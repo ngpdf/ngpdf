@@ -102,11 +102,15 @@ export class InvoiceActions {
   protected async preview(): Promise<void> {
     // Open the tab during the click, before any await, or a pop-up blocker may stop it.
     const tab = window.open('', '_blank');
+    if (!tab) {
+      // Blocked: save the file instead of rendering a preview nobody can see.
+      await this.download();
+      return;
+    }
     try {
       const blob = await this.pdf.toBlob(InvoiceDocument, {
         inputs: { customer: 'Northwind Bakery', lines: this.lines },
       });
-      if (!tab) return;
       const url = URL.createObjectURL(blob);
       tab.location.href = url;
       // The tab keeps using the URL while it is open; free the PDF once it closes.
@@ -116,7 +120,7 @@ export class InvoiceActions {
         clearInterval(watch);
       }, 2000);
     } catch (error) {
-      tab?.close();
+      tab.close();
       throw error;
     }
   }

@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Runs a command in a capped Node 24 container with the repo mounted at /w.
 # StrykerJS kills process trees with `ps`, which the slim image lacks: use NGPDF_IMAGE=node:24-bookworm for it.
-# NGPDF_PUBLISH=4200:4200 publishes a port, for a dev server (npm run start:site).
+# NGPDF_PUBLISH=127.0.0.1:4200:4200 publishes a port on the host's loopback only, for a dev server
+# (npm run start:site), which listens on all of the container's interfaces so Docker can reach it.
 set -euo pipefail
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 tty_flags=()

@@ -41,7 +41,7 @@ documentation (Markdown in `projects/site/src/content/docs/`, one file per page)
 
 ```sh
 ./scripts/dev npm run build:site     # build and prerender to dist/site/browser
-NGPDF_PUBLISH=4200:4200 ./scripts/dev npm run start:site   # dev server on http://localhost:4200
+NGPDF_PUBLISH=127.0.0.1:4200:4200 ./scripts/dev npm run start:site   # http://localhost:4200
 ```
 
 A change to the library that users see needs its docs page updated in the same pull request.
