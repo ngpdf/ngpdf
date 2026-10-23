@@ -75,7 +75,7 @@ interface DownloadPdfOptions extends DownloadOptions {
 ## What a render does
 
 1. Creates a child `EnvironmentInjector` of the parent injector, with ngpdf's renderer factory in it.
-2. Creates the component in that injector, sets each entry of `inputs` and runs change detection once. If that throws, the component and injector are destroyed and the promise rejects with the error.
+2. Creates the component in that injector, sets each entry of `inputs` and runs change detection once. If that throws, the component and injector are destroyed and the promise rejects with the error. When a constructor throws, the document's or a child's, Angular gives back no component to destroy: the injector is destroyed, which runs its own `DestroyRef` callbacks (`inject(EnvironmentInjector).get(DestroyRef)`) and the `ngOnDestroy` of services provided in it, but `inject(DestroyRef)` callbacks that components registered before the throw do not run.
 3. Loads the engine chunk on the first render. The chunk is cached; if loading fails, for example offline, the next render tries again.
 4. Resolves styles, loads the document's images, lays it out, breaks it into pages and writes the PDF.
 5. Destroys the component and its injector in a `finally` block, whether the render succeeded or failed.
@@ -85,6 +85,8 @@ interface DownloadPdfOptions extends DownloadOptions {
 1. create an object URL for the `Blob`;
 2. append an `<a download="<fileName>">` to the document body, click it and remove it;
 3. revoke the object URL on the next tick.
+
+The anchor is removed and the URL revoked even if the click throws.
 
 If the render fails, nothing is clicked and the promise rejects.
 

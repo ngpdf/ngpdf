@@ -116,6 +116,47 @@ class ThrowingRenderDocument {
   }
 }
 
+@Component({
+  selector: 'pdf-test-constructor-throws',
+  imports: [PDF_ELEMENTS],
+  template: `<pdf-document />`,
+})
+class ConstructorThrowsDocument {
+  constructor() {
+    seen.injector = inject(EnvironmentInjector);
+    seen.injector.get(DestroyRef).onDestroy(() => destroyed.push('root-injector'));
+    throw new Error('root boom');
+  }
+}
+
+@Component({ selector: 'pdf-test-sibling', template: '' })
+class Sibling {
+  constructor() {
+    inject(EnvironmentInjector)
+      .get(DestroyRef)
+      .onDestroy(() => destroyed.push('sibling-injector'));
+    inject(DestroyRef).onDestroy(() => destroyed.push('sibling-view'));
+  }
+}
+
+@Component({ selector: 'pdf-test-boom', template: '' })
+class Boom {
+  constructor() {
+    throw new Error('child boom');
+  }
+}
+
+@Component({
+  selector: 'pdf-test-child-throws',
+  imports: [PDF_ELEMENTS, Sibling, Boom],
+  template: `<pdf-document><pdf-test-sibling /><pdf-test-boom /></pdf-document>`,
+})
+class ChildThrowsDocument {
+  constructor() {
+    seen.injector = inject(EnvironmentInjector);
+  }
+}
+
 describe('renderTree', () => {
   let parent: EnvironmentInjector;
   let rendered: { destroy(): void }[] = [];
@@ -204,6 +245,20 @@ describe('renderTree', () => {
     destroyed.length = 0;
     expect(() => renderTree(ThrowingRenderDocument, parent)).toThrow('bad template');
     expect(destroyed).toEqual(['throwing-render']);
+  });
+
+  it('destroys the injector and rethrows when the document constructor throws', () => {
+    destroyed.length = 0;
+    expect(() => renderTree(ConstructorThrowsDocument, parent)).toThrow('root boom');
+    expect(destroyed).toEqual(['root-injector']);
+    expect(() => seen.injector?.get(GREETING, null)).toThrow(/destroyed/i);
+  });
+
+  it('destroys the injector and rethrows when a child constructor throws', () => {
+    destroyed.length = 0;
+    expect(() => renderTree(ChildThrowsDocument, parent)).toThrow('child boom');
+    expect(destroyed).toContain('sibling-injector');
+    expect(() => seen.injector?.get(GREETING, null)).toThrow(/destroyed/i);
   });
 
   it('destroy is idempotent', () => {
