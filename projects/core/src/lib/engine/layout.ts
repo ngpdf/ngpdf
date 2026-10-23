@@ -283,7 +283,7 @@ function isZero(length: Length): boolean {
 /**
  * Inside a table, rows and cells give up the styles that would move cells off their columns:
  * a row keeps vertical padding and borders and its background, but its horizontal padding,
- * left/right border, margin, justify-content and direction are fixed; a cell loses its margin
+ * left/right border, margin, justify-content, direction and gap are fixed; a cell loses its margin
  * and min/max width. `ignored` collects the properties the author had set.
  */
 function tableStyle(style: ResolvedStyle, node: PdfNode, ignored: Set<string>): ResolvedStyle {
@@ -299,6 +299,7 @@ function tableStyle(style: ResolvedStyle, node: PdfNode, ignored: Set<string>): 
     }
     if (style.justifyContent !== 'flex-start') ignored.add('pdf-row justify-content');
     if (style.flexDirection !== 'row') ignored.add('pdf-row flex-direction');
+    if (style.gap !== 0) ignored.add('pdf-row gap');
     return {
       ...style,
       flexDirection: 'row',
