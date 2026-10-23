@@ -97,7 +97,7 @@ Cells stretch to the height of the tallest cell in the row, so their backgrounds
 
 Inside a table, rows keep the cells on their columns, so some styles are fixed:
 
-- On a `pdf-row`: vertical padding, top and bottom borders and the background work. Horizontal padding, left and right borders, margins and `justify-content` are ignored, and `flex-direction` is always `row`. `gap` is set to 0.
+- On a `pdf-row`: vertical padding, top and bottom borders and the background work. Horizontal padding, left and right borders, margins, `justify-content` and `gap` are ignored, and `flex-direction` is always `row`.
 - On a `pdf-cell`: margins, `min-width` and `max-width` are ignored. Padding, borders and backgrounds work.
 
 ngpdf logs a dev-mode warning such as `ngpdf: ignored inside tables: pdf-row padding-left` when you set one of the ignored styles. Put horizontal padding on the cells, and draw vertical lines with `border-left` or `border-right` on cells.
