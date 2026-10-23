@@ -9,7 +9,10 @@ export interface InvoiceLine {
   readonly unitPrice: number;
 }
 
-/** The document the home page's live demo renders. Made-up data, edited by the visitor. */
+/**
+ * The document the home page's live demo renders. Made-up data, edited by the visitor. In the
+ * header, a long company name wraps and the right-hand column never shrinks.
+ */
 @Component({
   selector: 'site-invoice-document',
   imports: [PDF_ELEMENTS, CurrencyPipe, DatePipe],
@@ -17,13 +20,13 @@ export interface InvoiceLine {
     <pdf-document [title]="'Invoice for ' + customer()" author="ngpdf live demo">
       <pdf-page size="A4" style="padding: 48; font-size: 10; color: #1f1d1a">
         <pdf-view style="flex-direction: row; justify-content: space-between; margin-bottom: 28">
-          <pdf-view>
+          <pdf-view style="margin-right: 24">
             <pdf-text style="font-size: 20; font-weight: bold" [style.color]="accent()">{{
               company()
             }}</pdf-text>
             <pdf-text style="color: #6b6660">123 Paper Street, Springfield</pdf-text>
           </pdf-view>
-          <pdf-view style="align-items: flex-end">
+          <pdf-view style="flex-shrink: 0; align-items: flex-end">
             <pdf-text style="font-size: 20; font-weight: bold">INVOICE</pdf-text>
             <pdf-text style="color: #6b6660">No. 2026-0042</pdf-text>
             <pdf-text style="color: #6b6660">{{ issuedAt() | date: 'MMMM d, y' }}</pdf-text>
