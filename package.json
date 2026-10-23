@@ -54,7 +54,7 @@
     "lint-staged": "^17.6.0",
     "ng-packagr": "^22.2.0",
     "prettier": "^3.8.1",
-    "puppeteer-core": "^24.43.1",
+    "puppeteer-core": "^25.14.0",
     "typescript": "~6.0.2",
     "typescript-eslint": "^8.72.0",
     "vitest": "^5.0.0",
