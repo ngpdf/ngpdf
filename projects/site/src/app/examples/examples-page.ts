@@ -1,6 +1,18 @@
-import { Component, DestroyRef, ElementRef, inject, signal, viewChild } from '@angular/core';
+import { registerLocaleData } from '@angular/common';
+import localePt from '@angular/common/locales/pt';
+import {
+  Component,
+  DestroyRef,
+  ElementRef,
+  EnvironmentInjector,
+  LOCALE_ID,
+  createEnvironmentInjector,
+  inject,
+  signal,
+  viewChild,
+} from '@angular/core';
 import { RouterLink } from '@angular/router';
-import { PdfRenderer } from '@ngpdf/core';
+import { PdfRenderer, renderToBlob } from '@ngpdf/core';
 // The demo app's documents, used as they are, so the site shows exactly what the repository tests.
 import { captureChart } from '../../../../demo/src/app/capture-chart';
 import { CHART_BARS, makeCommunicators, makeLicences } from '../../../../demo/src/app/data';
@@ -54,6 +66,10 @@ const EXAMPLES: readonly Example[] = [
   },
 ];
 
+// The demo app runs in pt-BR (projects/demo/src/app/app.config.ts); its documents are rendered in
+// that locale here too, so amounts read "R$ 867,01" as in the e2e golden files.
+registerLocaleData(localePt);
+
 /** Fixed so the example documents read the same for every visitor. */
 const FIXED_DATE = new Date(2026, 9, 23, 14, 30);
 
@@ -65,6 +81,11 @@ const FIXED_DATE = new Date(2026, 9, 23, 14, 30);
 })
 export class ExamplesPage {
   private readonly pdf = inject(PdfRenderer);
+  /** The demo's locale for its documents only; the rest of the site keeps its own. */
+  private readonly demoInjector = createEnvironmentInjector(
+    [{ provide: LOCALE_ID, useValue: 'pt-BR' }],
+    inject(EnvironmentInjector),
+  );
   private readonly chart = viewChild.required<ElementRef<HTMLElement>>('chart');
 
   protected readonly examples = EXAMPLES;
@@ -83,6 +104,7 @@ export class ExamplesPage {
   constructor() {
     inject(DestroyRef).onDestroy(() => {
       this.destroyed = true;
+      this.demoInjector.destroy();
       clearInterval(this.previewWatch);
       for (const url of this.previews.values()) URL.revokeObjectURL(url);
       this.previews.clear();
@@ -161,11 +183,18 @@ export class ExamplesPage {
           },
         });
       case 'communicators':
-        return this.pdf.toBlob(CommunicatorsList, { inputs: { items: makeCommunicators(140) } });
+        return renderToBlob(CommunicatorsList, {
+          injector: this.demoInjector,
+          inputs: { items: makeCommunicators(140) },
+        });
       case 'licences':
-        return this.pdf.toBlob(LicencesList, { inputs: { items: makeLicences(60) } });
+        return renderToBlob(LicencesList, {
+          injector: this.demoInjector,
+          inputs: { items: makeLicences(60) },
+        });
       case 'capture':
-        return this.pdf.toBlob(CaptureReport, {
+        return renderToBlob(CaptureReport, {
+          injector: this.demoInjector,
           inputs: {
             title: 'Relatório de captura',
             capturedAt: FIXED_DATE,

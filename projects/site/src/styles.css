@@ -646,7 +646,7 @@ main:focus {
 }
 
 .hljs-comment {
-  color: #8a8379;
+  color: #948c82;
   font-style: italic;
 }
 
@@ -723,7 +723,7 @@ main:focus {
   font-family: var(--font-mono);
   font-size: 0.68rem;
   text-transform: uppercase;
-  color: #8a8379;
+  color: #948c82;
 }
 
 .prose table {
