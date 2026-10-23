@@ -90,6 +90,8 @@ The image keeps its aspect ratio unless you give it both dimensions.
 | `height` only | the width follows the aspect ratio |
 | `width` and `height` | the box you set; `object-fit` places the image in it |
 
+A JPEG with an EXIF orientation, as phone photos usually have, is drawn turned the way browsers show it, and its size and aspect ratio are those of the turned picture: a photo stored 4000x3000 with a quarter-turn orientation (5 to 8) is 3000 wide and 4000 high. The orientation is read from the first APP1 segment among those right after the start of the file, which is where cameras write it.
+
 A 2x image (for example a canvas captured at twice the screen size) therefore comes out twice as large as on screen. Set a `width` to scale it.
 
 An image with no size set is not stretched by its parent's default `align-items: stretch`. Set `align-self: stretch` to make it take the full width, with its height following.

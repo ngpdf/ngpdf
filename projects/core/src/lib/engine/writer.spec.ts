@@ -57,6 +57,100 @@ function tinyPng(): Uint8Array {
   ]);
 }
 
+/**
+ * A baseline grayscale JPEG of `width`x`height`, flat grey, with an Exif APP1 segment whose IFD0
+ * holds only the Orientation tag. Each 8x8 block is a zero DC difference and an end of block, both
+ * coded as the one-bit code `0`, so the file decodes without any pixel data in the repo.
+ */
+function orientedJpeg(
+  width: number,
+  height: number,
+  orientation: number,
+  options: { order?: 'MM' | 'II'; jfif?: boolean; type?: 1 | 3 | 4; before?: number[] } = {},
+): Uint8Array {
+  const big = options.order !== 'II';
+  const u16 = (n: number) => (big ? [n >> 8, n & 255] : [n & 255, n >> 8]);
+  const u32 = (n: number) =>
+    big ? [n >>> 24, (n >> 16) & 255, (n >> 8) & 255, n & 255] : [...u16(n & 0xffff), 0, 0];
+  const segment = (marker: number, body: number[]) => [
+    0xff,
+    marker,
+    (body.length + 2) >> 8,
+    (body.length + 2) & 255,
+    ...body,
+  ];
+  const tiff = [
+    ...(big ? [0x4d, 0x4d] : [0x49, 0x49]),
+    ...u16(42),
+    ...u32(8),
+    ...u16(2),
+    // An unrelated tag first (ImageDescription, empty), so the reader has to look past it.
+    ...u16(0x010e),
+    ...u16(2),
+    ...u32(0),
+    ...u32(0),
+    ...u16(0x0112),
+    ...u16(options.type ?? 3),
+    ...u32(1),
+    ...(options.type === 4
+      ? u32(orientation)
+      : options.type === 1
+        ? [orientation, 0, 0, 0]
+        : [...u16(orientation), 0, 0]),
+    ...u32(0),
+  ];
+  const exif = segment(0xe1, [0x45, 0x78, 0x69, 0x66, 0, 0, ...tiff]);
+  const jfif = segment(0xe0, [0x4a, 0x46, 0x49, 0x46, 0, 1, 1, 0, 0, 1, 0, 1, 0, 0]);
+  const oneSymbolTable = (tableClass: number) =>
+    segment(0xc4, [tableClass << 4, 1, ...Array<number>(15).fill(0), 0]);
+  const blocks = Math.ceil(width / 8) * Math.ceil(height / 8);
+  const scan = Array<number>(Math.ceil((blocks * 2) / 8)).fill(0);
+  const spareBits = scan.length * 8 - blocks * 2;
+  if (spareBits > 0) scan[scan.length - 1] = (1 << spareBits) - 1;
+  return new Uint8Array([
+    0xff,
+    0xd8,
+    ...(options.jfif ? jfif : []),
+    ...(options.before ?? []),
+    ...exif,
+    ...segment(0xdb, [0, ...Array<number>(64).fill(1)]),
+    ...segment(0xc0, [8, height >> 8, height & 255, width >> 8, width & 255, 1, 1, 0x11, 0]),
+    ...oneSymbolTable(0),
+    ...oneSymbolTable(1),
+    ...segment(0xda, [1, 1, 0, 0, 63, 0]),
+    ...scan,
+    0xff,
+    0xd9,
+  ]);
+}
+
+type Matrix = readonly [number, number, number, number, number, number];
+
+/** Where the unit square of the first image XObject lands, from the `cm`s in an uncompressed page. */
+function imagePlacement(pdf: string): (u: number, v: number) => [number, number] {
+  const page = pdf.slice(0, pdf.indexOf('/I1 Do'));
+  let ctm: Matrix = [1, 0, 0, 1, 0, 0];
+  const saved: Matrix[] = [];
+  for (const [token, args = ''] of page.matchAll(/((?:-?[\d.]+ ){6})cm|\bq\b|\bQ\b/g)) {
+    if (token === 'q') saved.push(ctm);
+    else if (token === 'Q') ctm = saved.pop() ?? ctm;
+    else {
+      const [a, b, c, d, e, f] = args.trim().split(' ').map(Number) as unknown as Matrix;
+      const [A, B, C, D, E, F] = ctm;
+      ctm = [
+        a * A + b * C,
+        a * B + b * D,
+        c * A + d * C,
+        c * B + d * D,
+        e * A + f * C + E,
+        e * B + f * D + F,
+      ];
+    }
+  }
+  const [a, b, c, d, e, f] = ctm;
+  return (u, v) => [a * u + c * v + e, b * u + d * v + f];
+}
+
 const A4 = { width: 595.28, height: 841.89 };
 const info = { title: 'Quarterly report', creationDate: new Date('2026-01-02T03:04:05Z') };
 
@@ -175,6 +269,83 @@ describe('createPdfkitWriter', () => {
     expect(writer.imageSize(jpeg)).toEqual({ width: 9, height: 7 });
     expect(() => writer.imageSize(new Uint8Array([0xff, 0xd8, 0xff, 0xd9]))).toThrow();
   });
+
+  it('swaps a JPEG size for EXIF orientations 5 to 8, as browsers display it', () => {
+    for (const orientation of [1, 2, 3, 4]) {
+      expect(writer.imageSize(orientedJpeg(40, 20, orientation))).toEqual({
+        width: 40,
+        height: 20,
+      });
+    }
+    for (const orientation of [5, 6, 7, 8]) {
+      expect(writer.imageSize(orientedJpeg(40, 20, orientation))).toEqual({
+        width: 20,
+        height: 40,
+      });
+    }
+    expect(writer.imageSize(orientedJpeg(40, 20, 6, { order: 'II' }))).toEqual({
+      width: 20,
+      height: 40,
+    });
+    expect(writer.imageSize(orientedJpeg(40, 20, 6, { jfif: true }))).toEqual({
+      width: 20,
+      height: 40,
+    });
+    for (const type of [1, 4] as const) {
+      for (const order of ['MM', 'II'] as const) {
+        expect(writer.imageSize(orientedJpeg(40, 20, 8, { type, order }))).toEqual({
+          width: 20,
+          height: 40,
+        });
+      }
+    }
+  });
+
+  it('ignores an orientation that pdfkit would not read either', () => {
+    const xmp = [0xff, 0xe1, 0x00, 0x0a, ...Array.from('http://', (ch) => ch.charCodeAt(0)), 0];
+    const comment = [0xff, 0xfe, 0x00, 0x04, 0x68, 0x69];
+    for (const before of [xmp, comment]) {
+      expect(writer.imageSize(orientedJpeg(40, 20, 6, { before }))).toEqual({
+        width: 40,
+        height: 20,
+      });
+    }
+    // An Exif header with an unknown byte order, a cut-short TIFF header, or an IFD past the end.
+    const exif = [0x45, 0x78, 0x69, 0x66, 0, 0];
+    const app1 = (tiff: number[]) => [0xff, 0xe1, 0x00, 8 + tiff.length, ...exif, ...tiff];
+    for (const tiff of [
+      [0x58, 0x58, 0, 42, 0, 0, 0, 8],
+      [0x4d, 0x4d, 0, 42],
+      [0x4d, 0x4d, 0, 42, 0, 0, 0, 0x40],
+      [0x4d, 0x4d, 0, 42, 0, 0, 0, 8, 0, 1, 0x01, 0x12, 0, 3],
+      [0x4d, 0x4d, 0, 42, 0, 0, 0, 8, 0, 1, 0x01, 0x12, 0, 7, 0, 0, 0, 1, 0, 6, 0, 0],
+    ]) {
+      const jpeg = orientedJpeg(40, 20, 1);
+      const withApp1 = new Uint8Array([0xff, 0xd8, ...app1(tiff), ...jpeg.subarray(2)]);
+      expect(writer.imageSize(withApp1)).toEqual({ width: 40, height: 20 });
+    }
+  });
+
+  it.each([5, 6, 7, 8])(
+    'fills the laid-out box with a JPEG of orientation %i, the way browsers rotate it',
+    async (orientation) => {
+      const jpeg = orientedJpeg(40, 20, orientation);
+      const { width: w, height: h } = writer.imageSize(jpeg);
+      const clip = { x: 0, y: 0, w: 100, h: 100 };
+      const ops: DrawOp[] = [{ op: 'image', x: 10, y: 20, w, h, clip, data: jpeg, opacity: 1 }];
+      const blob = await writer.write([{ width: 100, height: 100, ops }], info);
+      const place = imagePlacement(new TextDecoder('latin1').decode(await blob.arrayBuffer()));
+      // PDF space has y up; the box is x 10..30 and y 20..60 from the top of a 100pt page.
+      const corners = [place(0, 0), place(1, 0), place(0, 1), place(1, 1)].map(
+        ([x, y]) => [Math.round(x), Math.round(100 - y)] as const,
+      );
+      expect(new Set(corners.map(([x]) => x))).toEqual(new Set([10, 30]));
+      expect(new Set(corners.map(([, y]) => y))).toEqual(new Set([20, 60]));
+      // The stored image's top-left corner (u 0, v 1) goes where the orientation says.
+      const topLeft = { 5: [10, 20], 6: [30, 20], 7: [30, 60], 8: [10, 60] }[orientation];
+      expect(corners[2]).toEqual(topLeft);
+    },
+  );
 
   it('rejects malformed PNG and JPEG headers', () => {
     const sig = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];

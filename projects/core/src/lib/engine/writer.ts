@@ -83,7 +83,10 @@ export interface PageOps {
 }
 
 export interface PdfWriter extends FontMetrics {
-  /** Throws when the bytes are neither PNG nor JPEG. */
+  /**
+   * The displayed size, after a JPEG's EXIF orientation. Throws on bytes that are neither PNG nor
+   * JPEG.
+   */
   imageSize(data: Uint8Array): { width: number; height: number };
   write(pages: readonly PageOps[], info: DocumentInfo): Promise<Blob>;
 }
@@ -101,6 +104,13 @@ function readUint32(data: Uint8Array, at: number): number {
   );
 }
 
+function readUint32LE(data: Uint8Array, at: number): number {
+  return (
+    (data[at + 3] ?? 0) * 0x1000000 +
+    (((data[at + 2] ?? 0) << 16) | ((data[at + 1] ?? 0) << 8) | (data[at] ?? 0))
+  );
+}
+
 function pngSize(data: Uint8Array): { width: number; height: number } {
   // IHDR is always the first chunk: length(4) "IHDR"(4) width(4) height(4).
   const isIhdr = [0x49, 0x48, 0x44, 0x52].every((byte, i) => data[12 + i] === byte);
@@ -108,11 +118,61 @@ function pngSize(data: Uint8Array): { width: number; height: number } {
   return { width: readUint32(data, 16), height: readUint32(data, 20) };
 }
 
+function readUint16(data: Uint8Array, at: number, bigEndian: boolean): number {
+  const [high, low] = bigEndian ? [data[at], data[at + 1]] : [data[at + 1], data[at]];
+  return ((high ?? 0) << 8) | (low ?? 0);
+}
+
+/** The Orientation tag (0x0112) of IFD0 in the Exif APP1 segment `[start, end)`, or 1. */
+function exifOrientation(data: Uint8Array, start: number, end: number): number {
+  const isExif = [0x45, 0x78, 0x69, 0x66, 0, 0].every((byte, i) => data[start + i] === byte);
+  const tiff = start + 6;
+  if (!isExif || tiff + 8 > end) return 1;
+  const order = readUint16(data, tiff, true);
+  if (order !== 0x4d4d && order !== 0x4949) return 1;
+  const bigEndian = order === 0x4d4d;
+  const offset = bigEndian ? readUint32(data, tiff + 4) : readUint32LE(data, tiff + 4);
+  const ifd = tiff + offset;
+  if (ifd + 2 > end) return 1;
+  const count = readUint16(data, ifd, bigEndian);
+  for (let i = 0; i < count; i++) {
+    const entry = ifd + 2 + i * 12;
+    if (entry + 12 > end) break;
+    if (readUint16(data, entry, bigEndian) !== 0x0112) continue;
+    // SHORT is what the spec says; BYTE and LONG are read the way pdfkit's jpeg-exif reads them.
+    switch (readUint16(data, entry + 2, bigEndian)) {
+      case 1:
+        return data[entry + 8] ?? 1;
+      case 3:
+        return readUint16(data, entry + 8, bigEndian);
+      case 4:
+        return bigEndian ? readUint32(data, entry + 8) : readUint32LE(data, entry + 8);
+      default:
+        return 1;
+    }
+  }
+  return 1;
+}
+
+/**
+ * The size the JPEG is displayed at. EXIF orientations 5 to 8 turn the picture a quarter turn, so
+ * width and height swap, as browsers show it and as pdfkit draws it into the box it is given.
+ */
 function jpegSize(data: Uint8Array): { width: number; height: number } {
   let at = 2;
+  let orientation = 1;
+  // pdfkit (through jpeg-exif) reads the orientation only from the first APP1 in the run of APPn
+  // segments right after SOI. Reading it from the same place keeps the box in step with the drawing.
+  let inLeadingApps = true;
   while (at + 4 <= data.length) {
     if (data[at] !== 0xff) throw new Error('ngpdf: invalid JPEG marker');
     const marker = data[at + 1] ?? 0;
+    const isApp = marker >= 0xe0 && marker <= 0xef;
+    if (inLeadingApps && marker === 0xe1) {
+      const end = Math.min(data.length, at + 2 + readUint16(data, at + 2, true));
+      orientation = exifOrientation(data, at + 4, end);
+    }
+    if (!isApp || marker === 0xe1) inLeadingApps = false;
     if (marker === 0xff) {
       at += 1; // fill byte
       continue;
@@ -127,10 +187,11 @@ function jpegSize(data: Uint8Array): { width: number; height: number } {
     const isFrame = marker >= 0xc0 && marker <= 0xcf && ![0xc4, 0xc8, 0xcc].includes(marker);
     if (isFrame) {
       if (at + 9 > data.length) break;
-      return {
-        height: ((data[at + 5] ?? 0) << 8) | (data[at + 6] ?? 0),
-        width: ((data[at + 7] ?? 0) << 8) | (data[at + 8] ?? 0),
-      };
+      const height = ((data[at + 5] ?? 0) << 8) | (data[at + 6] ?? 0);
+      const width = ((data[at + 7] ?? 0) << 8) | (data[at + 8] ?? 0);
+      return orientation >= 5 && orientation <= 8
+        ? { width: height, height: width }
+        : { width, height };
     }
     if (length < 2) break;
     at += 2 + length;
