@@ -1,6 +1,6 @@
 <a class="skip-link" href="#main">Skip to content</a>
 
-<header class="site-header">
+<header #header class="site-header">
   <div class="container header-inner">
     <a class="brand" routerLink="/" (click)="closeMenu()" aria-label="ngpdf home">
       <svg class="brand-mark" viewBox="0 0 64 64" aria-hidden="true">
@@ -33,6 +33,7 @@
     </a>
 
     <button
+      #menuButton
       type="button"
       class="menu-button"
       [attr.aria-expanded]="menuOpen()"
@@ -43,7 +44,14 @@
       <span class="menu-icon" aria-hidden="true"></span>
     </button>
 
-    <nav id="site-nav" class="site-nav" [class.open]="menuOpen()" aria-label="Main">
+    <nav
+      #nav
+      id="site-nav"
+      class="site-nav"
+      [class.open]="menuOpen()"
+      aria-label="Main"
+      (focusout)="closeMenuOnFocusLeave($event, nav)"
+    >
       <a routerLink="/docs" routerLinkActive="active" (click)="closeMenu()">Docs</a>
       <a routerLink="/examples" routerLinkActive="active" (click)="closeMenu()">Examples</a>
       <a routerLink="/contributors" routerLinkActive="active" (click)="closeMenu()">Contributors</a>
