@@ -335,6 +335,12 @@ describe('table box model', () => {
     expect(message).toContain('pdf-row justify-content');
     expect(message).toContain('pdf-row flex-direction');
   });
+
+  it('warns for gap on a row', () => {
+    const warn = vi.fn();
+    lay(tableOf([styledRow({ gap: '10' })]), 200, warn);
+    expect(warn).toHaveBeenCalledWith('ngpdf: ignored inside tables: pdf-row gap');
+  });
 });
 
 describe('passes and cleanup', () => {
