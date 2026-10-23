@@ -47,6 +47,11 @@ Any other character is drawn as `?`. That includes emoji, Greek, Cyrillic, CJK, 
 
 `ngpdf: characters outside WinAnsi replaced with "?": ✓→`
 
+Some characters are handled before that, so they never become `?`:
+
+- The Unicode spaces that locale data puts in pipe output, such as the thin space (U+2009) and the narrow no-break space (U+202F), and the other spaces from U+2000 to U+200A and U+205F, are drawn as a normal space. The narrow no-break space and the figure space (U+2007) become a no-break space (U+00A0), so `3:00 PM` from `date: 'short'` still does not break between the time and `PM`.
+- A soft hyphen (U+00AD) and a zero-width space (U+200B) are removed. v0.1 does not break lines at them, so they are never drawn.
+
 The same applies to the text of `pdf-page-number`. Fonts beyond WinAnsi come with custom fonts in v0.2.
 
 ## Wrapping
