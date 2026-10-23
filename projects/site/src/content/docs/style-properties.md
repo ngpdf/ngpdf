@@ -22,7 +22,7 @@ All text properties are inherited by child elements.
 | --- | --- | --- |
 | `color` | color | `black` |
 | `font-family` | any text; picks Courier, Times or Helvetica | Helvetica |
-| `font-size` | length | `10` |
+| `font-size` | length ≥ 0 | `10` |
 | `font-weight` | `bold`, `bolder`, a number ≥ 600 (bold); anything else is normal | normal |
 | `font-style` | `italic`, `oblique` (italic); anything else is normal | normal |
 | `line-height` | number (× font size), `N%`, length, `normal` (keeps the inherited value) | `1.2` |
@@ -66,8 +66,8 @@ All text properties are inherited by child elements.
 | `max-width`, `max-height` | length/%, `auto` (no limit) | `auto` |
 | `margin` | 1 to 4 values of length/% or `auto` | `0` |
 | `margin-top`, `margin-right`, `margin-bottom`, `margin-left` | length/%, `auto` | `0` |
-| `padding` | 1 to 4 values of length/% | `0` |
-| `padding-top`, `padding-right`, `padding-bottom`, `padding-left` | length/% | `0` |
+| `padding` | 1 to 4 values of length/% ≥ 0 | `0` |
+| `padding-top`, `padding-right`, `padding-bottom`, `padding-left` | length/% ≥ 0 | `0` |
 
 Shorthands with 1 to 4 values follow CSS order: top, right, bottom, left.
 
@@ -116,6 +116,8 @@ Some styles are ignored in specific places:
 
 - an unknown unit: `em`, `rem`, `vh`, `vw` and the like;
 - a percentage or `auto` in `gap`, `font-size`, `border-radius`, `border-width` or a border's width;
+- `auto` in `padding` or a `padding-*` side;
+- a negative `font-size` or padding (margins can be negative, as in CSS);
 - a color that is not one of the forms above, including `hsl()`, `currentColor` and `var()`;
 - a keyword outside the lists above for `text-align`, `text-decoration`, `flex-direction`, `justify-content`, `align-items`, `align-self` and `object-fit`, upper case included;
 - a value that is not a number for `flex-grow`, `flex-shrink` and `opacity`;
