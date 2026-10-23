@@ -191,11 +191,20 @@ function parsePoints(value: string, tag?: string): number {
   return length;
 }
 
-/** Padding takes a length or a percentage: CSS has no `auto` padding. */
+/** Font sizes and padding can't go below 0 in CSS; margins can. */
+function rejectNegative<T extends Length>(length: T, value: string, tag?: string): T {
+  const amount = typeof length === 'object' ? length.percent : length;
+  if (typeof amount === 'number' && amount < 0) {
+    return fail(`expected a non-negative length in "${show(value)}"`, tag);
+  }
+  return length;
+}
+
+/** Padding takes a length or a percentage: CSS has no `auto` or negative padding. */
 function parsePadding(value: string, tag?: string): Length {
   const length = parseLength(value, tag);
   if (length === 'auto') return fail(`expected a length in "${show(value)}"`, tag);
-  return length;
+  return rejectNegative(length, value, tag);
 }
 
 function parseEdgeValues<T>(value: string, parse: (token: string) => T, tag?: string): Edges<T> {
@@ -367,7 +376,7 @@ function apply(
       style.fontFamily = fontFamilyOf(value);
       break;
     case 'font-size':
-      style.fontSize = parsePoints(value, tag);
+      style.fontSize = rejectNegative(parsePoints(value, tag), value, tag);
       break;
     case 'font-weight':
       style.fontWeight = fontWeightOf(value);

@@ -97,6 +97,19 @@ describe('resolveStyles', () => {
     expect(styleOf({ padding: '10%' }).padding.left).toEqual({ percent: 10 });
   });
 
+  it('rejects a negative font-size or padding but keeps negative margins', () => {
+    expect(() => styleOf({ 'font-size': '-10' }, 'pdf-text')).toThrow(
+      /^ngpdf: expected a non-negative length in "-10"/,
+    );
+    expect(() => styleOf({ padding: '-10' })).toThrow(
+      /^ngpdf: expected a non-negative length in "-10"/,
+    );
+    expect(() => styleOf({ padding: '4 -1mm' })).toThrow(/^ngpdf:/);
+    expect(() => styleOf({ 'padding-top': '-5%' })).toThrow(/^ngpdf:/);
+    expect(styleOf({ 'font-size': '0' }, 'pdf-text').fontSize).toBe(0);
+    expect(styleOf({ margin: '-10' }).margin.top).toBe(-10);
+  });
+
   it('rejects a shorthand with too many values', () => {
     expect(() => styleOf({ padding: '1 2 3 4 5' })).toThrow(/^ngpdf:/);
   });
