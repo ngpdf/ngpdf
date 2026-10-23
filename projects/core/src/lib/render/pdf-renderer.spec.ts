@@ -175,8 +175,11 @@ describe('renderToBlob', () => {
 });
 
 describe('download', () => {
-  function stubUrls(): { create: ReturnType<typeof vi.fn>; revoke: ReturnType<typeof vi.fn> } {
-    const create = vi.fn(() => 'blob:ngpdf-test');
+  function stubUrls(url = 'blob:ngpdf-test'): {
+    create: ReturnType<typeof vi.fn>;
+    revoke: ReturnType<typeof vi.fn>;
+  } {
+    const create = vi.fn(() => url);
     const revoke = vi.fn();
     vi.stubGlobal('URL', Object.assign(URL, { createObjectURL: create, revokeObjectURL: revoke }));
     return { create, revoke };
@@ -214,6 +217,25 @@ describe('download', () => {
       fileName: 'a.pdf',
     });
     expect(click).toHaveBeenCalledOnce();
+  });
+
+  it('removes the anchor and revokes the URL when click throws', async () => {
+    // Its own URL: a revoke that an earlier test left on a timer also lands on this stub.
+    const { revoke } = stubUrls('blob:ngpdf-blocked');
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {
+      throw new Error('click blocked');
+    });
+    vi.useFakeTimers();
+    try {
+      await expect(
+        TestBed.inject(PdfRenderer).download(TestDocument, { fileName: 'blocked.pdf' }),
+      ).rejects.toThrow('click blocked');
+      expect(document.querySelector('a[download]')).toBeNull();
+      vi.runAllTimers();
+      expect(revoke).toHaveBeenCalledWith('blob:ngpdf-blocked');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('does not click when the render fails', async () => {
