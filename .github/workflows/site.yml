@@ -1,8 +1,10 @@
 name: Site
 
 # Builds ngpdf.dev (projects/site, prerendered to static HTML) and uploads it to the Hostinger
-# host over FTPS, into public_html (the FTP account's root). Runs when main changes something the site shows: its own code, the library it
-# demos, the docs, the changelog or the contributors. Run it by hand to redeploy as it is.
+# host over FTPS, into public_html (the FTP account's root). Runs when main changes something the
+# site shows: its own code, the library it demos, the docs, the changelog or the contributors. Run
+# it by hand to redeploy as it is.
+
 on:
   push:
     branches: [main]
