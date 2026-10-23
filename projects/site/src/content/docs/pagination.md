@@ -48,7 +48,7 @@ A `pdf-row` with the `header` attribute repeats at the top of every sheet its ta
 
 ## breakBefore
 
-`breakBefore` on a `pdf-view` or `pdf-text` starts a new sheet before that element. On any element, the style `break-before: page` does the same.
+`breakBefore` on a `pdf-view` or `pdf-text` starts a new sheet before that element. On any element, the style `break-before: page` does the same. On an element inside a unit, such as a `pdf-cell` in a table row or a `pdf-text` inside a row `pdf-view`, either one starts the new sheet before that whole unit, since a unit is never split.
 
 ```html
 @for (chapter of chapters(); track chapter.title; let first = $first) {

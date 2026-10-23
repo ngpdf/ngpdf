@@ -127,7 +127,7 @@ Inside a page, `breakBefore` on a `pdf-view` or `pdf-text` moves that element to
 <pdf-view [breakBefore]="!first">…</pdf-view>
 ```
 
-It is a boolean attribute: the bare attribute means `true`. For any other element, such as a `pdf-table` or a `pdf-row`, use the style `break-before: page`. A break at the top of a sheet that is still empty does nothing, so it never produces a blank page.
+It is a boolean attribute: the bare attribute means `true`. For any other element, such as a `pdf-table` or a `pdf-row`, use the style `break-before: page`. Inside a table row or a row `pdf-view`, the break moves that whole row to the new sheet. A break at the top of a sheet that is still empty does nothing, so it never produces a blank page.
 
 ## Vertical space on a page
 
