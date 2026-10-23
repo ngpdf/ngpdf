@@ -45,4 +45,26 @@ describe('toWinAnsi', () => {
     expect(toWinAnsi('a\tb\nc', warn)).toBe('a\tb\nc');
     expect(warn).not.toHaveBeenCalled();
   });
+
+  it('turns Unicode space separators into a space, without warning', () => {
+    const warn = vi.fn();
+    const spaces = '           ';
+    expect(toWinAnsi(`a${spaces}b`, warn)).toBe(`a${' '.repeat(spaces.length)}b`);
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it('turns the no-break spaces among them into U+00A0', () => {
+    // Angular's en-US `date: 'short'` puts U+202F before AM/PM; fr `number` groups with it.
+    const warn = vi.fn();
+    expect(toWinAnsi('3:00 PM', warn)).toBe('3:00 PM');
+    expect(toWinAnsi('1 234', warn)).toBe('1 234');
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it('drops soft hyphens and zero-width spaces, which are never drawn', () => {
+    const warn = vi.fn();
+    expect(toWinAnsi('co­operation', warn)).toBe('cooperation');
+    expect(toWinAnsi('long​path', warn)).toBe('longpath');
+    expect(warn).not.toHaveBeenCalled();
+  });
 });
