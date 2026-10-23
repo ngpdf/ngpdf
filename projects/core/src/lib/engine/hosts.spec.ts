@@ -89,6 +89,22 @@ describe('dissolveHosts', () => {
     );
   });
 
+  it('counts only elements towards the limit, not the text or comment inside the last one', () => {
+    // pdf-document > pdf-page > 61 pdf-view > innermost pdf-view: 64 elements.
+    const chain = (inner: PdfNode): PdfNode => {
+      let node = el('pdf-view', [inner]);
+      for (let i = 0; i < 60; i++) node = el('pdf-view', [node]);
+      return el('pdf-document', [el('pdf-page', [node])]);
+    };
+    const withText = chain(el('pdf-view', [createNode('text', '', 'deepest')]));
+    const withAnchor = chain(el('pdf-view', [createNode('comment', '', 'container')]));
+    expect(() => dissolveHosts(withText, vi.fn())).not.toThrow();
+    expect(() => dissolveHosts(withAnchor, vi.fn())).not.toThrow();
+    expect(() => dissolveHosts(chain(el('pdf-view', [el('pdf-view')])), vi.fn())).toThrow(
+      'ngpdf: nesting deeper than 64',
+    );
+  });
+
   it('looks through a very long chain of hosts without overflowing the stack', () => {
     let chain = el('pdf-view');
     for (let i = 0; i < 100_000; i++) chain = el('app-wrap', [chain]);
