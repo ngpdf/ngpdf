@@ -55,7 +55,18 @@ export function highlight(code: string, lang: string | undefined): string {
     : escapeHtml(code);
 }
 
-export function renderMarkdown(source: string): RenderedMarkdown {
+export interface RenderMarkdownOptions {
+  /**
+   * Give each heading an id and a `#` link to it (default true). Turn it off for HTML that goes
+   * through Angular's sanitizer, which drops the ids and would leave the links pointing nowhere.
+   */
+  readonly headingAnchors?: boolean;
+}
+
+export function renderMarkdown(
+  source: string,
+  { headingAnchors = true }: RenderMarkdownOptions = {},
+): RenderedMarkdown {
   const headings: Heading[] = [];
   const used = new Map<string, number>();
   const marked = new Marked({
@@ -63,6 +74,7 @@ export function renderMarkdown(source: string): RenderedMarkdown {
     renderer: {
       heading({ tokens, depth }: Tokens.Heading): string {
         const inner = this.parser.parseInline(tokens);
+        if (!headingAnchors) return `<h${String(depth)}>${inner}</h${String(depth)}>\n`;
         // The text renderer gives the heading without markup, for the id and the contents list.
         const plain = decodeEntities(this.parser.parseInline(tokens, this.parser.textRenderer));
         const base = slugify(plain) || 'section';
