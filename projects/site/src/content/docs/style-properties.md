@@ -77,15 +77,15 @@ Shorthands with 1 to 4 values follow CSS order: top, right, bottom, left.
 | --- | --- | --- |
 | `border` | `<width> <style> <color>`, each optional, in any order | none |
 | `border-top`, `border-right`, `border-bottom`, `border-left` | same as `border`, for one side | none |
-| `border-width` | 1 to 4 lengths | `0` |
-| `border-top-width`, `border-right-width`, `border-bottom-width`, `border-left-width` | length | `0` |
+| `border-width` | 1 to 4 lengths or `thin`, `medium`, `thick` | `0` |
+| `border-top-width`, `border-right-width`, `border-bottom-width`, `border-left-width` | length or `thin`, `medium`, `thick` | `0` |
 | `border-color` | 1 to 4 colors | `black` |
 | `border-top-color`, `border-right-color`, `border-bottom-color`, `border-left-color` | color | `black` |
 | `border-radius` | one length | `0` |
 | `background-color` | color | none |
 | `opacity` | number from 0 to 1 (clamped) | `1` |
 
-In `border`, a missing width is 1 and a missing color is black. The styles `none` and `hidden` set the width to 0; `solid` draws solid; `dashed`, `dotted`, `double`, `groove`, `ridge`, `inset` and `outset` are drawn solid with a dev-mode warning. `border-radius` rounds the background only; borders stay square.
+In `border`, a missing width is 1 and a missing color is black. The width keywords `thin`, `medium` and `thick` mean 1, 3 and 5 points. The styles `none` and `hidden` set the width to 0; `solid` draws solid; `dashed`, `dotted`, `double`, `groove`, `ridge`, `inset` and `outset` are drawn solid with a dev-mode warning. `border-radius` rounds the background only; borders stay square.
 
 ## Images and pages
 
@@ -117,7 +117,7 @@ Some styles are ignored in specific places:
 - an unknown unit: `em`, `rem`, `vh`, `vw` and the like;
 - a percentage or `auto` in `gap`, `font-size`, `border-radius`, `border-width` or a border's width;
 - `auto` in `padding` or a `padding-*` side;
-- a negative `font-size` or padding (margins can be negative, as in CSS);
+- a negative `font-size`, padding or border width (margins can be negative, as in CSS);
 - a color that is not one of the forms above, including `hsl()`, `currentColor` and `var()`;
 - a keyword outside the lists above for `text-align`, `text-decoration`, `flex-direction`, `justify-content`, `align-items`, `align-self` and `object-fit`, upper case included;
 - a value that is not a number for `flex-grow`, `flex-shrink` and `opacity`;

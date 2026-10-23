@@ -70,6 +70,7 @@ export interface BorderParts {
 export const MAX_NESTING = 64;
 
 const BLACK: Color = Object.freeze({ r: 0, g: 0, b: 0, a: 1 });
+const BORDER_WIDTHS: Readonly<Record<string, number>> = { thin: 1, medium: 3, thick: 5 };
 
 export const ROOT_TEXT_STYLE: TextStyle = Object.freeze({
   color: BLACK,
@@ -191,6 +192,12 @@ function parsePoints(value: string, tag?: string): number {
   return length;
 }
 
+function parseBorderWidth(value: string, tag?: string): number {
+  const keywordWidth = BORDER_WIDTHS[value];
+  if (Object.hasOwn(BORDER_WIDTHS, value) && keywordWidth !== undefined) return keywordWidth;
+  return rejectNegative(parsePoints(value, tag), value, tag);
+}
+
 /** Font sizes and padding can't go below 0 in CSS; margins can. */
 function rejectNegative<T extends Length>(length: T, value: string, tag?: string): T {
   const amount = typeof length === 'object' ? length.percent : length;
@@ -231,8 +238,14 @@ export function parseBorder(value: string, tag?: string): BorderParts {
   if (tokens.length > 3) return fail(`too many values in "${show(value)}"`, tag);
   for (const token of tokens) {
     const code = token.charCodeAt(0);
-    if (isDigit(code) || code === 46 || code === 43 || code === 45) {
-      width = parsePoints(token, tag);
+    if (
+      isDigit(code) ||
+      code === 46 ||
+      code === 43 ||
+      code === 45 ||
+      Object.hasOwn(BORDER_WIDTHS, token)
+    ) {
+      width = parseBorderWidth(token, tag);
     } else if (BORDER_STYLES.has(token)) {
       if (token === 'none' || token === 'hidden') none = true;
       else if (token !== 'solid') unsupportedStyle = token;
@@ -361,7 +374,7 @@ function apply(
     return;
   }
   if (side && property === `border-${side}-width`) {
-    style.borderWidth = withSide(style.borderWidth, side, parsePoints(value, tag));
+    style.borderWidth = withSide(style.borderWidth, side, parseBorderWidth(value, tag));
     return;
   }
   if (side && property === `border-${side}-color`) {
@@ -468,7 +481,7 @@ function apply(
       break;
     }
     case 'border-width':
-      style.borderWidth = parseEdgeValues(value, (token) => parsePoints(token, tag), tag);
+      style.borderWidth = parseEdgeValues(value, (token) => parseBorderWidth(token, tag), tag);
       break;
     case 'border-color':
       style.borderColor = parseEdgeValues(value, (token) => parseColor(token, tag), tag);
