@@ -39,13 +39,26 @@
       </div>
     </fieldset>
 
-    <label class="field">
+    <!-- Not a wrapping <label>: an <output> is labelable too, and it would take the label. -->
+    <div class="field">
       <span
-        >Line items <output class="rows-value">{{ rows() }}</output></span
+        ><label for="demo-rows">Line items</label>
+        <output class="rows-value" for="demo-rows">{{ rows() }}</output></span
       >
-      <input type="range" min="3" max="150" step="1" [value]="rows()" (input)="setRows($event)" />
-      <small>Past about 30 rows the table runs onto a second page, and its header repeats.</small>
-    </label>
+      <input
+        id="demo-rows"
+        type="range"
+        min="3"
+        max="150"
+        step="1"
+        aria-describedby="demo-rows-hint"
+        [value]="rows()"
+        (input)="setRows($event)"
+      />
+      <small id="demo-rows-hint"
+        >Past about 30 rows the table runs onto a second page, and its header repeats.</small
+      >
+    </div>
 
     <p class="demo-status" role="status" aria-live="polite">
       @switch (status()) {
