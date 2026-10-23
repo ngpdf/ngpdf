@@ -106,8 +106,15 @@ export class InvoiceActions {
       const blob = await this.pdf.toBlob(InvoiceDocument, {
         inputs: { customer: 'Northwind Bakery', lines: this.lines },
       });
-      // The tab keeps using this URL, so it is not revoked here.
-      if (tab) tab.location.href = URL.createObjectURL(blob);
+      if (!tab) return;
+      const url = URL.createObjectURL(blob);
+      tab.location.href = url;
+      // The tab keeps using the URL while it is open; free the PDF once it closes.
+      const watch = setInterval(() => {
+        if (!tab.closed) return;
+        URL.revokeObjectURL(url);
+        clearInterval(watch);
+      }, 2000);
     } catch (error) {
       tab?.close();
       throw error;

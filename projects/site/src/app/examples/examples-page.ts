@@ -72,12 +72,20 @@ export class ExamplesPage {
   protected readonly chartLabel = `Bar chart of monthly captures: ${CHART_BARS.map((bar) => `${bar.label} ${String(bar.value)}`).join(', ')}`;
   protected readonly busy = signal<ExampleId | undefined>(undefined);
   protected readonly status = signal('');
-  /** Preview tabs keep using their URL (a reload reads it again), so they live as long as this page. */
-  private readonly previewUrls: string[] = [];
+  /**
+   * Each open preview tab and its URL. A tab keeps using its URL (a reload reads it again), so the
+   * URL is revoked when the tab closes, or when the visitor leaves this page.
+   */
+  private readonly previews = new Map<Window, string>();
+  private previewWatch: ReturnType<typeof setInterval> | undefined;
+  private destroyed = false;
 
   constructor() {
     inject(DestroyRef).onDestroy(() => {
-      for (const url of this.previewUrls) URL.revokeObjectURL(url);
+      this.destroyed = true;
+      clearInterval(this.previewWatch);
+      for (const url of this.previews.values()) URL.revokeObjectURL(url);
+      this.previews.clear();
     });
     inject(Seo).apply({
       title: `Examples - ${SITE_NAME}`,
@@ -95,9 +103,14 @@ export class ExamplesPage {
     const started = performance.now();
     try {
       const blob = await this.render(id);
+      // The visitor left while it rendered: nothing would ever revoke a URL made now.
+      if (this.destroyed) {
+        preview?.close();
+        return;
+      }
       const url = URL.createObjectURL(blob);
       if (preview) {
-        this.previewUrls.push(url);
+        this.watchPreview(preview, url);
         preview.location.href = url;
       } else {
         const anchor = document.createElement('a');
@@ -118,6 +131,21 @@ export class ExamplesPage {
     } finally {
       this.busy.set(undefined);
     }
+  }
+
+  private watchPreview(tab: Window, url: string): void {
+    this.previews.set(tab, url);
+    this.previewWatch ??= setInterval(() => {
+      for (const [open, openUrl] of this.previews) {
+        if (!open.closed) continue;
+        URL.revokeObjectURL(openUrl);
+        this.previews.delete(open);
+      }
+      if (this.previews.size === 0) {
+        clearInterval(this.previewWatch);
+        this.previewWatch = undefined;
+      }
+    }, 2000);
   }
 
   private async render(id: ExampleId): Promise<Blob> {
