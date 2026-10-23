@@ -104,7 +104,8 @@ The header row repeats on every page, rows are never split, and the text stays s
   as an anonymous `pdf-text` with its parent's text styles.
 - Your own components inside a document are transparent, like `display: contents`: their
   `pdf-*` elements are laid out as if written in place, and styles on the component's host
-  element are ignored with a warning. Style a `pdf-*` element inside it instead.
+  element are ignored with a warning. Style a `pdf-*` element inside it instead. The same goes
+  for the document component you render: style its `pdf-document` or `pdf-page`, not its host.
 - Colors are hex (3, 4, 6 or 8 digits), `rgb()`/`rgba()`, the CSS named colors and
   `transparent`. Other forms, such as `hsl()`, throw.
 - `opacity` multiplies down the tree; a faded view's children are each faded, not composited as

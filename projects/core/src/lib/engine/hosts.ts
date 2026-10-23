@@ -37,17 +37,18 @@ export function dissolveHosts(document: PdfNode, warn: (message: string) => void
   const copy = (node: PdfNode, parent: PdfNode | null, depth: number): PdfNode => {
     if (depth > MAX_NESTING) throw new Error(`ngpdf: nesting deeper than ${String(MAX_NESTING)}`);
     const out: PdfNode = { ...node, parent, children: [] };
-    const adopt = (children: readonly PdfNode[]): void => {
-      for (const child of children) {
-        if (isHost(child)) {
-          ignoreStyle(child);
-          adopt(child.children);
-        } else {
-          out.children.push(copy(child, out, depth + 1));
-        }
+    // A loop, not recursion: hosts do not count towards the nesting limit, so a chain of them
+    // can be as long as the template makes it.
+    const pending = [...node.children].reverse();
+    for (let child = pending.pop(); child; child = pending.pop()) {
+      if (isHost(child)) {
+        ignoreStyle(child);
+        // Not push(...children): spreading a host with a huge number of rows overflows too.
+        for (const grandchild of [...child.children].reverse()) pending.push(grandchild);
+      } else {
+        out.children.push(copy(child, out, depth + 1));
       }
-    };
-    adopt(node.children);
+    }
     return out;
   };
 

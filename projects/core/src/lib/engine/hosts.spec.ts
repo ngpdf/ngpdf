@@ -88,4 +88,13 @@ describe('dissolveHosts', () => {
       'ngpdf: nesting deeper than 64',
     );
   });
+
+  it('looks through a very long chain of hosts without overflowing the stack', () => {
+    let chain = el('pdf-view');
+    for (let i = 0; i < 100_000; i++) chain = el('app-wrap', [chain]);
+
+    const out = dissolveHosts(el('pdf-document', [el('pdf-page', [chain])]), vi.fn());
+
+    expect(tags(out.children[0]!)).toEqual(['pdf-view']);
+  });
 });

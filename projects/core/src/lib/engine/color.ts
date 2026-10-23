@@ -194,6 +194,8 @@ function amount(token: string, full: number): number | null {
   const text = isPercent ? token.slice(0, -1) : token;
   // Number('') is 0 and Number(' 1') is 1; neither is a CSS number.
   if (text === '' || text.trim() !== text) return null;
+  // Number() also reads 0x10, 0b1 and 0o7, which CSS does not.
+  if (/[box]/i.test(text)) return null;
   const value = Number(text);
   if (!Number.isFinite(value)) return null;
   return isPercent ? (value / 100) * full : value;
