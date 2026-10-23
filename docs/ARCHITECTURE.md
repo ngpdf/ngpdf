@@ -192,6 +192,7 @@ projects/core/src/lib/render/     render-tree, PdfRenderer facade       (eager)
 projects/core/src/lib/engine/     hosts, color, style, fonts, text, images, layout,
                                   paginate, display-list, writer, index (lazy)
 projects/demo/                    the three reference documents
+projects/site/                    ngpdf.dev: landing, docs (Markdown), examples
 scripts/                          dev (Docker), e2e, bundle budget
 docs/                             this file, ENGINEERING.md, roadmap
 ```

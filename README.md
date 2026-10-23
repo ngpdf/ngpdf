@@ -15,6 +15,8 @@ uses the `pdf-*` elements; ngpdf lays it out, breaks it into pages and writes th
 browser. The layout and PDF engine is loaded on the first render, so importing `@ngpdf/core` adds
 at most 15 KB gzipped to your initial bundle.
 
+**Docs, live demo and examples: [ngpdf.dev](https://ngpdf.dev)**
+
 ## Install
 
 ```sh

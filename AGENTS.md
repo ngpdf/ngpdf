@@ -41,7 +41,12 @@ All toolchains run in Docker. Nothing is installed on the host except nvm.
 ./scripts/dev npx ng build demo
 ./scripts/dev node scripts/bundle-budget.mjs   # eager size of @ngpdf/core in the demo
 node scripts/e2e.mjs [--update]        # demo PDFs in headless Chrome vs e2e/expected/*.txt
+./scripts/dev npm run build:site       # ngpdf.dev, prerendered to dist/site/browser
 ```
+
+The site (`projects/site`) is a prerendered Angular app. Its docs are the Markdown files in
+`projects/site/src/content/docs/`; they must stay true to the library's code, like any other docs.
+`.github/workflows/site.yml` deploys it to the Hostinger host over FTPS when `main` changes.
 
 `scripts/dev` runs a command in `node:24-bookworm-slim` with the repo at `/w`, uid 1000 and a
 6 GB memory cap. The end-to-end script uses the host's `/usr/bin/google-chrome` and runs

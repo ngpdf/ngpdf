@@ -34,6 +34,19 @@ Node image, because StrykerJS needs `ps`:
 NGPDF_IMAGE=node:24-bookworm ./scripts/dev npx stryker run --dryRunOnly
 ```
 
+## The site
+
+[ngpdf.dev](https://ngpdf.dev) lives in `projects/site`: a landing page with a live demo, the
+documentation (Markdown in `projects/site/src/content/docs/`, one file per page) and the examples.
+
+```sh
+./scripts/dev npm run build:site     # build and prerender to dist/site/browser
+```
+
+A change to the library that users see needs its docs page updated in the same pull request.
+Merging to `main` deploys the site (`.github/workflows/site.yml`). The social card and the home
+screen icon are rendered from `projects/site/brand/` with `node scripts/site-images.mjs`.
+
 ## Test first
 
 Write the test first and watch it fail. A test that passes without the change it covers guards
