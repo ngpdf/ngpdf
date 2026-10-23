@@ -6,3 +6,8 @@
 # id = "GHSA-xxxx-xxxx-xxxx"
 # ignoreUntil = 2026-12-31
 # reason = "The vulnerable function is never called by ngpdf; explain why it is unreachable."
+
+[[IgnoredVulns]]
+id = "GHSA-vfj7-8cjw-p6xm"
+ignoreUntil = 2027-01-20
+reason = "braces 3.0.3 has no fixed release. It reaches ngpdf only through micromatch in eslint-plugin-boundaries, a lint-time dev dependency that expands the glob patterns written in eslint.config.mjs. No user input reaches it, and it is not in the published package."
