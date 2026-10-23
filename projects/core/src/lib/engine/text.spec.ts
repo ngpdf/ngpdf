@@ -20,6 +20,11 @@ const kerningMetrics: FontMetrics = {
   ascent: () => 0,
 };
 
+// About 80 ms a run on a developer machine, and up to 500 ms on a shared CI runner with coverage
+// on. A quadratic regression over 100,000 characters takes far longer than either, so the budget
+// only has to separate those two, not hold the runner to a laptop's speed.
+const TEXT_BUDGET_MS = 2000;
+
 describe('layoutText', () => {
   let writer: PdfWriter;
   beforeAll(async () => {
@@ -112,7 +117,7 @@ describe('layoutText', () => {
     for (const line of block.lines) expect(line.width).toBeLessThanOrEqual(30);
   });
 
-  it('lays out 100,000 characters in under 500 ms when every measured line overflows its estimate', () => {
+  it('lays out 100,000 characters in under 2000 ms when every measured line overflows its estimate', () => {
     // Every multi-character measure draws 25pt wider than the character sum, so each line
     // takes the narrowing path.
     const inflating: FontMetrics = {
@@ -133,10 +138,10 @@ describe('layoutText', () => {
           .replace(/ /g, ''),
       ).toBe(text.replace(/ /g, ''));
     }
-    expect(Math.min(...timings)).toBeLessThan(500);
+    expect(Math.min(...timings)).toBeLessThan(TEXT_BUDGET_MS);
   });
 
-  it('splits a 100,000-character unbreakable word in under 500 ms', () => {
+  it('splits a 100,000-character unbreakable word in under 2000 ms', () => {
     const word = 'x'.repeat(100_000);
     const timings: number[] = [];
     for (let run = 0; run < 3; run++) {
@@ -145,7 +150,7 @@ describe('layoutText', () => {
       timings.push(performance.now() - started);
       expect(block.lines.every((line) => line.width <= 30)).toBe(true);
     }
-    expect(Math.min(...timings)).toBeLessThan(500);
+    expect(Math.min(...timings)).toBeLessThan(TEXT_BUDGET_MS);
   });
 
   it('puts one character per line when the box is narrower than a character', () => {
