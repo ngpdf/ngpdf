@@ -1,72 +1,54 @@
 <section class="hero" aria-labelledby="hero-title">
   <div class="container hero-grid">
     <div class="hero-copy">
-      <a class="release-pill" routerLink="/changelog">
-        <span class="dot" aria-hidden="true"></span> v{{ version }} is out · see what changed
-      </a>
+      <a class="release" routerLink="/changelog">What's new in v{{ version }} →</a>
       <h1 id="hero-title" class="hero-title">Write PDFs as <em>Angular components.</em></h1>
       <p class="hero-lede">
-        ngpdf renders a normal Angular component to a real PDF, in the browser: selectable text,
-        tables with repeating headers, page breaks and page numbers. No server, no screenshots, and
-        about 2 KB on your first load.
+        A normal component, a few <code>pdf-*</code> elements, and the browser writes a real PDF:
+        text you can select, tables whose header comes back on every page, page numbers at the
+        bottom. No server and no screenshots.
       </p>
       <site-copy-command [command]="installCommand" />
-      <div class="actions">
-        <a class="button primary" routerLink="/docs/getting-started">Get started</a>
-        <a class="button" href="#playground">Try it live</a>
-        <a class="button ghost" [href]="githubUrl" rel="noopener" target="_blank">GitHub</a>
+      <div class="hero-actions">
+        <a class="button primary" routerLink="/docs/getting-started">Read the guide</a>
+        <a class="text-link" href="#playground">or edit one right here ↓</a>
       </div>
-      <p class="hero-meta">For Angular 22+ · zoneless or zone.js · MIT licensed</p>
+      <p class="hero-meta">Angular 22+ · zoneless or zone.js · MIT</p>
     </div>
-
-    <div class="hero-visual" aria-hidden="true">
-      <div class="sheet sheet-back"></div>
-      <div class="sheet sheet-mid"></div>
-      <div class="sheet sheet-front">
-        <span class="crop tl"></span><span class="crop tr"></span><span class="crop bl"></span
-        ><span class="crop br"></span>
-        <div class="sheet-head">
-          <span class="sheet-brand">Northwind Studio</span>
-          <span class="sheet-label">INVOICE</span>
-        </div>
-        <div class="sheet-bill"><span></span><span></span></div>
-        <div class="sheet-table">
-          <div class="sheet-row head"><span></span><span></span><span></span></div>
-          @for (row of [1, 2, 3, 4, 5, 6, 7]; track row) {
-            <div class="sheet-row" [class.odd]="row % 2 === 0">
-              <span></span><span></span><span></span>
-            </div>
-          }
-        </div>
-        <div class="sheet-total"><span></span></div>
-        <span class="sheet-page">Page 1 of 2</span>
-      </div>
-      <span class="measure measure-x">595.28 pt</span>
-      <span class="measure measure-y">841.89 pt</span>
-    </div>
+    <site-hero-press />
   </div>
 </section>
 
-<section class="facts" aria-label="At a glance">
-  <ul class="container facts-list">
-    <li><strong>~2 KB</strong><span>eager, gzipped</span></li>
-    <li><strong>9</strong><span>pdf-* elements</span></li>
-    <li><strong>0</strong><span>servers needed</span></li>
-    <li><strong>100%</strong><span>text you can select</span></li>
-  </ul>
+<section class="section note" aria-labelledby="note-title">
+  <div class="container note-grid">
+    <h2 id="note-title" class="side-title">Why it exists</h2>
+    <div class="note-body">
+      <p class="drop">
+        At work I looked after three reports that went out as PDFs: a capture of a screen with a
+        title and a timestamp, a list of contacts, and a table of licences. They were built with
+        jsPDF. One was a screenshot of the page, so its text could not be selected; the other two
+        were tables placed by hand, and every new column meant working out coordinates again.
+      </p>
+      <p>
+        The data was already in Angular components, with pipes, signals and services around it.
+        ngpdf lets that component be the document, and leaves layout, page breaks and the PDF itself
+        to a small engine that loads only when you print.
+      </p>
+      <p class="signature">Gabriel Silva, maintainer</p>
+    </div>
+  </div>
 </section>
 
 <section class="section" aria-labelledby="code-title">
   <div class="container split">
     <div class="split-copy">
-      <p class="eyebrow">01 · Write</p>
       <h2 id="code-title" class="section-title">A document is a component</h2>
       <p>
-        Lay it out with the <code>pdf-*</code> elements and the CSS you already know: flexbox,
-        padding, borders, colors. Bind data with inputs and signals, format it with pipes, loop over
-        it with <code>&#64;for</code>.
+        Lay it out with the <code>pdf-*</code> elements and CSS you already know: flexbox, padding,
+        borders, colors. Inputs carry the data, pipes format it, <code>&#64;for</code>
+        repeats it.
       </p>
-      <p>Then render it with one call, wherever you can inject a service.</p>
+      <p>Then render it from anywhere you can inject a service.</p>
       <site-code-sheet [code]="renderSnippet" fileName="invoice-button.ts" />
     </div>
     <site-code-sheet class="split-code" [code]="heroTemplate" fileName="invoice.ts" />
@@ -75,39 +57,71 @@
 
 <section id="playground" class="section playground" aria-labelledby="playground-title">
   <div class="container">
-    <p class="eyebrow">02 · Try it</p>
-    <h2 id="playground-title" class="section-title">Edit it. It renders again, right here.</h2>
+    <h2 id="playground-title" class="section-title">Edit it, and it prints again</h2>
     <p class="section-lede">
-      This invoice is an Angular component on this page. Change its inputs and ngpdf lays it out,
-      paginates it and writes a new PDF in your browser.
+      This invoice is an Angular component on this page. Change it and ngpdf lays it out, paginates
+      it and writes a new PDF in your browser. Push the line items past thirty and watch the header
+      follow onto page two.
     </p>
     <site-live-demo />
   </div>
 </section>
 
-<section class="section" aria-labelledby="features-title">
-  <div class="container">
-    <p class="eyebrow">03 · Why ngpdf</p>
-    <h2 id="features-title" class="section-title">Built for the documents apps actually print</h2>
-    <ul class="feature-grid">
-      @for (feature of features; track feature.title) {
-        <li class="feature">
-          <h3>{{ feature.title }}</h3>
-          <p>{{ feature.text }}</p>
-        </li>
-      }
-    </ul>
+<section class="section" aria-labelledby="spec-title">
+  <div class="container spec">
+    <h2 id="spec-title" class="side-title">Specifications</h2>
+    <dl class="spec-list">
+      <div>
+        <dt>Layout</dt>
+        <dd>Flexbox through Yoga: direction, justify, align, gap, grow and shrink.</dd>
+      </div>
+      <div>
+        <dt>Tables</dt>
+        <dd>
+          Columns declared once in points, percentages or <code>fr</code>. Header rows repeat on
+          every page; rows are never split.
+        </dd>
+      </div>
+      <div>
+        <dt>Pages</dt>
+        <dd>A3, A4, A5, Letter, Legal or any size, portrait or landscape, with page numbers.</dd>
+      </div>
+      <div>
+        <dt>Text</dt>
+        <dd>Real text with line breaking, the 14 standard PDF fonts, alignment, decoration.</dd>
+      </div>
+      <div>
+        <dt>Images</dt>
+        <dd>PNG and JPEG from a URL, a data URL, a Blob or an ArrayBuffer; contain or cover.</dd>
+      </div>
+      <div>
+        <dt>Weight</dt>
+        <dd>About 2 KB gzipped on your first load. The engine arrives on the first render.</dd>
+      </div>
+      <div>
+        <dt>Output</dt>
+        <dd>
+          The same input gives the same bytes. No PDF JavaScript, actions or attachments are ever
+          written.
+        </dd>
+      </div>
+      <div class="not-yet">
+        <dt>Not yet</dt>
+        <dd>
+          Custom fonts, SVG, links, server rendering, splitting a paragraph across pages. They are
+          <a routerLink="/docs/limitations-and-roadmap">on the roadmap</a>.
+        </dd>
+      </div>
+    </dl>
   </div>
 </section>
 
-<section class="section how" aria-labelledby="how-title">
-  <div class="container">
-    <p class="eyebrow">04 · Under the hood</p>
-    <h2 id="how-title" class="section-title">From template to bytes, in one pipeline</h2>
+<section class="section" aria-labelledby="how-title">
+  <div class="container narrow-block">
+    <h2 id="how-title" class="section-title">How a page gets made</h2>
     <ol class="pipeline">
-      @for (step of steps; track step.name; let index = $index) {
+      @for (step of steps; track step.name) {
         <li>
-          <span class="pipeline-index">{{ index + 1 }}</span>
           <strong>{{ step.name }}</strong>
           <span>{{ step.detail }}</span>
         </li>
@@ -115,61 +129,54 @@
     </ol>
     <p class="section-foot">
       Each stage is a plain function over plain data, tested on its own.
-      <a routerLink="/docs/how-it-works">Read how it works</a>.
+      <a routerLink="/docs/how-it-works">More on how it works</a>.
     </p>
   </div>
 </section>
 
 <section class="section" aria-labelledby="compare-title">
-  <div class="container narrow-wide">
-    <p class="eyebrow">05 · Compared</p>
-    <h2 id="compare-title" class="section-title">Why not a screenshot, or jsPDF by hand?</h2>
+  <div class="container narrow-block">
+    <h2 id="compare-title" class="section-title">Compared with what you might use today</h2>
     <div class="table-scroll">
       <table class="compare">
         <thead>
           <tr>
-            <th scope="col"></th>
-            <th scope="col">Screenshot to PDF<br /><small>html2canvas + jsPDF</small></th>
-            <th scope="col">Drawing by hand<br /><small>jsPDF, coordinates</small></th>
-            <th scope="col" class="us">ngpdf</th>
+            <th scope="col"><span class="visually-hidden">Feature</span></th>
+            <th scope="col">Screenshot to PDF<small>html2canvas + jsPDF</small></th>
+            <th scope="col">Drawing by hand<small>jsPDF with coordinates</small></th>
+            <th scope="col">ngpdf</th>
           </tr>
         </thead>
         <tbody>
           <tr>
-            <th scope="row">Selectable, searchable text</th>
-            <td>No, it is an image</td>
+            <th scope="row">Selectable text</th>
+            <td>No, it is a picture</td>
             <td>Yes</td>
-            <td class="us">Yes</td>
+            <td>Yes</td>
           </tr>
           <tr>
             <th scope="row">Page breaks</th>
-            <td>Cuts through rows</td>
-            <td>You compute them</td>
-            <td class="us">Automatic, rows never split</td>
+            <td>Wherever the image is cut</td>
+            <td>You work them out</td>
+            <td>Automatic; rows stay whole</td>
           </tr>
           <tr>
-            <th scope="row">Repeating table headers</th>
+            <th scope="row">Repeating table header</th>
             <td>No</td>
             <td>With a plugin</td>
-            <td class="us">Built in</td>
+            <td>Built in</td>
           </tr>
           <tr>
             <th scope="row">Layout</th>
             <td>Whatever the screen shows</td>
             <td>x and y by hand</td>
-            <td class="us">Flexbox and CSS properties</td>
+            <td>Flexbox and CSS properties</td>
           </tr>
           <tr>
-            <th scope="row">Angular templates, pipes, DI</th>
+            <th scope="row">Pipes, signals, DI</th>
             <td>Indirectly</td>
             <td>No</td>
-            <td class="us">Yes</td>
-          </tr>
-          <tr>
-            <th scope="row">File size</th>
-            <td>Large, one image per page</td>
-            <td>Small</td>
-            <td class="us">Small</td>
+            <td>Yes</td>
           </tr>
         </tbody>
       </table>
@@ -177,63 +184,38 @@
   </div>
 </section>
 
-<section class="section examples-teaser" aria-labelledby="examples-title">
-  <div class="container split">
-    <div class="split-copy">
-      <p class="eyebrow">06 · Examples</p>
-      <h2 id="examples-title" class="section-title">Reports, lists, invoices</h2>
+<section class="section closing" aria-labelledby="closing-title">
+  <div class="container closing-grid">
+    <div>
+      <h2 id="closing-title" class="section-title">Start with one component</h2>
       <p>
-        See complete documents, a paginated directory, a landscape licence list and this invoice,
-        and generate each one in your browser.
+        The <a routerLink="/examples">examples</a> are complete documents you can generate in this
+        browser, and the <a routerLink="/docs/getting-started">guide</a> takes about ten minutes.
       </p>
-      <a class="button primary" routerLink="/examples">See the examples</a>
+      <site-copy-command [command]="installCommand" />
     </div>
-    <div class="mini-sheets" aria-hidden="true">
-      <div class="mini-sheet"><span></span><span></span><span></span><span></span></div>
-      <div class="mini-sheet landscape"><span></span><span></span><span></span></div>
-      <div class="mini-sheet"><span></span><span></span><span></span><span></span></div>
-    </div>
-  </div>
-</section>
-
-<section class="section community" aria-labelledby="community-title">
-  <div class="container">
-    <p class="eyebrow">07 · Community</p>
-    <h2 id="community-title" class="section-title">Made in the open</h2>
-    <p class="section-lede">
-      ngpdf is MIT licensed and maintained on GitHub. Every contribution, from code to a bug report,
-      gets credited.
-    </p>
-    <ul class="avatars">
-      @for (person of contributors; track person.login) {
-        <li>
-          <a [href]="person.profile" rel="noopener" target="_blank" [title]="person.name">
-            <img
-              [src]="person.avatar + '&s=112'"
-              [alt]="person.name"
-              width="56"
-              height="56"
-              loading="lazy"
-              decoding="async"
-            />
-          </a>
-        </li>
-      }
-    </ul>
-    <div class="actions">
-      <a class="button" routerLink="/contributors">All contributors</a>
-      <a class="button ghost" routerLink="/docs/contributing">How to contribute</a>
-    </div>
-  </div>
-</section>
-
-<section class="final-cta" aria-labelledby="final-title">
-  <div class="container final-inner">
-    <h2 id="final-title" class="final-title">Your next PDF is one component away.</h2>
-    <site-copy-command [command]="installCommand" />
-    <div class="actions">
-      <a class="button primary" routerLink="/docs/getting-started">Read the guide</a>
-      <a class="button ghost" [href]="npmUrl" rel="noopener" target="_blank">npm</a>
+    <div class="people">
+      <p>
+        Built in the open on <a [href]="githubUrl" rel="noopener" target="_blank">GitHub</a>, MIT
+        licensed. Every contribution, code or a bug report, gets credited.
+      </p>
+      <ul class="avatars">
+        @for (person of contributors; track person.login) {
+          <li>
+            <a [href]="person.profile" rel="noopener" target="_blank" [title]="person.name">
+              <img
+                [src]="person.avatar + '&s=96'"
+                [alt]="person.name"
+                width="48"
+                height="48"
+                loading="lazy"
+                decoding="async"
+              />
+            </a>
+          </li>
+        }
+      </ul>
+      <a class="text-link" routerLink="/docs/contributing">How to contribute →</a>
     </div>
   </div>
 </section>

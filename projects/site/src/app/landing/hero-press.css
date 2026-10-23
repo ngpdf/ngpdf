@@ -1,0 +1,249 @@
+:host {
+  --tilt-x: 0deg;
+  --tilt-y: 0deg;
+  position: relative;
+  display: block;
+  width: 100%;
+  max-width: 27rem;
+  aspect-ratio: 595 / 780;
+  justify-self: center;
+  /* The sheets are as wide as this box, so cqw inside them is a fraction of the page width. */
+  container-type: inline-size;
+  perspective: 1600px;
+  perspective-origin: 60% 30%;
+}
+
+.stage {
+  position: absolute;
+  inset: 0;
+  transform-style: preserve-3d;
+  transform: rotateX(calc(9deg + var(--tilt-x))) rotateY(calc(-17deg + var(--tilt-y)))
+    rotateZ(1.5deg);
+  transition: transform 0.6s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+/* A sheet is laid out like the PDF it stands for: Helvetica, points scaled to its width. */
+.sheet {
+  position: absolute;
+  inset: 0 0 auto 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3.2cqw;
+  aspect-ratio: 595 / 842;
+  padding: 8% 7%;
+  border-radius: 2px;
+  background: #fffdf9;
+  box-shadow:
+    0 1px 0 rgb(31 29 26 / 0.06),
+    0 30px 60px -20px rgb(31 29 26 / 0.35);
+  color: #1f1d1a;
+  font-family: Helvetica, Arial, sans-serif;
+  font-size: 2.15cqw;
+  line-height: 1.3;
+  transition:
+    transform 0.9s cubic-bezier(0.22, 0.75, 0.2, 1),
+    opacity 0.6s ease;
+}
+
+.sheet-one {
+  opacity: 0;
+  transform: translate3d(0, -8%, 180px) rotateX(-10deg);
+}
+
+.sheet-one.arrived {
+  opacity: 1;
+  transform: translate3d(0, 0, 40px);
+}
+
+.sheet-two {
+  opacity: 0;
+  transform: translate3d(14%, 6%, -40px) rotateY(4deg);
+}
+
+/* The turn: page one steps back and aside, page two comes to the front. */
+:host(.turned) .sheet-one {
+  opacity: 0.5;
+  transform: translate3d(-30%, -5%, -140px) rotateY(12deg);
+}
+
+:host(.turned) .sheet-two {
+  opacity: 1;
+  transform: translate3d(0, 0, 40px);
+}
+
+:host(.fading) .sheet {
+  opacity: 0;
+}
+
+/* Page one leaves first, so it never shows through page two as that one fades. */
+:host(.fading) .sheet-one {
+  transition-duration: 0.15s;
+}
+
+.letterhead {
+  display: flex;
+  justify-content: space-between;
+}
+
+.letterhead > div {
+  display: flex;
+  flex-direction: column;
+}
+
+.letterhead .right {
+  align-items: flex-end;
+}
+
+.letterhead b {
+  font-size: 3.6cqw;
+}
+
+.brand {
+  color: #c2410c;
+}
+
+.muted {
+  color: #6b6660;
+}
+
+.bill {
+  display: flex;
+  flex-direction: column;
+  padding: 2.6cqw 3cqw;
+  border-radius: 1cqw;
+  background: #f6f3ee;
+}
+
+.label {
+  font-size: 2cqw;
+  letter-spacing: 0.04em;
+  color: #6b6660;
+}
+
+.table {
+  display: flex;
+  flex-direction: column;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: 7% 1fr 26%;
+  padding: 1.15cqw 1.5cqw;
+}
+
+.row span:last-child {
+  text-align: right;
+}
+
+.row.odd {
+  background: #f6f3ee;
+}
+
+.row.head {
+  background: #c2410c;
+  color: #fff;
+  font-weight: 700;
+}
+
+.total {
+  display: flex;
+  justify-content: space-between;
+  align-self: flex-end;
+  width: 46%;
+  padding-top: 1.6cqw;
+  border-top: 0.3cqw solid #1f1d1a;
+  font-weight: 700;
+}
+
+.page-number {
+  margin-top: auto;
+  align-self: flex-end;
+  font-size: 2cqw;
+  color: #8a837a;
+}
+
+/* Setting a line: it is wiped in from the left, as a printer would lay it down. */
+.letterhead,
+.bill,
+.row,
+.total,
+.page-number {
+  clip-path: inset(0 100% 0 0);
+  opacity: 0.2;
+  transition:
+    clip-path 0.38s cubic-bezier(0.3, 0.7, 0.2, 1),
+    opacity 0.38s ease;
+}
+
+.inked,
+.sheet-two .row.head {
+  clip-path: inset(0 0 0 0);
+  opacity: 1;
+}
+
+.crop {
+  position: absolute;
+  width: 4cqw;
+  height: 4cqw;
+  border: 0 solid #c2410c;
+}
+
+.crop.tl {
+  top: -2.4cqw;
+  left: -2.4cqw;
+  border-right-width: 1px;
+  border-bottom-width: 1px;
+}
+
+.crop.br {
+  right: -2.4cqw;
+  bottom: -2.4cqw;
+  border-top-width: 1px;
+  border-left-width: 1px;
+}
+
+.measure {
+  position: absolute;
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  color: var(--muted);
+}
+
+.measure-x {
+  top: -1.8rem;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.measure-y {
+  top: 45%;
+  left: -2.4rem;
+  transform: rotate(-90deg);
+  transform-origin: left top;
+}
+
+@media (max-width: 600px) {
+  :host {
+    max-width: 15.5rem;
+  }
+
+  :host(.turned) .sheet-one {
+    transform: translate3d(-14%, -4%, -120px) rotateY(10deg);
+  }
+
+  .measure {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stage,
+  .sheet,
+  .letterhead,
+  .bill,
+  .row,
+  .total,
+  .page-number {
+    transition: none;
+  }
+}

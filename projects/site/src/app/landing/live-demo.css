@@ -12,6 +12,7 @@
 }
 
 .field {
+  font-family: var(--font-ui);
   display: flex;
   flex-direction: column;
   gap: 0.4rem;

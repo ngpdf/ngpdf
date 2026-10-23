@@ -1,0 +1,53 @@
+<div class="stage">
+  <!-- Page two: behind until the turn, then in front with its header row already repeated. -->
+  <div class="sheet sheet-two">
+    <div class="crop tl"></div>
+    <div class="crop br"></div>
+    <div class="table">
+      <div class="row head"><span>#</span><span>Description</span><span>Amount</span></div>
+      @for (line of pageTwo; track line.item; let i = $index) {
+        <div class="row" [class.odd]="i % 2 === 1" [class.inked]="shown(rowsTwoAt + i)">
+          <span>{{ pageOne.length + i + 1 }}</span
+          ><span>{{ line.item }}</span
+          ><span>{{ line.amount }}</span>
+        </div>
+      }
+    </div>
+    <div class="total" [class.inked]="shown(totalAt)"><span>Total</span><span>$5,996.00</span></div>
+    <span class="page-number" [class.inked]="shown(finishedAt)">Page 2 of 2</span>
+  </div>
+
+  <div class="sheet sheet-one" [class.arrived]="shown(1)">
+    <div class="crop tl"></div>
+    <div class="crop br"></div>
+    <div class="letterhead" [class.inked]="shown(1)">
+      <div>
+        <b class="brand">Northwind Studio</b>
+        <span class="muted">123 Paper Street, Springfield</span>
+      </div>
+      <div class="right">
+        <b>INVOICE</b>
+        <span class="muted">No. 2026-0042</span>
+      </div>
+    </div>
+    <div class="bill" [class.inked]="shown(2)">
+      <span class="label">BILL TO</span>
+      <b>Acme Publishing Ltd.</b>
+    </div>
+    <div class="table">
+      <div class="row head" [class.inked]="shown(3)">
+        <span>#</span><span>Description</span><span>Amount</span>
+      </div>
+      @for (line of pageOne; track line.item; let i = $index) {
+        <div class="row" [class.odd]="i % 2 === 1" [class.inked]="shown(rowsOneAt + i)">
+          <span>{{ i + 1 }}</span
+          ><span>{{ line.item }}</span
+          ><span>{{ line.amount }}</span>
+        </div>
+      }
+    </div>
+    <span class="page-number" [class.inked]="shown(rowsOneAt + pageOne.length)">Page 1 of 2</span>
+  </div>
+</div>
+<span class="measure measure-x">595.28 pt</span>
+<span class="measure measure-y">841.89 pt</span>

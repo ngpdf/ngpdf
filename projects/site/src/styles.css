@@ -1,11 +1,15 @@
 /* ngpdf.dev: paper, ink and one vermilion accent. Fonts are self-hosted from @fontsource. */
-@import '@fontsource-variable/inter';
-@import '@fontsource-variable/fraunces';
+@import '@fontsource-variable/fraunces/full.css';
+@import '@fontsource-variable/fraunces/full-italic.css';
+@import '@fontsource-variable/source-serif-4';
+@import '@fontsource-variable/instrument-sans';
 @import '@fontsource-variable/jetbrains-mono';
 
 :root {
-  --font-body: 'Inter Variable', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  /* Serif for reading, Fraunces for display, a plain sans for interface labels and buttons. */
+  --font-body: 'Source Serif 4 Variable', Georgia, 'Times New Roman', serif;
   --font-display: 'Fraunces Variable', Georgia, 'Times New Roman', serif;
+  --font-ui: 'Instrument Sans Variable', system-ui, -apple-system, 'Segoe UI', sans-serif;
   --font-mono: 'JetBrains Mono Variable', ui-monospace, 'SFMono-Regular', Menlo, monospace;
 
   --paper: #faf7f2;
@@ -24,6 +28,7 @@
   --code-bg: #1f1d1a;
   --code-ink: #f3efe7;
   --shadow-page: 0 1px 2px rgb(31 29 26 / 0.08), 0 12px 32px -8px rgb(31 29 26 / 0.22);
+  --radius-page: 2px;
 
   --radius: 10px;
   --radius-sm: 6px;
@@ -66,7 +71,10 @@ html {
 
 body {
   margin: 0;
-  background: var(--paper);
+  /* A faint paper grain, so large plain areas do not look like a flat fill. */
+  background:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 .05 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"),
+    var(--paper);
   color: var(--ink);
   font-family: var(--font-body);
   font-size: 1rem;
@@ -213,6 +221,7 @@ main:focus {
 
 .site-nav a {
   padding: 0.4rem 0.7rem;
+  font-family: var(--font-ui);
   border-radius: var(--radius-sm);
   color: var(--ink-soft);
   font-size: 0.92rem;
@@ -315,6 +324,10 @@ main:focus {
   font-size: 0.9rem;
 }
 
+.site-footer {
+  font-family: var(--font-ui);
+}
+
 .footer-grid {
   display: grid;
   grid-template-columns: 2fr 1fr 1fr;
@@ -352,9 +365,10 @@ main:focus {
 
 .footer-heading {
   margin: 0 0 0.25rem;
-  font-family: var(--font-mono);
-  font-size: 0.72rem;
-  letter-spacing: 0.08em;
+  font-family: var(--font-ui);
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--muted);
 }
@@ -383,10 +397,9 @@ main:focus {
 /* Shared pieces */
 .eyebrow {
   margin: 0;
-  font-family: var(--font-mono);
-  font-size: 0.75rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+  font-style: italic;
   color: var(--accent-ink);
 }
 
@@ -433,6 +446,7 @@ main:focus {
   background: var(--paper-raised);
   color: var(--ink);
   font: inherit;
+  font-family: var(--font-ui);
   font-size: 0.95rem;
   font-weight: 600;
   text-decoration: none;
@@ -492,6 +506,8 @@ main:focus {
 }
 
 .command code {
+  background: transparent;
+  color: inherit;
   overflow-x: auto;
   padding: 0.7rem 1rem;
   white-space: nowrap;
@@ -510,6 +526,7 @@ main:focus {
   background: transparent;
   color: var(--code-ink);
   font: inherit;
+  font-family: var(--font-ui);
   font-size: 0.8rem;
   font-weight: 600;
   cursor: pointer;
@@ -529,6 +546,7 @@ main:focus {
 }
 
 .card {
+  font-family: var(--font-ui);
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
