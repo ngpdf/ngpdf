@@ -59,6 +59,18 @@ describe('layoutText', () => {
     expect(narrow.lines.map((line) => line.text)).toEqual(['hello', 'world']);
   });
 
+  it('does not break inside a time whose locale puts a narrow no-break space before PM', () => {
+    const wide = layoutText('at 3:00 PM', style, 500, writer);
+    const block = layoutText('at 3:00 PM', style, wide.width - 1, writer);
+    expect(block.lines.map((line) => line.text)).toEqual(['at', '3:00 PM']);
+  });
+
+  it('draws a word with a soft hyphen without the hyphen', () => {
+    const block = layoutText('co­operation', style, 500, writer);
+    expect(block.lines.map((line) => line.text)).toEqual(['cooperation']);
+    expect(block.width).toBe(writer.widthOf('cooperation', 'Helvetica', 9));
+  });
+
   it('splits a long e-mail address that is wider than its box', () => {
     const block = layoutText('pessoa140@empresa-muito-longa.com.br', style, 60, writer);
     expect(block.lines.length).toBeGreaterThanOrEqual(2);

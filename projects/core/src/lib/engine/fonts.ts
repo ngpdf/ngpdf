@@ -30,12 +30,31 @@ function isWinAnsi(codePoint: number): boolean {
   );
 }
 
-/** Replaces characters outside WinAnsi with `?` and reports each distinct one once. */
+// Locale data puts these in pipe output (U+202F before AM/PM, U+2009 or U+202F as a group
+// separator). U+2007 and U+202F must not break (UAX #14 class GL), so they become U+00A0, which
+// linebreak also treats as glue.
+const isNoBreakSpace = (codePoint: number): boolean => codePoint === 0x2007 || codePoint === 0x202f;
+const isSpaceSeparator = (codePoint: number): boolean =>
+  (codePoint >= 0x2000 && codePoint <= 0x200a) || codePoint === 0x202f || codePoint === 0x205f;
+
+// Soft hyphen and zero-width space: invisible unless a line breaks there, and v0.1 never breaks at
+// them, so they are dropped rather than drawn as a hyphen (WinAnsi 0xAD) or as `?`.
+const isInvisible = (codePoint: number): boolean => codePoint === 0xad || codePoint === 0x200b;
+
+/**
+ * Maps Unicode space separators to U+0020 (or U+00A0 for the no-break ones), drops soft hyphens
+ * and zero-width spaces, and replaces any other character outside WinAnsi with `?`, reporting each
+ * distinct one once.
+ */
 export function toWinAnsi(text: string, warn: (chars: string[]) => void): string {
   const unsupported = new Set<string>();
   let out = '';
   for (const char of text) {
-    if (isWinAnsi(char.codePointAt(0) ?? 0)) {
+    const codePoint = char.codePointAt(0) ?? 0;
+    if (isInvisible(codePoint)) continue;
+    if (isSpaceSeparator(codePoint)) {
+      out += isNoBreakSpace(codePoint) ? '\u00A0' : ' ';
+    } else if (isWinAnsi(codePoint)) {
       out += char;
     } else {
       unsupported.add(char);
