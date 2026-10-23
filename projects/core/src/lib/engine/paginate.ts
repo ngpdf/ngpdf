@@ -281,6 +281,14 @@ interface Placement {
   readonly leadShift: number;
 }
 
+/**
+ * A unit is never split, so a break asked for anywhere inside it (a cell of a table row, a
+ * text in a row view) breaks before the whole unit.
+ */
+function asksForBreak(box: Box): boolean {
+  return box.style.breakBefore || box.children.some(asksForBreak);
+}
+
 function at<T>(list: readonly T[], index: number): T {
   const item = list[index];
   if (item === undefined) throw new Error(`ngpdf: pagination lost unit ${String(index)}`);
@@ -372,7 +380,7 @@ export function paginatePage(
   };
 
   units.forEach((unit, index) => {
-    if ((unit.box.style.breakBefore || breaksAt.has(index)) && current.units > 0) {
+    if ((breaksAt.has(index) || asksForBreak(unit.box)) && current.units > 0) {
       startPage();
       previousBottom = null;
     }
