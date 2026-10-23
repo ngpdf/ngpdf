@@ -21,8 +21,9 @@ import { GITHUB_URL, SITE_NAME } from '../site';
 })
 export class ChangelogPage {
   protected readonly releasesUrl = `${GITHUB_URL}/releases`;
-  // Angular sanitizes it: the changelog needs no ids, scripts or styles.
-  protected readonly html = renderMarkdown(SITE_DATA.changelog).html;
+  // Angular sanitizes it: the changelog needs no ids, scripts or styles, so its headings get no
+  // anchors either (the sanitizer would strip their ids and leave the links dangling).
+  protected readonly html = renderMarkdown(SITE_DATA.changelog, { headingAnchors: false }).html;
 
   constructor() {
     inject(Seo).apply({
