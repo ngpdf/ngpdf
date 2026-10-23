@@ -1,5 +1,6 @@
 // Renders the site's raster images from their HTML sources in projects/site/brand, with the
-// host's Chrome (as scripts/e2e.mjs does): the 1200 x 630 social card and the home screen icon.
+// host's Chrome (as scripts/e2e.mjs does): the 1200 x 630 social card, the home screen icon and
+// the organisations' avatar.
 // The PNGs are committed; run this again after changing a source.
 // Usage: node scripts/site-images.mjs
 import { resolve } from 'node:path';
@@ -18,6 +19,12 @@ const IMAGES = [
     output: 'projects/site/public/apple-touch-icon.png',
     width: 180,
     height: 180,
+  },
+  {
+    source: 'projects/site/brand/avatar.html',
+    output: 'projects/site/brand/avatar.png',
+    width: 512,
+    height: 512,
   },
 ];
 

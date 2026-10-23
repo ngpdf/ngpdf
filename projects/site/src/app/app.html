@@ -3,31 +3,32 @@
 <header class="site-header">
   <div class="container header-inner">
     <a class="brand" routerLink="/" (click)="closeMenu()" aria-label="ngpdf home">
-      <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true">
+      <svg class="brand-mark" viewBox="0 0 64 64" aria-hidden="true">
         <path
-          d="M7 3h13l6 6v20H7z"
-          fill="var(--paper-raised)"
-          stroke="currentColor"
-          stroke-width="2"
+          d="M11 4h28l15 15v37a4 4 0 0 1-4 4H11a4 4 0 0 1-4-4V8a4 4 0 0 1 4-4z"
+          fill="#fdf8f2"
+          stroke="#1f1d1a"
+          stroke-width="4"
           stroke-linejoin="round"
         />
+        <path d="M40 6.5 51.5 18H42a2 2 0 0 1-2-2z" fill="#c2410c" />
         <path
-          d="M20 3v6h6"
+          d="M19 17l-6 6 6 6M26 17l6 6-6 6"
           fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linejoin="round"
-        />
-        <path
-          d="M12 15l-3 3 3 3M21 15l3 3-3 3"
-          fill="none"
-          stroke="var(--accent)"
-          stroke-width="2.2"
+          stroke="#c2410c"
+          stroke-width="3.6"
           stroke-linecap="round"
           stroke-linejoin="round"
         />
+        <g stroke-width="3.2" stroke-linecap="round">
+          <path d="M13 36h7M13 41h12M13 46h13M13 51h6" stroke="#c2410c" />
+          <path
+            d="M32 33h17M32 38h9M45 38h4M32 43h9M45 43h4M32 48h9M45 48h4M32 53h9M45 53h4"
+            stroke="#1f1d1a"
+          />
+        </g>
       </svg>
-      <span class="brand-name">ngpdf</span>
+      <span class="brand-name">ng<span class="brand-accent">pdf</span></span>
       <span class="brand-version">v{{ version }}</span>
     </a>
 
@@ -61,7 +62,7 @@
 <footer class="site-footer">
   <div class="container footer-grid">
     <div>
-      <p class="footer-brand">ngpdf</p>
+      <p class="footer-brand">ng<span class="brand-accent">pdf</span></p>
       <p class="footer-text">
         PDFs as Angular components, for Angular. An independent open source project, not affiliated
         with Google or the Angular team.

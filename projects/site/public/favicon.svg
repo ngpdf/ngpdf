@@ -1,13 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
-  <style>
-    .page { fill: #fffdf9; stroke: #1f1d1a; }
-    .fold { stroke: #1f1d1a; }
-    @media (prefers-color-scheme: dark) {
-      .page { fill: #1c1a17; stroke: #f1ece4; }
-      .fold { stroke: #f1ece4; }
-    }
-  </style>
-  <path class="page" d="M7 3h13l6 6v20H7z" stroke-width="2" stroke-linejoin="round"/>
-  <path class="fold" d="M20 3v6h6" fill="none" stroke-width="2" stroke-linejoin="round"/>
-  <path d="M12 15l-3 3 3 3M21 15l3 3-3 3" fill="none" stroke="#e8590c" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- The ngpdf mark, simplified for 16 px: the page, its folded corner and the brackets. -->
+  <path d="M11 4h28l15 15v37a4 4 0 0 1-4 4H11a4 4 0 0 1-4-4V8a4 4 0 0 1 4-4z" fill="#fdf8f2" stroke="#1f1d1a" stroke-width="5" stroke-linejoin="round"/>
+  <path d="M40 7 51 18H42a2 2 0 0 1-2-2z" fill="#c2410c"/>
+  <path d="M24 26l-8 9 8 9M38 26l8 9-8 9" fill="none" stroke="#c2410c" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>

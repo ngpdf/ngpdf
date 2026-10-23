@@ -1,3 +1,7 @@
+<p align="center">
+  <a href="https://ngpdf.dev"><img src="projects/site/brand/logo.svg" width="112" alt="ngpdf"></a>
+</p>
+
 # ngpdf
 
 [![CI](https://github.com/ngpdf/ngpdf/actions/workflows/ci.yml/badge.svg)](https://github.com/ngpdf/ngpdf/actions/workflows/ci.yml)

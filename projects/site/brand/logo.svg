@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="ngpdf">
+  <!-- The ngpdf mark: a page whose code (orange, left) becomes typeset rows (ink, right). -->
+  <path d="M11 4h28l15 15v37a4 4 0 0 1-4 4H11a4 4 0 0 1-4-4V8a4 4 0 0 1 4-4z" fill="#fdf8f2" stroke="#1f1d1a" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M40 6.5 51.5 18H42a2 2 0 0 1-2-2z" fill="#c2410c"/>
+  <path d="M19 17l-6 6 6 6M26 17l6 6-6 6" fill="none" stroke="#c2410c" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/>
+  <g stroke-width="3.2" stroke-linecap="round">
+    <path d="M13 36h7M13 41h12M13 46h13M13 51h6" stroke="#c2410c"/>
+    <path d="M32 33h17M32 38h9M45 38h4M32 43h9M45 43h4M32 48h9M45 48h4M32 53h9M45 53h4" stroke="#1f1d1a"/>
+  </g>
+</svg>
