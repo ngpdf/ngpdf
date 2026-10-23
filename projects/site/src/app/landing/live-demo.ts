@@ -45,11 +45,13 @@ export class LiveDemo {
   protected readonly status = signal<'idle' | 'rendering' | 'ready' | 'error'>('idle');
   protected readonly message = signal('');
   protected readonly elapsed = signal(0);
+  protected readonly pages = signal(0);
   private readonly objectUrl = signal<string | undefined>(undefined);
   protected readonly previewUrl = computed<SafeResourceUrl | undefined>(() => {
     const url = this.objectUrl();
+    // No viewer toolbar or side panel: the frame has its own bar above it.
     return url
-      ? this.sanitizer.bypassSecurityTrustResourceUrl(`${url}#navpanes=0&view=FitH`)
+      ? this.sanitizer.bypassSecurityTrustResourceUrl(`${url}#toolbar=0&navpanes=0&view=FitH`)
       : undefined;
   });
   protected readonly rawUrl = computed(() => this.objectUrl());
@@ -113,6 +115,7 @@ export class LiveDemo {
       this.objectUrl.set(URL.createObjectURL(blob));
       if (previous) URL.revokeObjectURL(previous);
       this.elapsed.set(Math.round(performance.now() - started));
+      this.pages.set(countPages(await blob.text()));
       this.message.set(`${(blob.size / 1024).toFixed(1)} KB`);
       this.status.set('ready');
     } catch (error) {
@@ -121,4 +124,9 @@ export class LiveDemo {
       this.status.set('error');
     }
   }
+}
+
+/** Page objects in the PDF (`/Type /Page`, not `/Pages`); their dictionaries are not compressed. */
+function countPages(pdf: string): number {
+  return pdf.match(/\/Type \/Page\b/g)?.length ?? 0;
 }

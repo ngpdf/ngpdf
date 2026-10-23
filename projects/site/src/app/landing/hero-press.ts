@@ -38,12 +38,12 @@ const PAGE_TWO: readonly Line[] = [
  * Each entry is how long to hold that step, in milliseconds.
  */
 const STEPS = [
-  700, // 0: the first page drops into place
+  450, // 0: the first page drops into place
   450, // 1: letterhead
   350, // 2: billing box
   350, // 3: table header
   ...PAGE_ONE.map(() => 210), // 4..11: page one rows
-  700, // 12: "Page 1 of 2"
+  1300, // 12: "Page 1 of 2" (also the resting state: a full page, before the turn)
   1100, // 13: page one moves back, page two comes forward, its header already there
   ...PAGE_TWO.map(() => 230), // 14..17: page two rows
   450, // 18: total
@@ -56,11 +56,13 @@ const TURN_AT = 13;
 const ROWS_TWO_AT = 14;
 const TOTAL_AT = ROWS_TWO_AT + PAGE_TWO.length;
 const FINISHED_AT = TOTAL_AT + 1;
+/** Page one, complete: what the prerendered page shows, and where playback starts and stops. */
+const REST_AT = TURN_AT - 1;
 
 /**
- * The hero's document, drawn in HTML and moved in 3D with CSS. The prerendered page shows the
- * finished state (page two in front), so there is something to see before scripts run; in the
- * browser it replays the story while the hero is on screen. Under reduced motion it stays still.
+ * The hero's document, drawn in HTML and moved in 3D with CSS. The prerendered page shows page
+ * one complete, so there is a document to see before scripts run; in the browser the story goes
+ * on from there while the hero is on screen. Under reduced motion it stays on that page.
  */
 @Component({
   selector: 'site-hero-press',
@@ -90,8 +92,7 @@ export class HeroPress {
   protected readonly totalAt = TOTAL_AT;
   protected readonly finishedAt = FINISHED_AT;
 
-  /** The finished state until the browser takes over. */
-  protected readonly step = signal(FINISHED_AT);
+  protected readonly step = signal(REST_AT);
   protected readonly tiltX = signal(0);
   protected readonly tiltY = signal(0);
 
@@ -157,17 +158,20 @@ export class HeroPress {
     else this.pause();
   }
 
+  /**
+   * Starts from the full first page the visitor is already looking at, so there is always a
+   * document on screen: it turns to page two, finishes, fades and is set again from the top.
+   */
   private play(): void {
     if (this.running) return;
     this.running = true;
-    this.step.set(0);
     this.schedule();
   }
 
   private pause(): void {
     this.running = false;
     clearTimeout(this.timer);
-    this.step.set(FINISHED_AT);
+    this.step.set(REST_AT);
   }
 
   private schedule(): void {

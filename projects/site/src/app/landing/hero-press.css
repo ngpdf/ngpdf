@@ -71,6 +71,13 @@
   transform: translate3d(0, 0, 40px);
 }
 
+/* Page two turns opaque at once as it slides in, so page one never shows through it. */
+:host(.turned) .sheet-two {
+  transition:
+    transform 0.9s cubic-bezier(0.22, 0.75, 0.2, 1),
+    opacity 0.2s ease;
+}
+
 :host(.fading) .sheet {
   opacity: 0;
 }
