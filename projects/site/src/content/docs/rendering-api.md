@@ -86,6 +86,8 @@ interface DownloadPdfOptions extends DownloadOptions {
 2. append an `<a download="<fileName>">` to the document body, click it and remove it;
 3. revoke the object URL on the next tick.
 
+The anchor is removed and the URL revoked even if the click throws.
+
 If the render fails, nothing is clicked and the promise rejects.
 
 Renders are isolated. Each has its own component, injector, node tree and PDF writer, so you can start several at once.
