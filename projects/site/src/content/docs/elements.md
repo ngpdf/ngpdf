@@ -63,7 +63,7 @@ A flex container, like a `div` with `display: flex; flex-direction: column`.
 
 | Input | Type | Default | Description |
 | --- | --- | --- | --- |
-| `breakBefore` | `boolean` | `false` | Starts a new sheet before this element. A boolean attribute: `<pdf-view breakBefore>` is `true`. |
+| `breakBefore` | `boolean` | `false` | Starts a new sheet before this element, or before the table row or row `pdf-view` it is in (see [Pagination](/docs/pagination)). A boolean attribute: `<pdf-view breakBefore>` is `true`. |
 
 In pagination, a column `pdf-view` with children is a wrapper whose children are units, and a row `pdf-view` is one unit. See [Pagination](/docs/pagination).
 
@@ -73,7 +73,7 @@ A block of text. Its content is the text of all its child nodes.
 
 | Input | Type | Default | Description |
 | --- | --- | --- | --- |
-| `breakBefore` | `boolean` | `false` | Starts a new sheet before this element. A boolean attribute. |
+| `breakBefore` | `boolean` | `false` | Starts a new sheet before this element, or before the table row or row `pdf-view` it is in (see [Pagination](/docs/pagination)). A boolean attribute. |
 
 It wraps at Unicode line-break opportunities and is never split across sheets. A nested `pdf-text` is flattened to its text. See [Text and fonts](/docs/text-and-fonts).
 

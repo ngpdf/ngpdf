@@ -256,6 +256,33 @@ describe('paginatePage: page breaks', () => {
     expect(pages[1]!.placed.map((p) => p.box.node)).toEqual([inner]);
   });
 
+  it('breaks before a table row whose cell asks for it', () => {
+    const second = el('pdf-row', { height: '20' }, [el('pdf-cell', { 'break-before': 'page' })]);
+    const tableNode = el('pdf-table', {}, [row(), second], { columns: ['1fr'] });
+    const pages = paginate(page([tableNode]));
+    expect(pages).toHaveLength(2);
+    expect(pages[1]!.placed.map((p) => p.box.node)).toEqual([second]);
+  });
+
+  it('breaks before a row view when an element deep inside it asks for it', () => {
+    const text = el('pdf-text', {}, [], { breakBefore: true });
+    const rowView = el('pdf-view', { 'flex-direction': 'row', height: '20' }, [
+      el('pdf-view', {}, [text]),
+    ]);
+    const pages = paginate(page([el('pdf-view', { height: '20' }), rowView]));
+    expect(pages).toHaveLength(2);
+    expect(pages[1]!.placed.map((p) => p.box.node)).toEqual([rowView]);
+  });
+
+  it('ignores a break asked for inside a repeated header row', () => {
+    const header = el('pdf-row', { height: '20' }, [el('pdf-cell', { 'break-before': 'page' })], {
+      header: true,
+    });
+    const tableNode = el('pdf-table', {}, [header, row()], { columns: ['1fr'] });
+    const pages = paginate(page([el('pdf-view', { height: '20' }), tableNode]));
+    expect(pages).toHaveLength(1);
+  });
+
   it('puts a unit taller than a page on its own page, clipped, with one warning', () => {
     const before = el('pdf-view', { height: '20' });
     const tall = el('pdf-view', { 'flex-direction': 'row', height: '2000' }, [
