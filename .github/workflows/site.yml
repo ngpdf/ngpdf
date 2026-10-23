@@ -1,0 +1,61 @@
+name: Site
+
+# Builds ngpdf.dev (projects/site, prerendered to static HTML) and uploads it to the Hostinger
+# host over FTPS. Runs when main changes something the site shows: its own code, the library it
+# demos, the docs, the changelog or the contributors. Run it by hand to redeploy as it is.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'projects/site/**'
+      - 'projects/core/**'
+      - 'projects/demo/src/app/**'
+      - 'scripts/site-*.mjs'
+      - '.all-contributorsrc'
+      - 'angular.json'
+      - 'package-lock.json'
+      - '.github/workflows/site.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# One upload at a time, and never cancel one halfway: a cut upload leaves a mixed site.
+concurrency:
+  group: site-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    environment:
+      name: ngpdf.dev
+      url: https://ngpdf.dev
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm run build:site
+      # Uploads only what changed since the last deploy (the action keeps a sync state file on the
+      # server) and deletes files a build no longer has. FTPS encrypts the password and the files;
+      # the certificate is not checked against the host name because the server is reached by its
+      # IP address, which no certificate names.
+      - uses: SamKirkland/FTP-Deploy-Action@110f9186c050f71550953127052e77650219c287 # v4.4.0
+        with:
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          protocol: ftps
+          port: 21
+          security: loose
+          local-dir: ./dist/site/browser/
+          server-dir: ./public_html/
+          exclude: |
+            **/.git*
+            **/.git*/**
