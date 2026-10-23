@@ -11,3 +11,4 @@ out-tsc/
 .stryker-tmp/
 reports/
 docs/superpowers/
+projects/site/src/generated/

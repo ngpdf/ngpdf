@@ -55,6 +55,20 @@ export default tseslint.config(
     },
   },
   {
+    // The site (ngpdf.dev) is an app too: its selectors use `site`.
+    files: ['projects/site/**/*.ts'],
+    rules: {
+      '@angular-eslint/directive-selector': [
+        'error',
+        { type: 'attribute', prefix: 'site', style: 'camelCase' },
+      ],
+      '@angular-eslint/component-selector': [
+        'error',
+        { type: 'element', prefix: 'site', style: 'kebab-case' },
+      ],
+    },
+  },
+  {
     files: ['**/*.html'],
     extends: [...angular.configs.templateRecommended],
   },
@@ -161,6 +175,11 @@ export default tseslint.config(
     files: ['**/*.mjs', '**/*.js'],
     extends: [eslint.configs.recommended, tseslint.configs.disableTypeChecked],
     languageOptions: { globals: globals.node },
+  },
+  {
+    // Scripts the site serves as they are, and the image script's page callbacks, run in a browser.
+    files: ['projects/site/public/**/*.js', 'scripts/site-images.mjs'],
+    languageOptions: { globals: { ...globals.node, ...globals.browser } },
   },
   {
     files: ['**/*.spec.ts', '**/*.bench.ts'],

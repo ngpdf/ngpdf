@@ -1,0 +1,84 @@
+<div class="demo">
+  <form class="demo-controls" (submit)="$event.preventDefault()" aria-label="Invoice inputs">
+    <label class="field">
+      <span>Your company</span>
+      <input
+        type="text"
+        maxlength="60"
+        [value]="company()"
+        (input)="setText('company', $event)"
+        autocomplete="off"
+      />
+    </label>
+    <label class="field">
+      <span>Bill to</span>
+      <input
+        type="text"
+        maxlength="60"
+        [value]="customer()"
+        (input)="setText('customer', $event)"
+        autocomplete="off"
+      />
+    </label>
+
+    <fieldset class="field">
+      <legend>Accent</legend>
+      <div class="swatches">
+        @for (option of accents; track option.value) {
+          <label class="swatch" [style.--swatch]="option.value">
+            <input
+              type="radio"
+              name="accent"
+              [value]="option.value"
+              [checked]="accent() === option.value"
+              (change)="accent.set(option.value)"
+            />
+            <span class="visually-hidden">{{ option.name }}</span>
+          </label>
+        }
+      </div>
+    </fieldset>
+
+    <label class="field">
+      <span
+        >Line items <output class="rows-value">{{ rows() }}</output></span
+      >
+      <input type="range" min="3" max="150" step="1" [value]="rows()" (input)="setRows($event)" />
+      <small>Past about 30 rows the table runs onto a second page, and its header repeats.</small>
+    </label>
+
+    <p class="demo-status" role="status" aria-live="polite">
+      @switch (status()) {
+        @case ('rendering') {
+          Rendering in your browser…
+        }
+        @case ('ready') {
+          Rendered in {{ elapsed() }} ms · {{ message() }}
+        }
+        @case ('error') {
+          {{ message() }}
+        }
+        @default {
+          The PDF renders here, in your browser, when the page loads.
+        }
+      }
+    </p>
+
+    @if (rawUrl(); as url) {
+      <div class="actions">
+        <a class="button primary" [href]="url" download="ngpdf-invoice.pdf">Download PDF</a>
+        <a class="button" [href]="url" target="_blank" rel="noopener">Open in a new tab</a>
+      </div>
+    }
+  </form>
+
+  <div class="demo-preview" [class.busy]="status() === 'rendering'">
+    @if (previewUrl(); as url) {
+      <iframe [src]="url" title="Live PDF preview of the invoice" loading="lazy"></iframe>
+    } @else {
+      <div class="demo-placeholder" aria-hidden="true">
+        <span></span><span></span><span></span><span></span><span></span>
+      </div>
+    }
+  </div>
+</div>

@@ -1,0 +1,62 @@
+# ngpdf.dev on Hostinger (Apache/LiteSpeed). The site is static: every page is a prerendered
+# index.html under its own folder, so no rewrite to a single entry point is needed.
+
+Options -Indexes
+DirectoryIndex index.html
+
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+
+  # One origin: https, no www. A local preview (localhost) is left alone.
+  RewriteCond %{HTTP_HOST} !^(localhost|127\.0\.0\.1)(:\d+)?$
+  RewriteCond %{HTTPS} off [OR]
+  RewriteCond %{HTTP_HOST} ^www\. [NC]
+  RewriteRule ^ https://ngpdf.dev%{REQUEST_URI} [L,R=301]
+
+  # /docs/tables/ and /docs/tables are the same page; keep the one without the slash.
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_URI} ^(.+)/$
+  RewriteRule ^ %1 [L,R=301]
+
+  # /docs/tables is served from /docs/tables/index.html without a redirect.
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME}/index.html -f
+  RewriteRule ^(.+)$ $1/index.html [L]
+</IfModule>
+
+DirectorySlash Off
+
+ErrorDocument 404 /404/index.html
+
+<IfModule mod_headers.c>
+  Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains"
+  Header always set X-Content-Type-Options "nosniff"
+  Header always set Referrer-Policy "strict-origin-when-cross-origin"
+  Header always set Permissions-Policy "camera=(), microphone=(), geolocation=(), interest-cohort=()"
+  Header always set X-Frame-Options "SAMEORIGIN"
+  Header always set Cross-Origin-Opener-Policy "same-origin"
+  # Scripts only from this origin, the inline hydration scripts by hash (written by
+  # scripts/site-postbuild.mjs in place of SCRIPT_HASHES), and WebAssembly compilation for Yoga.
+  # Styles allow inline, because Angular adds component styles as <style> elements. The live demo
+  # shows its PDF from a blob: URL in a frame.
+  Header always set Content-Security-Policy "default-src 'self'; script-src 'self' SCRIPT_HASHES 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://avatars.githubusercontent.com; font-src 'self'; connect-src 'self' blob: data:; frame-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'; upgrade-insecure-requests"
+
+  # Hashed bundles never change under the same name: cache them for a year.
+  <FilesMatch "\.(js|css|woff2)$">
+    Header set Cache-Control "public, max-age=31536000, immutable"
+  </FilesMatch>
+  # Pages and the files crawlers read change with every deploy.
+  <FilesMatch "\.(html|xml|txt|webmanifest)$">
+    Header set Cache-Control "public, max-age=0, must-revalidate"
+  </FilesMatch>
+  <FilesMatch "\.(png|svg|ico)$">
+    Header set Cache-Control "public, max-age=604800"
+  </FilesMatch>
+</IfModule>
+
+<IfModule mod_deflate.c>
+  AddOutputFilterByType DEFLATE text/html text/css text/plain text/xml application/javascript application/json application/xml image/svg+xml application/manifest+json
+</IfModule>
+
+AddType application/manifest+json .webmanifest
+AddType font/woff2 .woff2

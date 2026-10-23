@@ -1,0 +1,200 @@
+<!doctype html>
+<!-- The 1200 x 630 social card (public/og.png). Rendered by scripts/site-images.mjs. -->
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      @font-face {
+        font-family: Fraunces;
+        src: url('../../../node_modules/@fontsource-variable/fraunces/files/fraunces-latin-wght-normal.woff2');
+        font-weight: 100 900;
+      }
+      @font-face {
+        font-family: Fraunces;
+        font-style: italic;
+        src: url('../../../node_modules/@fontsource-variable/fraunces/files/fraunces-latin-wght-italic.woff2');
+        font-weight: 100 900;
+      }
+      @font-face {
+        font-family: Inter;
+        src: url('../../../node_modules/@fontsource-variable/inter/files/inter-latin-wght-normal.woff2');
+        font-weight: 100 900;
+      }
+      @font-face {
+        font-family: Mono;
+        src: url('../../../node_modules/@fontsource-variable/jetbrains-mono/files/jetbrains-mono-latin-wght-normal.woff2');
+        font-weight: 100 900;
+      }
+      html,
+      body {
+        margin: 0;
+        width: 1200px;
+        height: 630px;
+      }
+      body {
+        position: relative;
+        overflow: hidden;
+        display: flex;
+        align-items: center;
+        padding: 0 80px;
+        box-sizing: border-box;
+        background: #faf7f2;
+        color: #1f1d1a;
+        font-family: Inter, sans-serif;
+        background-image:
+          linear-gradient(rgb(31 29 26 / 0.05) 1px, transparent 1px),
+          linear-gradient(90deg, rgb(31 29 26 / 0.05) 1px, transparent 1px);
+        background-size:
+          100% 40px,
+          40px 100%;
+      }
+      .copy {
+        width: 640px;
+      }
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        font-family: Fraunces, serif;
+        font-size: 44px;
+        font-weight: 650;
+        letter-spacing: -0.02em;
+      }
+      .brand svg {
+        width: 56px;
+        height: 56px;
+      }
+      h1 {
+        margin: 36px 0 20px;
+        font-family: Fraunces, serif;
+        font-size: 76px;
+        font-weight: 600;
+        line-height: 1.02;
+        letter-spacing: -0.035em;
+      }
+      h1 em {
+        color: #9a3412;
+      }
+      p {
+        margin: 0;
+        font-size: 26px;
+        color: #4a4640;
+        line-height: 1.4;
+      }
+      .cmd {
+        display: inline-block;
+        margin-top: 32px;
+        padding: 14px 22px;
+        border-radius: 10px;
+        background: #1f1d1a;
+        color: #f3efe7;
+        font-family: Mono, monospace;
+        font-size: 24px;
+      }
+      .cmd b {
+        color: #f97316;
+        font-weight: 400;
+      }
+      .sheet {
+        position: absolute;
+        width: 340px;
+        height: 440px;
+        border-radius: 4px;
+        background: #fffdf9;
+        box-shadow:
+          0 2px 4px rgb(31 29 26 / 0.08),
+          0 24px 60px -12px rgb(31 29 26 / 0.3);
+      }
+      .s1 {
+        right: 70px;
+        top: 120px;
+        transform: rotate(6deg);
+        opacity: 0.6;
+      }
+      .s2 {
+        right: 100px;
+        top: 100px;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+        padding: 36px 30px;
+        box-sizing: border-box;
+      }
+      .bar {
+        height: 12px;
+        border-radius: 2px;
+        background: #e2dbd0;
+      }
+      .head {
+        height: 26px;
+        background: #c2410c;
+        border-radius: 2px;
+      }
+      .row {
+        display: grid;
+        grid-template-columns: 1fr 3fr 1.3fr;
+        gap: 16px;
+        padding: 9px 8px;
+      }
+      .row span {
+        height: 10px;
+        border-radius: 2px;
+        background: #d9d2c7;
+      }
+      .odd {
+        background: #f6f3ee;
+      }
+      .title {
+        width: 55%;
+        height: 18px;
+        background: #c2410c;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="copy">
+      <div class="brand">
+        <svg viewBox="0 0 32 32">
+          <path
+            d="M7 3h13l6 6v20H7z"
+            fill="#fffdf9"
+            stroke="#1f1d1a"
+            stroke-width="2"
+            stroke-linejoin="round"
+          />
+          <path
+            d="M20 3v6h6"
+            fill="none"
+            stroke="#1f1d1a"
+            stroke-width="2"
+            stroke-linejoin="round"
+          />
+          <path
+            d="M12 15l-3 3 3 3M21 15l3 3-3 3"
+            fill="none"
+            stroke="#e8590c"
+            stroke-width="2.4"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+        </svg>
+        ngpdf
+      </div>
+      <h1>Write PDFs as <em>Angular components.</em></h1>
+      <p>Real text, tables that paginate, page numbers. Rendered in the browser.</p>
+      <div class="cmd"><b>$</b> npm install @ngpdf/core</div>
+    </div>
+    <div class="sheet s1"></div>
+    <div class="sheet s2">
+      <div class="bar title"></div>
+      <div class="bar" style="width: 40%"></div>
+      <div class="head"></div>
+      <div class="row"><span></span><span></span><span></span></div>
+      <div class="row odd"><span></span><span></span><span></span></div>
+      <div class="row"><span></span><span></span><span></span></div>
+      <div class="row odd"><span></span><span></span><span></span></div>
+      <div class="row"><span></span><span></span><span></span></div>
+      <div class="row odd"><span></span><span></span><span></span></div>
+    </div>
+  </body>
+</html>

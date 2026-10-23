@@ -1,0 +1,75 @@
+<div class="docs container">
+  <ng-template #pageList>
+    @for (section of sections; track section.name) {
+      <p class="docs-nav-section">{{ section.name }}</p>
+      <ul>
+        @for (item of section.pages; track item.slug) {
+          <li>
+            <a
+              [routerLink]="['/docs', item.slug]"
+              routerLinkActive="active"
+              ariaCurrentWhenActive="page"
+              >{{ item.title }}</a
+            >
+          </li>
+        }
+      </ul>
+    }
+  </ng-template>
+
+  <nav class="docs-nav" aria-label="Documentation">
+    <div class="docs-nav-wide">
+      <ng-container [ngTemplateOutlet]="pageList" />
+    </div>
+    <details class="docs-nav-narrow">
+      <summary>Documentation pages</summary>
+      <ng-container [ngTemplateOutlet]="pageList" />
+    </details>
+  </nav>
+
+  @if (page(); as current) {
+    <article class="docs-article">
+      <p class="eyebrow">{{ current.section }}</p>
+      <h1>{{ current.title }}</h1>
+      <p class="lede">{{ current.description }}</p>
+      <div class="prose" [innerHTML]="html()"></div>
+
+      <footer class="docs-footer">
+        <a class="edit-link" [href]="editUrl()" rel="noopener" target="_blank"
+          >Edit this page on GitHub</a
+        >
+        <nav class="pager" aria-label="Previous and next page">
+          @if (neighbours().previous; as previous) {
+            <a class="pager-link" [routerLink]="['/docs', previous.slug]">
+              <span>Previous</span>{{ previous.title }}
+            </a>
+          }
+          @if (neighbours().next; as next) {
+            <a class="pager-link next" [routerLink]="['/docs', next.slug]">
+              <span>Next</span>{{ next.title }}
+            </a>
+          }
+        </nav>
+      </footer>
+    </article>
+
+    @if (headings().length > 0) {
+      <aside class="docs-toc" aria-label="On this page">
+        <p class="docs-nav-section">On this page</p>
+        <ul>
+          @for (heading of headings(); track heading.id) {
+            <li [class.sub]="heading.depth === 3">
+              <a [href]="'/docs/' + current.slug + '#' + heading.id">{{ heading.text }}</a>
+            </li>
+          }
+        </ul>
+      </aside>
+    }
+  } @else {
+    <article class="docs-article">
+      <h1>Page not found</h1>
+      <p class="lede">There is no documentation page at this address.</p>
+      <p><a routerLink="/docs">See every documentation page</a></p>
+    </article>
+  }
+</div>

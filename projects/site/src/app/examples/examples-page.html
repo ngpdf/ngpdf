@@ -1,0 +1,57 @@
+<div class="container page">
+  <p class="eyebrow">Examples</p>
+  <h1 class="page-title">Real documents, rendered in your browser</h1>
+  <p class="page-lede">
+    Each button below runs ngpdf on this page. Nothing is sent to a server: the PDF is laid out and
+    written by your browser, in milliseconds. The sources are on GitHub.
+  </p>
+
+  <p class="examples-status" role="status" aria-live="polite">{{ status() }}</p>
+
+  <ul class="examples">
+    @for (example of examples; track example.id) {
+      <li class="example">
+        <h2>{{ example.title }}</h2>
+        <p>{{ example.text }}</p>
+        <ul class="points">
+          @for (point of example.points; track point) {
+            <li>{{ point }}</li>
+          }
+        </ul>
+        @if (example.id === 'capture') {
+          <div class="chart" #chart role="img" aria-label="Bar chart of monthly captures">
+            @for (bar of bars; track bar.label) {
+              <div class="bar" [attr.data-label]="bar.label" [style.height.%]="bar.value"></div>
+            }
+          </div>
+        }
+        <div class="actions">
+          <button
+            type="button"
+            class="button primary"
+            [disabled]="busy() !== undefined"
+            (click)="open(example.id, 'preview')"
+          >
+            {{ busy() === example.id ? 'Rendering…' : 'Open PDF' }}
+          </button>
+          <button
+            type="button"
+            class="button"
+            [disabled]="busy() !== undefined"
+            (click)="open(example.id, 'download')"
+          >
+            Download
+          </button>
+          <a class="button ghost" [href]="example.source" rel="noopener" target="_blank"
+            >View source</a
+          >
+        </div>
+      </li>
+    }
+  </ul>
+
+  <p class="examples-foot">
+    Want to build your own? Start with the <a routerLink="/docs/getting-started">guide</a> or the
+    <a routerLink="/docs/tables">tables</a> page.
+  </p>
+</div>

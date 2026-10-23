@@ -1,0 +1,131 @@
+---
+title: Rendering API
+description: Reference for PdfRenderer, renderToBlob and downloadPdf in @ngpdf/core - signatures, option types, render lifecycle, errors and dev-mode warnings.
+section: Reference
+order: 10
+---
+
+`@ngpdf/core` exports one service and two functions that render a document component to a PDF.
+
+| Export | Needs an injection context | Returns |
+| --- | --- | --- |
+| `PdfRenderer.toBlob` | yes, to inject `PdfRenderer` | `Promise<Blob>` |
+| `PdfRenderer.download` | yes, to inject `PdfRenderer` | `Promise<void>` |
+| `renderToBlob` | no, you pass an injector | `Promise<Blob>` |
+| `downloadPdf` | no, you pass an injector | `Promise<void>` |
+
+## PdfRenderer
+
+```ts
+class PdfRenderer {
+  toBlob<T>(component: Type<T>, options?: RenderOptions): Promise<Blob>;
+  download<T>(component: Type<T>, options: DownloadOptions): Promise<void>;
+}
+```
+
+A service provided in root. It keeps no state; every call is a separate render. It renders with the root `EnvironmentInjector` as the parent injector.
+
+```ts
+private readonly pdf = inject(PdfRenderer);
+
+const blob = await this.pdf.toBlob(InvoiceDocument, { inputs: { customer, lines } });
+await this.pdf.download(InvoiceDocument, { inputs: { customer, lines }, fileName: 'invoice.pdf' });
+```
+
+## renderToBlob and downloadPdf
+
+```ts
+function renderToBlob<T>(component: Type<T>, options: RenderToBlobOptions): Promise<Blob>;
+function downloadPdf<T>(component: Type<T>, options: DownloadPdfOptions): Promise<void>;
+```
+
+The same renders, for code without an injection context. The `injector` you pass is the parent of the render's injector, so the document resolves its services from it. `PdfRenderer` calls these two functions.
+
+## Option types
+
+All four option types are exported as types.
+
+```ts
+interface RenderOptions {
+  /** Values for the document component's inputs, by input name. */
+  readonly inputs?: Record<string, unknown>;
+}
+
+interface DownloadOptions extends RenderOptions {
+  readonly fileName: string;
+}
+
+interface RenderToBlobOptions extends RenderOptions {
+  /** The injector the document component resolves its dependencies from. */
+  readonly injector: EnvironmentInjector;
+}
+
+interface DownloadPdfOptions extends DownloadOptions {
+  readonly injector: EnvironmentInjector;
+}
+```
+
+- `inputs` keys are the component's input names (the alias, if an input has one). Each value is set with `ComponentRef.setInput`. The record is not type-checked against the component.
+- `fileName` is the name the browser saves the file under.
+
+## The Blob
+
+`toBlob` and `renderToBlob` resolve to a `Blob` with type `application/pdf`. The PDF's streams are compressed. To show it, create an object URL with `URL.createObjectURL(blob)` and revoke it when you are done; to upload it, send the `Blob` as a request body or in a `FormData`.
+
+## What a render does
+
+1. Creates a child `EnvironmentInjector` of the parent injector, with ngpdf's renderer factory in it.
+2. Creates the component in that injector, sets each entry of `inputs` and runs change detection once. If that throws, the component and injector are destroyed and the promise rejects with the error.
+3. Loads the engine chunk on the first render. The chunk is cached; if loading fails, for example offline, the next render tries again.
+4. Resolves styles, loads the document's images, lays it out, breaks it into pages and writes the PDF.
+5. Destroys the component and its injector in a `finally` block, whether the render succeeded or failed.
+
+`download` and `downloadPdf` then:
+
+1. create an object URL for the `Blob`;
+2. append an `<a download="<fileName>">` to the document body, click it and remove it;
+3. revoke the object URL on the next tick.
+
+If the render fails, nothing is clicked and the promise rejects.
+
+Renders are isolated. Each has its own component, injector, node tree and PDF writer, so you can start several at once.
+
+## Errors
+
+The returned promise rejects with an `Error`. Errors from ngpdf start with `ngpdf:`.
+
+| Message | Cause |
+| --- | --- |
+| `ngpdf: no pdf-document in the rendered component` | The template has no `pdf-document`. |
+| `ngpdf: pdf-document has no pdf-page` | The document has no `pdf-page` child. |
+| `ngpdf: unknown page size "<size>" on pdf-page` | A size name that does not exist, or a pair that is not two positive numbers. |
+| `ngpdf: invalid color "<value>" on <element>` | A color in a form ngpdf does not read. |
+| `ngpdf: unknown unit in "<value>" on <element>` | A unit other than `pt`, `px`, `in`, `cm`, `mm` or `%`. |
+| `ngpdf: invalid length "<value>" on <element>` | A length that does not start with a number. |
+| `ngpdf: expected a length in "<value>" on <element>` | A percentage or `auto` where only a length is allowed. |
+| `ngpdf: invalid value "<value>" for <property> on <element>` | A keyword or number that the property does not accept. |
+| `ngpdf: expected 1 to 4 values in "<value>" on <element>` | `margin`, `padding`, `border-width` or `border-color` with too many values. |
+| `ngpdf: too many values in "<value>" on <element>` | A `border` with more than three parts. |
+| `ngpdf: expected 1 to 3 values in "<value>" on <element>`, `ngpdf: invalid flex-grow in …`, `ngpdf: invalid flex-shrink in …` | An invalid `flex` shorthand. |
+| `ngpdf: invalid line-height "auto" on <element>` | `line-height: auto`. |
+| `ngpdf: invalid column "<value>" on pdf-table` | A column that is not a non-negative number, `Nfr` or `N%`. |
+| `ngpdf: pdf-row has more cells than pdf-table columns (<used> > <declared>)` | A row whose cells, spans counted, exceed the columns. |
+| `ngpdf: could not load image "<source>": <reason>` | An image that failed to load or is not PNG or JPEG. |
+| `ngpdf: nesting deeper than 64` | More than 64 nested elements. |
+| `ngpdf: text longer than 1 MB` | One text longer than 1,048,576 characters. |
+
+Errors from your own template, such as a missing required input or an exception in a binding, reject the render with Angular's own error.
+
+## Warnings
+
+Some problems still produce a PDF. ngpdf collects them during the render and prints each distinct one once with `console.warn` at the end, also when the render fails. They are printed only in development mode, when Angular's `ngDevMode` is on.
+
+| Warning | Meaning |
+| --- | --- |
+| `ngpdf: characters outside WinAnsi replaced with "?": <characters>` | See [Text and fonts](/docs/text-and-fonts#characters-winansi). |
+| `ngpdf: <element> is taller than a page and is cut at the bottom` | A unit is clipped. See [Pagination](/docs/pagination#units-taller-than-a-page). |
+| `ngpdf: ignored inside tables: <list>` | Row or cell styles that tables do not use. See [Tables](/docs/tables#padding-and-borders). |
+| `ngpdf: styles on <tag> are ignored; style a pdf-* element inside it` | Styles on a component host. See [Components in documents](/docs/components-in-documents#hosts-are-transparent). |
+| `ngpdf: border style "<style>" is not supported; drawing solid` | `dashed`, `dotted` and other styles are drawn solid. |
+| `ngpdf: pdf-page-number must be a direct child of pdf-page` | A nested page number, which is not drawn. |
+| `ngpdf: table columns did not settle` | Nested tables whose widths did not converge; the last layout is used. |

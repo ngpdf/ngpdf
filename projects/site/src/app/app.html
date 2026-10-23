@@ -1,0 +1,90 @@
+<a class="skip-link" href="#main">Skip to content</a>
+
+<header class="site-header">
+  <div class="container header-inner">
+    <a class="brand" routerLink="/" (click)="closeMenu()" aria-label="ngpdf home">
+      <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true">
+        <path
+          d="M7 3h13l6 6v20H7z"
+          fill="var(--paper-raised)"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linejoin="round"
+        />
+        <path
+          d="M20 3v6h6"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linejoin="round"
+        />
+        <path
+          d="M12 15l-3 3 3 3M21 15l3 3-3 3"
+          fill="none"
+          stroke="var(--accent)"
+          stroke-width="2.2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        />
+      </svg>
+      <span class="brand-name">ngpdf</span>
+      <span class="brand-version">v{{ version }}</span>
+    </a>
+
+    <button
+      type="button"
+      class="menu-button"
+      [attr.aria-expanded]="menuOpen()"
+      aria-controls="site-nav"
+      (click)="toggleMenu()"
+    >
+      <span class="visually-hidden">Menu</span>
+      <span class="menu-icon" aria-hidden="true"></span>
+    </button>
+
+    <nav id="site-nav" class="site-nav" [class.open]="menuOpen()" aria-label="Main">
+      <a routerLink="/docs" routerLinkActive="active" (click)="closeMenu()">Docs</a>
+      <a routerLink="/examples" routerLinkActive="active" (click)="closeMenu()">Examples</a>
+      <a routerLink="/contributors" routerLinkActive="active" (click)="closeMenu()">Contributors</a>
+      <a routerLink="/changelog" routerLinkActive="active" (click)="closeMenu()">Changelog</a>
+      <a class="nav-external" [href]="npmUrl" rel="noopener" target="_blank">npm</a>
+      <a class="nav-external" [href]="githubUrl" rel="noopener" target="_blank">GitHub</a>
+      <site-theme-toggle />
+    </nav>
+  </div>
+</header>
+
+<main id="main" tabindex="-1">
+  <router-outlet />
+</main>
+
+<footer class="site-footer">
+  <div class="container footer-grid">
+    <div>
+      <p class="footer-brand">ngpdf</p>
+      <p class="footer-text">
+        PDFs as Angular components, for Angular. An independent open source project, not affiliated
+        with Google or the Angular team.
+      </p>
+    </div>
+    <nav aria-label="Documentation links">
+      <p class="footer-heading">Learn</p>
+      <a routerLink="/docs/getting-started">Getting started</a>
+      <a routerLink="/docs/elements">Elements</a>
+      <a routerLink="/docs/rendering-api">Rendering API</a>
+      <a routerLink="/examples">Examples</a>
+    </nav>
+    <nav aria-label="Project links">
+      <p class="footer-heading">Project</p>
+      <a [href]="githubUrl" rel="noopener" target="_blank">GitHub</a>
+      <a [href]="npmUrl" rel="noopener" target="_blank">npm</a>
+      <a routerLink="/changelog">Changelog</a>
+      <a routerLink="/contributors">Contributors</a>
+      <a routerLink="/docs/security">Security</a>
+    </nav>
+  </div>
+  <div class="container footer-base">
+    <span>© {{ year }} ngpdf contributors · MIT License</span>
+    <span>Every PDF on this site was rendered by ngpdf in your browser.</span>
+  </div>
+</footer>

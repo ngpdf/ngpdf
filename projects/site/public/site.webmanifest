@@ -1,0 +1,8 @@
+{
+  "name": "ngpdf - PDFs as Angular components",
+  "short_name": "ngpdf",
+  "icons": [{ "src": "/apple-touch-icon.png", "sizes": "180x180", "type": "image/png" }],
+  "theme_color": "#faf7f2",
+  "background_color": "#faf7f2",
+  "display": "browser"
+}
