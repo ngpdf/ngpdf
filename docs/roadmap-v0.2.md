@@ -80,6 +80,5 @@ it does not affect a correct document. Items that change behaviour need a design
 - Spec hygiene: some component specs destroy in the test body instead of `finally`/`afterEach`,
   a global `URL` stub and the zone.js import leak into later tests, and a few assertions use loose
   `toMatchObject`.
-- `downloadPdf` does not revoke the object URL when `anchor.click()` throws.
 - Triage the advisories `npm audit` reports in dev-only tooling, within the 30-day dev-dependency
   deadline in `docs/ENGINEERING.md`.

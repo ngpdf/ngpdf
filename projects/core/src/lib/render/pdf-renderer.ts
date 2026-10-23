@@ -58,12 +58,15 @@ export async function downloadPdf<T>(
   anchor.href = url;
   anchor.download = options.fileName;
   doc.body.append(anchor);
-  anchor.click();
-  anchor.remove();
-  // Some browsers cancel a download whose URL is revoked in the same tick.
-  setTimeout(() => {
-    URL.revokeObjectURL(url);
-  }, 0);
+  try {
+    anchor.click();
+  } finally {
+    anchor.remove();
+    // Some browsers cancel a download whose URL is revoked in the same tick.
+    setTimeout(() => {
+      URL.revokeObjectURL(url);
+    }, 0);
+  }
 }
 
 /** Facade over the render pipeline: `inject(PdfRenderer).toBlob(Doc)` or `.download(Doc, …)`. */
