@@ -191,6 +191,13 @@ function parsePoints(value: string, tag?: string): number {
   return length;
 }
 
+/** Padding takes a length or a percentage: CSS has no `auto` padding. */
+function parsePadding(value: string, tag?: string): Length {
+  const length = parseLength(value, tag);
+  if (length === 'auto') return fail(`expected a length in "${show(value)}"`, tag);
+  return length;
+}
+
 function parseEdgeValues<T>(value: string, parse: (token: string) => T, tag?: string): Edges<T> {
   const tokens = tokenize(value);
   if (tokens.length < 1 || tokens.length > 4) {
@@ -200,7 +207,7 @@ function parseEdgeValues<T>(value: string, parse: (token: string) => T, tag?: st
   return { top: a as T, right: b as T, bottom: c as T, left: d as T };
 }
 
-/** The `margin` and `padding` shorthand: 1 to 4 values. */
+/** The `margin` shorthand: 1 to 4 values. */
 export function parseEdges(value: string, tag?: string): Edges<Length> {
   return parseEdgeValues(value, (token) => parseLength(token, tag), tag);
 }
@@ -334,7 +341,7 @@ function apply(
     return;
   }
   if (side && property.startsWith('padding-')) {
-    style.padding = withSide(style.padding, side, parseLength(value, tag));
+    style.padding = withSide(style.padding, side, parsePadding(value, tag));
     return;
   }
   if (side && property === `border-${side}`) {
@@ -442,7 +449,7 @@ function apply(
       style.margin = parseEdges(value, tag);
       break;
     case 'padding':
-      style.padding = parseEdges(value, tag);
+      style.padding = parseEdgeValues(value, (token) => parsePadding(token, tag), tag);
       break;
     case 'border': {
       const border = parseBorder(value, tag);

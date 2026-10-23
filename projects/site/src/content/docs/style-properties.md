@@ -116,6 +116,7 @@ Some styles are ignored in specific places:
 
 - an unknown unit: `em`, `rem`, `vh`, `vw` and the like;
 - a percentage or `auto` in `gap`, `font-size`, `border-radius`, `border-width` or a border's width;
+- `auto` in `padding` or a `padding-*` side;
 - a color that is not one of the forms above, including `hsl()`, `currentColor` and `var()`;
 - a keyword outside the lists above for `text-align`, `text-decoration`, `flex-direction`, `justify-content`, `align-items`, `align-self` and `object-fit`, upper case included;
 - a value that is not a number for `flex-grow`, `flex-shrink` and `opacity`;

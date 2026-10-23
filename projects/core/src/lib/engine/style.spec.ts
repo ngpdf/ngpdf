@@ -90,6 +90,13 @@ describe('resolveStyles', () => {
     expect(style.padding).toEqual({ top: 4, right: 4, bottom: 4, left: 9 });
   });
 
+  it('rejects auto padding, which CSS does not have', () => {
+    expect(() => styleOf({ padding: 'auto' })).toThrow(/^ngpdf: expected a length in "auto"/);
+    expect(() => styleOf({ padding: '4 auto' })).toThrow(/^ngpdf:/);
+    expect(() => styleOf({ 'padding-left': 'auto' })).toThrow(/^ngpdf:/);
+    expect(styleOf({ padding: '10%' }).padding.left).toEqual({ percent: 10 });
+  });
+
   it('rejects a shorthand with too many values', () => {
     expect(() => styleOf({ padding: '1 2 3 4 5' })).toThrow(/^ngpdf:/);
   });
