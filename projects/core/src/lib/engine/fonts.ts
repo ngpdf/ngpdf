@@ -33,7 +33,7 @@ function isWinAnsi(codePoint: number): boolean {
 // Locale data puts these in pipe output (U+202F before AM/PM, U+2009 or U+202F as a group
 // separator). U+2007 and U+202F must not break (UAX #14 class GL), so they become U+00A0, which
 // linebreak also treats as glue.
-const NO_BREAK_SPACES = new Set([0x2007, 0x202f]);
+const isNoBreakSpace = (codePoint: number): boolean => codePoint === 0x2007 || codePoint === 0x202f;
 const isSpaceSeparator = (codePoint: number): boolean =>
   (codePoint >= 0x2000 && codePoint <= 0x200a) || codePoint === 0x202f || codePoint === 0x205f;
 
@@ -53,7 +53,7 @@ export function toWinAnsi(text: string, warn: (chars: string[]) => void): string
     const codePoint = char.codePointAt(0) ?? 0;
     if (isInvisible(codePoint)) continue;
     if (isSpaceSeparator(codePoint)) {
-      out += NO_BREAK_SPACES.has(codePoint) ? '\u00A0' : ' ';
+      out += isNoBreakSpace(codePoint) ? '\u00A0' : ' ';
     } else if (isWinAnsi(codePoint)) {
       out += char;
     } else {
