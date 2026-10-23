@@ -3,8 +3,10 @@
 {
   "compileOnSave": false,
   "compilerOptions": {
+    // The built package first, as apps get it from npm; the sources when dist/core is not built
+    // yet (a fresh clone, or mid-rebuild), so the editor still resolves the import.
     "paths": {
-      "@ngpdf/core": ["./dist/core"]
+      "@ngpdf/core": ["./dist/core", "./projects/core/src/public-api.ts"]
     },
     "strict": true,
     "noUncheckedIndexedAccess": true,
