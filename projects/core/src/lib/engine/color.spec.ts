@@ -53,6 +53,10 @@ describe('parseColor', () => {
     'rgb(0b1 0 0)',
     'rgb(0o7, 0, 0)',
     'rgba(0, 0, 0, 0x1)',
+    'rgb(0X10, 0, 0)',
+    'rgb(0B1 0 0)',
+    'rgb(0O7, 0, 0)',
+    'rgba(0, 0, 0, 0X1)',
     'constructor',
   ])('throws on %j, naming the value and the element', (value) => {
     expect(() => parseColor(value, 'pdf-view')).toThrow(
