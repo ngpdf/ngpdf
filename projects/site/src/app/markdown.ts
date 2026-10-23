@@ -30,11 +30,19 @@ export interface RenderedMarkdown {
 const escapeHtml = (text: string): string =>
   text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
+/** The handful of entities marked writes into heading text. */
+const decodeEntities = (text: string): string =>
+  text
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&amp;/g, '&');
+
+/** A heading's anchor id from its plain text (no markup): lowercase words joined by hyphens. */
 export function slugify(text: string): string {
   return text
     .toLowerCase()
-    .replace(/<[^>]*>/g, '')
-    .replace(/&[a-z]+;/g, '')
     .replace(/[^a-z0-9\s-]/g, '')
     .trim()
     .replace(/\s+/g, '-');
@@ -55,12 +63,14 @@ export function renderMarkdown(source: string): RenderedMarkdown {
     renderer: {
       heading({ tokens, depth }: Tokens.Heading): string {
         const inner = this.parser.parseInline(tokens);
-        const base = slugify(inner) || 'section';
+        // The text renderer gives the heading without markup, for the id and the contents list.
+        const plain = decodeEntities(this.parser.parseInline(tokens, this.parser.textRenderer));
+        const base = slugify(plain) || 'section';
         const seen = used.get(base) ?? 0;
         used.set(base, seen + 1);
         const id = seen === 0 ? base : `${base}-${String(seen)}`;
         if (depth === 2 || depth === 3) {
-          headings.push({ id, text: inner.replace(/<[^>]*>/g, ''), depth });
+          headings.push({ id, text: plain, depth });
         }
         return `<h${String(depth)} id="${id}"><a class="anchor" href="#${id}" aria-hidden="true" tabindex="-1">#</a>${inner}</h${String(depth)}>\n`;
       },

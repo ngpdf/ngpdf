@@ -41,6 +41,10 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci --ignore-scripts
+      # Typed lint resolves @ngpdf/core from dist/core and the site's generated data, so both exist
+      # before it runs.
+      - run: npm run build:core
+      - run: node scripts/site-data.mjs
       - run: npm run lint
       # The package README's usage sections must match the repository README's.
       - run: node scripts/check-readme.mjs

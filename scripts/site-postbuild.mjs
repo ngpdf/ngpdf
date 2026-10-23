@@ -37,10 +37,10 @@ export function sitemap(origin, paths, lastmod) {
 /** The CSP source of each executable inline script: no src, and a JavaScript type or none. */
 export function inlineScriptHashes(html) {
   const hashes = new Set();
-  for (const match of html.matchAll(/<script(\s[^>]*)?>([\s\S]*?)<\/script>/g)) {
+  for (const match of html.matchAll(/<script(\s[^>]*)?>([\s\S]*?)<\/script\s*>/gi)) {
     const attributes = match[1] ?? '';
-    if (/\ssrc=/.test(attributes)) continue;
-    const type = /\stype="([^"]*)"/.exec(attributes)?.[1];
+    if (/\ssrc=/i.test(attributes)) continue;
+    const type = /\stype="([^"]*)"/i.exec(attributes)?.[1]?.toLowerCase();
     if (type && type !== 'text/javascript' && type !== 'module') continue;
     const digest = createHash('sha256')
       .update(match[2] ?? '')
