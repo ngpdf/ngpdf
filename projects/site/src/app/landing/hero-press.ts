@@ -98,13 +98,23 @@ export class HeroPress {
   private timer: ReturnType<typeof setTimeout> | undefined;
   private running = false;
   private inView = false;
+  private reduceMotion = false;
   private canTilt = false;
 
   constructor() {
     afterNextRender(() => {
       const view = this.document.defaultView;
-      if (!view || view.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+      if (!view) return;
       this.canTilt = view.matchMedia('(pointer: fine)').matches;
+      // Reduced motion can be switched on while the page is open, so it is followed, not read once.
+      const motion = view.matchMedia('(prefers-reduced-motion: reduce)');
+      this.reduceMotion = motion.matches;
+      const onMotion = (event: MediaQueryListEvent): void => {
+        this.reduceMotion = event.matches;
+        if (event.matches) this.resetTilt();
+        this.update();
+      };
+      motion.addEventListener('change', onMotion);
       // Plays only while the hero is on screen and the tab is visible; costs nothing otherwise.
       const observer = new IntersectionObserver(([entry]) => {
         this.inView = entry?.isIntersecting ?? false;
@@ -117,6 +127,7 @@ export class HeroPress {
       this.document.addEventListener('visibilitychange', onVisibility);
       this.destroyRef.onDestroy(() => {
         observer.disconnect();
+        motion.removeEventListener('change', onMotion);
         this.document.removeEventListener('visibilitychange', onVisibility);
         this.pause();
       });
@@ -128,7 +139,7 @@ export class HeroPress {
   }
 
   protected tilt(event: PointerEvent): void {
-    if (!this.canTilt) return;
+    if (!this.canTilt || this.reduceMotion) return;
     const box = this.host.nativeElement.getBoundingClientRect();
     const x = (event.clientX - box.left) / box.width - 0.5;
     const y = (event.clientY - box.top) / box.height - 0.5;
@@ -142,7 +153,7 @@ export class HeroPress {
   }
 
   private update(): void {
-    if (this.inView && !this.document.hidden) this.play();
+    if (this.inView && !this.document.hidden && !this.reduceMotion) this.play();
     else this.pause();
   }
 
