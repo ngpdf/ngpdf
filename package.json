@@ -17,7 +17,7 @@
     "prepare": "husky || true",
     "changeset": "changeset",
     "changeset:version": "changeset version && npm install --package-lock-only --ignore-scripts",
-    "build:site": "npm run build:core && node scripts/site-data.mjs && ng build site && node scripts/site-postbuild.mjs",
+    "build:site": "npm run build:core && node scripts/site-data.mjs && ng build site && node scripts/site-postbuild.mjs && node scripts/site-llms.mjs",
     "start:site": "npm run build:core && node scripts/site-data.mjs && ng serve site --host 0.0.0.0"
   },
   "packageManager": "npm@11.19.1",

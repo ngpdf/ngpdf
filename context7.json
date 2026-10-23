@@ -1,0 +1,14 @@
+{
+  "$schema": "https://context7.com/schema/context7.json",
+  "projectTitle": "ngpdf",
+  "description": "Render Angular components to PDF in the browser: pdf-* elements, flexbox layout, paginated tables with repeating headers, page numbers and real selectable text.",
+  "folders": ["projects/site/src/content/docs"],
+  "excludeFolders": ["node_modules", "dist", "e2e", "projects/demo", "projects/site/src/app"],
+  "rules": [
+    "A document is a standalone Angular component that imports PDF_ELEMENTS and uses pdf-document > pdf-page in its template.",
+    "Render with inject(PdfRenderer).download(Component, { inputs, fileName }) or .toBlob(Component, { inputs }); outside an injection context use renderToBlob/downloadPdf with an injector.",
+    "Lengths without a unit are points; style with the static style attribute or [style.x] bindings, using the properties listed on the style-properties page.",
+    "Table columns are declared on pdf-table with [columns] (points, 'Nfr' or 'N%'); a pdf-row with the header attribute repeats on every page.",
+    "Only the 14 standard PDF fonts (WinAnsi) are supported in v0.1; characters outside WinAnsi become '?'."
+  ]
+}

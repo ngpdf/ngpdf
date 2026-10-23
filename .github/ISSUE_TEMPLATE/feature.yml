@@ -1,0 +1,25 @@
+name: Feature request
+description: Something ngpdf should do that it does not do yet.
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Check the [limits and roadmap](https://ngpdf.dev/docs/limitations-and-roadmap) first: it may already be planned. For an open-ended idea, [Discussions](https://github.com/ngpdf/ngpdf/discussions/categories/ideas) is a good place to start.
+  - type: textarea
+    id: problem
+    attributes:
+      label: The document you are trying to make
+      description: What you need to produce, and where ngpdf gets in the way today.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you would like
+      description: The template or API you have in mind, if you have one.
+  - type: textarea
+    id: workaround
+    attributes:
+      label: What you do today
+      description: Any workaround, or the library you use instead.

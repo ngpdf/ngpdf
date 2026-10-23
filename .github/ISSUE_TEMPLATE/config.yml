@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Question or help
+    url: https://github.com/ngpdf/ngpdf/discussions/categories/q-a
+    about: Ask how to build a document, or share what you made.
+  - name: Security vulnerability
+    url: https://github.com/ngpdf/ngpdf/security/advisories/new
+    about: Report it privately, not in a public issue.

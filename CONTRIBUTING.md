@@ -48,6 +48,12 @@ A change to the library that users see needs its docs page updated in the same p
 Merging to `main` deploys the site (`.github/workflows/site.yml`). The social card and the home
 screen icon are rendered from `projects/site/brand/` with `node scripts/site-images.mjs`.
 
+## Where to start
+
+- Issues labelled [`good first issue`](https://github.com/ngpdf/ngpdf/labels/good%20first%20issue) are small and say where to look; [`help wanted`](https://github.com/ngpdf/ngpdf/labels/help%20wanted) ones are bigger. Comment on one before you start, so two people don't work on the same thing.
+- ngpdf takes part in [Hacktoberfest](https://hacktoberfest.com): issues labelled `hacktoberfest` count.
+- Questions, ideas and things you built go to [Discussions](https://github.com/ngpdf/ngpdf/discussions).
+
 ## Test first
 
 Write the test first and watch it fail. A test that passes without the change it covers guards

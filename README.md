@@ -151,6 +151,8 @@ Thanks go to these people ([emoji key](https://allcontributors.org/docs/en/emoji
 
 <!-- ALL-CONTRIBUTORS-LIST:END -->
 
+Questions and ideas: [Discussions](https://github.com/ngpdf/ngpdf/discussions). Good first issues: [here](https://github.com/ngpdf/ngpdf/labels/good%20first%20issue).
+
 This project follows the [all-contributors](https://github.com/all-contributors/all-contributors)
 specification. Contributions of any kind are welcome: see [CONTRIBUTING.md](CONTRIBUTING.md).
 

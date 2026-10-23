@@ -1,0 +1,50 @@
+name: Bug report
+description: Something renders wrong, throws, or does not match the docs.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time. A small document that shows the problem is the fastest way to a fix.
+        Questions are welcome in [Discussions](https://github.com/ngpdf/ngpdf/discussions); security issues go to [private reporting](https://github.com/ngpdf/ngpdf/security/advisories/new).
+  - type: textarea
+    id: what
+    attributes:
+      label: What happens
+      description: What you see, and the exact error message if there is one.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+      description: If a page of ngpdf.dev/docs says otherwise, link it.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Reproduction
+      description: The smallest document component and render call that show it. A StackBlitz or a repository link works too.
+      render: ts
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: '@ngpdf/core version'
+      placeholder: 0.1.3
+    validations:
+      required: true
+  - type: input
+    id: angular
+    attributes:
+      label: Angular version, and zoneless or zone.js
+      placeholder: 22.2.0, zoneless
+    validations:
+      required: true
+  - type: input
+    id: browser
+    attributes:
+      label: Browser and OS
+      placeholder: Chrome 156 on Windows 11
