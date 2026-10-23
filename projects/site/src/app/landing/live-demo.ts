@@ -109,13 +109,15 @@ export class LiveDemo {
     const started = performance.now();
     try {
       const blob = await this.pdf.toBlob(InvoiceDocument, { inputs });
-      // A newer edit, or leaving the page, happened while this one rendered.
+      const pages = countPages(await blob.text());
+      // A newer edit, or leaving the page, happened while this one rendered. Checked after the
+      // last await, so nothing below can publish one render's file with another's details.
       if (generation !== this.generation) return;
       const previous = this.objectUrl();
       this.objectUrl.set(URL.createObjectURL(blob));
       if (previous) URL.revokeObjectURL(previous);
       this.elapsed.set(Math.round(performance.now() - started));
-      this.pages.set(countPages(await blob.text()));
+      this.pages.set(pages);
       this.message.set(`${(blob.size / 1024).toFixed(1)} KB`);
       this.status.set('ready');
     } catch (error) {
