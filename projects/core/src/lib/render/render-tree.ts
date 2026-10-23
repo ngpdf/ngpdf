@@ -1,5 +1,6 @@
 import {
   RendererFactory2,
+  type ComponentRef,
   createComponent,
   createEnvironmentInjector,
   type EnvironmentInjector,
@@ -21,7 +22,16 @@ export function renderTree<T>(
     [{ provide: RendererFactory2, useFactory: () => new PdfRendererFactory() }],
     parent,
   );
-  const ref = createComponent(component, { environmentInjector });
+  let ref: ComponentRef<T>;
+  try {
+    ref = createComponent(component, { environmentInjector });
+  } catch (error) {
+    // A constructor that throws (the document's or a child's) leaves no ComponentRef: Angular drops
+    // the half-built views without destroying them, so their DestroyRef callbacks are out of reach.
+    // The injector is ours to destroy, and that runs its own DestroyRef callbacks.
+    environmentInjector.destroy();
+    throw error;
+  }
   let destroyed = false;
   const destroy = (): void => {
     if (destroyed) return;
