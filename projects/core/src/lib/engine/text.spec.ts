@@ -52,6 +52,14 @@ describe('layoutText', () => {
     expect(block.lines.map((line) => line.text)).toEqual(['a b c']);
   });
 
+  it.each(['\f', '\v', '\u2028', '\u0085'])(
+    'collapses requested whitespace characters',
+    (whitespace) => {
+      const block = layoutText(`a${whitespace}b`, style, 500, writer);
+      expect(block.lines.map((line) => line.text)).toEqual(['a b']);
+    },
+  );
+
   it('trims whitespace at the ends of the text and of each line', () => {
     const block = layoutText('  hello \n world  ', style, 500, writer);
     expect(block.lines.map((line) => line.text)).toEqual(['hello world']);

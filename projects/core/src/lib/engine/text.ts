@@ -28,7 +28,7 @@ function assertTextSize(text: string): void {
 
 /** CSS `white-space: normal`: runs of space, tab and line breaks become one space; ends trimmed. */
 function collapseWhitespace(text: string): string {
-  return text.replace(/[ \t\r\n]+/g, ' ').trim();
+  return text.replace(/[ \t\r\n\f\v\u2028\u0085]+/g, ' ').trim();
 }
 
 /** Positions in `text` after which a line may break (UAX #14); the last one is `text.length`. */
@@ -76,7 +76,7 @@ export function layoutText(
   warn: (chars: string[]) => void = () => undefined,
 ): TextBlock {
   assertTextSize(text);
-  const collapsed = collapseWhitespace(toWinAnsi(text, warn));
+  const collapsed = toWinAnsi(collapseWhitespace(text), warn);
   const font = fontFor(style);
   const size = style.fontSize;
   const lineHeight = size * style.lineHeight;
