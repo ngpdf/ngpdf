@@ -1,5 +1,11 @@
 # @ngpdf/core
 
+## 0.1.2
+
+### Patch Changes
+
+- [#10](https://github.com/ngpdf/ngpdf/pull/10) [`b30c004`](https://github.com/ngpdf/ngpdf/commit/b30c004713796a8d99bd525ce2e210b5479d70d6) Thanks [@GabeSilvaDev](https://github.com/GabeSilvaDev)! - Rendering a PDF works in an app that hydrated from server-rendered HTML (`provideClientHydration()` with SSR or prerendering), where it threw `TypeError: rNode.getAttribute is not a function`.
+
 ## 0.1.1
 
 ### Patch Changes
