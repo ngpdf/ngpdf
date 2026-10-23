@@ -13,6 +13,7 @@ on:
       - 'scripts/site-*.mjs'
       - '.all-contributorsrc'
       - 'angular.json'
+      - 'package.json'
       - 'package-lock.json'
       - '.github/workflows/site.yml'
   workflow_dispatch:
@@ -42,18 +43,24 @@ jobs:
           cache: npm
       - run: npm ci --ignore-scripts
       - run: npm run build:site
+      # The FTP server is known by its IP address (the FTP_SERVER secret), and its certificate
+      # names *.hstgr.io, Hostinger's domain. Pointing a name under that domain at the IP lets the
+      # upload verify the certificate strictly, so the password goes only to a server holding
+      # Hostinger's certificate.
+      - name: Pin the FTP host name
+        run: echo "${FTP_SERVER} ngpdf-deploy.hstgr.io" | sudo tee -a /etc/hosts >/dev/null
+        env:
+          FTP_SERVER: ${{ secrets.FTP_SERVER }}
       # Uploads only what changed since the last deploy (the action keeps a sync state file on the
-      # server) and deletes files a build no longer has. FTPS encrypts the password and the files;
-      # the certificate is not checked against the host name because the server is reached by its
-      # IP address, which no certificate names.
+      # server) and deletes files a build no longer has.
       - uses: SamKirkland/FTP-Deploy-Action@110f9186c050f71550953127052e77650219c287 # v4.4.0
         with:
-          server: ${{ secrets.FTP_SERVER }}
+          server: ngpdf-deploy.hstgr.io
           username: ${{ secrets.FTP_USERNAME }}
           password: ${{ secrets.FTP_PASSWORD }}
           protocol: ftps
           port: 21
-          security: loose
+          security: strict
           local-dir: ./dist/site/browser/
           server-dir: ./public_html/
           exclude: |

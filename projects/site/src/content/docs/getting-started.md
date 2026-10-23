@@ -100,13 +100,18 @@ export class InvoiceActions {
   }
 
   protected async preview(): Promise<void> {
-    const blob = await this.pdf.toBlob(InvoiceDocument, {
-      inputs: { customer: 'Northwind Bakery', lines: this.lines },
-    });
-    const url = URL.createObjectURL(blob);
-    window.open(url, '_blank');
-    // Give the new tab a minute to load the file before the URL goes away.
-    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    // Open the tab during the click, before any await, or a pop-up blocker may stop it.
+    const tab = window.open('', '_blank');
+    try {
+      const blob = await this.pdf.toBlob(InvoiceDocument, {
+        inputs: { customer: 'Northwind Bakery', lines: this.lines },
+      });
+      // The tab keeps using this URL, so it is not revoked here.
+      if (tab) tab.location.href = URL.createObjectURL(blob);
+    } catch (error) {
+      tab?.close();
+      throw error;
+    }
   }
 }
 ```

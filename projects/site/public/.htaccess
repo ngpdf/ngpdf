@@ -41,12 +41,12 @@ ErrorDocument 404 /404/index.html
   # shows its PDF from a blob: URL in a frame.
   Header always set Content-Security-Policy "default-src 'self'; script-src 'self' SCRIPT_HASHES 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://avatars.githubusercontent.com; font-src 'self'; connect-src 'self' blob: data:; frame-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'; upgrade-insecure-requests"
 
-  # Hashed bundles never change under the same name: cache them for a year.
-  <FilesMatch "\.(js|css|woff2)$">
+  # Hashed bundles and fonts never change under the same name: cache them for a year.
+  <FilesMatch "-[A-Za-z0-9_]{8}\.(js|css|woff2)$">
     Header set Cache-Control "public, max-age=31536000, immutable"
   </FilesMatch>
-  # Pages and the files crawlers read change with every deploy.
-  <FilesMatch "\.(html|xml|txt|webmanifest)$">
+  # Pages, theme.js and the files crawlers read keep their names across deploys.
+  <FilesMatch "(\.(html|xml|txt|webmanifest)|^theme\.js)$">
     Header set Cache-Control "public, max-age=0, must-revalidate"
   </FilesMatch>
   <FilesMatch "\.(png|svg|ico)$">

@@ -1,4 +1,4 @@
-import { Component, ElementRef, inject, signal, viewChild } from '@angular/core';
+import { Component, DestroyRef, ElementRef, inject, signal, viewChild } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { PdfRenderer } from '@ngpdf/core';
 // The demo app's documents, used as they are, so the site shows exactly what the repository tests.
@@ -69,10 +69,16 @@ export class ExamplesPage {
 
   protected readonly examples = EXAMPLES;
   protected readonly bars = CHART_BARS;
+  protected readonly chartLabel = `Bar chart of monthly captures: ${CHART_BARS.map((bar) => `${bar.label} ${String(bar.value)}`).join(', ')}`;
   protected readonly busy = signal<ExampleId | undefined>(undefined);
   protected readonly status = signal('');
+  /** Preview tabs keep using their URL (a reload reads it again), so they live as long as this page. */
+  private readonly previewUrls: string[] = [];
 
   constructor() {
+    inject(DestroyRef).onDestroy(() => {
+      for (const url of this.previewUrls) URL.revokeObjectURL(url);
+    });
     inject(Seo).apply({
       title: `Examples - ${SITE_NAME}`,
       description:
@@ -91,16 +97,18 @@ export class ExamplesPage {
       const blob = await this.render(id);
       const url = URL.createObjectURL(blob);
       if (preview) {
+        this.previewUrls.push(url);
         preview.location.href = url;
       } else {
         const anchor = document.createElement('a');
         anchor.href = url;
         anchor.download = `ngpdf-${id}.pdf`;
         anchor.click();
+        // The download has started from the URL; some browsers cancel it if revoked in the same tick.
+        setTimeout(() => {
+          URL.revokeObjectURL(url);
+        }, 0);
       }
-      setTimeout(() => {
-        URL.revokeObjectURL(url);
-      }, 60_000);
       this.status.set(
         `${id} rendered in ${String(Math.round(performance.now() - started))} ms in your browser.`,
       );

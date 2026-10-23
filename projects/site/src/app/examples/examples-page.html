@@ -19,7 +19,7 @@
           }
         </ul>
         @if (example.id === 'capture') {
-          <div class="chart" #chart role="img" aria-label="Bar chart of monthly captures">
+          <div class="chart" #chart role="img" [attr.aria-label]="chartLabel">
             @for (bar of bars; track bar.label) {
               <div class="bar" [attr.data-label]="bar.label" [style.height.%]="bar.value"></div>
             }

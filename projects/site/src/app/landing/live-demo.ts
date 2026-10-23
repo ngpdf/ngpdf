@@ -56,6 +56,7 @@ export class LiveDemo {
 
   private readonly started = signal(false);
   private timer: ReturnType<typeof setTimeout> | undefined;
+  /** Bumped by every edit and by teardown; a render whose number is stale drops its result. */
   private generation = 0;
 
   constructor() {
@@ -78,6 +79,7 @@ export class LiveDemo {
     });
 
     inject(DestroyRef).onDestroy(() => {
+      this.generation++;
       clearTimeout(this.timer);
       const url = this.objectUrl();
       if (url) URL.revokeObjectURL(url);
@@ -94,17 +96,18 @@ export class LiveDemo {
   }
 
   private schedule(inputs: Record<string, unknown>): void {
+    // A render still running for the previous inputs must not publish once these are edited.
+    const generation = ++this.generation;
     clearTimeout(this.timer);
-    this.timer = setTimeout(() => void this.render(inputs), 250);
+    this.timer = setTimeout(() => void this.render(inputs, generation), 250);
   }
 
-  private async render(inputs: Record<string, unknown>): Promise<void> {
-    const generation = ++this.generation;
+  private async render(inputs: Record<string, unknown>, generation: number): Promise<void> {
     this.status.set('rendering');
     const started = performance.now();
     try {
       const blob = await this.pdf.toBlob(InvoiceDocument, { inputs });
-      // A newer edit started while this one rendered; its result wins.
+      // A newer edit, or leaving the page, happened while this one rendered.
       if (generation !== this.generation) return;
       const previous = this.objectUrl();
       this.objectUrl.set(URL.createObjectURL(blob));

@@ -1,5 +1,4 @@
 import { Component, inject } from '@angular/core';
-import { DomSanitizer } from '@angular/platform-browser';
 import { SITE_DATA } from '../../generated/site-data';
 import { renderMarkdown } from '../markdown';
 import { Seo } from '../seo';
@@ -22,10 +21,8 @@ import { GITHUB_URL, SITE_NAME } from '../site';
 })
 export class ChangelogPage {
   protected readonly releasesUrl = `${GITHUB_URL}/releases`;
-  // Generated from the repository's own CHANGELOG.md at build time, so it is trusted.
-  protected readonly html = inject(DomSanitizer).bypassSecurityTrustHtml(
-    renderMarkdown(SITE_DATA.changelog).html,
-  );
+  // Angular sanitizes it: the changelog needs no ids, scripts or styles.
+  protected readonly html = renderMarkdown(SITE_DATA.changelog).html;
 
   constructor() {
     inject(Seo).apply({
