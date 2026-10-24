@@ -53,9 +53,9 @@ it does not affect a correct document. Items that change behaviour need a design
 
 - **The style attribute parser** splits on `;`, which cuts values that contain one (a quoted
   string, a data URL).
-- **Keyword case.** `text-align: CENTER` throws and `font-weight: BOLD` falls back to normal;
-  keywords should be matched case-insensitively and trimmed, with one policy for unknown
-  keywords (fallback or throw).
+- **Unknown keywords.** Keywords are matched case-insensitively, but an unknown one throws for
+  `text-align` and the other `oneOf` properties, falls back to `normal` for `font-weight` and
+  `font-style`, and is ignored by `break-before`; pick one policy (fallback or throw).
 - **Border widths.** `parseBorder` accepts a negative width, and takes `thin`, `medium` and
   `thick` as colors (they now throw as invalid colors); support the keywords and reject negative
   widths.

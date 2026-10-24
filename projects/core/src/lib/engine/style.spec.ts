@@ -380,6 +380,33 @@ describe('resolveStyles property coverage', () => {
     );
   });
 
+  // CSS keywords are case-insensitive, and a value can arrive with spaces around it.
+  it.each([
+    ['text-align', 'CENTER', 'textAlign', 'center'],
+    ['text-align', ' Right ', 'textAlign', 'right'],
+    ['text-decoration', 'Line-Through', 'textDecoration', 'line-through'],
+    ['flex-direction', 'ROW', 'flexDirection', 'row'],
+    ['justify-content', 'Space-Between', 'justifyContent', 'space-between'],
+    ['align-items', 'CENTER', 'alignItems', 'center'],
+    ['align-self', 'Flex-End', 'alignSelf', 'flex-end'],
+    ['object-fit', 'COVER', 'objectFit', 'cover'],
+    ['font-weight', 'BOLD', 'fontWeight', 'bold'],
+    ['font-weight', 'Bolder', 'fontWeight', 'bold'],
+    ['font-weight', ' 700 ', 'fontWeight', 'bold'],
+    ['font-style', 'ITALIC', 'fontStyle', 'italic'],
+    ['font-style', 'Oblique', 'fontStyle', 'italic'],
+    ['break-before', 'PAGE', 'breakBefore', true],
+  ])('reads %s "%s" case-insensitively', (property, value, key, expected) => {
+    expect(styleOf({ [property]: value })).toMatchObject({ [key]: expected });
+  });
+
+  it('still rejects an unknown keyword in any case, naming the value as written', () => {
+    expect(() => styleOf({ 'text-align': 'JUSTIFY' })).toThrow(
+      'ngpdf: invalid value "JUSTIFY" for text-align on pdf-view',
+    );
+    expect(styleOf({ 'font-weight': 'HEAVY' }).fontWeight).toBe('normal');
+  });
+
   it.each(['flex-grow', 'flex-shrink', 'opacity'])('rejects a non-numeric %s', (property) => {
     expect(() => styleOf({ [property]: 'lots' })).toThrow(
       `ngpdf: invalid value "lots" for ${property} on pdf-view`,

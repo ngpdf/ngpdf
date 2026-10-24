@@ -12,7 +12,7 @@ In the tables:
 - **length** is a number with an optional unit: none or `pt` (points), `px` (= 1pt), `in`, `cm` or `mm`. Any other unit throws.
 - **length/%** also accepts a percentage of the parent's content box.
 - **color** is hex (3, 4, 6 or 8 digits), `rgb()`/`rgba()`, a CSS named color or `transparent`.
-- Keywords are matched exactly and in lower case.
+- The keywords of `text-align`, `text-decoration`, `flex-direction`, `justify-content`, `align-items`, `align-self`, `object-fit`, `font-weight`, `font-style` and `break-before` are matched in any case, as in CSS: `CENTER` is `center`.
 
 ## Text
 
@@ -119,6 +119,6 @@ Some styles are ignored in specific places:
 - `auto` in `padding` or a `padding-*` side;
 - a negative `font-size` or padding (margins can be negative, as in CSS);
 - a color that is not one of the forms above, including `hsl()`, `currentColor` and `var()`;
-- a keyword outside the lists above for `text-align`, `text-decoration`, `flex-direction`, `justify-content`, `align-items`, `align-self` and `object-fit`, upper case included;
+- a keyword outside the lists above for `text-align`, `text-decoration`, `flex-direction`, `justify-content`, `align-items`, `align-self` and `object-fit`, in any case;
 - a value that is not a number for `flex-grow`, `flex-shrink` and `opacity`;
 - the wrong number of values in a shorthand.

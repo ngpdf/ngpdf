@@ -30,7 +30,7 @@ What has no effect:
 - Styles on the host element of your own components. ngpdf ignores them with a dev-mode warning. See [Components in documents](/docs/components-in-documents).
 - Properties ngpdf does not know, such as `display`, `position`, `top`, `flex-wrap`, `font` or `background`. They are ignored without a warning.
 
-The style attribute is split on `;`, so a value cannot contain a semicolon. Write keywords in lower case: `text-align: CENTER` throws, and `font-weight: BOLD` falls back to normal. `!important` and `var()` are not supported.
+The style attribute is split on `;`, so a value cannot contain a semicolon. Keywords are matched in any case, as in CSS: `text-align: CENTER` is `center` and `font-weight: BOLD` is `bold`. `!important` and `var()` are not supported.
 
 ## Flexbox
 

@@ -25,7 +25,7 @@ ngpdf v0.1 covers documents built from text, tables, boxes and images. This page
 - `opacity` multiplies down the tree: a faded view's children are each faded, not composited as one group, so overlapping children show through each other.
 - A box cannot fill the remaining height of a page. Use a fixed height.
 - Your own components inside a document are transparent, like `display: contents`. Styles on a component's host element are ignored with a warning. Style a `pdf-*` element inside it instead. The same goes for the document component you render.
-- Keywords are case-sensitive, and a style value cannot contain `;`.
+- A style value cannot contain `;`.
 
 ### Tables
 
@@ -83,7 +83,7 @@ These items are in the [v0.2 roadmap](https://github.com/ngpdf/ngpdf/blob/main/d
 ### Robustness
 
 - A style parser that keeps values containing `;`.
-- Keywords matched case-insensitively, with one policy for unknown keywords.
+- One policy for unknown keywords: `font-weight` and `font-style` fall back to `normal`, `break-before` ignores them, and the other keyword properties throw.
 - `thin`, `medium` and `thick` border widths, and negative border widths rejected.
 
 Ideas and bug reports are welcome on [GitHub issues](https://github.com/ngpdf/ngpdf/issues).

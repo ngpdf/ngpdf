@@ -279,13 +279,19 @@ function allSides<T>(value: T): Edges<T> {
   return { top: value, right: value, bottom: value, left: value };
 }
 
+/** CSS keywords are case-insensitive, so `CENTER` and ` center ` both read as `center`. */
+function keywordOf(value: string): string {
+  return value.trim().toLowerCase();
+}
+
 function oneOf<T extends string>(
   value: string,
   allowed: readonly T[],
   property: string,
   tag: string,
 ): T {
-  const found = allowed.find((candidate) => candidate === value);
+  const keyword = keywordOf(value);
+  const found = allowed.find((candidate) => candidate === keyword);
   if (found === undefined) return fail(`invalid value "${show(value)}" for ${property}`, tag);
   return found;
 }
@@ -298,8 +304,9 @@ function fontFamilyOf(value: string): TextStyle['fontFamily'] {
 }
 
 function fontWeightOf(value: string): TextStyle['fontWeight'] {
-  if (value === 'bold' || value === 'bolder') return 'bold';
-  const weight = parseNumber(value);
+  const keyword = keywordOf(value);
+  if (keyword === 'bold' || keyword === 'bolder') return 'bold';
+  const weight = parseNumber(keyword);
   return weight !== null && weight >= 600 ? 'bold' : 'normal';
 }
 
@@ -381,9 +388,11 @@ function apply(
     case 'font-weight':
       style.fontWeight = fontWeightOf(value);
       break;
-    case 'font-style':
-      style.fontStyle = value === 'italic' || value === 'oblique' ? 'italic' : 'normal';
+    case 'font-style': {
+      const keyword = keywordOf(value);
+      style.fontStyle = keyword === 'italic' || keyword === 'oblique' ? 'italic' : 'normal';
       break;
+    }
     case 'text-align':
       style.textAlign = oneOf(value, ['left', 'center', 'right'], property, tag);
       break;
@@ -488,7 +497,7 @@ function apply(
       style.objectFit = oneOf(value, ['contain', 'cover'], property, tag);
       break;
     case 'break-before':
-      style.breakBefore = style.breakBefore || value === 'page';
+      style.breakBefore = style.breakBefore || keywordOf(value) === 'page';
       break;
     default:
       break;
