@@ -436,6 +436,24 @@ describe('resolveStyles property coverage', () => {
     expect(() => styleOf({ border: '1 solid red blue' })).toThrow(/^ngpdf: too many values/);
   });
 
+  it('supports CSS border width keywords and rejects negative widths', () => {
+    expect(styleOf({ border: 'thin solid red' }).borderWidth.top).toBe(1);
+    expect(styleOf({ 'border-top': 'medium solid red' }).borderWidth.top).toBe(3);
+    expect(styleOf({ 'border-width': 'thick' }).borderWidth).toEqual({
+      top: 5,
+      right: 5,
+      bottom: 5,
+      left: 5,
+    });
+    expect(styleOf({ 'border-right-width': 'medium' }).borderWidth.right).toBe(3);
+    expect(() => styleOf({ border: '-2 solid red' })).toThrow(
+      'ngpdf: expected a non-negative length in "-2" on pdf-view',
+    );
+    expect(() => styleOf({ 'border-width': '-2' })).toThrow(
+      'ngpdf: expected a non-negative length in "-2" on pdf-view',
+    );
+  });
+
   it('warns for an unsupported border style on a side shorthand too', () => {
     const warn = vi.fn();
     styleOf({ 'border-top': '1 dotted red' }, 'pdf-view', warn);
