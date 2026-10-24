@@ -45,8 +45,6 @@ it does not affect a correct document. Items that change behaviour need a design
 - **Cancel sibling fetches** with an `AbortController` when one image fails.
 - `percentDecode` builds a `number[]` before the byte array; decode straight into a
   `Uint8Array`.
-- A `pdf-image` with element children fails in Yoga (a measured node cannot have children);
-  reject it with an `ngpdf:` error.
 
 ## Robustness
 

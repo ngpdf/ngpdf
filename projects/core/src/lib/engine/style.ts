@@ -559,8 +559,19 @@ interface Pending {
 }
 
 /**
+ * A `pdf-image` is measured by Yoga, and a measured node cannot have children: without this check
+ * Yoga fails deep in layout with an unclear error. Its text is ignored, so only elements count.
+ */
+function checkImageChildren(node: PdfNode): void {
+  if (node.tag !== 'pdf-image') return;
+  const child = node.children.find((candidate) => candidate.kind === 'element');
+  if (child) fail(`pdf-image cannot have children (found <${child.tag}>)`);
+}
+
+/**
  * Resolves every element under `root`; text and comment nodes get no entry. Warnings (a border
- * style drawn solid) go to `warn`, which the caller dedupes and prints in dev mode only.
+ * style drawn solid) go to `warn`, which the caller dedupes and prints in dev mode only. Runs
+ * before images load, so a `pdf-image` with element children throws before anything is fetched.
  */
 export function resolveStyles(
   root: PdfNode,
@@ -571,6 +582,7 @@ export function resolveStyles(
   const stack: Pending[] = [{ node: root, depth: 1, inherited: ROOT_TEXT_STYLE }];
   for (let item = stack.pop(); item; item = stack.pop()) {
     if (item.depth > MAX_NESTING) fail(`nesting deeper than ${String(MAX_NESTING)}`);
+    checkImageChildren(item.node);
     const style = resolveOne(item.node, item.inherited, warn);
     result.set(item.node, style);
     const inherited = textPartOf(style);

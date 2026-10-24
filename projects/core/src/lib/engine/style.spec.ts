@@ -274,6 +274,18 @@ describe('resolveStyles', () => {
     expect(() => resolveStyles(build(65))).toThrow('ngpdf: nesting deeper than 64');
     expect(() => resolveStyles(build(100000))).toThrow('ngpdf: nesting deeper than 64');
   });
+
+  it('throws a clear error for a pdf-image with an element child, which Yoga cannot lay out', () => {
+    const image = el('pdf-image', {}, [el('pdf-text', {}, [createNode('text', '', 'x')])]);
+    expect(() => resolveStyles(el('pdf-document', {}, [image]))).toThrow(
+      'ngpdf: pdf-image cannot have children (found <pdf-text>)',
+    );
+  });
+
+  it('lets a pdf-image hold text, which is ignored', () => {
+    const image = el('pdf-image', {}, [createNode('text', '', 'alt')]);
+    expect(() => resolveStyles(el('pdf-document', {}, [image]))).not.toThrow();
+  });
 });
 
 describe('resolveStyles property coverage', () => {

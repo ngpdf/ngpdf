@@ -106,6 +106,17 @@ describe('renderDocument', () => {
     expect(labels).toEqual(['1/2', '2/2']);
   });
 
+  it('rejects a pdf-image with children before fetching it, naming the element', async () => {
+    const fetchFn = vi.fn(() => Promise.reject(new TypeError('Failed to fetch')));
+    vi.stubGlobal('fetch', fetchFn);
+    const image = el('pdf-image', {}, [text('caption')], { src: '/logo.png' });
+    const page = el('pdf-page', {}, [image], { size: 'A4' });
+    await expect(renderDocument(host({}, [page]), { writer: recordingWriter() })).rejects.toThrow(
+      'ngpdf: pdf-image cannot have children (found <pdf-text>)',
+    );
+    expect(fetchFn).not.toHaveBeenCalled();
+  });
+
   it('throws when the tree has no pdf-document', async () => {
     await expect(renderDocument(el('div'), { writer: recordingWriter() })).rejects.toThrow(
       'ngpdf: no pdf-document in the rendered component',
