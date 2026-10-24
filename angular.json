@@ -44,7 +44,15 @@
                 "input": "projects/demo/public"
               }
             ],
-            "allowedCommonJsDependencies": ["pdfkit", "unicode-trie", "base64-js"],
+            "allowedCommonJsDependencies": [
+              "base64-js",
+              "brotli",
+              "clone",
+              "dfa",
+              "fast-deep-equal",
+              "tiny-inflate",
+              "unicode-trie"
+            ],
             "styles": ["projects/demo/src/styles.css"]
           },
           "configurations": {
@@ -108,7 +116,15 @@
             "loader": {
               ".md": "text"
             },
-            "allowedCommonJsDependencies": ["pdfkit", "unicode-trie", "base64-js"],
+            "allowedCommonJsDependencies": [
+              "base64-js",
+              "brotli",
+              "clone",
+              "dfa",
+              "fast-deep-equal",
+              "tiny-inflate",
+              "unicode-trie"
+            ],
             "outputPath": "dist/site"
           },
           "configurations": {

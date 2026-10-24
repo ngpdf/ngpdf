@@ -1,9 +1,21 @@
 import angular from '@analogjs/vite-plugin-angular';
+import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
   // Compiles Angular components in specs; plain TypeScript specs pass through untouched.
   plugins: [angular({ tsconfig: 'projects/core/tsconfig.spec.json' })],
+  resolve: {
+    // Under Node, `pdfkit` resolves to its Node build. Specs run the browser build that apps ship.
+    alias: [
+      {
+        find: /^pdfkit$/,
+        replacement: fileURLToPath(
+          new URL('./node_modules/pdfkit/js/pdfkit.browser.mjs', import.meta.url),
+        ),
+      },
+    ],
+  },
   test: {
     environment: 'node',
     exclude: ['**/node_modules/**', '**/dist/**', '.stryker-tmp/**'],
