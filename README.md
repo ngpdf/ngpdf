@@ -10,7 +10,7 @@
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/ngpdf/ngpdf/badge)](https://scorecard.dev/viewer/?uri=github.com/ngpdf/ngpdf)
 <!-- prettier-ignore-start -->
 <!-- ALL-CONTRIBUTORS-BADGE:START - Do not remove or modify this section -->
-[![All Contributors](https://img.shields.io/badge/all_contributors-1-orange.svg?style=flat-square)](#contributors-)
+[![All Contributors](https://img.shields.io/badge/all_contributors-2-orange.svg?style=flat-square)](#contributors-)
 <!-- ALL-CONTRIBUTORS-BADGE:END -->
 <!-- prettier-ignore-end -->
 
@@ -142,6 +142,7 @@ Thanks go to these people ([emoji key](https://allcontributors.org/docs/en/emoji
   <tbody>
     <tr>
       <td align="center" valign="top" width="14.28%"><a href="https://github.com/GabeSilvaDev"><img src="https://avatars.githubusercontent.com/u/96894950?v=4?s=100" width="100px;" alt="Gabriel Silva"/><br /><sub><b>Gabriel Silva</b></sub></a><br /><a href="https://github.com/ngpdf/ngpdf/commits?author=GabeSilvaDev" title="Code">💻</a> <a href="https://github.com/ngpdf/ngpdf/commits?author=GabeSilvaDev" title="Documentation">📖</a> <a href="#design-GabeSilvaDev" title="Design">🎨</a> <a href="https://github.com/ngpdf/ngpdf/commits?author=GabeSilvaDev" title="Tests">⚠️</a> <a href="#infra-GabeSilvaDev" title="Infrastructure (Hosting, Build-Tools, etc)">🚇</a> <a href="#maintenance-GabeSilvaDev" title="Maintenance">🚧</a></td>
+      <td align="center" valign="top" width="14.28%"><a href="https://github.com/arxigen"><img src="https://avatars.githubusercontent.com/u/341682957?v=4?s=100" width="100px;" alt="ARXIGEN"/><br /><sub><b>ARXIGEN</b></sub></a><br /><a href="https://github.com/ngpdf/ngpdf/commits?author=arxigen" title="Code">💻</a> <a href="https://github.com/ngpdf/ngpdf/commits?author=arxigen" title="Tests">⚠️</a> <a href="https://github.com/ngpdf/ngpdf/commits?author=arxigen" title="Documentation">📖</a></td>
     </tr>
   </tbody>
 </table>
