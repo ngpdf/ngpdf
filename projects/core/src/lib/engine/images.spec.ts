@@ -74,6 +74,42 @@ describe('loadImages', () => {
     expect(assets.get(node)?.width).toBe(200);
   });
 
+  it('keeps no more memory than the decoded bytes when escapes leave most of the buffer unused', async () => {
+    // Every byte escaped: the text is three times the bytes, so a view would hold 3x the image.
+    const escaped = imageNode(
+      `data:image/png,${Array.from(png, (b) => `%${b.toString(16).padStart(2, '0')}`).join('')}`,
+    );
+    const assets = await loadImages(root(escaped), writer);
+    const data = assets.get(escaped)?.data;
+    expect(data).toEqual(png);
+    expect(data?.buffer.byteLength).toBe(png.length);
+
+    // Bytes written as Latin-1 characters, only `%` escaped: little slack, so no copy is made.
+    const text = Array.from(png, (b) => (b === 0x25 ? '%25' : String.fromCharCode(b))).join('');
+    const plain = imageNode(`data:image/png,${text}`);
+    const plainData = (await loadImages(root(plain), writer)).get(plain)?.data;
+    expect(plainData).toEqual(png);
+    expect(plainData?.buffer.byteLength).toBe(text.length);
+
+    // Exactly half the buffer used: every escape adds two characters, so escaping half the bytes
+    // makes the text twice their length. At the threshold the view is kept.
+    const even = new Uint8Array([...png, 0x41]);
+    let escapes = even.filter((b) => b === 0x25).length;
+    const half = Array.from(even, (b) => {
+      if (b === 0x25) return '%25';
+      if (escapes < even.length / 2) {
+        escapes++;
+        return `%${b.toString(16).padStart(2, '0')}`;
+      }
+      return String.fromCharCode(b);
+    }).join('');
+    expect(half.length).toBe(even.length * 2);
+    const boundary = imageNode(`data:image/png,${half}`);
+    const boundaryData = (await loadImages(root(boundary), writer)).get(boundary)?.data;
+    expect(boundaryData).toEqual(even);
+    expect(boundaryData?.buffer.byteLength).toBe(half.length);
+  });
+
   it('rejects a data URL without a comma', async () => {
     const bad = imageNode('data:image/png;base64');
     await expect(loadImages(root(bad), writer)).rejects.toThrow(/malformed data URL/);
@@ -88,6 +124,30 @@ describe('loadImages', () => {
     const node = imageNode(`data:image/png,${encoded}`);
     const assets = await loadImages(root(node), writer);
     expect(assets.get(node)).toEqual({ data: bytes, width: 37, height: 100 });
+  });
+
+  it('decodes a percent-encoded data URL of a few hundred KB, mixing escapes and plain bytes', async () => {
+    // 300 KB after the PNG header; bytes that are letters or digits stay as they are, the rest
+    // are escaped, so the encoded text is longer than the bytes and the output must be cut to fit.
+    const header = pngHeader(640, 480);
+    const bytes = new Uint8Array(header.length + 300_000);
+    bytes.set(header);
+    for (let i = header.length; i < bytes.length; i++) bytes[i] = (i * 31) & 0xff;
+    const plain = (b: number) => /[0-9a-z]/i.test(String.fromCharCode(b));
+    const encoded = Array.from(bytes, (b) =>
+      plain(b) ? String.fromCharCode(b) : `%${b.toString(16).padStart(2, '0')}`,
+    ).join('');
+    const node = imageNode(`data:image/png,${encoded}`);
+    const started = performance.now();
+    const assets = await loadImages(root(node), writer);
+    // About 90 ms on a developer machine. As with the text budget, the margin only has to separate
+    // a linear decode on a busy CI runner with coverage on from a quadratic one.
+    expect(performance.now() - started).toBeLessThan(2000);
+    const asset = assets.get(node);
+    expect([asset?.width, asset?.height]).toEqual([640, 480]);
+    // A plain loop: `toEqual` walks a 300 KB typed array slowly enough to hit the test timeout.
+    expect(asset?.data.length).toBe(bytes.length);
+    expect(asset?.data.every((byte, i) => byte === bytes[i])).toBe(true);
   });
 
   it('loads a Blob and an ArrayBuffer the same way', async () => {
