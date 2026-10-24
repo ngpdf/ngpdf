@@ -1,5 +1,19 @@
 # @ngpdf/core
 
+## 0.1.4
+
+### Patch Changes
+
+- [#59](https://github.com/ngpdf/ngpdf/pull/59) [`17706f7`](https://github.com/ngpdf/ngpdf/commit/17706f773f7817fc755a2a2500b61bac1dd4520f) Thanks [@arxigen](https://github.com/arxigen)! - A `pdf-image` with element children now rejects the render with
+  `ngpdf: pdf-image cannot have children (found <pdf-text>)`, naming the first child, before any
+  image is fetched. The error identifies the element you need to remove.
+
+- [#64](https://github.com/ngpdf/ngpdf/pull/64) [`7ac8749`](https://github.com/ngpdf/ngpdf/commit/7ac8749d91a252697e64a27b85a240ce5145bdbf) Thanks [@arxigen](https://github.com/arxigen)! - A `;` inside quotes or parentheses in a `style` attribute no longer ends the declaration, so values
+  such as `url(data:image/png;base64,...)` or `font-family: "A;B"` are kept whole.
+
+- [#55](https://github.com/ngpdf/ngpdf/pull/55) [`fc028e9`](https://github.com/ngpdf/ngpdf/commit/fc028e9b27dffaeca97f9113ff4d1785075fd1ff) Thanks [@arxigen](https://github.com/arxigen)! - An image `src` written as an upper- or mixed-case data URL (`DATA:image/png;base64,...`) is now
+  decoded instead of being fetched over the network, as URL schemes are case-insensitive.
+
 ## 0.1.3
 
 ### Patch Changes
