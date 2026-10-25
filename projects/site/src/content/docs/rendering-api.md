@@ -111,7 +111,7 @@ A directive for the most common case, a button that downloads a document. Import
 | `(pdfError)` | `unknown` | Emits the error when the render fails. The error also goes to the app's `ErrorHandler`. |
 
 - A click starts `downloadPdf` with the nearest `EnvironmentInjector`: a route's, if the route has `providers`, or the root one. The document can inject route-scoped services.
-- While the PDF renders, the host gets `aria-busy="true"` and `aria-disabled="true"`, and further clicks are ignored. The directive never sets `disabled`, which would drop keyboard focus and could undo the app's own `[disabled]`. Style the busy state with `[aria-busy='true']`.
+- While the PDF renders, the host gets `aria-busy="true"` and `aria-disabled="true"`, and further clicks are ignored, with their default action (a form submit, a link) cancelled. The directive never sets `disabled`, which would drop keyboard focus and could undo the app's own `[disabled]`. Style the busy state with `[aria-busy='true']`.
 - The render counts as a pending task, so `whenStable()` in a test waits for it.
 
 ## Option types

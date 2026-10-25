@@ -80,6 +80,19 @@ class BoundDisabledHost {
   readonly locked = signal(false);
 }
 
+@Component({
+  imports: [PdfDownload],
+  template: `
+    <form (submit)="submits = submits + 1; $event.preventDefault()">
+      <button type="submit" [pdfDownload]="document" pdfFileName="a.pdf">Download</button>
+    </form>
+  `,
+})
+class SubmitHost {
+  readonly document: Type<unknown> = TestDocument;
+  submits = 0;
+}
+
 const handled: unknown[] = [];
 
 beforeEach(() => {
@@ -147,6 +160,16 @@ describe('PdfDownload', () => {
     button.click();
 
     expect(downloads.calls).toHaveLength(1);
+  });
+
+  it('cancels the default action of a click while busy, so a form is not submitted twice', async () => {
+    const { fixture, button } = await render(SubmitHost);
+
+    button.click();
+    button.click();
+
+    expect(downloads.calls).toHaveLength(1);
+    expect(fixture.componentInstance.submits).toBe(1);
   });
 
   it('emits pdfError and reports to the ErrorHandler when the render fails', async () => {

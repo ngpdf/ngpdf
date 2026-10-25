@@ -20,7 +20,7 @@ import { downloadPdf } from './pdf-renderer';
 @Directive({
   selector: '[pdfDownload]',
   host: {
-    '(click)': 'download()',
+    '(click)': 'download($event)',
     '[attr.aria-busy]': 'busy() ? "true" : null',
     '[attr.aria-disabled]': 'busy() ? "true" : null',
   },
@@ -37,8 +37,12 @@ export class PdfDownload {
   private readonly errorHandler = inject(ErrorHandler);
   private readonly pendingTasks = inject(PendingTasks);
 
-  protected async download(): Promise<void> {
-    if (this.busy()) return;
+  protected async download(event: Event): Promise<void> {
+    // aria-disabled stops nothing by itself: a busy click must not submit a form or follow a link.
+    if (this.busy()) {
+      event.preventDefault();
+      return;
+    }
     this.busy.set(true);
     const done = this.pendingTasks.add();
     try {
