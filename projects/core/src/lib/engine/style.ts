@@ -197,7 +197,7 @@ function parsePoints(value: string, tag?: string): number {
 }
 
 function parseBorderWidth(value: string, tag?: string): number {
-  const keyword = value.trim();
+  const keyword = value.trim().toLowerCase();
   const keywordWidth = BORDER_WIDTHS[keyword];
   if (Object.hasOwn(BORDER_WIDTHS, keyword) && keywordWidth !== undefined) return keywordWidth;
   return rejectNegative(parsePoints(value, tag), value, tag);
@@ -248,7 +248,7 @@ export function parseBorder(value: string, tag?: string): BorderParts {
       code === 46 ||
       code === 43 ||
       code === 45 ||
-      Object.hasOwn(BORDER_WIDTHS, token)
+      Object.hasOwn(BORDER_WIDTHS, token.toLowerCase())
     ) {
       width = parseBorderWidth(token, tag);
     } else if (BORDER_STYLES.has(token)) {
