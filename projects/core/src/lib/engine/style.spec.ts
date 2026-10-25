@@ -446,10 +446,17 @@ describe('resolveStyles property coverage', () => {
       left: 5,
     });
     expect(styleOf({ 'border-right-width': 'medium' }).borderWidth.right).toBe(3);
+    expect(styleOf({ 'border-right-width': ' thin ' }).borderWidth.right).toBe(1);
     expect(() => styleOf({ border: '-2 solid red' })).toThrow(
       'ngpdf: expected a non-negative length in "-2" on pdf-view',
     );
+    expect(() => styleOf({ 'border-top': '-2 solid red' })).toThrow(
+      'ngpdf: expected a non-negative length in "-2" on pdf-view',
+    );
     expect(() => styleOf({ 'border-width': '-2' })).toThrow(
+      'ngpdf: expected a non-negative length in "-2" on pdf-view',
+    );
+    expect(() => styleOf({ 'border-right-width': '-2' })).toThrow(
       'ngpdf: expected a non-negative length in "-2" on pdf-view',
     );
   });

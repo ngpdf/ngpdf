@@ -70,7 +70,11 @@ export interface BorderParts {
 export const MAX_NESTING = 64;
 
 const BLACK: Color = Object.freeze({ r: 0, g: 0, b: 0, a: 1 });
-const BORDER_WIDTHS: Readonly<Record<string, number>> = { thin: 1, medium: 3, thick: 5 };
+const BORDER_WIDTHS: Readonly<Record<string, number>> = Object.freeze({
+  thin: 1,
+  medium: 3,
+  thick: 5,
+});
 
 export const ROOT_TEXT_STYLE: TextStyle = Object.freeze({
   color: BLACK,
@@ -193,8 +197,9 @@ function parsePoints(value: string, tag?: string): number {
 }
 
 function parseBorderWidth(value: string, tag?: string): number {
-  const keywordWidth = BORDER_WIDTHS[value];
-  if (Object.hasOwn(BORDER_WIDTHS, value) && keywordWidth !== undefined) return keywordWidth;
+  const keyword = value.trim();
+  const keywordWidth = BORDER_WIDTHS[keyword];
+  if (Object.hasOwn(BORDER_WIDTHS, keyword) && keywordWidth !== undefined) return keywordWidth;
   return rejectNegative(parsePoints(value, tag), value, tag);
 }
 
