@@ -14,6 +14,8 @@ export {
 export type { TableColumn } from './lib/elements';
 export type { PageOrientation, PageSize } from './lib/elements/page';
 export { PdfRenderer, downloadPdf, renderToBlob } from './lib/render/pdf-renderer';
+export { pdfResource } from './lib/render/pdf-resource';
+export type { PdfResourceOptions, PdfResourceRef } from './lib/render/pdf-resource';
 export type {
   DownloadOptions,
   DownloadPdfOptions,

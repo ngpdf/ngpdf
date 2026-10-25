@@ -5,7 +5,7 @@ section: Reference
 order: 10
 ---
 
-`@ngpdf/core` exports one service and two functions that render a document component to a PDF.
+`@ngpdf/core` exports one service and three functions that render a document component to a PDF.
 
 | Export | Needs an injection context | Returns |
 | --- | --- | --- |
@@ -13,6 +13,7 @@ order: 10
 | `PdfRenderer.download` | yes, to inject `PdfRenderer` | `Promise<void>` |
 | `renderToBlob` | no, you pass an injector | `Promise<Blob>` |
 | `downloadPdf` | no, you pass an injector | `Promise<void>` |
+| `pdfResource` | yes, or pass `injector` | `PdfResourceRef` |
 
 ## PdfRenderer
 
@@ -40,6 +41,50 @@ function downloadPdf<T>(component: Type<T>, options: DownloadPdfOptions): Promis
 ```
 
 The same renders, for code without an injection context. The `injector` you pass is the parent of the render's injector, so the document resolves its services from it. `PdfRenderer` calls these two functions.
+
+## pdfResource
+
+```ts
+function pdfResource<T>(component: Type<T>, options?: PdfResourceOptions): PdfResourceRef;
+
+interface PdfResourceOptions {
+  readonly inputs?: () => Record<string, unknown> | undefined;
+  readonly debounce?: number;
+  readonly injector?: Injector;
+}
+
+interface PdfResourceRef extends Resource<Blob | undefined> {
+  readonly url: Signal<string | undefined>;
+  reload(): boolean;
+  destroy(): void;
+}
+```
+
+A PDF that stays current with signals, built on Angular's `resource()`. It renders when it is created and again whenever a signal read in `inputs` changes. A render overtaken by a newer one is dropped.
+
+```ts
+protected readonly lines = signal<InvoiceLine[]>([]);
+protected readonly pdf = pdfResource(InvoiceDocument, {
+  inputs: () => ({ customer: this.customer(), lines: this.lines() }),
+  debounce: 300,
+});
+```
+
+```html
+@if (pdf.url(); as url) {
+  <a [href]="url" download="invoice.pdf">Download</a>
+} @else if (pdf.isLoading()) {
+  <p>Rendering…</p>
+} @else if (pdf.error(); as error) {
+  <p>{{ error.message }}</p>
+}
+```
+
+- `value()` is the `Blob`, and `status()`, `isLoading()`, `error()` and `hasValue()` work as on any `Resource`. Like any `Resource`, `value()` throws in the `error` status; `url()` does not, so templates can read it directly.
+- `url()` is an object URL for the current PDF. It is created the first time you read it, and revoked when a newer PDF replaces it or when the resource is destroyed. Do not revoke it yourself.
+- `inputs` returning `undefined` holds off rendering, and the resource stays `idle`. Use it while the data is still loading.
+- `debounce` is how many milliseconds to wait after the last change before rendering. A slider or a text field otherwise starts a render per keystroke, and only the last one is kept.
+- `injector` is needed outside an injection context. The resource is destroyed with it, and the document resolves its services from its `EnvironmentInjector`.
 
 ## Option types
 
