@@ -5,7 +5,7 @@ section: Reference
 order: 10
 ---
 
-`@ngpdf/core` exports one service and three functions that render a document component to a PDF.
+`@ngpdf/core` exports one service, three functions and a directive that render a document component to a PDF.
 
 | Export | Needs an injection context | Returns |
 | --- | --- | --- |
@@ -14,6 +14,7 @@ order: 10
 | `renderToBlob` | no, you pass an injector | `Promise<Blob>` |
 | `downloadPdf` | no, you pass an injector | `Promise<void>` |
 | `pdfResource` | yes, or pass `injector` | `PdfResourceRef` |
+| `PdfDownload` | no, it is a directive | - |
 
 ## PdfRenderer
 
@@ -85,6 +86,33 @@ protected readonly pdf = pdfResource(InvoiceDocument, {
 - `inputs` returning `undefined` holds off rendering, and the resource stays `idle`. Use it while the data is still loading.
 - `debounce` is how many milliseconds to wait after the last change before rendering. A slider or a text field otherwise starts a render per keystroke, and only the last one is kept.
 - `injector` is needed outside an injection context. The resource is destroyed with it, and the document resolves its services from its `EnvironmentInjector`.
+
+## PdfDownload
+
+```html
+<button
+  type="button"
+  [pdfDownload]="InvoiceDocument"
+  [pdfInputs]="{ customer: customer(), lines: lines() }"
+  pdfFileName="invoice.pdf"
+  (pdfError)="showError($event)"
+>
+  Download PDF
+</button>
+```
+
+A directive for the most common case, a button that downloads a document. Import `PdfDownload` in the component that uses it.
+
+| Input or output | Type | |
+| --- | --- | --- |
+| `pdfDownload` | `Type<unknown>` | Required. The document component. |
+| `pdfInputs` | `Record<string, unknown>` | The document's inputs, as in `RenderOptions`. Read when the host is clicked. |
+| `pdfFileName` | `string` | Required. The name the browser saves the file under. |
+| `(pdfError)` | `unknown` | Emits the error when the render fails. The error also goes to the app's `ErrorHandler`. |
+
+- A click starts `downloadPdf` with the root `EnvironmentInjector`, the same as `PdfRenderer.download`.
+- While the PDF renders, the host gets `aria-busy="true"`, a host with a `disabled` property (a `<button>`, say) is disabled, and further clicks are ignored. A host that was already disabled is left as it is.
+- The render counts as a pending task, so `whenStable()` in a test waits for it.
 
 ## Option types
 
