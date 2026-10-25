@@ -64,6 +64,22 @@ class DisabledHost {
   readonly document: Type<unknown> = TestDocument;
 }
 
+@Component({
+  imports: [PdfDownload],
+  template: `<button
+    type="button"
+    [disabled]="locked()"
+    [pdfDownload]="document"
+    pdfFileName="a.pdf"
+  >
+    Download
+  </button>`,
+})
+class BoundDisabledHost {
+  readonly document: Type<unknown> = TestDocument;
+  readonly locked = signal(false);
+}
+
 const handled: unknown[] = [];
 
 beforeEach(() => {
@@ -108,19 +124,20 @@ describe('PdfDownload', () => {
     expect(downloads.calls[0]?.inputs).toEqual({ customer: 'Globex' });
   });
 
-  it('disables its host and marks it busy while the PDF renders', async () => {
+  it('marks its host busy and aria-disabled while the PDF renders', async () => {
     const { fixture, button } = await render(ButtonHost);
 
     button.click();
     // whenStable would wait for the download itself: the directive holds a pending task.
     fixture.detectChanges();
-    expect(button.disabled).toBe(true);
     expect(button.getAttribute('aria-busy')).toBe('true');
+    expect(button.getAttribute('aria-disabled')).toBe('true');
+    expect(button.disabled).toBe(false);
 
     downloads.settle?.();
     await fixture.whenStable();
-    expect(button.disabled).toBe(false);
     expect(button.hasAttribute('aria-busy')).toBe(false);
+    expect(button.hasAttribute('aria-disabled')).toBe(false);
   });
 
   it('ignores clicks while a download is under way', async () => {
@@ -147,6 +164,18 @@ describe('PdfDownload', () => {
 
   it('leaves a host that is disabled on its own alone', async () => {
     const { button } = await render(DisabledHost);
+
+    expect(button.disabled).toBe(true);
+  });
+
+  it('keeps a host disabled that the app disabled while the PDF rendered', async () => {
+    const { fixture, button } = await render(BoundDisabledHost);
+
+    button.click();
+    fixture.componentInstance.locked.set(true);
+    fixture.detectChanges();
+    downloads.settle?.();
+    await fixture.whenStable();
 
     expect(button.disabled).toBe(true);
   });

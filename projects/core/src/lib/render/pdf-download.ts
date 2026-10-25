@@ -1,6 +1,5 @@
 import {
   Directive,
-  ElementRef,
   EnvironmentInjector,
   ErrorHandler,
   PendingTasks,
@@ -15,14 +14,15 @@ import { downloadPdf } from './pdf-renderer';
 /**
  * Downloads a document when its host is clicked:
  * `<button [pdfDownload]="Invoice" [pdfInputs]="{ lines }" pdfFileName="invoice.pdf">`.
- * A button host is disabled and any host is `aria-busy` while the PDF renders; clicks in between
- * are ignored.
+ * While the PDF renders the host is `aria-busy` and `aria-disabled`, and clicks are ignored. It is
+ * not given `disabled`: that would drop keyboard focus and fight the app's own `[disabled]`.
  */
 @Directive({
   selector: '[pdfDownload]',
   host: {
     '(click)': 'download()',
     '[attr.aria-busy]': 'busy() ? "true" : null',
+    '[attr.aria-disabled]': 'busy() ? "true" : null',
   },
 })
 export class PdfDownload {
@@ -36,15 +36,10 @@ export class PdfDownload {
   private readonly injector = inject(EnvironmentInjector);
   private readonly errorHandler = inject(ErrorHandler);
   private readonly pendingTasks = inject(PendingTasks);
-  private readonly host =
-    inject<ElementRef<HTMLElement & { disabled?: boolean }>>(ElementRef).nativeElement;
 
   protected async download(): Promise<void> {
     if (this.busy()) return;
     this.busy.set(true);
-    // Set by hand rather than bound, so a host's own `disabled` is never overwritten when idle.
-    const disable = this.host.disabled === false;
-    if (disable) this.host.disabled = true;
     const done = this.pendingTasks.add();
     try {
       await downloadPdf(this.pdfDownload(), {
@@ -56,7 +51,6 @@ export class PdfDownload {
       this.errorHandler.handleError(error);
       this.pdfError.emit(error);
     } finally {
-      if (disable) this.host.disabled = false;
       this.busy.set(false);
       done();
     }
