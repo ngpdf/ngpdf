@@ -2,6 +2,5 @@
 '@ngpdf/core': minor
 ---
 
-New `pdfResource(Document, { inputs })`: a signal-based PDF built on Angular's `resource()`. It
-renders again when its inputs change, exposes the `Blob`, an object URL that is revoked for you,
-and the loading and error state, and can debounce bursts of changes.
+Add `pdfResource` to keep a PDF Blob and object URL current as document inputs change. It also
+exposes loading and error state, revokes replaced URLs, and can debounce bursts of changes.
