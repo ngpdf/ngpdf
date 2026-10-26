@@ -119,7 +119,7 @@ The site (`projects/site`) is a prerendered Angular app. Its docs are the Markdo
     yields its rows as units. A row `pdf-view` is one unit.
   - A unit is never split. A `pdf-text` that would be a unit is cut into line groups instead: the
     first `orphans` lines, each line between, and the last `widows` lines (2 and 2 by default).
-    A short text, `break-inside: avoid` or a fixed height keeps it one unit.
+    A short text, `break-inside: avoid`, a fixed `height` or a `max-height` keeps it one unit.
   - A `header` row repeats at the top of every page its table runs onto.
   - `breakBefore` starts a new page.
   - `pdf-page-number` reserves its height at the bottom of the content area.

@@ -493,7 +493,7 @@ function apply(
       style.breakBefore = style.breakBefore || value === 'page';
       break;
     case 'break-inside':
-      style.breakInside = value.trim().startsWith('avoid') ? 'avoid' : 'auto';
+      style.breakInside = ['avoid', 'avoid-page'].includes(value.trim()) ? 'avoid' : 'auto';
       break;
     case 'orphans':
     case 'widows':

@@ -36,7 +36,7 @@ ngpdf v0.1 covers documents built from text, tables, boxes and images. This page
 ### Pagination
 
 - `pdf-page-number` always sits at the bottom of the content area.
-- A unit taller than a page (a row, or a `pdf-view` in a column) is clipped to its page. A `pdf-text` breaks between lines instead, unless it is inside a row.
+- A unit taller than a page (a row, or a `pdf-view` in a column) is clipped to its page. So is a `pdf-text` that stays one unit: one inside a row, or one with `break-inside: avoid`, a fixed `height` or `max-height`, or fewer than `orphans + widows` lines. Other text breaks between lines instead.
 
 ### Images
 

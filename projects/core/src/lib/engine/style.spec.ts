@@ -432,6 +432,8 @@ describe('resolveStyles property coverage', () => {
     expect(styleOf({ 'break-inside': 'avoid' }).breakInside).toBe('avoid');
     expect(styleOf({ 'break-inside': 'avoid-page' }).breakInside).toBe('avoid');
     expect(styleOf({ 'break-inside': 'auto' }).breakInside).toBe('auto');
+    // Columns don't exist here, so avoiding a column break avoids nothing.
+    expect(styleOf({ 'break-inside': 'avoid-column' }).breakInside).toBe('auto');
     const text = el('pdf-text');
     const view = el('pdf-view', { 'break-inside': 'avoid' }, [text]);
     expect(resolveStyles(view).get(text)?.breakInside).toBe('auto');
