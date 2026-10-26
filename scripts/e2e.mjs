@@ -36,6 +36,7 @@ const DOCUMENTS = [
     contains: ['Łódź', 'καλημέρα', 'доброе утро', '日本語の文字テスト', 'Страница 1 / 1'],
   },
   { name: 'span-sample', pages: 1, contains: ['#1024', '12 days overdue', 'Łódź'] },
+  { name: 'article-sample', pages: 3, contains: ['Field notes', 'Page 3 of 3'] },
 ];
 
 const update = process.argv.includes('--update');

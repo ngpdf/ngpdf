@@ -2,6 +2,7 @@ import { Component, ElementRef, inject, isDevMode, signal, viewChild } from '@an
 import { PdfRenderer } from '@ngpdf/core';
 import { captureChart } from './capture-chart';
 import { CHART_BARS, makeCommunicators, makeLicences } from './data';
+import { ArticleSample } from './documents/article-sample';
 import { CaptureReport } from './documents/capture-report';
 import { CommunicatorsList } from './documents/communicators-list';
 import { FontsSample } from './documents/fonts-sample';
@@ -14,6 +15,7 @@ const DOCUMENT_NAMES = [
   'licences-list',
   'fonts-sample',
   'span-sample',
+  'article-sample',
 ] as const;
 export type DemoDocument = (typeof DOCUMENT_NAMES)[number];
 
@@ -97,6 +99,8 @@ export class App {
         return this.pdf.toBlob(FontsSample);
       case 'span-sample':
         return this.pdf.toBlob(SpanSample);
+      case 'article-sample':
+        return this.pdf.toBlob(ArticleSample);
     }
   }
 
