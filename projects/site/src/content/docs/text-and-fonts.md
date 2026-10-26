@@ -123,7 +123,7 @@ The same applies to the text of `pdf-page-number`.
 - Widths include the font's kerning, and the ligatures of a custom font.
 - There is no hyphenation, no `text-align: justify` and no right-to-left text in v0.1.
 
-A `pdf-text` is one pagination unit and is never split across pages. Long text belongs in several `pdf-text` elements, one per paragraph, so the paragraphs can flow onto the next page. See [Pagination](/docs/pagination).
+A long `pdf-text` breaks between lines at a page break, keeping `orphans` lines (default 2) before the break and `widows` lines (default 2) after it. `break-inside: avoid` keeps it whole. See [Text across pages](/docs/pagination#text-across-pages).
 
 ## Line height
 

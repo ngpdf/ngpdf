@@ -1,6 +1,6 @@
 ---
 title: Pagination
-description: How ngpdf breaks content into pages - pagination units, rows that never split, repeated table headers, breakBefore and pdf-page-number formats.
+description: How ngpdf breaks content into pages - pagination units, rows that never split, text that breaks between lines with orphans and widows, repeated table headers, breakBefore and pdf-page-number formats.
 section: Guide
 order: 6
 ---
@@ -9,7 +9,7 @@ You do not place page breaks by hand. ngpdf lays out each `pdf-page` at its cont
 
 ## Units
 
-ngpdf moves content between pages in whole units. A unit is never split.
+ngpdf moves content between pages in whole units. A unit is never split, but a long `pdf-text` is cut into several units, so it can break between its lines (see [Text across pages](#text-across-pages)).
 
 Starting from the children of the `pdf-page`, ngpdf looks inside some elements and treats others as units:
 
@@ -18,7 +18,8 @@ Starting from the children of the `pdf-page`, ngpdf looks inside some elements a
 | `pdf-view` with `flex-direction: column` (the default) and children | a wrapper: its children are looked at in turn |
 | `pdf-table` | a wrapper: each of its rows is a unit |
 | `pdf-view` with `flex-direction: row` | one unit, with everything inside it |
-| `pdf-row`, `pdf-text`, `pdf-image`, an empty `pdf-view` | one unit |
+| `pdf-text` | its lines, grouped by `orphans` and `widows`; one unit if it is short, has `break-inside: avoid` or a fixed height |
+| `pdf-row`, `pdf-image`, an empty `pdf-view` | one unit |
 
 Wrappers can nest to any depth, so a table inside a column `pdf-view` inside another column `pdf-view` still yields its rows as units. A table inside a cell or inside a row `pdf-view` is part of that unit.
 
@@ -28,7 +29,21 @@ If the page's own `flex-direction` is `row`, its whole content is one unit.
 
 ### Keep units small
 
-Because a unit is never split, a long `pdf-text` cannot flow onto the next page. Write one `pdf-text` per paragraph, and avoid wrapping long lists in a row `pdf-view`.
+A table row or a row `pdf-view` is never split, with everything inside it, text included. Avoid wrapping long lists in a row `pdf-view`.
+
+## Text across pages
+
+A `pdf-text` that is a unit by the rules above, as a child of the page or of a column `pdf-view`, can break between two of its lines, as a paragraph does in CSS:
+
+```html
+<pdf-text style="orphans: 3; widows: 2">{{ longParagraph() }}</pdf-text>
+```
+
+- `orphans` is the fewest lines left at the bottom of a page before the break, and `widows` the fewest carried to the top of the next. Both are integers of at least 1, are inherited, and default to 2.
+- A text with fewer than `orphans + widows` lines moves to the next page whole, as do texts with `break-inside: avoid`, a fixed `height` or a `max-height`.
+- A text longer than a page continues over as many pages as it needs.
+- Its top padding and border stay with its first lines, the bottom ones with its last lines. A background or border is sliced like a [wrapper's](#wrapper-backgrounds-and-borders).
+- A `pdf-text` inside a table row or a row `pdf-view` is part of that unit and does not break.
 
 ### Units taller than a page
 
@@ -36,7 +51,7 @@ A unit taller than the content area goes on a sheet of its own and is clipped at
 
 `ngpdf: pdf-view is taller than a page and is cut at the bottom`
 
-Text lines that would cross the cut are not drawn, and images, backgrounds and side borders are cut at it. Splitting a text block across pages is not part of v0.1.
+Text lines that would cross the cut are not drawn, and images, backgrounds and side borders are cut at it. A `pdf-text` that can break between lines is not clipped: it continues on the next page.
 
 ## Wrapper backgrounds and borders
 

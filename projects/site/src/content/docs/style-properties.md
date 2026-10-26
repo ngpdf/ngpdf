@@ -89,12 +89,15 @@ Shorthands with 1 to 4 values follow CSS order: top, right, bottom, left.
 
 In `border`, a missing width is 1 and a missing color is black. The styles `none` and `hidden` set the width to 0; `solid` draws solid; `dashed`, `dotted`, `double`, `groove`, `ridge`, `inset` and `outset` are drawn solid with a dev-mode warning. `border-radius` rounds the background only; borders stay square.
 
-## Images and pages
+## Images, pages and breaks
 
 | Property | Values | Default |
 | --- | --- | --- |
 | `object-fit` | `contain`, `cover` | `contain` |
 | `break-before` | `page` starts a new sheet; other values do nothing | |
+| `break-inside` | `avoid` keeps a `pdf-text` on one sheet; other values do nothing | `auto` |
+| `orphans` | integer ≥ 1: the fewest lines of a `pdf-text` before a page break (inherited) | `2` |
+| `widows` | integer ≥ 1: the fewest lines of a `pdf-text` after a page break (inherited) | `2` |
 
 ## Ignored
 

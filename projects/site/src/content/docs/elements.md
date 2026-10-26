@@ -76,7 +76,7 @@ A block of text. Its content is the text of all its child nodes.
 | --- | --- | --- | --- |
 | `breakBefore` | `boolean` | `false` | Starts a new sheet before this element, or before the table row or row `pdf-view` it is in (see [Pagination](/docs/pagination)). A boolean attribute. |
 
-It wraps at Unicode line-break opportunities and is never split across sheets. Style part of its text with `pdf-span`. A nested `pdf-text` is drawn in the outer text's style, with a warning in development mode. See [Text and fonts](/docs/text-and-fonts).
+It wraps at Unicode line-break opportunities, and a long text breaks between lines across sheets (see [Text across pages](/docs/pagination#text-across-pages)). Style part of its text with `pdf-span`. A nested `pdf-text` is drawn in the outer text's style, with a warning in development mode. See [Text and fonts](/docs/text-and-fonts).
 
 ## pdf-span
 
