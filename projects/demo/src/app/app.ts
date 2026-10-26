@@ -6,12 +6,14 @@ import { CaptureReport } from './documents/capture-report';
 import { CommunicatorsList } from './documents/communicators-list';
 import { FontsSample } from './documents/fonts-sample';
 import { LicencesList } from './documents/licences-list';
+import { SpanSample } from './documents/span-sample';
 
 const DOCUMENT_NAMES = [
   'capture-report',
   'communicators-list',
   'licences-list',
   'fonts-sample',
+  'span-sample',
 ] as const;
 export type DemoDocument = (typeof DOCUMENT_NAMES)[number];
 
@@ -93,6 +95,8 @@ export class App {
         return this.pdf.toBlob(LicencesList, { inputs: { items: makeLicences(60) } });
       case 'fonts-sample':
         return this.pdf.toBlob(FontsSample);
+      case 'span-sample':
+        return this.pdf.toBlob(SpanSample);
     }
   }
 

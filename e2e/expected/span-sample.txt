@@ -1,0 +1,8 @@
+Styled runs
+Invoice #1024 totals € 1,280.00 and is 12 days overdue. Pay it at
+example.com/pay.
+A narrow box wraps across
+span boundaries and inside
+spans as one paragraph.
+
+Ships to Łódź from WAREHOUSE-7.
