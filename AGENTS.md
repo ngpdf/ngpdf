@@ -103,8 +103,9 @@ The site (`projects/site`) is a prerendered Angular app. Its docs are the Markdo
   - Custom fonts (TTF, OTF, WOFF, WOFF2) come from `providePdfFonts` and are embedded as subsets.
   - `font-family` is a list: each grapheme cluster is drawn in the first font of the list that has
     it. A list with no registered family maps to one standard font, as it always has.
-  - A character missing from every font in the list stays in the first font (its empty glyph),
-    with one dev-mode warning per render. No synthetic bold or italic.
+  - A character missing from every font in the list takes the first font's fallback: its empty
+    glyph for a custom first font, `?` for a standard one. One dev-mode warning per render. No
+    synthetic bold or italic.
   - Only the faces of families a document names are loaded, so an unused broken font never fails
     a render.
 - **Tables:**
