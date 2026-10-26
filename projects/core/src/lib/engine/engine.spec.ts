@@ -132,6 +132,20 @@ describe('renderDocument', () => {
     ]);
   });
 
+  it('draws a fixed header on every sheet of its page', async () => {
+    const writer = recordingWriter();
+    const header = el('pdf-view', {}, [text('Header')], { fixed: 'top' });
+    const rows = [0, 1, 2, 3].map(() => el('pdf-view', { height: '400' }));
+    await renderDocument(host({}, [el('pdf-page', {}, [header, ...rows], { size: 'A4' })]), {
+      writer,
+      dev: false,
+    });
+    const headers = writer.recorded[0]!.pages.map(
+      (p) => p.ops.filter((op) => op.op === 'text' && op.text === 'Header').length,
+    );
+    expect(headers).toEqual([1, 1]);
+  });
+
   it('rejects a pdf-image with children before fetching it, naming the element', async () => {
     const fetchFn = vi.fn(() => Promise.reject(new TypeError('Failed to fetch')));
     vi.stubGlobal('fetch', fetchFn);

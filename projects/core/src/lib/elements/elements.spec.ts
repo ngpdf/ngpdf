@@ -50,6 +50,7 @@ const BLOB = new Blob(['x']);
       <pdf-table [columns]="['1fr', 40]">
         <pdf-row header><pdf-cell span="2" /></pdf-row>
       </pdf-table>
+      <pdf-view fixed="top" />
     </pdf-document>
   `,
 })
@@ -157,6 +158,7 @@ describe('pdf-* elements', () => {
     const row = at(elementChildren(table), 0);
     expect(propsOf(row)['header']).toBe(true);
     expect(propsOf(at(elementChildren(row), 0))).toEqual({ span: 2 });
+    expect(propsOf(at(children, 8))).toEqual({ breakBefore: false, fixed: 'top' });
   });
 
   it('renders pdf-span with interpolation, @if and @for inside a pdf-text', () => {

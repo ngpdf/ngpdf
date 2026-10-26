@@ -682,3 +682,68 @@ describe('paginatePage: text split across pages', () => {
     expect(linesOn(pages[1]!)).toHaveLength(10);
   });
 });
+
+describe('paginatePage: fixed views', () => {
+  const fixed = (where: 'top' | 'bottom', height: number, style: Record<string, string> = {}) =>
+    el('pdf-view', { height: String(height), ...style }, [], { fixed: where });
+  const block = (height: number): PdfNode => el('pdf-view', { height: String(height) });
+  const fixedOn = (laid: PageLayout): PlacedBox[] =>
+    laid.placed.filter((placed) => placed.box.node.owner?.pdfProps()['fixed'] !== undefined);
+  const flowOn = (laid: PageLayout): PlacedBox[] =>
+    laid.placed.filter((placed) => placed.box.node.owner?.pdfProps()['fixed'] === undefined);
+  const AREA = A4_HEIGHT - 2 * PADDING;
+
+  it('draws top and bottom views on every sheet and keeps the flow between them', () => {
+    const blocks = Array.from({ length: 10 }, () => block(100));
+    const pages = paginate(page([fixed('top', 40), ...blocks, fixed('bottom', 30)]));
+    // 769.89 - 40 - 30 leaves room for six 100pt blocks a sheet.
+    expect(pages.map((laid) => flowOn(laid).length)).toEqual([6, 4]);
+    for (const laid of pages) {
+      const [top, bottomView] = fixedOn(laid);
+      expect(top!.y).toBeCloseTo(CONTENT_TOP, 3);
+      expect(bottom(bottomView!)).toBeCloseTo(CONTENT_TOP + AREA, 3);
+      expect(flowOn(laid)[0]!.y).toBeCloseTo(CONTENT_TOP + 40, 3);
+    }
+  });
+
+  it('stacks several fixed views in template order with their margins', () => {
+    const pages = paginate(
+      page([
+        fixed('top', 20),
+        fixed('top', 10, { 'margin-top': '5', 'margin-bottom': '8' }),
+        block(10),
+        fixed('bottom', 12, { 'margin-top': '4' }),
+        fixed('bottom', 6, { 'margin-bottom': '3' }),
+      ]),
+    );
+    const [first, second, third, fourth] = fixedOn(pages[0]!);
+    expect(first!.y).toBeCloseTo(CONTENT_TOP, 3);
+    expect(second!.y).toBeCloseTo(CONTENT_TOP + 20 + 5, 3);
+    expect(flowOn(pages[0]!)[0]!.y).toBeCloseTo(CONTENT_TOP + 20 + 5 + 10 + 8, 3);
+    expect(bottom(fourth!)).toBeCloseTo(CONTENT_TOP + AREA - 3, 3);
+    expect(bottom(third!)).toBeCloseTo(fourth!.y, 3);
+  });
+
+  it('puts bottom views above the page number', () => {
+    const pages = paginate(page([block(10), fixed('bottom', 20), pageNumber()]));
+    const [footer] = fixedOn(pages[0]!);
+    expect(bottom(footer!)).toBeCloseTo(CONTENT_BOTTOM, 3);
+    expect(pages[0]!.pageNumber?.y).toBeCloseTo(CONTENT_BOTTOM, 3);
+  });
+
+  it('throws when fixed views leave no room for content', () => {
+    expect(() => paginate(page([fixed('top', 400), fixed('bottom', 400), block(10)]))).toThrow(
+      'ngpdf: fixed views leave no room for content on pdf-page',
+    );
+  });
+
+  it('lays out a fixed view below the page in the flow, with a warning', () => {
+    const warn = vi.fn<(message: string) => void>();
+    const inner = fixed('top', 10);
+    const pages = paginate(page([el('pdf-view', {}, [block(10), inner])]), warn);
+    expect(pages[0]!.placed.map((placed) => placed.box)).toContainEqual(
+      expect.objectContaining({ node: inner }),
+    );
+    expect(warn).toHaveBeenCalledWith('ngpdf: a fixed pdf-view must be a direct child of pdf-page');
+  });
+});

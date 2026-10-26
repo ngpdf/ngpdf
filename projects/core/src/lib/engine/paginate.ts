@@ -338,6 +338,19 @@ function setsTextAlign(node: PdfNode): boolean {
   return false;
 }
 
+function fixedSide(node: PdfNode): 'top' | 'bottom' | undefined {
+  if (node.kind !== 'element' || node.tag !== 'pdf-view') return undefined;
+  const side = propsOf(node)['fixed'];
+  return side === 'top' || side === 'bottom' ? side : undefined;
+}
+
+/** Whether a fixed pdf-view sits anywhere below the page's direct children. */
+function hasNestedFixed(page: PdfNode): boolean {
+  const below = (node: PdfNode): boolean =>
+    node.children.some((child) => fixedSide(child) !== undefined || below(child));
+  return page.children.some((child) => below(child));
+}
+
 /** Whether a pdf-page-number sits anywhere below the page's direct children. */
 function hasNestedPageNumber(page: PdfNode): boolean {
   const below = (node: PdfNode): boolean =>
@@ -419,16 +432,54 @@ export function paginatePage(
   const numberBox = numberNode
     ? measurePageNumber(numberNode, styles, base.contentWidth, ctx)
     : undefined;
-  const frame: PageFrame = { ...base, bottom: base.innerBottom - (numberBox?.h ?? 0) };
+  const numberTop = base.innerBottom - (numberBox?.h ?? 0);
   const pageNumber = numberBox && {
     box: numberBox,
-    x: frame.left,
-    y: frame.bottom,
+    x: base.left,
+    y: numberTop,
     ...fade(pageStyle.opacity),
   };
 
-  // The content without the page number, laid out as a plain box at the content width.
-  const content: PdfNode = { ...page, children: page.children.filter((c) => !isPageNumber(c)) };
+  // Fixed views are laid out once and drawn on every sheet; the flow gets the space between them.
+  if (hasNestedFixed(page)) warn('ngpdf: a fixed pdf-view must be a direct child of pdf-page');
+  const fixedViews: PlacedBox[] = [];
+  const fixedBox = (node: PdfNode): { box: Box; top: number; bottom: number; left: number } => {
+    const margin = styles.get(node)?.margin ?? ZERO_EDGES;
+    const side = (edge: keyof Edges<Length>): number => lengthIn(margin[edge], base.contentWidth);
+    const width = Math.max(0, base.contentWidth - side('left') - side('right'));
+    const box = layoutBox(node, styles, width, ctx);
+    return {
+      box: { ...box, x: 0, y: 0 },
+      top: side('top'),
+      bottom: side('bottom'),
+      left: side('left'),
+    };
+  };
+  let top = base.top;
+  for (const node of page.children.filter((child) => fixedSide(child) === 'top')) {
+    const view = fixedBox(node);
+    const y = top + view.top;
+    fixedViews.push({ box: view.box, x: base.left + view.left, y, ...fade(pageStyle.opacity) });
+    top = y + view.box.h + view.bottom;
+  }
+  let bottom = numberTop;
+  const bottoms: PlacedBox[] = [];
+  for (const node of page.children.filter((child) => fixedSide(child) === 'bottom').reverse()) {
+    const view = fixedBox(node);
+    const y = bottom - view.bottom - view.box.h;
+    bottoms.unshift({ box: view.box, x: base.left + view.left, y, ...fade(pageStyle.opacity) });
+    bottom = y - view.top;
+  }
+  fixedViews.push(...bottoms);
+  if (bottom - top <= EPSILON)
+    throw new Error('ngpdf: fixed views leave no room for content on pdf-page');
+  const frame: PageFrame = { ...base, top, bottom };
+
+  // The content without the page number and fixed views, laid out at the content width.
+  const content: PdfNode = {
+    ...page,
+    children: page.children.filter((c) => !isPageNumber(c) && fixedSide(c) === undefined),
+  };
   const contentStyle: ResolvedStyle = {
     ...pageStyle,
     width: 'auto',
@@ -464,7 +515,13 @@ export function paginatePage(
   // Flow bottom of the last unit placed on this page; null right after a page break.
   let previousBottom: number | null = 0;
   const startPage = (): void => {
-    current = { placed: [], decorations: [], headers: new Set(), units: 0, lastUnit: -1 };
+    current = {
+      placed: [...fixedViews],
+      decorations: [],
+      headers: new Set(),
+      units: 0,
+      lastUnit: -1,
+    };
     pages.push(current);
     cursor = frame.top;
   };

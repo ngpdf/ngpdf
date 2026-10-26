@@ -7,12 +7,14 @@ import type { PdfNode } from '../tree/node';
 })
 export class PdfView {
   readonly breakBefore = input(false, { transform: booleanAttribute });
+  /** Draws this view on every sheet of its pdf-page, at the top or the bottom. */
+  readonly fixed = input<'top' | 'bottom'>();
 
   constructor() {
     (inject(ElementRef).nativeElement as PdfNode).owner = this;
   }
 
   pdfProps(): Record<string, unknown> {
-    return { breakBefore: this.breakBefore() };
+    return { breakBefore: this.breakBefore(), fixed: this.fixed() };
   }
 }
