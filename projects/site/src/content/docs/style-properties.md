@@ -95,7 +95,7 @@ In `border`, a missing width is 1 and a missing color is black. The styles `none
 | --- | --- | --- |
 | `object-fit` | `contain`, `cover` | `contain` |
 | `break-before` | `page` starts a new sheet; other values do nothing | |
-| `break-inside` | `avoid` keeps a `pdf-text` on one sheet; other values do nothing | `auto` |
+| `break-inside` | `avoid` or `avoid-page` keeps a `pdf-text` on one sheet; other values do nothing | `auto` |
 | `orphans` | integer ≥ 1: the fewest lines of a `pdf-text` before a page break (inherited) | `2` |
 | `widows` | integer ≥ 1: the fewest lines of a `pdf-text` after a page break (inherited) | `2` |
 
