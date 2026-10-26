@@ -65,6 +65,7 @@ A flex container, like a `div` with `display: flex; flex-direction: column`.
 | Input | Type | Default | Description |
 | --- | --- | --- | --- |
 | `breakBefore` | `boolean` | `false` | Starts a new sheet before this element, or before the table row or row `pdf-view` it is in (see [Pagination](/docs/pagination)). A boolean attribute: `<pdf-view breakBefore>` is `true`. |
+| `fixed` | `'top' \| 'bottom' \| undefined` | `undefined` | Takes the view out of the flow and draws it at the top or bottom of every sheet of its `pdf-page`. Only on a direct child of `pdf-page`. See [Fixed headers and footers](/docs/pagination#fixed-headers-and-footers). |
 
 In pagination, a column `pdf-view` with children is a wrapper whose children are units, and a row `pdf-view` is one unit. See [Pagination](/docs/pagination).
 

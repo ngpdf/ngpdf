@@ -123,6 +123,9 @@ The site (`projects/site`) is a prerendered Angular app. Its docs are the Markdo
   - A `header` row repeats at the top of every page its table runs onto.
   - `breakBefore` starts a new page.
   - `pdf-page-number` reserves its height at the bottom of the content area.
+  - A `pdf-view` with `fixed="top"` or `fixed="bottom"`, a direct child of `pdf-page`, is laid
+    out once and drawn on every sheet; the flow gets the space between them. Bottom views sit
+    above the page number.
   - A unit taller than a page goes on a page of its own, is clipped, and gets a dev-mode warning.
   - Wrapper backgrounds and borders are sliced per page.
 - **Text wrapping:** text wraps at Unicode line-break opportunities. A word wider than its box breaks

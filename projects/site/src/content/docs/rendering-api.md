@@ -186,6 +186,9 @@ The returned promise rejects with an `Error`. Errors from ngpdf start with `ngpd
 | `ngpdf: invalid column "<value>" on pdf-table` | A column that is not a non-negative number, `Nfr` or `N%`. |
 | `ngpdf: pdf-row has more cells than pdf-table columns (<used> > <declared>)` | A row whose cells, spans counted, exceed the columns. |
 | `ngpdf: could not load image "<source>": <reason>` | An image that failed to load or is not PNG or JPEG. |
+| `ngpdf: fixed views leave no room for content on pdf-page` | The `fixed` views and the page number take the whole content area. |
+| `ngpdf: pdf-span must be inside a pdf-text` | A `pdf-span` outside a `pdf-text`. |
+| `ngpdf: expected an integer of at least 1 in "<value>" for orphans on <element>` | `orphans` or `widows` below 1, or not a whole number. |
 | `ngpdf: nesting deeper than 64` | More than 64 nested elements. |
 | `ngpdf: text longer than 1 MB` | One text longer than 1,048,576 characters. |
 | `ngpdf: could not load font "<src>": <reason>` | A font from `providePdfFonts` could not be fetched or read. The URL is shown without its query string. |
@@ -207,4 +210,7 @@ Some problems still produce a PDF. ngpdf collects them during the render and pri
 | `ngpdf: styles on <tag> are ignored; style a pdf-* element inside it` | Styles on a component host. See [Components in documents](/docs/components-in-documents#hosts-are-transparent). |
 | `ngpdf: border style "<style>" is not supported; drawing solid` | `dashed`, `dotted` and other styles are drawn solid. |
 | `ngpdf: pdf-page-number must be a direct child of pdf-page` | A nested page number, which is not drawn. |
+| `ngpdf: a fixed pdf-view must be a direct child of pdf-page` | A nested `fixed` view, laid out in the flow instead. |
+| `ngpdf: <property> has no effect on pdf-span` | A box property on a `pdf-span`. See [Styled runs](/docs/text-and-fonts#styled-runs-pdf-span). |
+| `ngpdf: a pdf-text inside a pdf-text is drawn in the outer style; use pdf-span` | A nested `pdf-text`. |
 | `ngpdf: table columns did not settle` | Nested tables whose widths did not converge; the last layout is used. |

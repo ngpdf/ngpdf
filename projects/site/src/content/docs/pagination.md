@@ -80,6 +80,32 @@ A `pdf-row` with the `header` attribute repeats at the top of every sheet its ta
 
 On a wrapper, the break happens before its first unit. A break on a sheet that has no units yet is ignored, so you never get a blank page.
 
+## Fixed headers and footers
+
+Give a `pdf-view` that is a direct child of `pdf-page` the `fixed` input to draw it on every sheet:
+
+```html
+<pdf-page style="padding: 36">
+  <pdf-view fixed="top" style="flex-direction: row; margin-bottom: 12">
+    <pdf-text style="flex: 1; font-weight: bold">Stock count</pdf-text>
+    <pdf-text>Warehouse 7</pdf-text>
+  </pdf-view>
+  …
+  <pdf-view fixed="bottom" style="margin-top: 8">
+    <pdf-text style="font-size: 8">Made-up data</pdf-text>
+  </pdf-view>
+  <pdf-page-number />
+</pdf-page>
+```
+
+- A fixed view is laid out once at the content width and drawn the same on every sheet that `pdf-page` produces. It is taken out of the flow wherever you write it among the page's children.
+- `fixed="top"` views stack at the top of the content area, and `fixed="bottom"` views at the bottom, in template order, with their margins. The flow gets the space between them on every sheet.
+- Bottom views sit above the `pdf-page-number`, which keeps the very bottom.
+- A fixed view is never a pagination unit: it is not split, moved or clipped, and `breakBefore` inside it does nothing.
+- Fixed views that leave no room for content fail the render with `ngpdf: fixed views leave no room for content on pdf-page`.
+- A `fixed` view nested deeper than a direct child of `pdf-page` is laid out in the flow as an ordinary view and logs `ngpdf: a fixed pdf-view must be a direct child of pdf-page` in development mode.
+- The content of a fixed view is the same on every sheet. Page numbers inside a fixed view are planned.
+
 ## Page numbers
 
 Put a `pdf-page-number` directly inside a `pdf-page`:
@@ -93,7 +119,7 @@ Put a `pdf-page-number` directly inside a `pdf-page`:
 
 - `format` replaces `{page}` with the sheet's number and `{total}` with the number of sheets in the whole document, across all `pdf-page` elements. Each token can appear any number of times. The default format is `{page} / {total}`.
 - It sits at the bottom of the content area, inside the page padding, across the content width, on every sheet that `pdf-page` produces. It is taken out of the flow wherever you write it among the page's children.
-- It reserves its height on every sheet: one line of its font (`font-size × line-height`) plus its own vertical padding and borders, or its `height` if you set one. Content stops above it.
+- It reserves its height on every sheet: one line of its font (`font-size × line-height`) plus its own vertical padding and borders, or its `height` if you set one. Content and bottom fixed views stop above it.
 - It is right-aligned unless it, or an element above it, sets `text-align`.
 - Text styles apply: `font-size`, `color`, `font-weight` and the rest. Other position styles are ignored; a positioned page number is planned for v0.2.
 - The text is drawn on one line and does not wrap. Content you put inside the element is ignored.
