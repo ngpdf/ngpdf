@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { ROOT_TEXT_STYLE, type TextStyle } from './style';
-import { layoutText, measureText, TextMeasureCache } from './text';
+import { layoutRanges, layoutText, measureText, TextMeasureCache, type TextRange } from './text';
 import { testFont } from '../../testing/test-fonts';
 import { createPdfkitWriter, type FontMetrics, type PdfWriter } from './writer';
 
@@ -390,5 +390,129 @@ describe('layoutText with custom fonts', () => {
     const standard = layoutText('Zoë', style, Infinity, writer, undefined, cache);
     expect(custom.lines[0]?.runs[0]?.font).toBe('font:0');
     expect(standard.lines[0]?.runs[0]?.font).toBe('Helvetica');
+  });
+});
+
+describe('layoutRanges', () => {
+  let writer: PdfWriter;
+  beforeAll(async () => {
+    writer = await createPdfkitWriter({ compress: false });
+    writer.registerFont('font:0', testFont('noto-sans-regular.ttf'));
+  });
+  const bold: TextStyle = { ...style, fontWeight: 'bold' };
+  const red: TextStyle = { ...style, color: { r: 255, g: 0, b: 0, a: 1 } };
+  const big: TextStyle = { ...style, fontSize: 18 };
+  const range = (text: string, rangeStyle: TextStyle = style): TextRange => ({
+    text,
+    style: rangeStyle,
+  });
+  const lay = (ranges: readonly TextRange[], maxWidth = Infinity, warn?: (c: string[]) => void) =>
+    layoutRanges(ranges, style, maxWidth, writer, warn);
+
+  it('lays out one range exactly as layoutText does', () => {
+    const text = 'Gabriela Teixeira de Albuquerque Cavalcanti';
+    expect(lay([range(text)], 120)).toEqual(layoutText(text, style, 120, writer));
+  });
+
+  it('draws each range in its own font, size, color and decoration', () => {
+    const underlined: TextStyle = { ...style, textDecoration: 'underline' };
+    const [line] = lay([
+      range('Total: '),
+      range('42', bold),
+      range(' ok', red),
+      range('!', underlined),
+    ]).lines;
+    expect(line?.text).toBe('Total: 42 ok!');
+    expect(
+      line?.runs.map(({ text, font, color, decoration }) => [text, font, color.r, decoration]),
+    ).toEqual([
+      ['Total: ', 'Helvetica', 0, 'none'],
+      ['42', 'Helvetica-Bold', 0, 'none'],
+      [' ok', 'Helvetica', 255, 'none'],
+      ['!', 'Helvetica', 0, 'underline'],
+    ]);
+    const runs = line?.runs ?? [];
+    expect(runs[1]?.x).toBeCloseTo(writer.widthOf('Total: ', 'Helvetica', 9), 6);
+    expect(runs[1]?.width).toBeCloseTo(writer.widthOf('42', 'Helvetica-Bold', 9), 6);
+  });
+
+  it('merges neighbouring ranges that draw alike into one run', () => {
+    const [line] = lay([range('a '), range('b')]).lines;
+    expect(line?.runs.map((run) => run.text)).toEqual(['a b']);
+  });
+
+  it('collapses whitespace across range boundaries and trims the paragraph ends', () => {
+    const block = lay([range('  a  '), range('  b', bold), range('   '), range(' c  ')]);
+    expect(block.lines.map((line) => line.text)).toEqual(['a b c']);
+    expect(block.lines[0]?.runs.map((run) => run.text)).toEqual(['a ', 'b', ' c']);
+  });
+
+  it('drops ranges that are empty after collapsing', () => {
+    const block = lay([range(''), range('   ', bold), range('x')]);
+    expect(block.lines[0]?.runs.map((run) => [run.text, run.font])).toEqual([['x', 'Helvetica']]);
+  });
+
+  it('returns no lines for ranges that are only whitespace', () => {
+    expect(lay([range(' ', bold), range('\n')])).toEqual({ lines: [], width: 0, height: 0 });
+  });
+
+  it('breaks at the paragraph’s break opportunities, not at range boundaries', () => {
+    // "bold," has no break before the comma, so the comma follows the bold word to the next line.
+    const width =
+      writer.widthOf('aaaa ', 'Helvetica', 9) + writer.widthOf('bold', 'Helvetica-Bold', 9) + 1;
+    const block = lay([range('aaaa '), range('bold', bold), range(', tail')], width);
+    expect(block.lines.map((line) => line.text)).toEqual(['aaaa', 'bold, tail']);
+  });
+
+  it('measures a word that crosses a range boundary as the sum of its pieces', () => {
+    const block = lay([range('ab'), range('cd', bold)]);
+    expect(block.width).toBeCloseTo(
+      writer.widthOf('ab', 'Helvetica', 9) + writer.widthOf('cd', 'Helvetica-Bold', 9),
+      6,
+    );
+  });
+
+  it('makes a line as tall as its largest run and puts the runs on one baseline', () => {
+    const width =
+      writer.widthOf('small ', 'Helvetica', 9) + writer.widthOf('BIG', 'Helvetica', 18) + 1;
+    const block = lay([range('small '), range('BIG', big), range(' after and more words')], width);
+    const [first, second] = block.lines;
+    expect(first?.height).toBe(18 * 1.5);
+    expect(first?.ascent).toBeCloseTo(writer.ascent('Helvetica', 18), 6);
+    expect(first?.runs.map((run) => run.size)).toEqual([9, 18]);
+    expect(first?.runs[0]?.ascent).toBeCloseTo(writer.ascent('Helvetica', 9), 6);
+    expect(second?.y).toBe(27);
+    expect(second?.height).toBe(13.5);
+    expect(block.height).toBe(27 + 13.5 * block.lines.slice(1).length);
+  });
+
+  it('shapes each range with its own font chain', () => {
+    const [line] = lay([
+      range('Łódź '),
+      { text: 'Łódź', style, fonts: { chain: ['font:0', 'Helvetica'] } },
+    ]).lines;
+    expect(line?.runs.map((run) => [run.text, run.font])).toEqual([
+      ['?ód? ', 'Helvetica'],
+      ['Łódź', 'font:0'],
+    ]);
+  });
+
+  it('reports replaced characters from every range once', () => {
+    const warn = vi.fn();
+    lay([range('\u{1F600}'), range('b\u{1F600}', bold)], Infinity, warn);
+    expect(warn).toHaveBeenCalledExactlyOnceWith(['\u{1F600}']);
+  });
+
+  it('does not reuse a cached block for the same text in another color', () => {
+    const cache = new TextMeasureCache();
+    const black = layoutRanges([range('same')], style, Infinity, writer, undefined, cache);
+    const colored = layoutRanges([range('same', red)], style, Infinity, writer, undefined, cache);
+    expect(black.lines[0]?.runs[0]?.color.r).toBe(0);
+    expect(colored.lines[0]?.runs[0]?.color.r).toBe(255);
+  });
+
+  it('rejects ranges over 1 MB in total', () => {
+    const half = 'a'.repeat(524_289);
+    expect(() => lay([range(half), range(half)])).toThrow('ngpdf: text longer than 1 MB');
   });
 });

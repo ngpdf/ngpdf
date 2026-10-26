@@ -1,10 +1,17 @@
 import type { Edge, Node as YogaNode, Yoga } from 'yoga-layout/load';
-import { createNode, propsOf, textContent, type PdfNode } from '../tree/node';
+import { createNode, propsOf, type PdfNode } from '../tree/node';
 import type { TableColumn } from '../tree/table-column';
 import type { ImageAsset } from './images';
 import { anonymousTextStyle, type Edges, type Length, type ResolvedStyle } from './style';
 import { fontChain, type FontRegistry } from './fonts';
-import { layoutText, measureText, TextMeasureCache, type TextBlock, type TextFonts } from './text';
+import {
+  layoutRanges,
+  measureRanges,
+  TextMeasureCache,
+  type TextBlock,
+  type TextFonts,
+  type TextRange,
+} from './text';
 import type { FontMetrics } from './writer';
 
 export interface Box {
@@ -365,6 +372,8 @@ export function layoutBox(
     return style;
   };
 
+  const withFonts = (fonts: TextFonts | undefined): { fonts?: TextFonts } =>
+    fonts ? { fonts } : {};
   // Only text in a registered family needs a chain; the rest keeps the one-font path.
   const fontsOf = (style: ResolvedStyle): TextFonts | undefined =>
     ctx.fonts && ctx.fonts.size > 0
@@ -374,16 +383,36 @@ export function layoutBox(
         }
       : undefined;
 
+  // A pdf-text's text as ranges: its own text in its style, a pdf-span's in the span's. Any other
+  // element inside it (a nested pdf-text) is flattened into the style around it.
+  const ranges = new Map<PdfNode, readonly TextRange[]>();
+  const rangesOf = (textNode: PdfNode): readonly TextRange[] => {
+    let found = ranges.get(textNode);
+    if (!found) {
+      const out: TextRange[] = [];
+      const visit = (node: PdfNode, style: ResolvedStyle): void => {
+        for (const child of node.children) {
+          if (child.kind === 'element') {
+            visit(child, child.tag === 'pdf-span' ? styleOf(styles, child) : style);
+          } else if (child.kind === 'text') {
+            const last = out[out.length - 1];
+            if (last?.style === style)
+              out[out.length - 1] = { ...last, text: last.text + child.text };
+            else out.push({ text: child.text, style, ...withFonts(fontsOf(style)) });
+          }
+        }
+      };
+      visit(textNode, styleFor(textNode));
+      found = out;
+      ranges.set(textNode, found);
+    }
+    return found;
+  };
+
   const measureOf = (textNode: PdfNode, style: ResolvedStyle): Measure => {
     let measure = measures.get(textNode);
     if (!measure) {
-      const inner = measureText(
-        textContent(textNode),
-        style,
-        ctx.metrics,
-        textCache,
-        fontsOf(style),
-      );
+      const inner = measureRanges(rangesOf(textNode), style, ctx.metrics, textCache);
       measure = (available, mode) => {
         const measured = inner(available, mode);
         return { width: measured.width + WIDTH_SLACK, height: measured.height };
@@ -502,14 +531,13 @@ export function layoutBox(
       border: edgesOf((edge) => yogaNode.getComputedBorder(edge)),
       ...(built.isText
         ? {
-            text: layoutText(
-              textContent(current),
+            text: layoutRanges(
+              rangesOf(current),
               style,
               contentWidthOf(yogaNode),
               ctx.metrics,
               ctx.warnChars,
               textCache,
-              fontsOf(style),
             ),
           }
         : {}),

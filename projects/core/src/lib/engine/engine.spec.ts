@@ -406,7 +406,8 @@ describe('renderDocument with fonts', () => {
     expect([latin?.text, latin?.font]).toEqual(['Zoë ', 'font:0']);
     expect([cjk?.text, cjk?.font]).toEqual(['日本', 'font:2']);
     expect(cjk!.x).toBeCloseTo(latin!.x + real.widthOf('Zoë ', 'font:0', 10), 6);
-    expect(cjk!.y).toBe(latin!.y);
+    // Fallback fonts sit on one baseline, not at one top.
+    expect(cjk!.y + real.ascent('font:2', 10)).toBeCloseTo(latin!.y + real.ascent('font:0', 10), 6);
   });
 
   it('picks the bold face for bold text', async () => {

@@ -99,24 +99,25 @@ function drawBox(
     drawBox(child, x + child.x, y + child.y, limit, nested, opacity, out);
   }
 
-  const ink = paint(style.color, opacity);
-  if (box.text && ink) {
-    const lineHeight = style.fontSize * style.lineHeight;
+  if (box.text) {
     for (const textLine of box.text.lines) {
       const lineTop = contentTop + textLine.y;
-      if (lineTop + lineHeight > limit + 1e-6) continue;
+      if (lineTop + textLine.height > limit + 1e-6) continue;
       const lineLeft = alignedX(contentLeft, contentWidth, textLine.width, style.textAlign);
       for (const run of textLine.runs) {
+        const ink = paint(run.color, opacity);
+        if (!ink) continue;
         out.push({
           op: 'text',
           x: lineLeft + run.x,
-          y: lineTop,
+          // Runs of different sizes share the line's baseline.
+          y: lineTop + textLine.ascent - run.ascent,
           text: run.text,
           font: run.font,
-          size: style.fontSize,
+          size: run.size,
           ...ink,
-          underline: style.textDecoration === 'underline',
-          strike: style.textDecoration === 'line-through',
+          underline: run.decoration === 'underline',
+          strike: run.decoration === 'line-through',
         });
       }
     }

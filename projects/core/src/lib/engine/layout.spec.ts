@@ -122,6 +122,39 @@ describe('layoutBox', () => {
       expect(line.width).toBeLessThanOrEqual(leaf?.w ?? 0);
   });
 
+  it('lays out the text of pdf-spans in their own styles, inherited from the text', () => {
+    const root = el('pdf-view', {}, [
+      el('pdf-text', { color: 'blue', 'font-size': '9' }, [
+        textNode('Total: '),
+        el('pdf-span', { 'font-weight': 'bold' }, [
+          textNode('42 '),
+          el('pdf-span', { 'font-size': '18' }, [textNode('EUR')]),
+        ]),
+        textNode(' due'),
+      ]),
+    ]);
+    const leaf = lay(root, 400).children[0];
+    const runs = leaf?.text?.lines[0]?.runs ?? [];
+    expect(runs.map(({ text, font, size, color }) => [text, font, size, color.b])).toEqual([
+      ['Total: ', 'Helvetica', 9, 255],
+      ['42 ', 'Helvetica-Bold', 9, 255],
+      ['EUR', 'Helvetica-Bold', 18, 255],
+      [' due', 'Helvetica', 9, 255],
+    ]);
+    expect(leaf?.h).toBeCloseTo(18 * 1.2, 6);
+  });
+
+  it('keeps flattening a pdf-text inside a pdf-text into the outer style', () => {
+    const root = el('pdf-view', {}, [
+      el('pdf-text', {}, [
+        textNode('a '),
+        el('pdf-text', { 'font-weight': 'bold' }, [textNode('b')]),
+      ]),
+    ]);
+    const runs = lay(root, 400).children[0]?.text?.lines[0]?.runs ?? [];
+    expect(runs.map((run) => [run.text, run.font])).toEqual([['a b', 'Helvetica']]);
+  });
+
   it('never makes a text box narrower than its text', () => {
     const root = el('pdf-view', { 'flex-direction': 'row' }, [
       el('pdf-text', {}, [textNode('Hello wide world of text')]),
@@ -362,12 +395,12 @@ describe('passes and cleanup', () => {
   });
 
   it('wraps each text node once per call, however many passes run', () => {
-    const spy = vi.spyOn(textModule, 'layoutText');
+    const spy = vi.spyOn(textModule, 'layoutRanges');
     const text = el('pdf-text', {}, [textNode('some text in a cell')]);
     const root = table([100, '1fr'], [[el('pdf-cell', {}, [text]), ...cells([1])]]);
     spy.mockClear();
     lay(root, 300);
-    const wraps = spy.mock.calls.filter(([content]) => content === 'some text in a cell');
+    const wraps = spy.mock.calls.filter(([ranges]) => ranges[0]?.text === 'some text in a cell');
     spy.mockRestore();
     expect(wraps).toHaveLength(1);
   });

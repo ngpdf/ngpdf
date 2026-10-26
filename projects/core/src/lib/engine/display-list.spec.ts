@@ -163,6 +163,34 @@ describe('displayList', () => {
     ]);
   });
 
+  it('draws each pdf-span run in its own size, color and decoration on one baseline', () => {
+    const span = (style: Record<string, string>, content: string): PdfNode => {
+      const node = el('pdf-span', style);
+      const run = createNode('text', '', content);
+      run.parent = node;
+      node.children.push(run);
+      return node;
+    };
+    const paragraph = el('pdf-text', {}, [
+      createNode('text', '', 'Pay '),
+      span({ 'font-size': '20', color: '#b00' }, 'now'),
+      createNode('text', '', ' '),
+      span({ 'text-decoration': 'underline' }, 'here'),
+      span({ color: 'transparent' }, ' hidden'),
+    ]);
+    for (const child of paragraph.children) child.parent = paragraph;
+    const ops = only(list(layout(page([paragraph]))[0]!, 0, 1), 'text');
+    expect(ops.map(({ text, size, color, underline }) => [text, size, color, underline])).toEqual([
+      ['Pay ', 10, '#000000', false],
+      ['now', 20, '#bb0000', false],
+      [' ', 10, '#000000', false],
+      ['here', 10, '#000000', true],
+    ]);
+    const baseline = 36 + writer.ascent('Helvetica', 20);
+    expect(ops[0]!.y).toBeCloseTo(baseline - writer.ascent('Helvetica', 10), 6);
+    expect(ops[1]!.y).toBeCloseTo(36, 6);
+  });
+
   it('draws the page number from the format with page and total', () => {
     const number = el('pdf-page-number', { height: '9' }, [], { format: '{page} / {total}' });
     const [first] = layout(page([text('a'), number]));
