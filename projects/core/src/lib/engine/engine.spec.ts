@@ -1,7 +1,7 @@
-import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createNode, type PdfNode } from '../tree/node';
 import { testFont } from '../../testing/test-fonts';
-import { renderDocument, type LoadedFont } from './index';
+import { renderDocument, type FontSource } from './index';
 import { createPdfkitWriter, type DocumentInfo, type PageOps, type PdfWriter } from './writer';
 
 let real: PdfWriter;
@@ -366,16 +366,24 @@ describe('renderDocument', () => {
 });
 
 describe('renderDocument with fonts', () => {
-  const fonts: LoadedFont[] = [
-    { family: 'Noto Sans', src: 'regular.ttf', data: testFont('noto-sans-regular.ttf') },
-    {
-      family: 'Noto Sans',
-      weight: 'bold',
-      src: 'bold.ttf',
-      data: testFont('noto-sans-bold.ttf'),
-    },
-    { family: 'Noto Sans JP', src: 'jp.ttf', data: testFont('noto-sans-jp-subset.ttf') },
-  ];
+  const face = (
+    family: string,
+    label: string,
+    data: Uint8Array,
+    weight?: 'bold',
+  ): FontSource & { load: ReturnType<typeof vi.fn> } => ({
+    family,
+    ...(weight && { weight }),
+    load: vi.fn(() => Promise.resolve({ label, data })),
+  });
+  let fonts: (FontSource & { load: ReturnType<typeof vi.fn> })[];
+  beforeEach(() => {
+    fonts = [
+      face('Noto Sans', 'regular.ttf', testFont('noto-sans-regular.ttf')),
+      face('Noto Sans', 'bold.ttf', testFont('noto-sans-bold.ttf'), 'bold'),
+      face('Noto Sans JP', 'jp.ttf', testFont('noto-sans-jp-subset.ttf')),
+    ];
+  });
 
   /** A writer of its own, so registered fonts never leak between tests. */
   async function fontWriter() {
@@ -442,10 +450,26 @@ describe('renderDocument with fonts', () => {
 
   it('rejects the render when a font cannot be read, naming its source', async () => {
     const writer = await fontWriter();
-    const broken = [{ family: 'Broken', src: 'broken.ttf', data: new Uint8Array([0, 1, 2]) }];
+    const broken = [face('Broken', 'broken.ttf', new Uint8Array([0, 1, 2]))];
     await expect(
-      renderDocument(onePage(text('a')), { writer, dev: false, fonts: broken }),
+      renderDocument(onePage(text('a', { 'font-family': 'Broken' })), {
+        writer,
+        dev: false,
+        fonts: broken,
+      }),
     ).rejects.toThrow('ngpdf: invalid font "broken.ttf"');
+  });
+
+  it('loads only the faces of families the document names', async () => {
+    const writer = await fontWriter();
+    const broken = face('Broken', 'broken.ttf', new Uint8Array([0, 1, 2]));
+    const doc = onePage(text('Zoë', { 'font-family': 'Noto Sans' }), text('Plain'));
+    await renderDocument(doc, { writer, dev: false, fonts: [...fonts, broken] });
+    expect(fonts[0]!.load).toHaveBeenCalledTimes(1);
+    expect(fonts[1]!.load).toHaveBeenCalledTimes(1);
+    expect(fonts[2]!.load).not.toHaveBeenCalled();
+    expect(broken.load).not.toHaveBeenCalled();
+    expect(textOps(writer).map((op) => op.font)).toEqual(['font:0', 'Helvetica']);
   });
 
   it('writes a PDF that embeds the fonts it used', async () => {

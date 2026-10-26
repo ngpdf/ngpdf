@@ -137,4 +137,36 @@ describe('providePdfFonts', () => {
     });
     expect(await embedded(await TestBed.inject(PdfRenderer).toBlob(FontDocument))).toBe(2);
   });
+
+  it('renders documents that do not use a font even when that font cannot be loaded', async () => {
+    const fetchFn = serveFonts({});
+    TestBed.configureTestingModule({
+      providers: [providePdfFonts([{ family: 'Noto Sans', src: '/fonts/gone.ttf' }])],
+    });
+    const blob = await TestBed.inject(PdfRenderer).toBlob(FontDocument, {
+      inputs: { family: 'Helvetica' },
+    });
+    expect(await embedded(blob)).toBe(0);
+    expect(fetchFn).not.toHaveBeenCalled();
+  });
+
+  it('reads a base64 data URL, and names a malformed one in the error', async () => {
+    let binary = '';
+    for (const byte of REGULAR) binary += String.fromCharCode(byte);
+    TestBed.configureTestingModule({
+      providers: [
+        providePdfFonts([
+          { family: 'Noto Sans', src: `data:font/ttf;base64,${btoa(binary)}` },
+          { family: 'Noto Sans JP', src: 'data:font/ttf;base64' },
+        ]),
+      ],
+    });
+    const renderer = TestBed.inject(PdfRenderer);
+    expect(
+      await embedded(await renderer.toBlob(FontDocument, { inputs: { family: 'Noto Sans' } })),
+    ).toBe(1);
+    await expect(renderer.toBlob(FontDocument)).rejects.toThrow(
+      'ngpdf: could not load font "data URL": malformed data URL',
+    );
+  });
 });

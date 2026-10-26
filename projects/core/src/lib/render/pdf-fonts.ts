@@ -15,13 +15,12 @@ export interface PdfFont {
   readonly style?: 'normal' | 'italic';
 }
 
-/** A face with its bytes, as the engine takes it. */
-export interface LoadedPdfFont {
+/** A face as the engine takes it: its bytes are read only if a document names its family. */
+export interface PdfFontSource {
   readonly family: string;
   readonly weight?: 'normal' | 'bold';
   readonly style?: 'normal' | 'italic';
-  readonly data: Uint8Array;
-  readonly src: string;
+  readonly load: () => Promise<{ readonly label: string; readonly data: Uint8Array }>;
 }
 
 export type FontLoader = (
@@ -40,20 +39,14 @@ export class PdfFontSet {
   }
 
   /** The faces in order, the ancestors' first. A failed fetch is forgotten, so it is retried. */
-  async load(loader: FontLoader): Promise<LoadedPdfFont[]> {
-    const own = await Promise.all(
-      this.#fonts.map(async (font) => {
-        const { label, data } = await this.#read(font.src, loader);
-        return {
-          family: font.family,
-          ...(font.weight && { weight: font.weight }),
-          ...(font.style && { style: font.style }),
-          data,
-          src: label,
-        };
-      }),
-    );
-    return [...((await this.#parent?.load(loader)) ?? []), ...own];
+  sources(loader: FontLoader): PdfFontSource[] {
+    const own = this.#fonts.map((font) => ({
+      family: font.family,
+      ...(font.weight && { weight: font.weight }),
+      ...(font.style && { style: font.style }),
+      load: () => this.#read(font.src, loader),
+    }));
+    return [...(this.#parent?.sources(loader) ?? []), ...own];
   }
 
   #read(src: PdfFont['src'], loader: FontLoader): ReturnType<FontLoader> {
@@ -74,7 +67,8 @@ export const PDF_FONT_SET = new InjectionToken<PdfFontSet>('ngpdf font set');
 
 /**
  * Makes fonts available to documents rendered with this environment injector or one below it,
- * such as a route's. Fonts are loaded on the first render that needs them; a URL is fetched once.
+ * such as a route's. A font is loaded on the first render whose document names its family; a URL
+ * is fetched once.
  */
 export function providePdfFonts(fonts: readonly PdfFont[]): EnvironmentProviders {
   return makeEnvironmentProviders([

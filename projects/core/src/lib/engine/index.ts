@@ -6,7 +6,7 @@
 import { elementChildren, propsOf, type PdfNode } from '../tree/node';
 import { displayList } from './display-list';
 export { loadFont } from './font-loading';
-import type { FontRegistry, RegisteredFace } from './fonts';
+import { parseFontFamily, type FontRegistry, type RegisteredFace } from './fonts';
 import { dissolveHosts } from './hosts';
 import { loadImages } from './images';
 import type { LayoutContext } from './layout';
@@ -29,33 +29,50 @@ export interface RenderDocumentOptions {
   readonly dev?: boolean;
   /** Replaces the pdfkit writer; tests use it to see what the engine hands over. */
   readonly writer?: PdfWriter;
-  /** Font faces for `font-family`, already loaded. */
-  readonly fonts?: readonly LoadedFont[];
+  /** Font faces for `font-family`; only those of families the document names are loaded. */
+  readonly fonts?: readonly FontSource[];
 }
 
-/** One face of a font family, with its bytes. */
-export interface LoadedFont {
+/** One face of a font family, with a way to get its bytes. */
+export interface FontSource {
   readonly family: string;
   readonly weight?: 'normal' | 'bold';
   readonly style?: 'normal' | 'italic';
-  readonly data: Uint8Array;
-  /** Where the bytes came from, for error messages. */
-  readonly src: string;
+  /** The bytes, and a label for them (the URL, "Blob", …) for error messages. */
+  readonly load: () => Promise<{ readonly label: string; readonly data: Uint8Array }>;
 }
 
-/** Registers each face with the writer as `font:<index>` and groups the faces by family. */
-function registerFonts(fonts: readonly LoadedFont[], writer: PdfWriter): FontRegistry {
+const familyKey = (family: string): string => family.trim().toLowerCase();
+
+/**
+ * Loads the faces of the families that some `font-family` in the document names, registers each
+ * with the writer as `font:<index>` and groups them by family. A font the document never names is
+ * never fetched, so a broken one cannot fail an unrelated render.
+ */
+async function registerUsedFonts(
+  sources: readonly FontSource[],
+  styles: ReadonlyMap<PdfNode, { readonly fontFamily: string }>,
+  writer: PdfWriter,
+): Promise<FontRegistry> {
+  const named = new Set<string>();
+  for (const style of new Set([...styles.values()].map((resolved) => resolved.fontFamily))) {
+    for (const name of parseFontFamily(style)) named.add(familyKey(name));
+  }
+  const used = sources.filter((source) => named.has(familyKey(source.family)));
+  const loaded = await Promise.all(
+    used.map(async (source) => ({ source, ...(await source.load()) })),
+  );
   const registry = new Map<string, RegisteredFace[]>();
-  fonts.forEach((loaded, index) => {
+  loaded.forEach(({ source, label, data }, index) => {
     const font: CustomFont = `font:${String(index)}`;
     try {
-      writer.registerFont(font, loaded.data);
+      writer.registerFont(font, data);
     } catch {
-      throw new Error(`ngpdf: invalid font "${loaded.src}"`);
+      throw new Error(`ngpdf: invalid font "${label}"`);
     }
-    const key = loaded.family.trim().toLowerCase();
+    const key = familyKey(source.family);
     const faces = registry.get(key) ?? [];
-    faces.push({ weight: loaded.weight ?? 'normal', style: loaded.style ?? 'normal', font });
+    faces.push({ weight: source.weight ?? 'normal', style: source.style ?? 'normal', font });
     registry.set(key, faces);
   });
   return registry;
@@ -137,11 +154,13 @@ export async function renderDocument(
     options.writer ?? createPdfkitWriter({ compress: true }),
   ]);
   try {
-    const fonts = registerFonts(options.fonts ?? [], writer);
     // Component hosts are transparent: the stages below see only pdf-* elements.
     const tree = dissolveHosts(document, warn);
     const styles = resolveStyles(tree, warn);
-    const images = await loadImages(tree, writer);
+    const [images, fonts] = await Promise.all([
+      loadImages(tree, writer),
+      registerUsedFonts(options.fonts ?? [], styles, writer),
+    ]);
     // One text cache per render, passed down like the metrics and images, so renders share nothing.
     const textCache = new TextMeasureCache();
     const ctx: LayoutContext = {
