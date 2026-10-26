@@ -1,5 +1,36 @@
 # @ngpdf/core
 
+## 0.2.0
+
+### Minor Changes
+
+- [#110](https://github.com/ngpdf/ngpdf/pull/110) [`b2762ed`](https://github.com/ngpdf/ngpdf/commit/b2762ed5acfa54114d6f31b236a994b68a2de3ad) Thanks [@GabeSilvaDev](https://github.com/GabeSilvaDev)! - Add custom fonts: register TTF, OTF, WOFF or WOFF2 files with `providePdfFonts` and name them in
+  `font-family`. Text in them is not limited to WinAnsi, and each character falls back along the
+  `font-family` list to the first font that has it. Only the fonts a PDF uses are embedded, as
+  subsets. Documents that name no registered family render exactly as before.
+
+- [#108](https://github.com/ngpdf/ngpdf/pull/108) [`318a305`](https://github.com/ngpdf/ngpdf/commit/318a3054f9c8ef54ff744d42f4c4752df27e1e2c) Thanks [@GabeSilvaDev](https://github.com/GabeSilvaDev)! - Add the `pdfDownload` directive: `<button [pdfDownload]="Invoice" pdfFileName="invoice.pdf">`
+  downloads the document when clicked, marks the button busy and ignores clicks while it renders,
+  and reports a failed render through `(pdfError)` and the app's `ErrorHandler`.
+
+- [#107](https://github.com/ngpdf/ngpdf/pull/107) [`1c4d22a`](https://github.com/ngpdf/ngpdf/commit/1c4d22a5d6536b30c46a14ae22c7a301e142b5e4) Thanks [@GabeSilvaDev](https://github.com/GabeSilvaDev)! - Add `pdfResource` to keep a PDF Blob and object URL current as document inputs change. It also
+  exposes loading and error state, revokes replaced URLs, and can debounce bursts of changes.
+
+### Patch Changes
+
+- [#59](https://github.com/ngpdf/ngpdf/pull/59) [`17706f7`](https://github.com/ngpdf/ngpdf/commit/17706f773f7817fc755a2a2500b61bac1dd4520f) Thanks [@arxigen](https://github.com/arxigen)! - A `pdf-image` with element children now rejects the render with
+  `ngpdf: pdf-image cannot have children (found <pdf-text>)`, naming the first child, before any
+  image is fetched. The error identifies the element you need to remove.
+
+- [#64](https://github.com/ngpdf/ngpdf/pull/64) [`7ac8749`](https://github.com/ngpdf/ngpdf/commit/7ac8749d91a252697e64a27b85a240ce5145bdbf) Thanks [@arxigen](https://github.com/arxigen)! - A `;` inside quotes or parentheses in a `style` attribute no longer ends the declaration, so values
+  such as `url(data:image/png;base64,...)` or `font-family: "A;B"` are kept whole.
+
+- [#71](https://github.com/ngpdf/ngpdf/pull/71) [`f6cbe03`](https://github.com/ngpdf/ngpdf/commit/f6cbe03a8f70e308c4a7f1f64585e96fd7ca2da3) Thanks [@arxigen](https://github.com/arxigen)! - Text is measured once per render instead of again for every layout pass, so documents with a lot
+  of text lay out faster. The output is unchanged.
+
+- [#55](https://github.com/ngpdf/ngpdf/pull/55) [`fc028e9`](https://github.com/ngpdf/ngpdf/commit/fc028e9b27dffaeca97f9113ff4d1785075fd1ff) Thanks [@arxigen](https://github.com/arxigen)! - An image `src` written as an upper- or mixed-case data URL (`DATA:image/png;base64,...`) is now
+  decoded instead of being fetched over the network, as URL schemes are case-insensitive.
+
 ## 0.1.3
 
 ### Patch Changes
