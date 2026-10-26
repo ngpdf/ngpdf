@@ -97,8 +97,14 @@ The site (`projects/site`) is a prerendered Angular app. Its docs are the Markdo
   - any other unit throws.
 - **Page sizes, in points:** A3 841.89×1190.55, A4 595.28×841.89, A5 419.53×595.28, Letter
   612×792, Legal 612×1008, or `[width, height]`. Landscape swaps them.
-- **Fonts:** only the 14 standard PDF fonts, WinAnsi encoding. A character outside it becomes `?`,
-  with one dev-mode warning per render naming the characters. Custom fonts are v0.2.
+- **Fonts:**
+  - The 12 text faces of the standard PDF fonts, WinAnsi encoding. In them, a character outside
+    WinAnsi becomes `?`, with one dev-mode warning per render naming the characters.
+  - Custom fonts (TTF, OTF, WOFF, WOFF2) come from `providePdfFonts` and are embedded as subsets.
+  - `font-family` is a list: each grapheme cluster is drawn in the first font of the list that has
+    it. A list with no registered family maps to one standard font, as it always has.
+  - A character no font in the list has stays in the first font (its empty glyph), with one
+    dev-mode warning per render. No synthetic bold or italic.
 - **Tables:**
   - Columns are declared on the table: `[columns]` with points, `'Nfr'` or `'N%'`.
   - Column widths are resolved in this order: fixed widths first, then percentages, then `fr`
@@ -122,7 +128,6 @@ The site (`projects/site`) is a prerendered Angular app. Its docs are the Markdo
   - A failed load rejects the render with `ngpdf: could not load image "<src>": <reason>`.
 - **Out of v0.1:**
   - server rendering;
-  - custom fonts;
   - SVG, links, bookmarks;
   - splitting a text block across pages;
   - hyphenation, justify, RTL;

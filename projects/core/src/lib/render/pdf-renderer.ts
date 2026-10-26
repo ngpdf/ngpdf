@@ -1,4 +1,5 @@
 import { DOCUMENT, EnvironmentInjector, Service, inject, type Type } from '@angular/core';
+import { PDF_FONT_SET } from './pdf-fonts';
 import { renderTree } from './render-tree';
 
 export interface RenderOptions {
@@ -40,7 +41,9 @@ export async function renderToBlob<T>(
   const tree = renderTree(component, options.injector, options.inputs);
   try {
     const loaded = await loadEngine();
-    return await loaded.renderDocument(tree.root);
+    const fontSet = options.injector.get(PDF_FONT_SET, null);
+    const fonts = fontSet ? await fontSet.load((src) => loaded.loadFont(src)) : [];
+    return await loaded.renderDocument(tree.root, { fonts });
   } finally {
     tree.destroy();
   }

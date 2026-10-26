@@ -188,6 +188,8 @@ The returned promise rejects with an `Error`. Errors from ngpdf start with `ngpd
 | `ngpdf: could not load image "<source>": <reason>` | An image that failed to load or is not PNG or JPEG. |
 | `ngpdf: nesting deeper than 64` | More than 64 nested elements. |
 | `ngpdf: text longer than 1 MB` | One text longer than 1,048,576 characters. |
+| `ngpdf: could not load font "<src>": <reason>` | A font from `providePdfFonts` could not be fetched or read. The URL is shown without its query string. |
+| `ngpdf: invalid font "<src>"` | The bytes are not a TrueType, OpenType, WOFF or WOFF2 font. |
 
 Errors from your own template, such as a missing required input or an exception in a binding, reject the render with Angular's own error.
 
@@ -198,6 +200,8 @@ Some problems still produce a PDF. ngpdf collects them during the render and pri
 | Warning | Meaning |
 | --- | --- |
 | `ngpdf: characters outside WinAnsi replaced with "?": <characters>` | See [Text and fonts](/docs/text-and-fonts#characters-winansi). |
+| `ngpdf: characters missing from every font in their font-family, drawn as an empty box: <characters>` | See [Text and fonts](/docs/text-and-fonts#the-family-list-and-fallback). |
+| `ngpdf: font "<family>" has no <face> face; using its <face> face` | A registered family without the weight or style asked for. See [Custom fonts](/docs/text-and-fonts#custom-fonts). |
 | `ngpdf: <element> is taller than a page and is cut at the bottom` | A unit is clipped. See [Pagination](/docs/pagination#units-taller-than-a-page). |
 | `ngpdf: ignored inside tables: <list>` | Row or cell styles that tables do not use. See [Tables](/docs/tables#padding-and-borders). |
 | `ngpdf: styles on <tag> are ignored; style a pdf-* element inside it` | Styles on a component host. See [Components in documents](/docs/components-in-documents#hosts-are-transparent). |

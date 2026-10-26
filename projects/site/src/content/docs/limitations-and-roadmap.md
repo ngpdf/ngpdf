@@ -11,7 +11,8 @@ ngpdf v0.1 covers documents built from text, tables, boxes and images. This page
 
 ### Text and fonts
 
-- Only the standard PDF fonts (Helvetica, Times and Courier), with the WinAnsi encoding. A character outside it is drawn as `?`, with a warning in development mode.
+- In the standard PDF fonts (Helvetica, Times and Courier), only WinAnsi characters: any other is drawn as `?`, with a warning in development mode. [Custom fonts](/docs/text-and-fonts#custom-fonts) have no such limit.
+- No font collections (`.ttc`), no color emoji fonts, and no kerning across two fonts in one line.
 - A `pdf-text` inside a `pdf-text` is flattened to its text, so one bold word inside a sentence is not possible.
 - Text sits at the top of its line box: extra `line-height` goes below the text, not half above and half below as in CSS.
 - A bare number is in points, except in `line-height`, where it multiplies the font size as in CSS (`line-height: 1.4`). Write `line-height: 14pt` for points.
@@ -46,7 +47,6 @@ ngpdf v0.1 covers documents built from text, tables, boxes and images. This page
 ### Not in v0.1
 
 - Server rendering. Render in the browser.
-- Custom fonts.
 - SVG, links and bookmarks.
 - Forms and encryption.
 - A preview component.
@@ -69,7 +69,6 @@ These items are in the [v0.2 roadmap](https://github.com/ngpdf/ngpdf/blob/main/d
 
 ### Text
 
-- Custom fonts, and characters beyond WinAnsi.
 - Control characters such as `\f`, `\v`, U+2028 and U+0085 collapsed as whitespace.
 
 ### Images

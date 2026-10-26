@@ -15,5 +15,7 @@ export function testFont(
     | 'inter-basic.otf'
     | 'noto-sans-basic.woff2',
 ): Uint8Array {
-  return new Uint8Array(readFileSync(new URL(`./fonts/${file}`, import.meta.url)));
+  // Relative to the repository root, where vitest runs; `import.meta.url` is not a file URL under
+  // the jsdom environment.
+  return new Uint8Array(readFileSync(`projects/core/src/testing/fonts/${file}`));
 }

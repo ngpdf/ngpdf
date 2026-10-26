@@ -21,7 +21,7 @@ All text properties are inherited by child elements.
 | Property | Values | Default |
 | --- | --- | --- |
 | `color` | color | `black` |
-| `font-family` | any text; picks Courier, Times or Helvetica | Helvetica |
+| `font-family` | a list of family names: [registered fonts](/docs/text-and-fonts#custom-fonts) and Courier, Times or Helvetica | Helvetica |
 | `font-size` | length ≥ 0 | `10` |
 | `font-weight` | `bold`, `bolder`, a number ≥ 600 (bold); anything else is normal | normal |
 | `font-style` | `italic`, `oblique` (italic); anything else is normal | normal |
@@ -29,7 +29,7 @@ All text properties are inherited by child elements.
 | `text-align` | `left`, `center`, `right` | `left` |
 | `text-decoration` | `none`, `underline`, `line-through` | `none` |
 
-`font-family` contains `courier` or `mono`: Courier. Contains `times`, or `serif` without `sans`: Times. Otherwise Helvetica. See [Text and fonts](/docs/text-and-fonts).
+Without a registered family in the list: `font-family` contains `courier` or `mono`: Courier. Contains `times`, or `serif` without `sans`: Times. Otherwise Helvetica. With one, each character takes the first font in the list that has it. See [Text and fonts](/docs/text-and-fonts).
 
 ## Flexbox
 

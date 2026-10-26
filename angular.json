@@ -42,6 +42,11 @@
               {
                 "glob": "**/*",
                 "input": "projects/demo/public"
+              },
+              {
+                "glob": "{*.ttf,OFL.txt}",
+                "input": "projects/core/src/testing/fonts",
+                "output": "fonts"
               }
             ],
             "allowedCommonJsDependencies": ["pdfkit", "unicode-trie", "base64-js"],

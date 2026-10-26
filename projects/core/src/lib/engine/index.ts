@@ -5,6 +5,7 @@
 /// <reference path="./linebreak.d.ts" />
 import { elementChildren, propsOf, type PdfNode } from '../tree/node';
 import { displayList } from './display-list';
+export { loadFont } from './font-loading';
 import type { FontRegistry, RegisteredFace } from './fonts';
 import { dissolveHosts } from './hosts';
 import { loadImages } from './images';
