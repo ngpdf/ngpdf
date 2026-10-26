@@ -51,7 +51,7 @@ A unit taller than the content area goes on a sheet of its own and is clipped at
 
 `ngpdf: pdf-view is taller than a page and is cut at the bottom`
 
-Text lines that would cross the cut are not drawn, and images, backgrounds and side borders are cut at it. A `pdf-text` that can break between lines is not clipped: it continues on the next page.
+Text lines that would cross the cut are not drawn, and images, backgrounds and side borders are cut at it. A `pdf-text` that can break between lines continues on the next page instead. Only a group of lines that is itself taller than the content area, such as one line in a very large `pdf-span`, is still clipped.
 
 ## Wrapper backgrounds and borders
 

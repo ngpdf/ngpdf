@@ -420,10 +420,12 @@ describe('resolveStyles property coverage', () => {
     const text = el('pdf-text');
     const view = el('pdf-view', { orphans: '4', widows: '5' }, [text]);
     expect(resolveStyles(view).get(text)).toMatchObject({ orphans: 4, widows: 5 });
-    for (const value of ['0', '-1', '1.5', 'two']) {
-      expect(() => styleOf({ orphans: value })).toThrow(
-        `ngpdf: expected an integer of at least 1 in "${value}" for orphans`,
-      );
+    for (const property of ['orphans', 'widows']) {
+      for (const value of ['0', '-1', '1.5', 'two']) {
+        expect(() => styleOf({ [property]: value })).toThrow(
+          `ngpdf: expected an integer of at least 1 in "${value}" for ${property}`,
+        );
+      }
     }
   });
 
