@@ -14,7 +14,8 @@ export interface Edges<T> {
 
 export interface TextStyle {
   readonly color: Color;
-  readonly fontFamily: 'Helvetica' | 'Times' | 'Courier';
+  /** The CSS `font-family` list as written; `fonts.ts` turns it into fonts. */
+  readonly fontFamily: string;
   readonly fontSize: number;
   readonly fontWeight: 'normal' | 'bold';
   readonly fontStyle: 'normal' | 'italic';
@@ -308,13 +309,6 @@ function oneOf<T extends string>(
   return found;
 }
 
-function fontFamilyOf(value: string): TextStyle['fontFamily'] {
-  const text = value.toLowerCase();
-  if (text.includes('courier') || text.includes('mono')) return 'Courier';
-  if (text.includes('times') || (text.includes('serif') && !text.includes('sans'))) return 'Times';
-  return 'Helvetica';
-}
-
 function fontWeightOf(value: string): TextStyle['fontWeight'] {
   if (value === 'bold' || value === 'bolder') return 'bold';
   const weight = parseNumber(value);
@@ -391,7 +385,7 @@ function apply(
       style.color = parseColor(value, tag);
       break;
     case 'font-family':
-      style.fontFamily = fontFamilyOf(value);
+      style.fontFamily = value.trim();
       break;
     case 'font-size':
       style.fontSize = rejectNegative(parsePoints(value, tag), value, tag);
@@ -577,8 +571,19 @@ interface Pending {
 }
 
 /**
+ * A `pdf-image` is measured by Yoga, and a measured node cannot have children: without this check
+ * Yoga fails deep in layout with an unclear error. Its text is ignored, so only elements count.
+ */
+function checkImageChildren(node: PdfNode): void {
+  if (node.tag !== 'pdf-image') return;
+  const child = node.children.find((candidate) => candidate.kind === 'element');
+  if (child) fail(`pdf-image cannot have children (found <${child.tag}>)`);
+}
+
+/**
  * Resolves every element under `root`; text and comment nodes get no entry. Warnings (a border
- * style drawn solid) go to `warn`, which the caller dedupes and prints in dev mode only.
+ * style drawn solid) go to `warn`, which the caller dedupes and prints in dev mode only. Runs
+ * before images load, so a `pdf-image` with element children throws before anything is fetched.
  */
 export function resolveStyles(
   root: PdfNode,
@@ -589,6 +594,7 @@ export function resolveStyles(
   const stack: Pending[] = [{ node: root, depth: 1, inherited: ROOT_TEXT_STYLE }];
   for (let item = stack.pop(); item; item = stack.pop()) {
     if (item.depth > MAX_NESTING) fail(`nesting deeper than ${String(MAX_NESTING)}`);
+    checkImageChildren(item.node);
     const style = resolveOne(item.node, item.inherited, warn);
     result.set(item.node, style);
     const inherited = textPartOf(style);

@@ -128,6 +128,49 @@ describe('PdfRendererFactory styles', () => {
     expect(el.rawStyle).toEqual({ background: 'url(a:b)' });
   });
 
+  it('keeps a ; inside url(...) or inside quotes in the value', () => {
+    const r = setup();
+    const el = r.createElement('x') as PdfNode;
+    r.setAttribute(
+      el,
+      'style',
+      `background-image: url(data:image/png;base64,AAAA); font-family: "A;B", 'C;D'; color: red`,
+    );
+    expect(el.rawStyle).toEqual({
+      'background-image': 'url(data:image/png;base64,AAAA)',
+      'font-family': `"A;B", 'C;D'`,
+      color: 'red',
+    });
+  });
+
+  it('keeps an escaped quote inside a quoted value', () => {
+    const r = setup();
+    const el = r.createElement('x') as PdfNode;
+    r.setAttribute(el, 'style', String.raw`content: "a\";b"; color: red`);
+    expect(el.rawStyle).toEqual({ content: String.raw`"a\";b"`, color: 'red' });
+  });
+
+  it('reads an unclosed quote or parenthesis to the end, and ignores a stray )', () => {
+    const r = setup();
+    const el = r.createElement('x') as PdfNode;
+    r.setAttribute(el, 'style', `color: red; content: "a; b: c`);
+    expect(el.rawStyle).toEqual({ color: 'red', content: `"a; b: c` });
+    r.setAttribute(el, 'style', 'a: url(x; b: 1');
+    expect(el.rawStyle).toEqual({ a: 'url(x; b: 1' });
+    r.setAttribute(el, 'style', 'a: 1); b: 2');
+    expect(el.rawStyle).toEqual({ a: '1)', b: '2' });
+  });
+
+  it('splits a long style in linear time', () => {
+    const r = setup();
+    const el = r.createElement('x') as PdfNode;
+    const started = performance.now();
+    r.setAttribute(el, 'style', `a: ${'('.repeat(200_000)}; ${'b: "x;"; '.repeat(20_000)}`);
+    // Well under 100 ms; the budget only has to catch a quadratic scan.
+    expect(performance.now() - started).toBeLessThan(2000);
+    expect(Object.keys(el.rawStyle)).toEqual(['a']);
+  });
+
   it('setStyle kebab-cases the name and stringifies the value', () => {
     const r = setup();
     const el = r.createElement('x') as PdfNode;

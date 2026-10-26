@@ -1,0 +1,11 @@
+Fonts and fallback
+Zoë visits Łódź, Kraków and Åre.
+Ελληνικά: καλημέρα. Кириллица: доброе утро.
+日本語の文字テスト in the middle of a sentence.
+No italic face is registered, so this line uses the regular one.
+Helvetica, as before: Zoë, but not ?ód?.
+
+
+
+
+                                                                   Страница 1 / 1

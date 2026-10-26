@@ -8,6 +8,7 @@
 
 ## Checklist
 
+- [ ] It closes an issue that a maintainer agreed to and assigned to me (see "Before you open a pull request" in CONTRIBUTING.md)
 - [ ] A test covers the change, and it fails without it
 - [ ] `./scripts/dev npm run lint` and `./scripts/dev npm test` pass
 - [ ] Docs in `projects/site/src/content/docs/` are updated if behaviour changed

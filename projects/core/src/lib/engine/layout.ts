@@ -3,7 +3,8 @@ import { createNode, propsOf, textContent, type PdfNode } from '../tree/node';
 import type { TableColumn } from '../tree/table-column';
 import type { ImageAsset } from './images';
 import { anonymousTextStyle, type Edges, type Length, type ResolvedStyle } from './style';
-import { layoutText, measureText, type TextBlock } from './text';
+import { fontChain, type FontRegistry } from './fonts';
+import { layoutText, measureText, TextMeasureCache, type TextBlock, type TextFonts } from './text';
 import type { FontMetrics } from './writer';
 
 export interface Box {
@@ -33,6 +34,12 @@ export interface LayoutContext {
   readonly warn?: (message: string) => void;
   /** Characters outside WinAnsi found in laid-out text; the caller merges them into one warning. */
   readonly warnChars?: (chars: string[]) => void;
+  /** Text measuring reused across one render's layouts; without it, each `layoutBox` makes its own. */
+  readonly textCache?: TextMeasureCache;
+  /** Registered font faces; without them, text uses the standard fonts only. */
+  readonly fonts?: FontRegistry;
+  /** Characters no font in their `font-family` has; the caller merges them into one warning. */
+  readonly warnMissing?: (chars: string[]) => void;
 }
 
 type Measure = (width: number, widthMode: number) => { width: number; height: number };
@@ -339,6 +346,7 @@ export function layoutBox(
   ctx: LayoutContext,
 ): Box {
   const { yoga } = ctx;
+  const textCache = ctx.textCache ?? new TextMeasureCache();
   const config = yoga.Config.create();
   config.setPointScaleFactor(0);
   const measures = new Map<PdfNode, Measure>();
@@ -357,20 +365,28 @@ export function layoutBox(
     return style;
   };
 
+  // Only text in a registered family needs a chain; the rest keeps the one-font path.
+  const fontsOf = (style: ResolvedStyle): TextFonts | undefined =>
+    ctx.fonts && ctx.fonts.size > 0
+      ? {
+          chain: fontChain(style, ctx.fonts, ctx.warn),
+          ...(ctx.warnMissing && { missing: ctx.warnMissing }),
+        }
+      : undefined;
+
   const measureOf = (textNode: PdfNode, style: ResolvedStyle): Measure => {
     let measure = measures.get(textNode);
     if (!measure) {
-      const inner = measureText(textContent(textNode), style, ctx.metrics);
-      const cache = new Map<number, { width: number; height: number }>();
+      const inner = measureText(
+        textContent(textNode),
+        style,
+        ctx.metrics,
+        textCache,
+        fontsOf(style),
+      );
       measure = (available, mode) => {
-        const key = mode === 0 ? Infinity : available;
-        let size = cache.get(key);
-        if (!size) {
-          const measured = inner(available, mode);
-          size = { width: measured.width + WIDTH_SLACK, height: measured.height };
-          cache.set(key, size);
-        }
-        return size;
+        const measured = inner(available, mode);
+        return { width: measured.width + WIDTH_SLACK, height: measured.height };
       };
       measures.set(textNode, measure);
     }
@@ -492,6 +508,8 @@ export function layoutBox(
               contentWidthOf(yogaNode),
               ctx.metrics,
               ctx.warnChars,
+              textCache,
+              fontsOf(style),
             ),
           }
         : {}),

@@ -12,6 +12,11 @@ export type StandardFont =
   | 'Courier-Oblique'
   | 'Courier-BoldOblique';
 
+/** A font registered with `PdfWriter.registerFont`; the engine names them `font:0`, `font:1`, … */
+export type CustomFont = `font:${string}`;
+
+export type FontName = StandardFont | CustomFont;
+
 export interface Clip {
   readonly x: number;
   readonly y: number;
@@ -45,7 +50,7 @@ export type DrawOp =
       readonly x: number;
       readonly y: number;
       readonly text: string;
-      readonly font: StandardFont;
+      readonly font: FontName;
       readonly size: number;
       readonly color: string;
       readonly opacity: number;
@@ -64,8 +69,10 @@ export type DrawOp =
     };
 
 export interface FontMetrics {
-  widthOf(text: string, font: StandardFont, size: number): number;
-  ascent(font: StandardFont, size: number): number;
+  widthOf(text: string, font: FontName, size: number): number;
+  ascent(font: FontName, size: number): number;
+  /** Whether a registered font has a glyph for the code point. */
+  hasGlyph(font: CustomFont, codePoint: number): boolean;
 }
 
 export interface DocumentInfo {
@@ -83,6 +90,11 @@ export interface PageOps {
 }
 
 export interface PdfWriter extends FontMetrics {
+  /**
+   * Makes a TrueType, OpenType, WOFF or WOFF2 font available under `name` for measuring and drawing.
+   * Throws `ngpdf: invalid font` on bytes that are none of those.
+   */
+  registerFont(name: CustomFont, data: Uint8Array): void;
   /**
    * The displayed size, after a JPEG's EXIF orientation. Throws on bytes that are neither PNG nor
    * JPEG.
@@ -217,7 +229,7 @@ function toDataUrl(data: Uint8Array): string {
 
 /** The slice of a pdfkit document that the writer touches that `@types/pdfkit` leaves private. */
 interface FontInternals {
-  _font: { ascender: number };
+  _font: { ascender: number; font?: { hasGlyphForCodePoint(codePoint: number): boolean } };
 }
 
 export async function createPdfkitWriter(options: { compress?: boolean } = {}): Promise<PdfWriter> {
@@ -230,8 +242,28 @@ export async function createPdfkitWriter(options: { compress?: boolean } = {}): 
     compress,
     info: { CreationDate: new Date(0) },
   });
+  // Registered again on each written document, which embeds only the glyphs its pages use.
+  const registered = new Map<CustomFont, Uint8Array>();
 
   return {
+    registerFont(name, data) {
+      measurer.registerFont(name, data);
+      try {
+        // pdfkit parses a font when it is first selected; do it now so bad bytes fail here.
+        measurer.font(name);
+      } catch {
+        throw new Error('ngpdf: invalid font');
+      }
+      registered.set(name, data);
+    },
+
+    hasGlyph(font, codePoint) {
+      measurer.font(font);
+      return (
+        (measurer as unknown as FontInternals)._font.font?.hasGlyphForCodePoint(codePoint) ?? false
+      );
+    },
+
     widthOf(text, font, size) {
       return measurer.font(font).fontSize(size).widthOfString(text);
     },
@@ -255,6 +287,7 @@ export async function createPdfkitWriter(options: { compress?: boolean } = {}): 
           CreationDate: info.creationDate,
         },
       });
+      for (const [name, data] of registered) doc.registerFont(name, data);
       const chunks: Uint8Array[] = [];
       const done = new Promise<Blob>((resolve, reject) => {
         doc.on('data', (chunk: Uint8Array) => chunks.push(chunk));

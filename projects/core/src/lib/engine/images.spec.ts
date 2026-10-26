@@ -67,6 +67,17 @@ describe('loadImages', () => {
     expect(assets.get(node)).toEqual({ data: png, width: 200, height: 100 });
   });
 
+  it.each(['DATA:image/png;BASE64,', 'Data:image/png;Base64,'])(
+    'decodes a %s data URL without fetching it, as URL schemes are case-insensitive',
+    async (prefix) => {
+      const fetchFn = vi.fn(() => Promise.reject(new TypeError('Failed to fetch')));
+      const node = imageNode(`${prefix}${base64(png)}`);
+      const assets = await loadImages(root(node), writer, fetchFn);
+      expect(fetchFn).not.toHaveBeenCalled();
+      expect(assets.get(node)).toEqual({ data: png, width: 200, height: 100 });
+    },
+  );
+
   it('decodes a percent-encoded data URL', async () => {
     const encoded = Array.from(png, (b) => `%${b.toString(16).padStart(2, '0')}`).join('');
     const node = imageNode(`data:image/png,${encoded}`);

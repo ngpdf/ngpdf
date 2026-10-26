@@ -1,6 +1,7 @@
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { ROOT_TEXT_STYLE, type TextStyle } from './style';
-import { layoutText, measureText } from './text';
+import { layoutText, measureText, TextMeasureCache } from './text';
+import { testFont } from '../../testing/test-fonts';
 import { createPdfkitWriter, type FontMetrics, type PdfWriter } from './writer';
 
 const MEASURE_MODE_UNDEFINED = 0;
@@ -18,6 +19,7 @@ const style: TextStyle = {
 const kerningMetrics: FontMetrics = {
   widthOf: (text) => 10 * text.length + (text.includes('-b') ? 6 : 0),
   ascent: () => 0,
+  hasGlyph: () => false,
 };
 
 // About 80 ms a run on a developer machine, and up to 500 ms on a shared CI runner with coverage
@@ -135,6 +137,7 @@ describe('layoutText', () => {
     const inflating: FontMetrics = {
       widthOf: (text) => 10 * text.length + (text.length > 1 ? 25 : 0),
       ascent: () => 0,
+      hasGlyph: () => false,
     };
     const text = 'ab-cd-ef '.repeat(11_112);
     const timings: number[] = [];
@@ -234,5 +237,158 @@ describe('measureText', () => {
     expect(() => measureText('a'.repeat(1_048_577), style, writer)).toThrow(
       'ngpdf: text longer than 1 MB',
     );
+  });
+});
+
+describe('TextMeasureCache', () => {
+  /** Real widths, with every call counted. */
+  function countingMetrics(writer: PdfWriter): FontMetrics & { calls: number } {
+    const counted = {
+      calls: 0,
+      widthOf: (chunk: string, font: Parameters<FontMetrics['widthOf']>[1], size: number) => {
+        counted.calls++;
+        return writer.widthOf(chunk, font, size);
+      },
+      ascent: (font: Parameters<FontMetrics['ascent']>[0], size: number) =>
+        writer.ascent(font, size),
+      hasGlyph: (font: Parameters<FontMetrics['hasGlyph']>[0], codePoint: number) =>
+        writer.hasGlyph(font, codePoint),
+    };
+    return counted;
+  }
+
+  let writer: PdfWriter;
+  beforeAll(async () => {
+    writer = await createPdfkitWriter({ compress: false });
+  });
+  const text = 'Gabriela Teixeira de Albuquerque Cavalcanti';
+
+  it('lays out the same text at the same width once, and returns the same block', () => {
+    const metrics = countingMetrics(writer);
+    const cache = new TextMeasureCache();
+    const first = layoutText(text, style, 120, metrics, undefined, cache);
+    const calls = metrics.calls;
+    expect(layoutText(text, style, 120, metrics, undefined, cache)).toBe(first);
+    expect(metrics.calls).toBe(calls);
+    // Without a shared cache the work is done again.
+    layoutText(text, style, 120, metrics);
+    expect(metrics.calls).toBeGreaterThan(calls);
+  });
+
+  it('measures each string once per font and size, across widths', () => {
+    const metrics = countingMetrics(writer);
+    const cache = new TextMeasureCache();
+    const measure = measureText(text, style, metrics, cache);
+    measure(120, MEASURE_MODE_AT_MOST);
+    const calls = metrics.calls;
+    // A narrower width breaks the same words again: only new candidate lines are measured.
+    measure(80, MEASURE_MODE_AT_MOST);
+    const narrower = metrics.calls - calls;
+    measure(80, MEASURE_MODE_AT_MOST);
+    expect(metrics.calls - calls).toBe(narrower);
+    const fresh = countingMetrics(writer);
+    measureText(text, style, fresh)(80, MEASURE_MODE_AT_MOST);
+    expect(narrower).toBeLessThan(fresh.calls);
+  });
+
+  it('keeps widths, fonts, sizes and line heights apart, and matches an uncached layout', () => {
+    const cache = new TextMeasureCache();
+    const variants: [TextStyle, number][] = [
+      [style, 120],
+      [style, 80],
+      [{ ...style, fontFamily: 'Courier' }, 120],
+      [{ ...style, fontSize: 12 }, 120],
+      [{ ...style, lineHeight: 2 }, 120],
+    ];
+    for (const [variant, width] of variants) {
+      expect(layoutText(text, variant, width, writer, undefined, cache)).toEqual(
+        layoutText(text, variant, width, writer),
+      );
+    }
+  });
+
+  it('reports replaced characters every time a cached block is used', () => {
+    const cache = new TextMeasureCache();
+    // Measuring has no warning sink; the final layout of the same text and width must still warn.
+    measureText('Olá 漢', style, writer, cache)(Infinity, MEASURE_MODE_UNDEFINED);
+    const warn = vi.fn();
+    layoutText('Olá 漢', style, Infinity, writer, warn, cache);
+    layoutText('Olá 漢', style, Infinity, writer, warn, cache);
+    expect(warn).toHaveBeenCalledTimes(2);
+    expect(warn).toHaveBeenCalledWith(['漢']);
+  });
+});
+
+describe('layoutText with custom fonts', () => {
+  let writer: PdfWriter;
+  beforeAll(async () => {
+    writer = await createPdfkitWriter({ compress: false });
+    writer.registerFont('font:0', testFont('noto-sans-regular.ttf'));
+    writer.registerFont('font:1', testFont('noto-sans-jp-subset.ttf'));
+  });
+  const fonts = { chain: ['font:0', 'font:1', 'Helvetica'] as const };
+
+  it('measures text in the custom font, without the WinAnsi replacement', () => {
+    const warn = vi.fn();
+    const block = layoutText('Łódź Жук', style, Infinity, writer, warn, undefined, fonts);
+    expect(block.lines.map((line) => line.text)).toEqual(['Łódź Жук']);
+    expect(block.width).toBeCloseTo(writer.widthOf('Łódź Жук', 'font:0', 9), 6);
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it('gives each line its runs, one per font, placed one after another', () => {
+    const block = layoutText('Zoë 日本語 ok', style, Infinity, writer, undefined, undefined, fonts);
+    const [line] = block.lines;
+    expect(line?.runs.map((run) => [run.text, run.font])).toEqual([
+      ['Zoë ', 'font:0'],
+      ['日本語 ', 'font:1'],
+      ['ok', 'font:0'],
+    ]);
+    const [a, b, c] = line!.runs;
+    expect(a!.x).toBe(0);
+    expect(b!.x).toBeCloseTo(a!.width, 6);
+    expect(c!.x).toBeCloseTo(a!.width + b!.width, 6);
+    expect(line!.width).toBeCloseTo(a!.width + b!.width + c!.width, 6);
+    expect(b!.width).toBeCloseTo(writer.widthOf('日本語 ', 'font:1', 9), 6);
+  });
+
+  it('wraps mixed-font text within the box', () => {
+    const text = '日本語の文字 Тестовый текст 日本語 Zoë Łódź';
+    const block = layoutText(text, style, 60, writer, undefined, undefined, fonts);
+    expect(block.lines.length).toBeGreaterThan(2);
+    for (const line of block.lines) expect(line.width).toBeLessThanOrEqual(60);
+    expect(
+      block.lines
+        .map((line) => line.text)
+        .join('')
+        .replace(/ /g, ''),
+    ).toBe(text.replace(/ /g, ''));
+  });
+
+  it('never splits a grapheme cluster when it breaks a word at the box edge', () => {
+    // Decomposed é (e + U+0301) repeated: each line must end after an accent, never before it.
+    const word = 'e\u0301'.repeat(30);
+    const block = layoutText(word, style, 20, writer, undefined, undefined, fonts);
+    expect(block.lines.length).toBeGreaterThan(1);
+    for (const line of block.lines) {
+      expect(line.text.length % 2).toBe(0);
+      expect(line.text.startsWith('\u0301')).toBe(false);
+    }
+  });
+
+  it('reports characters no font has as missing, not as replaced', () => {
+    const warn = vi.fn();
+    const missing = vi.fn();
+    layoutText('a ☃', style, Infinity, writer, warn, undefined, { ...fonts, missing });
+    expect(missing).toHaveBeenCalledWith(['☃']);
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it('caches blocks per font chain', () => {
+    const cache = new TextMeasureCache();
+    const custom = layoutText('Zoë', style, Infinity, writer, undefined, cache, fonts);
+    const standard = layoutText('Zoë', style, Infinity, writer, undefined, cache);
+    expect(custom.lines[0]?.runs[0]?.font).toBe('font:0');
+    expect(standard.lines[0]?.runs[0]?.font).toBe('Helvetica');
   });
 });

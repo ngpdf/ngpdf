@@ -5,7 +5,7 @@ section: Reference
 order: 10
 ---
 
-`@ngpdf/core` exports one service and two functions that render a document component to a PDF.
+`@ngpdf/core` exports one service, three functions and a directive that render a document component to a PDF.
 
 | Export | Needs an injection context | Returns |
 | --- | --- | --- |
@@ -13,6 +13,8 @@ order: 10
 | `PdfRenderer.download` | yes, to inject `PdfRenderer` | `Promise<void>` |
 | `renderToBlob` | no, you pass an injector | `Promise<Blob>` |
 | `downloadPdf` | no, you pass an injector | `Promise<void>` |
+| `pdfResource` | yes, or pass `injector` | `PdfResourceRef` |
+| `PdfDownload` | no, it is a directive | - |
 
 ## PdfRenderer
 
@@ -40,6 +42,77 @@ function downloadPdf<T>(component: Type<T>, options: DownloadPdfOptions): Promis
 ```
 
 The same renders, for code without an injection context. The `injector` you pass is the parent of the render's injector, so the document resolves its services from it. `PdfRenderer` calls these two functions.
+
+## pdfResource
+
+```ts
+function pdfResource<T>(component: Type<T>, options?: PdfResourceOptions): PdfResourceRef;
+
+interface PdfResourceOptions {
+  readonly inputs?: () => Record<string, unknown> | undefined;
+  readonly debounce?: number;
+  readonly injector?: Injector;
+}
+
+interface PdfResourceRef extends Resource<Blob | undefined> {
+  readonly url: Signal<string | undefined>;
+  reload(): boolean;
+  destroy(): void;
+}
+```
+
+A PDF that stays current with signals, built on Angular's `resource()`. It renders when it is created and again whenever a signal read in `inputs` changes. A render overtaken by a newer one is dropped.
+
+```ts
+protected readonly lines = signal<InvoiceLine[]>([]);
+protected readonly pdf = pdfResource(InvoiceDocument, {
+  inputs: () => ({ customer: this.customer(), lines: this.lines() }),
+  debounce: 300,
+});
+```
+
+```html
+@if (pdf.url(); as url) {
+  <a [href]="url" download="invoice.pdf">Download</a>
+} @else if (pdf.isLoading()) {
+  <p>Rendering…</p>
+} @else if (pdf.error(); as error) {
+  <p>{{ error.message }}</p>
+}
+```
+
+- `value()` is the `Blob`, and `status()`, `isLoading()`, `error()` and `hasValue()` work as on any `Resource`. Like any `Resource`, `value()` throws in the `error` status; `url()` does not, so templates can read it directly.
+- `url()` is an object URL for the current PDF. It is created the first time you read it, and revoked when a newer PDF replaces it or when the resource is destroyed. Do not revoke it yourself.
+- `inputs` returning `undefined` holds off rendering, and the resource stays `idle`. Use it while the data is still loading.
+- `debounce` is how many milliseconds to wait after the last change before rendering. A slider or a text field otherwise starts a render per keystroke, and only the last one is kept.
+- `injector` is needed outside an injection context. The resource is destroyed with it, and the document resolves its services from its `EnvironmentInjector`.
+
+## PdfDownload
+
+```html
+<button
+  type="button"
+  [pdfDownload]="InvoiceDocument"
+  [pdfInputs]="{ customer: customer(), lines: lines() }"
+  pdfFileName="invoice.pdf"
+  (pdfError)="showError($event)"
+>
+  Download PDF
+</button>
+```
+
+A directive for the most common case, a button that downloads a document. Import `PdfDownload` in the component that uses it.
+
+| Input or output | Type | |
+| --- | --- | --- |
+| `pdfDownload` | `Type<unknown>` | Required. The document component. |
+| `pdfInputs` | `Record<string, unknown>` | The document's inputs, as in `RenderOptions`. Read when the host is clicked. |
+| `pdfFileName` | `string` | Required. The name the browser saves the file under. |
+| `(pdfError)` | `unknown` | Emits the error when the render fails. The error also goes to the app's `ErrorHandler`. |
+
+- A click starts `downloadPdf` with the nearest `EnvironmentInjector`: a route's, if the route has `providers`, or the root one. The document can inject route-scoped services.
+- While the PDF renders, the host gets `aria-busy="true"` and `aria-disabled="true"`, and further clicks are ignored, with their default action (a form submit, a link) cancelled. The directive never sets `disabled`, which would drop keyboard focus and could undo the app's own `[disabled]`. Style the busy state with `[aria-busy='true']`.
+- The render counts as a pending task, so `whenStable()` in a test waits for it.
 
 ## Option types
 
@@ -115,6 +188,8 @@ The returned promise rejects with an `Error`. Errors from ngpdf start with `ngpd
 | `ngpdf: could not load image "<source>": <reason>` | An image that failed to load or is not PNG or JPEG. |
 | `ngpdf: nesting deeper than 64` | More than 64 nested elements. |
 | `ngpdf: text longer than 1 MB` | One text longer than 1,048,576 characters. |
+| `ngpdf: could not load font "<src>": <reason>` | A font from `providePdfFonts` could not be fetched or read. The URL is shown without its query string. |
+| `ngpdf: invalid font "<src>"` | The bytes are not a TrueType, OpenType, WOFF or WOFF2 font. |
 
 Errors from your own template, such as a missing required input or an exception in a binding, reject the render with Angular's own error.
 
@@ -125,6 +200,8 @@ Some problems still produce a PDF. ngpdf collects them during the render and pri
 | Warning | Meaning |
 | --- | --- |
 | `ngpdf: characters outside WinAnsi replaced with "?": <characters>` | See [Text and fonts](/docs/text-and-fonts#characters-winansi). |
+| `ngpdf: characters missing from every font in their font-family, drawn as an empty box: <characters>` | See [Text and fonts](/docs/text-and-fonts#the-family-list-and-fallback). |
+| `ngpdf: font "<family>" has no <face> face; using its <face> face` | A registered family without the weight or style asked for. See [Custom fonts](/docs/text-and-fonts#custom-fonts). |
 | `ngpdf: <element> is taller than a page and is cut at the bottom` | A unit is clipped. See [Pagination](/docs/pagination#units-taller-than-a-page). |
 | `ngpdf: ignored inside tables: <list>` | Row or cell styles that tables do not use. See [Tables](/docs/tables#padding-and-borders). |
 | `ngpdf: styles on <tag> are ignored; style a pdf-* element inside it` | Styles on a component host. See [Components in documents](/docs/components-in-documents#hosts-are-transparent). |

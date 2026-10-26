@@ -61,7 +61,7 @@ export function toImageSource(bytes: Uint8Array): ArrayBuffer {
 }
 ```
 
-The `data:` prefix is matched in lower case only. An upper-case `DATA:` URL is passed to `fetch` instead.
+The `data:` prefix and its `;base64` marker are matched in any case, so `DATA:image/png;BASE64,…` is decoded in place too.
 
 ## Fetching URLs
 
@@ -107,5 +107,5 @@ The image is drawn inside the content box, so padding and borders on a `pdf-imag
 
 ## Things to avoid
 
-- Do not put children inside `pdf-image`. They are not supported and can make the render fail.
+- Do not put elements inside `pdf-image`. The render rejects with `ngpdf: pdf-image cannot have children`, naming the first one, before any image is fetched. Text inside it is ignored.
 - Do not rely on `src` changing after the render starts. The component is rendered once.

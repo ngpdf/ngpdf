@@ -31,10 +31,9 @@ it does not affect a correct document. Items that change behaviour need a design
 
 ## Text
 
-- **Custom fonts and encodings beyond WinAnsi.** Characters outside WinAnsi become `?`. Custom
-  fonts plug into the `PdfWriter` port.
-- **A measure cache.** `measureText` re-runs whitespace collapsing and line breaking on every Yoga
-  measure call, and `widthOf` measures character by character without a cache.
+- **Kerning across fonts.** With fallback along `font-family`, each font's run is kerned on its
+  own; a pair that straddles two fonts is not.
+- **Font collections** (`.ttc`) in `providePdfFonts`.
 - **Control characters** (`\f`, `\v`, U+2028, U+0085) are not collapsed as whitespace.
 - More timing tests: the mid-word narrowing path under an inflating metric, and a 100,000-character
   unbreakable word at a narrow width.
@@ -45,14 +44,9 @@ it does not affect a correct document. Items that change behaviour need a design
 - **Cancel sibling fetches** with an `AbortController` when one image fails.
 - `percentDecode` builds a `number[]` before the byte array; decode straight into a
   `Uint8Array`.
-- An upper-case `DATA:` URL is fetched instead of decoded.
-- A `pdf-image` with element children fails in Yoga (a measured node cannot have children);
-  reject it with an `ngpdf:` error.
 
 ## Robustness
 
-- **The style attribute parser** splits on `;`, which cuts values that contain one (a quoted
-  string, a data URL).
 - **Keyword case.** `text-align: CENTER` throws and `font-weight: BOLD` falls back to normal;
   keywords should be matched case-insensitively and trimmed, with one policy for unknown
   keywords (fallback or throw).
@@ -72,8 +66,6 @@ it does not affect a correct document. Items that change behaviour need a design
 - **Poppler version detection.** The e2e script's Docker fallback hard-codes poppler's major
   version, and hides `apt-get` errors.
 - **The e2e Chrome can leak** when `puppeteer.launch` finishes after the script's timeout.
-- **A strike-through length test.** The underline length is pinned by a writer test; the
-  strike-through line is not.
 - Spec hygiene: some component specs destroy in the test body instead of `finally`/`afterEach`,
   a global `URL` stub and the zone.js import leak into later tests, and a few assertions use loose
   `toMatchObject`.

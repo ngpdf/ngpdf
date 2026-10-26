@@ -50,9 +50,17 @@ screen icon are rendered from `projects/site/brand/` with `node scripts/site-ima
 
 ## Where to start
 
-- Issues labelled [`good first issue`](https://github.com/ngpdf/ngpdf/labels/good%20first%20issue) are small and say where to look; [`help wanted`](https://github.com/ngpdf/ngpdf/labels/help%20wanted) ones are bigger. Comment on one before you start, so two people don't work on the same thing.
+- Issues labelled [`good first issue`](https://github.com/ngpdf/ngpdf/labels/good%20first%20issue) are small and say where to look; [`help wanted`](https://github.com/ngpdf/ngpdf/labels/help%20wanted) ones are bigger.
 - ngpdf takes part in [Hacktoberfest](https://hacktoberfest.com): issues labelled `hacktoberfest` count.
 - Questions, ideas and things you built go to [Discussions](https://github.com/ngpdf/ngpdf/discussions).
+
+## Before you open a pull request
+
+- **Claim the issue first.** Comment on it saying you'd like to work on it, and wait for a maintainer to reply that it's yours. That way two people never do the same work, and everyone gets a fair turn.
+- **At most two claimed issues per person at a time.** Once one is merged or closed, claim another. A claim with no pull request after seven days is released, so others can take it.
+- **New features need an issue before any code.** Open a [feature request](https://github.com/ngpdf/ngpdf/issues/new?template=feature.yml) and wait until the design is agreed in it. A feature pull request without an agreed issue will be closed, however good the code, because the design discussion belongs in the issue.
+- **Bug fixes** go through the same steps: open an issue with a reproduction (or claim an existing one), then send the fix. A typo or a broken link in the docs can go straight to a pull request.
+- Link the issue in the pull request description (`Closes #123`).
 
 ## Test first
 

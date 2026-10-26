@@ -1,5 +1,5 @@
 // End-to-end check: builds the demo in development mode (it exposes window.ngpdfDemo there),
-// renders the three documents in headless Chrome, extracts their text with pdftotext and compares
+// renders the demo documents in headless Chrome, extracts their text with pdftotext and compares
 // it with e2e/expected/<name>.txt. `--update` rewrites the expected files; `--skip-build` reuses
 // dist/demo.
 //
@@ -30,6 +30,11 @@ const DOCUMENTS = [
     contains: ['Página 5 de 5', 'pessoa140@example.com', 'Página 1 de 5'],
   },
   { name: 'licences-list', pages: 3, contains: ['Página 3 de 3', 'R$'] },
+  {
+    name: 'fonts-sample',
+    pages: 1,
+    contains: ['Łódź', 'καλημέρα', 'доброе утро', '日本語の文字テスト', 'Страница 1 / 1'],
+  },
 ];
 
 const update = process.argv.includes('--update');

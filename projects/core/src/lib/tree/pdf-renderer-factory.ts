@@ -4,9 +4,40 @@ import { createNode, type PdfNode } from './node';
 const toKebab = (name: string): string =>
   name.startsWith('--') ? name : name.replace(/[A-Z]/g, (ch) => `-${ch.toLowerCase()}`);
 
+/**
+ * Splits a style attribute into declarations at each `;` outside quotes and parentheses, so a
+ * value such as `url(data:image/png;base64,...)` or `"A;B"` stays whole. A backslash escapes the
+ * next character inside quotes. An unclosed quote or parenthesis runs to the end, and a stray `)`
+ * is kept as text. One pass over the string, no regular expression.
+ */
+function splitDeclarations(source: string): string[] {
+  const declarations: string[] = [];
+  let start = 0;
+  let quote = '';
+  let depth = 0;
+  for (let at = 0; at < source.length; at++) {
+    const ch = source[at];
+    if (quote) {
+      if (ch === '\\') at++;
+      else if (ch === quote) quote = '';
+    } else if (ch === '"' || ch === "'") {
+      quote = ch;
+    } else if (ch === '(') {
+      depth++;
+    } else if (ch === ')') {
+      if (depth > 0) depth--;
+    } else if (ch === ';' && depth === 0) {
+      declarations.push(source.slice(start, at));
+      start = at + 1;
+    }
+  }
+  declarations.push(source.slice(start));
+  return declarations;
+}
+
 function parseStyle(source: string): Record<string, string> {
   const style: Record<string, string> = {};
-  for (const declaration of source.split(';')) {
+  for (const declaration of splitDeclarations(source)) {
     const colon = declaration.indexOf(':');
     if (colon < 0) continue;
     const name = declaration.slice(0, colon).trim();
