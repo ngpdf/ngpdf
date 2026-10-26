@@ -5,13 +5,20 @@
 /// <reference path="./linebreak.d.ts" />
 import { elementChildren, propsOf, type PdfNode } from '../tree/node';
 import { displayList } from './display-list';
+import type { FontRegistry, RegisteredFace } from './fonts';
 import { dissolveHosts } from './hosts';
 import { loadImages } from './images';
 import type { LayoutContext } from './layout';
 import { paginatePage } from './paginate';
 import { resolveStyles } from './style';
 import { TextMeasureCache } from './text';
-import { createPdfkitWriter, type DocumentInfo, type PageOps, type PdfWriter } from './writer';
+import {
+  createPdfkitWriter,
+  type CustomFont,
+  type DocumentInfo,
+  type PageOps,
+  type PdfWriter,
+} from './writer';
 import type { Yoga } from 'yoga-layout/load';
 
 declare const ngDevMode: unknown;
@@ -21,6 +28,36 @@ export interface RenderDocumentOptions {
   readonly dev?: boolean;
   /** Replaces the pdfkit writer; tests use it to see what the engine hands over. */
   readonly writer?: PdfWriter;
+  /** Font faces for `font-family`, already loaded. */
+  readonly fonts?: readonly LoadedFont[];
+}
+
+/** One face of a font family, with its bytes. */
+export interface LoadedFont {
+  readonly family: string;
+  readonly weight?: 'normal' | 'bold';
+  readonly style?: 'normal' | 'italic';
+  readonly data: Uint8Array;
+  /** Where the bytes came from, for error messages. */
+  readonly src: string;
+}
+
+/** Registers each face with the writer as `font:<index>` and groups the faces by family. */
+function registerFonts(fonts: readonly LoadedFont[], writer: PdfWriter): FontRegistry {
+  const registry = new Map<string, RegisteredFace[]>();
+  fonts.forEach((loaded, index) => {
+    const font: CustomFont = `font:${String(index)}`;
+    try {
+      writer.registerFont(font, loaded.data);
+    } catch {
+      throw new Error(`ngpdf: invalid font "${loaded.src}"`);
+    }
+    const key = loaded.family.trim().toLowerCase();
+    const faces = registry.get(key) ?? [];
+    faces.push({ weight: loaded.weight ?? 'normal', style: loaded.style ?? 'normal', font });
+    registry.set(key, faces);
+  });
+  return registry;
 }
 
 // The one piece of module state: the Yoga WebAssembly module is compiled once per page load.
@@ -89,19 +126,33 @@ export async function renderDocument(
   const warnChars = (chars: string[]): void => {
     for (const char of chars) replaced.add(char);
   };
+  const missing = new Set<string>();
+  const warnMissing = (chars: string[]): void => {
+    for (const char of chars) missing.add(char);
+  };
 
   const [yoga, writer] = await Promise.all([
     loadYogaOnce(),
     options.writer ?? createPdfkitWriter({ compress: true }),
   ]);
   try {
+    const fonts = registerFonts(options.fonts ?? [], writer);
     // Component hosts are transparent: the stages below see only pdf-* elements.
     const tree = dissolveHosts(document, warn);
     const styles = resolveStyles(tree, warn);
     const images = await loadImages(tree, writer);
     // One text cache per render, passed down like the metrics and images, so renders share nothing.
     const textCache = new TextMeasureCache();
-    const ctx: LayoutContext = { yoga, metrics: writer, images, warn, warnChars, textCache };
+    const ctx: LayoutContext = {
+      yoga,
+      metrics: writer,
+      images,
+      warn,
+      warnChars,
+      textCache,
+      fonts,
+      warnMissing,
+    };
 
     const layouts = elementChildren(tree)
       .filter((child) => child.tag === 'pdf-page')
@@ -112,6 +163,8 @@ export async function renderDocument(
       ops: displayList(layout, index, layouts.length, undefined, {
         metrics: writer,
         warn: warnChars,
+        fonts,
+        warnMissing,
       }),
     }));
     return await writer.write(pages, infoOf(document, now));
@@ -119,6 +172,11 @@ export async function renderDocument(
     // Also on failure: a warning often explains why the render broke.
     if (replaced.size > 0) {
       warn(`ngpdf: characters outside WinAnsi replaced with "?": ${[...replaced].join('')}`);
+    }
+    if (missing.size > 0) {
+      warn(
+        `ngpdf: characters missing from every font in their font-family, drawn as an empty box: ${[...missing].join('')}`,
+      );
     }
     if (dev) for (const message of warnings) console.warn(message);
   }

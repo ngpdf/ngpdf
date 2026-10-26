@@ -79,12 +79,15 @@ invalidation would buy nothing here.
   - `PdfWriter` is a port, an interface owned by the engine.
   - `createPdfkitWriter` is the Adapter behind it. It translates each `DrawOp` into pdfkit calls
     and wraps pdfkit's font metrics as `FontMetrics`.
+  - Custom fonts go through the same port: the engine registers each face's bytes as
+    `font:<index>` with `registerFont`, asks `hasGlyph` which font of a `font-family` list draws
+    each character, and draws each run of a line as its own text op.
 - **Why an interface with one production implementation is justified.** It already has a second
   implementation: the recording fake used by the engine tests. And jsPDF is the documented
   fallback writer should pdfkit's browser build become a problem.
 - **Alternative.** Calling pdfkit directly from the display list. It loses because every layout
   test would then need to parse PDF output, and the writer could never be swapped.
-- **Removal trigger.** None expected. The port is also what v0.2's custom fonts plug into.
+- **Removal trigger.** None expected.
 
 ### Facade: `PdfRenderer` service
 

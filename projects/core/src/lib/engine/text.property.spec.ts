@@ -50,6 +50,7 @@ describe('layoutText properties', () => {
     const kerning: FontMetrics = {
       widthOf: (text) => 10 * text.length + 6 * (text.match(/-b|rt|_r/g)?.length ?? 0),
       ascent: () => 0,
+      hasGlyph: () => false,
     };
     const parts = fc.array(fc.constantFrom('a', 'b', '-', '_', 'r', 't', ' ', '  ', '.', '/'), {
       maxLength: 80,

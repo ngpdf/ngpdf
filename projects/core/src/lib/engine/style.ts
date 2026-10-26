@@ -14,7 +14,8 @@ export interface Edges<T> {
 
 export interface TextStyle {
   readonly color: Color;
-  readonly fontFamily: 'Helvetica' | 'Times' | 'Courier';
+  /** The CSS `font-family` list as written; `fonts.ts` turns it into fonts. */
+  readonly fontFamily: string;
   readonly fontSize: number;
   readonly fontWeight: 'normal' | 'bold';
   readonly fontStyle: 'normal' | 'italic';
@@ -290,13 +291,6 @@ function oneOf<T extends string>(
   return found;
 }
 
-function fontFamilyOf(value: string): TextStyle['fontFamily'] {
-  const text = value.toLowerCase();
-  if (text.includes('courier') || text.includes('mono')) return 'Courier';
-  if (text.includes('times') || (text.includes('serif') && !text.includes('sans'))) return 'Times';
-  return 'Helvetica';
-}
-
 function fontWeightOf(value: string): TextStyle['fontWeight'] {
   if (value === 'bold' || value === 'bolder') return 'bold';
   const weight = parseNumber(value);
@@ -373,7 +367,7 @@ function apply(
       style.color = parseColor(value, tag);
       break;
     case 'font-family':
-      style.fontFamily = fontFamilyOf(value);
+      style.fontFamily = value.trim();
       break;
     case 'font-size':
       style.fontSize = rejectNegative(parsePoints(value, tag), value, tag);

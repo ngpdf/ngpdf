@@ -1,5 +1,6 @@
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
-import { createPdfkitWriter, type DrawOp, type PdfWriter } from './writer';
+import { createPdfkitWriter, type DrawOp, type FontName, type PdfWriter } from './writer';
+import { testFont } from '../../testing/test-fonts';
 
 /** 3x2 8-bit grayscale PNG, generated so no binary file sits in the repo. */
 function tinyPng(): Uint8Array {
@@ -545,5 +546,82 @@ describe('createPdfkitWriter', () => {
       await pdfText([image(shared)]);
       expect(btoaSpy).toHaveBeenCalledTimes(1);
     });
+  });
+});
+
+describe('createPdfkitWriter with registered fonts', () => {
+  let writer: PdfWriter;
+  beforeAll(async () => {
+    writer = await createPdfkitWriter({ compress: false });
+    writer.registerFont('font:0', testFont('noto-sans-regular.ttf'));
+    writer.registerFont('font:1', testFont('noto-sans-jp-subset.ttf'));
+  });
+
+  const textOp = (text: string, font: FontName): DrawOp => ({
+    op: 'text',
+    x: 20,
+    y: 20,
+    text,
+    font,
+    size: 12,
+    color: '#000000',
+    opacity: 1,
+    underline: false,
+    strike: false,
+  });
+
+  it('measures with the registered font, kerning included', () => {
+    const width = writer.widthOf('Жук', 'font:0', 10);
+    expect(width).toBeGreaterThan(0);
+    expect(writer.widthOf('AV', 'font:0', 10)).toBeLessThan(
+      writer.widthOf('A', 'font:0', 10) + writer.widthOf('V', 'font:0', 10),
+    );
+    expect(writer.ascent('font:0', 20)).toBeCloseTo(writer.ascent('font:0', 10) * 2, 5);
+  });
+
+  it('tells which code points a registered font has a glyph for', () => {
+    expect(writer.hasGlyph('font:0', 'Ж'.codePointAt(0)!)).toBe(true);
+    expect(writer.hasGlyph('font:0', '日'.codePointAt(0)!)).toBe(false);
+    expect(writer.hasGlyph('font:1', '日'.codePointAt(0)!)).toBe(true);
+    expect(writer.hasGlyph('font:1', 'A'.codePointAt(0)!)).toBe(false);
+  });
+
+  it('reads WOFF2 too', async () => {
+    const woff = await createPdfkitWriter({ compress: false });
+    woff.registerFont('font:0', testFont('noto-sans-basic.woff2'));
+    expect(woff.widthOf('Hello', 'font:0', 10)).toBeCloseTo(
+      writer.widthOf('Hello', 'font:0', 10),
+      6,
+    );
+  });
+
+  it('rejects bytes that are not a font', async () => {
+    const bad = await createPdfkitWriter({ compress: false });
+    expect(() => {
+      bad.registerFont('font:0', new Uint8Array([1, 2, 3, 4]));
+    }).toThrow('ngpdf: invalid font');
+  });
+
+  it('embeds only the fonts the pages use, as subsets', async () => {
+    const blob = await writer.write([{ ...A4, ops: [textOp('Жук', 'font:0')] }], info);
+    const pdf = new TextDecoder('latin1').decode(await blob.arrayBuffer());
+    expect(pdf).toContain('/FontFile2');
+    expect(pdf).toMatch(/\/BaseFont \/[A-Z]{6}\+NotoSans/);
+    expect(pdf).not.toContain('NotoSansCJK');
+  });
+
+  it('embeds a CFF-based OpenType font', async () => {
+    const cff = await createPdfkitWriter({ compress: false });
+    cff.registerFont('font:0', testFont('inter-basic.otf'));
+    const blob = await cff.write([{ ...A4, ops: [textOp('Hello', 'font:0')] }], info);
+    const pdf = new TextDecoder('latin1').decode(await blob.arrayBuffer());
+    expect(pdf).toContain('/FontFile3');
+  });
+
+  it('writes the same bytes for the same pages with a custom font', async () => {
+    const pages = [{ ...A4, ops: [textOp('Жук 日', 'font:0')] }];
+    const a = new Uint8Array(await (await writer.write(pages, info)).arrayBuffer());
+    const b = new Uint8Array(await (await writer.write(pages, info)).arrayBuffer());
+    expect(b).toEqual(a);
   });
 });

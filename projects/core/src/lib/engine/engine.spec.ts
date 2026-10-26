@@ -1,6 +1,7 @@
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { createNode, type PdfNode } from '../tree/node';
-import { renderDocument } from './index';
+import { testFont } from '../../testing/test-fonts';
+import { renderDocument, type LoadedFont } from './index';
 import { createPdfkitWriter, type DocumentInfo, type PageOps, type PdfWriter } from './writer';
 
 let real: PdfWriter;
@@ -58,6 +59,10 @@ function recordingWriter(): PdfWriter & { recorded: Recorded[] } {
   return {
     widthOf: (t, f, s) => real.widthOf(t, f, s),
     ascent: (f, s) => real.ascent(f, s),
+    hasGlyph: (f, c) => real.hasGlyph(f, c),
+    registerFont: (f, d) => {
+      real.registerFont(f, d);
+    },
     imageSize: (d) => real.imageSize(d),
     write: (pages, info) => {
       recorded.push({ pages, info });
@@ -357,5 +362,96 @@ describe('renderDocument', () => {
       );
       expect(texts).toContain('? ?');
     });
+  });
+});
+
+describe('renderDocument with fonts', () => {
+  const fonts: LoadedFont[] = [
+    { family: 'Noto Sans', src: 'regular.ttf', data: testFont('noto-sans-regular.ttf') },
+    {
+      family: 'Noto Sans',
+      weight: 'bold',
+      src: 'bold.ttf',
+      data: testFont('noto-sans-bold.ttf'),
+    },
+    { family: 'Noto Sans JP', src: 'jp.ttf', data: testFont('noto-sans-jp-subset.ttf') },
+  ];
+
+  /** A writer of its own, so registered fonts never leak between tests. */
+  async function fontWriter() {
+    real = await createPdfkitWriter({ compress: false });
+    return recordingWriter();
+  }
+
+  const textOps = (writer: { recorded: Recorded[] }) =>
+    writer.recorded[0]!.pages.flatMap((page) => page.ops).filter((op) => op.op === 'text');
+
+  function onePage(...children: PdfNode[]): PdfNode {
+    return host({}, [el('pdf-page', {}, children, { size: 'A4' })]);
+  }
+
+  it('draws each run of a line in the first family that has its characters', async () => {
+    const writer = await fontWriter();
+    const doc = onePage(text('Zoë 日本', { 'font-family': 'Noto Sans, "Noto Sans JP"' }));
+    await renderDocument(doc, { writer, dev: false, fonts });
+    const [latin, cjk] = textOps(writer);
+    expect([latin?.text, latin?.font]).toEqual(['Zoë ', 'font:0']);
+    expect([cjk?.text, cjk?.font]).toEqual(['日本', 'font:2']);
+    expect(cjk!.x).toBeCloseTo(latin!.x + real.widthOf('Zoë ', 'font:0', 10), 6);
+    expect(cjk!.y).toBe(latin!.y);
+  });
+
+  it('picks the bold face for bold text', async () => {
+    const writer = await fontWriter();
+    const doc = onePage(text('Bold', { 'font-family': 'Noto Sans', 'font-weight': 'bold' }));
+    await renderDocument(doc, { writer, dev: false, fonts });
+    expect(textOps(writer)[0]?.font).toBe('font:1');
+  });
+
+  it('leaves documents that name no registered family as they were', async () => {
+    const writer = await fontWriter();
+    await renderDocument(onePage(text('Plain', { 'font-family': 'Georgia, serif' })), {
+      writer,
+      dev: false,
+      fonts,
+    });
+    expect(textOps(writer)[0]?.font).toBe('Times-Roman');
+  });
+
+  it('draws the page number in a registered family', async () => {
+    const writer = await fontWriter();
+    const number = el('pdf-page-number', { 'font-family': 'Noto Sans' }, [], {
+      format: 'Страница {page}',
+    });
+    await renderDocument(onePage(text('a'), number), { writer, dev: false, fonts });
+    expect(textOps(writer).at(-1)).toMatchObject({ text: 'Страница 1', font: 'font:0' });
+  });
+
+  it('warns once, naming the characters no font in the list has', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const writer = await fontWriter();
+    const doc = onePage(
+      text('a ☃', { 'font-family': 'Noto Sans' }),
+      text('☃ ♞', { 'font-family': 'Noto Sans' }),
+    );
+    await renderDocument(doc, { writer, dev: true, fonts });
+    expect(warn.mock.calls.map(([message]: unknown[]) => message)).toEqual([
+      'ngpdf: characters missing from every font in their font-family, drawn as an empty box: ☃♞',
+    ]);
+  });
+
+  it('rejects the render when a font cannot be read, naming its source', async () => {
+    const writer = await fontWriter();
+    const broken = [{ family: 'Broken', src: 'broken.ttf', data: new Uint8Array([0, 1, 2]) }];
+    await expect(
+      renderDocument(onePage(text('a')), { writer, dev: false, fonts: broken }),
+    ).rejects.toThrow('ngpdf: invalid font "broken.ttf"');
+  });
+
+  it('writes a PDF that embeds the fonts it used', async () => {
+    const writer = await createPdfkitWriter({ compress: false });
+    const doc = onePage(text('Zoë 日本', { 'font-family': 'Noto Sans, Noto Sans JP' }));
+    const pdf = await bytesOf(await renderDocument(doc, { writer, dev: false, fonts }));
+    expect(pdf.match(/\/FontFile2/g)).toHaveLength(2);
   });
 });

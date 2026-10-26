@@ -1,13 +1,30 @@
 import LineBreaker from 'linebreak';
-import { fontFor, toWinAnsi } from './fonts';
+import { fontFor, normalizeText, shapeText, type ShapedText } from './fonts';
 import type { TextStyle } from './style';
-import type { FontMetrics, StandardFont } from './writer';
+import type { FontMetrics, FontName } from './writer';
+
+/** A piece of a line drawn in one font. */
+export interface TextRun {
+  readonly text: string;
+  readonly font: FontName;
+  /** Offset from the start of the line. */
+  readonly x: number;
+  readonly width: number;
+}
 
 export interface TextLine {
   readonly text: string;
   readonly width: number;
   /** Top of the line box. */
   readonly y: number;
+  readonly runs: readonly TextRun[];
+}
+
+/** The fonts of a text, from `fontChain`. Without it, text is drawn in one standard font. */
+export interface TextFonts {
+  readonly chain: readonly FontName[];
+  /** Receives the characters no font in the chain has. */
+  readonly missing?: (chars: string[]) => void;
 }
 
 export interface TextBlock {
@@ -30,6 +47,8 @@ interface CachedBlock {
   readonly block: TextBlock;
   /** Characters replaced by `?`, reported again each time the block is used. */
   readonly replaced: readonly string[];
+  /** Characters no font has, reported the same way. */
+  readonly missing: readonly string[];
 }
 
 /**
@@ -59,7 +78,7 @@ export class TextMeasureCache {
   }
 
   /** `metrics.widthOf` for one font and size, remembering every string it measures. */
-  widthOf(metrics: FontMetrics, font: StandardFont, size: number): (chunk: string) => number {
+  widthOf(metrics: FontMetrics, font: FontName, size: number): (chunk: string) => number {
     const fontKey = `${font} ${String(size)}`;
     let widths = this.#widths.get(fontKey);
     if (!widths) {
@@ -127,46 +146,80 @@ export function layoutText(
   metrics: FontMetrics,
   warn: (chars: string[]) => void = () => undefined,
   cache: TextMeasureCache = new TextMeasureCache(),
+  fonts?: TextFonts,
 ): TextBlock {
   assertTextSize(text);
-  const font = fontFor(style);
+  const chain = fonts?.chain ?? [fontFor(style)];
   const size = style.fontSize;
-  const key = `${font} ${String(size)} ${String(style.lineHeight)} ${String(maxWidth)}`;
-  const { block, replaced } = cache.block(text, key, () => {
-    let replaced: readonly string[] = [];
-    const collapsed = collapseWhitespace(
-      toWinAnsi(text, (chars) => {
-        replaced = chars;
-      }),
-    );
-    const widthOf = cache.widthOf(metrics, font, size);
-    return { block: breakLines(collapsed, size * style.lineHeight, maxWidth, widthOf), replaced };
+  const key = `${chain.join(',')} ${String(size)} ${String(style.lineHeight)} ${String(maxWidth)}`;
+  const { block, replaced, missing } = cache.block(text, key, () => {
+    const shaped = shapeText(collapseWhitespace(normalizeText(text)), chain, metrics);
+    const widthOfs = chain.map((font) => cache.widthOf(metrics, font, size));
+    return {
+      block: breakLines(shaped, chain, size * style.lineHeight, maxWidth, widthOfs),
+      replaced: shaped.replaced,
+      missing: shaped.missing,
+    };
   });
   if (replaced.length > 0) warn([...replaced]);
+  if (missing.length > 0) fonts?.missing?.([...missing]);
   return block;
 }
 
-/** The lines of `collapsed` in `maxWidth`; see `layoutText`. */
+/** The lines of the shaped text in `maxWidth`; see `layoutText`. */
 function breakLines(
-  collapsed: string,
+  shaped: ShapedText,
+  chain: readonly FontName[],
   lineHeight: number,
   maxWidth: number,
-  widthOf: (chunk: string) => number,
+  widthOfs: readonly ((chunk: string) => number)[],
 ): TextBlock {
+  const { text: collapsed, fontAt, clusterStarts } = shaped;
   const length = collapsed.length;
-  // prefix[i] is the summed width of the first i characters (all single UTF-16 units after WinAnsi).
+  const widthIn = (font: number, chunk: string): number => (widthOfs[font] ?? (() => 0))(chunk);
+
+  // Where a word may be cut at the box edge: between grapheme clusters, or anywhere when every
+  // unit is its own cluster.
+  const cut = clusterStarts ? (k: number) => clusterStarts[k] ?? length : (k: number) => k;
+  const cutIndex = clusterStarts
+    ? (position: number) => lastWhere(0, clusterStarts.length - 1, (k) => cut(k) <= position)
+    : (position: number) => position;
+
+  // prefix[i] is the summed width of the clusters that end by unit i; a cluster's width sits on
+  // its last unit.
   const prefix = new Float64Array(length + 1);
-  for (let i = 0; i < length; i++) {
-    prefix[i + 1] = (prefix[i] ?? 0) + widthOf(collapsed.charAt(i));
+  for (let k = 0; cut(k) < length; k++) {
+    const from = cut(k);
+    const to = cut(k + 1);
+    for (let i = from + 1; i < to; i++) prefix[i] = prefix[from] ?? 0;
+    prefix[to] = (prefix[from] ?? 0) + widthIn(fontAt[from] ?? 0, collapsed.slice(from, to));
   }
   const breaks = length === 0 ? [] : breakPositions(collapsed);
+
+  /** `[start, end)` split where the font changes, each piece measured in its own font. */
+  const runsOf = (start: number, end: number): TextRun[] => {
+    const runs: TextRun[] = [];
+    let x = 0;
+    for (let from = start; from < end;) {
+      const font = fontAt[from] ?? 0;
+      let to = from + 1;
+      while (to < end && fontAt[to] === font) to++;
+      const text = collapsed.slice(from, to);
+      const width = widthIn(font, text);
+      runs.push({ text, font: chain[font] ?? chain[0] ?? 'Helvetica', x, width });
+      x += width;
+      from = to;
+    }
+    return runs;
+  };
+  const widthOfRange = (start: number, end: number): number =>
+    runsOf(start, end).reduce((sum, run) => sum + run.width, 0);
 
   /** The end of the text to draw for a line `[start, end)`: a trailing space is not drawn. */
   const drawnEnd = (end: number): number => (collapsed.charCodeAt(end - 1) === 32 ? end - 1 : end);
   const guess = (start: number, end: number): number =>
     (prefix[drawnEnd(end)] ?? 0) - (prefix[start] ?? 0);
-  const measure = (start: number, end: number): number =>
-    widthOf(collapsed.slice(start, drawnEnd(end)));
+  const measure = (start: number, end: number): number => widthOfRange(start, drawnEnd(end));
   const fits = (start: number, end: number): boolean => measure(start, end) <= maxWidth;
 
   /** The largest end in `[low, high]` that fits, given that `low` fits and `high` does not. */
@@ -203,16 +256,27 @@ function breakLines(
     }
 
     if (end < 0) {
-      // The first word is wider than the box: split it at the last character that fits.
-      const lastChar = lastWhere(start + 1, firstEnd, (index) => guess(start, index) <= guessLimit);
-      const guessEnd = Math.max(lastChar, start + 1);
-      if (fits(start, guessEnd) || guessEnd === start + 1) end = guessEnd;
-      else if (fits(start, start + 1)) end = narrow(start + 1, guessEnd, (i) => i, start);
-      else end = start + 1;
+      // The first word is wider than the box: split it after the last cluster that fits.
+      const first = cutIndex(start);
+      const lastCut = lastWhere(
+        first + 1,
+        cutIndex(firstEnd),
+        (k) => guess(start, cut(k)) <= guessLimit,
+      );
+      const guessCut = Math.max(lastCut, first + 1);
+      const guessEnd = cut(guessCut);
+      if (fits(start, guessEnd) || guessCut === first + 1) end = guessEnd;
+      else if (fits(start, cut(first + 1))) end = narrow(first + 1, guessCut, cut, start);
+      else end = cut(first + 1);
     }
 
-    const lineText = collapsed.slice(start, drawnEnd(end));
-    lines.push({ text: lineText, width: widthOf(lineText), y: lines.length * lineHeight });
+    const runs = runsOf(start, drawnEnd(end));
+    lines.push({
+      text: collapsed.slice(start, drawnEnd(end)),
+      width: runs.reduce((sum, run) => sum + run.width, 0),
+      y: lines.length * lineHeight,
+      runs,
+    });
     start = end;
   }
 
@@ -229,6 +293,7 @@ export function measureText(
   style: TextStyle,
   metrics: FontMetrics,
   cache: TextMeasureCache = new TextMeasureCache(),
+  fonts?: TextFonts,
 ): (width: number, widthMode: number) => { width: number; height: number } {
   assertTextSize(text);
   return (width, widthMode) => {
@@ -240,6 +305,7 @@ export function measureText(
       metrics,
       undefined,
       cache,
+      fonts && { chain: fonts.chain },
     );
     return { width: blockWidth, height };
   };

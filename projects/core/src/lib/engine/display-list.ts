@@ -1,6 +1,6 @@
 import { propsOf } from '../tree/node';
 import { toHex, type Color } from './color';
-import { fontFor, toWinAnsi } from './fonts';
+import { fontChain, fontFor, shapeText, type FontRegistry } from './fonts';
 import { fitImage } from './images';
 import type { Box } from './layout';
 import type { PageLayout, PlacedBox } from './paginate';
@@ -12,6 +12,10 @@ export interface DisplayListOptions {
   readonly metrics: FontMetrics;
   /** Receives the characters of the page number format that WinAnsi cannot show. */
   readonly warn?: (chars: string[]) => void;
+  /** Registered font faces, for a page number in a registered family. */
+  readonly fonts?: FontRegistry;
+  /** Receives the characters of the page number that no font in its family has. */
+  readonly warnMissing?: (chars: string[]) => void;
 }
 
 const DEFAULT_FORMAT = '{page} / {total}';
@@ -97,22 +101,24 @@ function drawBox(
 
   const ink = paint(style.color, opacity);
   if (box.text && ink) {
-    const font = fontFor(style);
     const lineHeight = style.fontSize * style.lineHeight;
     for (const textLine of box.text.lines) {
       const lineTop = contentTop + textLine.y;
       if (lineTop + lineHeight > limit + 1e-6) continue;
-      out.push({
-        op: 'text',
-        x: alignedX(contentLeft, contentWidth, textLine.width, style.textAlign),
-        y: lineTop,
-        text: textLine.text,
-        font,
-        size: style.fontSize,
-        ...ink,
-        underline: style.textDecoration === 'underline',
-        strike: style.textDecoration === 'line-through',
-      });
+      const lineLeft = alignedX(contentLeft, contentWidth, textLine.width, style.textAlign);
+      for (const run of textLine.runs) {
+        out.push({
+          op: 'text',
+          x: lineLeft + run.x,
+          y: lineTop,
+          text: run.text,
+          font: run.font,
+          size: style.fontSize,
+          ...ink,
+          underline: style.textDecoration === 'underline',
+          strike: style.textDecoration === 'line-through',
+        });
+      }
     }
   }
 
@@ -183,23 +189,40 @@ export function displayList(
       const filled = format
         .replaceAll('{page}', () => String(pageIndex + 1))
         .replaceAll('{total}', () => String(pageCount));
-      const text = toWinAnsi(filled, options.warn ?? (() => undefined));
-      const font = fontFor(style);
+      const chain = options.fonts ? fontChain(style, options.fonts) : [fontFor(style)];
+      const shaped = shapeText(filled, chain, options.metrics);
+      if (shaped.replaced.length > 0) options.warn?.([...shaped.replaced]);
+      if (shaped.missing.length > 0) options.warnMissing?.([...shaped.missing]);
+      // The format is short: one op per font change is enough, no line breaking.
+      const runs: { text: string; font: (typeof chain)[number]; width: number }[] = [];
+      for (let from = 0; from < shaped.text.length;) {
+        const index = shaped.fontAt[from] ?? 0;
+        let to = from + 1;
+        while (to < shaped.text.length && shaped.fontAt[to] === index) to++;
+        const text = shaped.text.slice(from, to);
+        const font = chain[index] ?? fontFor(style);
+        runs.push({ text, font, width: options.metrics.widthOf(text, font, style.fontSize) });
+        from = to;
+      }
       const left = box.padding.left + box.border.left;
       const top = box.padding.top + box.border.top;
       const contentWidth = Math.max(0, box.w - left - box.padding.right - box.border.right);
-      const width = options.metrics.widthOf(text, font, style.fontSize);
-      out.push({
-        op: 'text',
-        x: alignedX(x + left, contentWidth, width, style.textAlign),
-        y: y + top,
-        text,
-        font,
-        size: style.fontSize,
-        ...ink,
-        underline: style.textDecoration === 'underline',
-        strike: style.textDecoration === 'line-through',
-      });
+      const width = runs.reduce((sum, run) => sum + run.width, 0);
+      let runX = alignedX(x + left, contentWidth, width, style.textAlign);
+      for (const run of runs) {
+        out.push({
+          op: 'text',
+          x: runX,
+          y: y + top,
+          text: run.text,
+          font: run.font,
+          size: style.fontSize,
+          ...ink,
+          underline: style.textDecoration === 'underline',
+          strike: style.textDecoration === 'line-through',
+        });
+        runX += run.width;
+      }
     }
   }
   return out;

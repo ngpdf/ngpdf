@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createNode, type PdfNode } from '../tree/node';
+import { fontFor } from './fonts';
 import { parseLength, resolveStyles, ROOT_TEXT_STYLE } from './style';
 
 function el(tag: string, rawStyle: Record<string, string> = {}, children: PdfNode[] = []): PdfNode {
@@ -294,12 +295,12 @@ describe('resolveStyles property coverage', () => {
   });
 
   it('maps font-family keywords to the three standard families', () => {
-    expect(styleOf({ 'font-family': 'Courier New, monospace' }).fontFamily).toBe('Courier');
-    expect(styleOf({ 'font-family': 'ui-monospace' }).fontFamily).toBe('Courier');
-    expect(styleOf({ 'font-family': 'Times New Roman' }).fontFamily).toBe('Times');
-    expect(styleOf({ 'font-family': 'Georgia, serif' }).fontFamily).toBe('Times');
-    expect(styleOf({ 'font-family': 'sans-serif' }).fontFamily).toBe('Helvetica');
-    expect(styleOf({ 'font-family': 'Arial' }).fontFamily).toBe('Helvetica');
+    expect(fontFor(styleOf({ 'font-family': 'Courier New, monospace' }))).toBe('Courier');
+    expect(fontFor(styleOf({ 'font-family': 'ui-monospace' }))).toBe('Courier');
+    expect(fontFor(styleOf({ 'font-family': 'Times New Roman' }))).toBe('Times-Roman');
+    expect(fontFor(styleOf({ 'font-family': 'Georgia, serif' }))).toBe('Times-Roman');
+    expect(fontFor(styleOf({ 'font-family': 'sans-serif' }))).toBe('Helvetica');
+    expect(fontFor(styleOf({ 'font-family': 'Arial' }))).toBe('Helvetica');
   });
 
   it('resolves text properties', () => {
