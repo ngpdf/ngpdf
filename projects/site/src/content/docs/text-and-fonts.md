@@ -86,8 +86,8 @@ function providePdfFonts(fonts: readonly PdfFont[]): EnvironmentProviders;
 `font-family` is read as a list. Each character is drawn in the first font of the list that has it:
 
 - A registered family is used for the characters its font has.
-- A standard name in the list (`Helvetica`, `Arial`, `Times`, `serif`, `Courier`, `monospace` and the like) covers WinAnsi.
-- Names that are neither are skipped.
+- A standard name in the list covers WinAnsi. The names are, in any case: `Helvetica`, `Arial`, `sans-serif` and `system-ui` for Helvetica; `Times`, `Times New Roman`, `Times-Roman` and `serif` for Times; `Courier`, `Courier New`, `monospace` and `ui-monospace` for Courier.
+- Names that are neither are skipped, including web fonts such as `Open Sans` or `IBM Plex Mono` that you have not registered.
 - When the list has registered families but no standard name, a standard font is added at the end, chosen from the whole value as above. So WinAnsi characters a custom font lacks are still drawn.
 
 With `font-family: Inter, 'Noto Sans JP'`, Latin text is drawn in Inter, Japanese in Noto Sans JP, and a `€` that neither had would be drawn in Helvetica. Kerning applies within each font's run of text, not across two fonts.
