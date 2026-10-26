@@ -561,3 +561,124 @@ describe('page geometry', () => {
     expect([placed.x, placed.y]).toEqual([0, 0]);
   });
 });
+
+describe('paginatePage: text split across pages', () => {
+  // Without a page number, the content area is 769.89pt: 76 lines of 10pt and 9.89pt left over.
+  const AREA = A4_HEIGHT - 2 * PADDING;
+  const LINE = 10;
+
+  /** A text of `lines` lines, one word per line, each 10pt high. */
+  function paragraph(lines: number, style: Record<string, string> = {}): PdfNode {
+    const words = Array.from({ length: lines }, (_, i) => `w${String(i)}`).join(' ');
+    const node = el('pdf-text', { width: '25', 'font-size': '10', 'line-height': '1', ...style });
+    const run = createNode('text', '', words);
+    run.parent = node;
+    node.children.push(run);
+    return node;
+  }
+
+  /** A view that leaves `room` points of the content area below it. */
+  const filler = (room: number): PdfNode => el('pdf-view', { height: String(AREA - room) });
+
+  const textPieces = (laid: PageLayout): PlacedBox[] =>
+    laid.placed.filter((placed) => placed.box.node.tag === 'pdf-text');
+  const linesOn = (laid: PageLayout): string[] =>
+    textPieces(laid).flatMap((placed) => placed.box.text?.lines.map((line) => line.text) ?? []);
+
+  it('breaks a paragraph between lines, filling the page before the break', () => {
+    const pages = paginate(page([filler(35), paragraph(10)]));
+    expect(pages).toHaveLength(2);
+    expect(linesOn(pages[0]!)).toEqual(['w0', 'w1', 'w2']);
+    expect(linesOn(pages[1]!)).toEqual(['w3', 'w4', 'w5', 'w6', 'w7', 'w8', 'w9']);
+    expect(textPieces(pages[1]!)[0]!.y).toBeCloseTo(CONTENT_TOP, 3);
+    const pieces = textPieces(pages[0]!);
+    expect(pieces[0]!.y).toBeCloseTo(CONTENT_TOP + AREA - 35, 3);
+    expect(bottom(pieces.at(-1)!)).toBeCloseTo(CONTENT_TOP + AREA - 5, 3);
+  });
+
+  it('leaves at least orphans lines at the bottom of a page', () => {
+    const pages = paginate(page([filler(15), paragraph(10)]));
+    expect(linesOn(pages[0]!)).toEqual([]);
+    expect(linesOn(pages[1]!)).toHaveLength(10);
+    const three = paginate(page([filler(25), paragraph(10, { orphans: '3' })]));
+    expect(linesOn(three[0]!)).toEqual([]);
+  });
+
+  it('carries at least widows lines to the next page', () => {
+    const pages = paginate(page([filler(45), paragraph(5)]));
+    expect(linesOn(pages[0]!)).toEqual(['w0', 'w1', 'w2']);
+    expect(linesOn(pages[1]!)).toEqual(['w3', 'w4']);
+    const three = paginate(page([filler(45), paragraph(5, { widows: '3' })]));
+    expect(linesOn(three[0]!)).toEqual(['w0', 'w1']);
+  });
+
+  it('moves a text with fewer than orphans + widows lines whole', () => {
+    const pages = paginate(page([filler(25), paragraph(3)]));
+    expect(linesOn(pages[0]!)).toEqual([]);
+    expect(linesOn(pages[1]!)).toEqual(['w0', 'w1', 'w2']);
+  });
+
+  it('keeps a text whole with break-inside: avoid, a fixed height, or inside a row', () => {
+    for (const text of [
+      paragraph(10, { 'break-inside': 'avoid' }),
+      paragraph(10, { height: '100' }),
+      paragraph(10, { 'max-height': '200' }),
+    ]) {
+      const pages = paginate(page([filler(35), text]));
+      expect(linesOn(pages[0]!)).toEqual([]);
+      expect(linesOn(pages[1]!)).toHaveLength(10);
+    }
+    const inRow = el('pdf-view', { 'flex-direction': 'row' }, [paragraph(10)]);
+    const pages = paginate(page([filler(35), inRow]));
+    expect(pages[0]!.placed.map((placed) => placed.box.node.tag)).toEqual(['pdf-view']);
+  });
+
+  it('flows a text longer than a page over several pages without a warning', () => {
+    const warn = vi.fn<(message: string) => void>();
+    const pages = paginate(page([paragraph(200)]), warn);
+    expect(pages.map((laid) => linesOn(laid).length)).toEqual([76, 76, 48]);
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it('draws a text that fits exactly where it was laid out', () => {
+    const pages = paginate(page([filler(200), paragraph(10)]));
+    expect(pages).toHaveLength(1);
+    const pieces = textPieces(pages[0]!);
+    expect(pieces[0]!.y).toBeCloseTo(CONTENT_TOP + AREA - 200, 3);
+    const ys = pieces.flatMap((placed) =>
+      (placed.box.text?.lines ?? []).map((line) => placed.y + line.y),
+    );
+    ys.forEach((y, i) => {
+      expect(y).toBeCloseTo(ys[0]! + i * LINE, 3);
+    });
+  });
+
+  it('keeps padding and border with the first and last lines and slices the background', () => {
+    const boxed = { padding: '4', 'border-top': '1 solid black', 'background-color': '#eee' };
+    const pages = paginate(page([filler(47), paragraph(10, boxed)]));
+    // 47pt of room: 1pt border, 4pt padding and 4 lines.
+    expect(linesOn(pages[0]!)).toEqual(['w0', 'w1', 'w2', 'w3']);
+    expect(textPieces(pages[0]!)[0]!.y).toBeCloseTo(CONTENT_TOP + AREA - 47 + 5, 3);
+    expect(textPieces(pages[1]!)[0]!.y).toBeCloseTo(CONTENT_TOP, 3);
+    const backgrounds = pages.map((laid) =>
+      laid.decorations.filter((placed) => placed.box.node.tag === 'pdf-text'),
+    );
+    expect(backgrounds[0]).toHaveLength(1);
+    expect(backgrounds[0]![0]).toMatchObject({ sliceTop: false, sliceBottom: true });
+    expect(backgrounds[1]![0]).toMatchObject({ sliceTop: true, sliceBottom: false });
+    expect(backgrounds[1]![0]!.box.h).toBeCloseTo(6 * LINE + 4, 3);
+    // The pieces draw only text: the background and border belong to the sliced decoration.
+    for (const piece of [...textPieces(pages[0]!), ...textPieces(pages[1]!)]) {
+      expect(piece.box.style.backgroundColor).toBeNull();
+      expect(piece.box.style.borderWidth.top).toBe(0);
+    }
+  });
+
+  it('starts a new page before a split text with breakBefore', () => {
+    const text = paragraph(10);
+    text.owner = { pdfProps: () => ({ breakBefore: true }) };
+    const pages = paginate(page([el('pdf-view', { height: '10' }), text]));
+    expect(linesOn(pages[0]!)).toEqual([]);
+    expect(linesOn(pages[1]!)).toHaveLength(10);
+  });
+});

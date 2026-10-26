@@ -1,5 +1,6 @@
 import { propsOf, type PdfNode } from '../tree/node';
 import { layoutBox, type Box, type LayoutContext } from './layout';
+import type { TextBlock } from './text';
 import type { Edges, Length, ResolvedStyle } from './style';
 
 export interface PlacedBox {
@@ -126,6 +127,33 @@ function isWrapper(box: Box): boolean {
   );
 }
 
+/**
+ * A text that may break between lines: long enough to leave `orphans` lines before a break and
+ * `widows` after it, not kept whole with `break-inside: avoid`, and not of a fixed height.
+ */
+function isSplittable(box: Box): boolean {
+  const { style, text } = box;
+  return (
+    text !== undefined &&
+    text.lines.length >= style.orphans + style.widows &&
+    style.breakInside !== 'avoid' &&
+    style.height === 'auto' &&
+    style.maxHeight === 'auto'
+  );
+}
+
+/**
+ * The line groups a text splits into, as `[first, end)` line ranges: the first `orphans` lines,
+ * each line between, and the last `widows` lines. Units are never split, so a page break can only
+ * fall where both limits hold.
+ */
+function lineGroups(count: number, orphans: number, widows: number): [number, number][] {
+  const groups: [number, number][] = [[0, orphans]];
+  for (let line = orphans; line < count - widows; line++) groups.push([line, line + 1]);
+  groups.push([count - widows, count]);
+  return groups;
+}
+
 function isHeaderRow(node: PdfNode): boolean {
   return propsOf(node)['header'] === true;
 }
@@ -145,6 +173,10 @@ function collectUnits(content: Box, maxHeader: number, pageOpacity: number): Col
     header: Header | null,
     opacity: number,
   ): void => {
+    if (box.text && isSplittable(box)) {
+      visitText(box, box.text, x, top, header, opacity);
+      return;
+    }
     if (!isWrapper(box)) {
       units.push({ box, x, top, bottom: top + box.h, header, opacity });
       return;
@@ -185,6 +217,77 @@ function collectUnits(content: Box, maxHeader: number, pageOpacity: number): Col
       }
     }
     for (const child of children) visit(child, x + child.x, top + child.y, childHeader, inside);
+    wrapper.last = units.length - 1;
+  };
+
+  // A splittable text is a wrapper whose units are its line groups. The wrapper keeps the text's
+  // background and border, sliced per page like a column view's; each piece draws only its lines.
+  const visitText = (
+    box: Box,
+    text: TextBlock,
+    x: number,
+    top: number,
+    header: Header | null,
+    opacity: number,
+  ): void => {
+    const { node, style: boxStyle, w, h, padding, border } = box;
+    const decoration: Box = {
+      node,
+      style: boxStyle,
+      x: box.x,
+      y: box.y,
+      w,
+      h,
+      padding,
+      border,
+      children: [],
+    };
+    const wrapper: Wrapper = {
+      box: decoration,
+      x,
+      top,
+      opacity,
+      bottom: top + box.h,
+      first: units.length,
+      last: 0,
+    };
+    wrappers.push(wrapper);
+    const left = box.padding.left + box.border.left;
+    const right = box.padding.right + box.border.right;
+    const inner = top + box.padding.top + box.border.top;
+    const style: ResolvedStyle = {
+      ...box.style,
+      padding: ZERO_EDGES,
+      borderWidth: NO_BORDER,
+      backgroundColor: null,
+      breakBefore: false,
+    };
+    for (const [first, end] of lineGroups(text.lines.length, box.style.orphans, box.style.widows)) {
+      const lines = text.lines.slice(first, end);
+      const start = lines[0]?.y ?? 0;
+      const last = lines[lines.length - 1];
+      const h = last ? last.y + last.height - start : 0;
+      const piece: Box = {
+        ...box,
+        style,
+        x: 0,
+        y: 0,
+        w: Math.max(0, box.w - left - right),
+        h,
+        padding: NO_BORDER,
+        border: NO_BORDER,
+        text: { ...text, lines: lines.map((line) => ({ ...line, y: line.y - start })), height: h },
+        children: [],
+      };
+      units.push({
+        box: piece,
+        x: x + left,
+        top: inner + start,
+        bottom: inner + start + h,
+        header,
+        opacity,
+      });
+    }
     wrapper.last = units.length - 1;
   };
 
