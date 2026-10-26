@@ -69,6 +69,8 @@ describe('resolveStyles', () => {
       lineHeight: 1.2,
       textAlign: 'left',
       textDecoration: 'none',
+      orphans: 2,
+      widows: 2,
     });
   });
 
@@ -410,6 +412,29 @@ describe('resolveStyles property coverage', () => {
     expect(style.backgroundColor).toEqual(rgb(238, 238, 238));
     expect(style.borderRadius).toBe(3);
     expect(style.objectFit).toBe('cover');
+  });
+
+  it('reads orphans and widows as integers of at least 1, inherited, default 2', () => {
+    expect(styleOf({})).toMatchObject({ orphans: 2, widows: 2 });
+    expect(styleOf({ orphans: '3', widows: ' 1 ' })).toMatchObject({ orphans: 3, widows: 1 });
+    const text = el('pdf-text');
+    const view = el('pdf-view', { orphans: '4', widows: '5' }, [text]);
+    expect(resolveStyles(view).get(text)).toMatchObject({ orphans: 4, widows: 5 });
+    for (const value of ['0', '-1', '1.5', 'two']) {
+      expect(() => styleOf({ orphans: value })).toThrow(
+        `ngpdf: expected an integer of at least 1 in "${value}" for orphans`,
+      );
+    }
+  });
+
+  it('reads break-inside: avoid, not inherited', () => {
+    expect(styleOf({}).breakInside).toBe('auto');
+    expect(styleOf({ 'break-inside': 'avoid' }).breakInside).toBe('avoid');
+    expect(styleOf({ 'break-inside': 'avoid-page' }).breakInside).toBe('avoid');
+    expect(styleOf({ 'break-inside': 'auto' }).breakInside).toBe('auto');
+    const text = el('pdf-text');
+    const view = el('pdf-view', { 'break-inside': 'avoid' }, [text]);
+    expect(resolveStyles(view).get(text)?.breakInside).toBe('auto');
   });
 
   it('clamps opacity to 0..1', () => {
