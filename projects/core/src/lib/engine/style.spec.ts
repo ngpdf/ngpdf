@@ -436,7 +436,7 @@ describe('resolveStyles property coverage', () => {
     expect(() => styleOf({ border: '1 solid red blue' })).toThrow(/^ngpdf: too many values/);
   });
 
-  it('supports CSS border width keywords and rejects negative widths', () => {
+  it('supports CSS border width keywords', () => {
     expect(styleOf({ border: 'thin solid red' }).borderWidth.top).toBe(1);
     expect(styleOf({ 'border-top': 'medium solid red' }).borderWidth.top).toBe(3);
     expect(styleOf({ 'border-top': 'MEDIUM solid red' }).borderWidth.top).toBe(3);
@@ -449,6 +449,9 @@ describe('resolveStyles property coverage', () => {
     expect(styleOf({ 'border-right-width': 'medium' }).borderWidth.right).toBe(3);
     expect(styleOf({ 'border-right-width': 'Medium' }).borderWidth.right).toBe(3);
     expect(styleOf({ 'border-right-width': ' thin ' }).borderWidth.right).toBe(1);
+  });
+
+  it('rejects negative border widths', () => {
     expect(() => styleOf({ border: '-2 solid red' })).toThrow(
       'ngpdf: expected a non-negative length in "-2" on pdf-view',
     );

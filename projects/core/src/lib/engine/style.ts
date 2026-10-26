@@ -70,11 +70,11 @@ export interface BorderParts {
 export const MAX_NESTING = 64;
 
 const BLACK: Color = Object.freeze({ r: 0, g: 0, b: 0, a: 1 });
-const BORDER_WIDTHS: Readonly<Record<string, number>> = Object.freeze({
-  thin: 1,
-  medium: 3,
-  thick: 5,
-});
+const BORDER_WIDTHS: ReadonlyMap<string, number> = new Map([
+  ['thin', 1],
+  ['medium', 3],
+  ['thick', 5],
+]);
 
 export const ROOT_TEXT_STYLE: TextStyle = Object.freeze({
   color: BLACK,
@@ -198,12 +198,12 @@ function parsePoints(value: string, tag?: string): number {
 
 function parseBorderWidth(value: string, tag?: string): number {
   const keyword = value.trim().toLowerCase();
-  const keywordWidth = BORDER_WIDTHS[keyword];
-  if (Object.hasOwn(BORDER_WIDTHS, keyword) && keywordWidth !== undefined) return keywordWidth;
+  const keywordWidth = BORDER_WIDTHS.get(keyword);
+  if (keywordWidth !== undefined) return keywordWidth;
   return rejectNegative(parsePoints(value, tag), value, tag);
 }
 
-/** Font sizes and padding can't go below 0 in CSS; margins can. */
+/** Font sizes, padding, and border widths can't go below 0 in CSS; margins can. */
 function rejectNegative<T extends Length>(length: T, value: string, tag?: string): T {
   const amount = typeof length === 'object' ? length.percent : length;
   if (typeof amount === 'number' && amount < 0) {
@@ -248,7 +248,7 @@ export function parseBorder(value: string, tag?: string): BorderParts {
       code === 46 ||
       code === 43 ||
       code === 45 ||
-      Object.hasOwn(BORDER_WIDTHS, token.toLowerCase())
+      BORDER_WIDTHS.has(token.toLowerCase())
     ) {
       width = parseBorderWidth(token, tag);
     } else if (BORDER_STYLES.has(token)) {

@@ -84,6 +84,5 @@ These items are in the [v0.2 roadmap](https://github.com/ngpdf/ngpdf/blob/main/d
 
 - A style parser that keeps values containing `;`.
 - Keywords matched case-insensitively, with one policy for unknown keywords.
-- `thin`, `medium` and `thick` border widths, and negative border widths rejected.
 
 Ideas and bug reports are welcome on [GitHub issues](https://github.com/ngpdf/ngpdf/issues).
