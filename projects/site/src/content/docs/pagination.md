@@ -103,7 +103,7 @@ Give a `pdf-view` that is a direct child of `pdf-page` the `fixed` input to draw
 - Bottom views sit above the `pdf-page-number`, which keeps the very bottom.
 - A fixed view is never a pagination unit: it is not split, moved or clipped, and `breakBefore` inside it does nothing.
 - Fixed views that leave no room for content fail the render with `ngpdf: fixed views leave no room for content on pdf-page`.
-- A `fixed` view nested deeper than a direct child of `pdf-page` is laid out in the flow as an ordinary view and logs `ngpdf: a fixed pdf-view must be a direct child of pdf-page` in development mode.
+- A `fixed` view nested deeper than a direct child of `pdf-page` is laid out as an ordinary view where it is, and logs `ngpdf: a fixed pdf-view must be a direct child of pdf-page` in development mode: inside the flow it stays in the flow, and inside a fixed view it repeats with that view.
 - The content of a fixed view is the same on every sheet. Page numbers inside a fixed view are planned.
 
 ## Page numbers
