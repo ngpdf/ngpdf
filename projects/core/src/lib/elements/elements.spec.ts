@@ -9,7 +9,7 @@ import {
 } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { afterEach, beforeAll, describe, expect, expectTypeOf, it } from 'vitest';
-import { elementChildren, propsOf, type PdfNode } from '../tree/node';
+import { elementChildren, propsOf, textContent, type PdfNode } from '../tree/node';
 import { PdfRendererFactory } from '../tree/pdf-renderer-factory';
 import { PDF_ELEMENTS, type PdfDocument, type PdfTable, type TableColumn } from '.';
 import type { PageSize } from './page';
@@ -57,6 +57,31 @@ class BoundDocument {
   readonly blob = BLOB;
 }
 
+@Component({
+  selector: 'pdf-test-spans',
+  imports: [PDF_ELEMENTS],
+  template: `
+    <pdf-document>
+      <pdf-text
+        >Total: <pdf-span style="font-weight: bold">{{ total }}</pdf-span>
+        @if (late) {
+          <pdf-span>, late</pdf-span>
+        }
+        @for (tag of tags; track tag) {
+          <pdf-span
+            ><pdf-span> #{{ tag }}</pdf-span></pdf-span
+          >
+        }
+      </pdf-text>
+    </pdf-document>
+  `,
+})
+class SpansDocument {
+  readonly total = 42;
+  readonly late = true;
+  readonly tags = ['a', 'b'];
+}
+
 function at<T>(items: readonly T[], index: number): T {
   const item = items[index];
   if (item === undefined) throw new Error(`no item at ${String(index)}`);
@@ -75,7 +100,9 @@ describe('pdf-* elements', () => {
     rendered = [];
   });
 
-  function render(component: typeof DefaultsDocument | typeof BoundDocument): PdfNode {
+  function render(
+    component: typeof DefaultsDocument | typeof BoundDocument | typeof SpansDocument,
+  ): PdfNode {
     const environmentInjector = createEnvironmentInjector(
       [{ provide: RendererFactory2, useFactory: () => new PdfRendererFactory() }],
       TestBed.inject(EnvironmentInjector),
@@ -130,6 +157,18 @@ describe('pdf-* elements', () => {
     const row = at(elementChildren(table), 0);
     expect(propsOf(row)['header']).toBe(true);
     expect(propsOf(at(elementChildren(row), 0))).toEqual({ span: 2 });
+  });
+
+  it('renders pdf-span with interpolation, @if and @for inside a pdf-text', () => {
+    const text = at(elementChildren(render(SpansDocument)), 0);
+    const spans = elementChildren(text);
+    expect(spans.map((span) => span.tag)).toEqual(['pdf-span', 'pdf-span', 'pdf-span', 'pdf-span']);
+    for (const span of spans) {
+      expect(span.owner).not.toBeNull();
+      expect(propsOf(span)).toEqual({});
+    }
+    expect(at(spans, 0).rawStyle).toEqual({ 'font-weight': 'bold' });
+    expect(textContent(text)).toBe('Total: 42, late #a #b');
   });
 });
 

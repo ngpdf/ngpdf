@@ -4,6 +4,7 @@ import { PdfImage } from './image';
 import { PdfPage } from './page';
 import { PdfPageNumber } from './page-number';
 import { PdfRow } from './row';
+import { PdfSpan } from './span';
 import { PdfTable } from './table';
 import { PdfText } from './text';
 import { PdfView } from './view';
@@ -15,6 +16,7 @@ export {
   PdfPage,
   PdfPageNumber,
   PdfRow,
+  PdfSpan,
   PdfTable,
   PdfText,
   PdfView,
@@ -27,6 +29,7 @@ export const PDF_ELEMENTS = [
   PdfPage,
   PdfView,
   PdfText,
+  PdfSpan,
   PdfImage,
   PdfTable,
   PdfRow,

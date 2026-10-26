@@ -7,6 +7,7 @@ export {
   PdfPage,
   PdfPageNumber,
   PdfRow,
+  PdfSpan,
   PdfTable,
   PdfText,
   PdfView,
