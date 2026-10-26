@@ -1,3 +1,10 @@
+Noto Sans: Copyright 2015 Google LLC. All Rights Reserved.
+Noto Sans CJK JP: © 2014-2021 Adobe (http://www.adobe.com/).
+Inter: Copyright 2016 The Inter Project Authors.
+
+These notices are copied from each font's name table. The subsets in this folder are Modified
+Versions under the license below.
+
 SIL OPEN FONT LICENSE Version 1.1 - 26 February 2007
 -----------------------------------------------------------
 

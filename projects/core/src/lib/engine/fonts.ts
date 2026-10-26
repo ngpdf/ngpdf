@@ -22,6 +22,23 @@ function standardFamilyOf(name: string): StandardFamily | undefined {
   return undefined;
 }
 
+// In a list with a registered family, only these exact names stand for a standard font, so a
+// web-font name such as "Open Sans" or "IBM Plex Mono" is skipped rather than read as Helvetica.
+const STANDARD_NAMES: ReadonlyMap<string, StandardFamily> = new Map([
+  ['helvetica', 'Helvetica'],
+  ['arial', 'Helvetica'],
+  ['sans-serif', 'Helvetica'],
+  ['system-ui', 'Helvetica'],
+  ['times', 'Times'],
+  ['times new roman', 'Times'],
+  ['times-roman', 'Times'],
+  ['serif', 'Times'],
+  ['courier', 'Courier'],
+  ['courier new', 'Courier'],
+  ['monospace', 'Courier'],
+  ['ui-monospace', 'Courier'],
+]);
+
 function standardFont(family: StandardFamily, style: FaceStyle): StandardFont {
   const index = (style.fontWeight === 'bold' ? 1 : 0) + (style.fontStyle === 'italic' ? 2 : 0);
   return FONT_NAMES[family][index] as StandardFont;
@@ -43,8 +60,6 @@ export interface RegisteredFace {
 
 /** Registered faces by lower-cased family name. */
 export type FontRegistry = ReadonlyMap<string, readonly RegisteredFace[]>;
-
-export const NO_FONTS: FontRegistry = new Map();
 
 /** The names in a CSS `font-family` list, unquoted, in order. Splitting is linear. */
 export function parseFontFamily(value: string): string[] {
@@ -109,7 +124,7 @@ export function fontChain(
   const chain: FontName[] = [];
   for (const name of names) {
     const faces = fonts.get(name.toLowerCase());
-    const standard = faces ? undefined : standardFamilyOf(name);
+    const standard = faces ? undefined : STANDARD_NAMES.get(name.toLowerCase());
     const font = faces
       ? faceOf(faces, name, style, warn)
       : standard && standardFont(standard, style);

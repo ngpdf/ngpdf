@@ -128,6 +128,15 @@ describe('fontChain', () => {
     expect(fontChain(textStyle('Roboto, Inter, Times'), INTER)).toEqual(['font:0', 'Times-Roman']);
   });
 
+  it('skips unregistered web-font names that only contain a generic word', () => {
+    expect(fontChain(textStyle("'Open Sans', Inter, sans-serif"), INTER)).toEqual([
+      'font:0',
+      'Helvetica',
+    ]);
+    // The closing standard font still reads the whole value, as it always has.
+    expect(fontChain(textStyle("'IBM Plex Mono', Inter"), INTER)).toEqual(['font:0', 'Courier']);
+  });
+
   it('ends with a standard font when the list names none, for characters in WinAnsi', () => {
     expect(fontChain(textStyle('Inter'), INTER)).toEqual(['font:0', 'Helvetica']);
     expect(fontChain(textStyle('Inter', 'bold'), INTER)).toEqual(['font:1', 'Helvetica-Bold']);

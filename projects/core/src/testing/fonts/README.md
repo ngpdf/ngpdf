@@ -1,12 +1,14 @@
 # Test fonts
 
-Subsets of OFL-licensed fonts, used by the engine specs. The license is in `OFL.txt`.
+Subsets of OFL-licensed fonts, used by the specs and the demo. The license and the copyright
+notices are in `OFL.txt`.
 
-| File                                          | From                      | Subset                                                                                                   |
-| --------------------------------------------- | ------------------------- | -------------------------------------------------------------------------------------------------------- |
-| `noto-sans-regular.ttf`, `noto-sans-bold.ttf` | Noto Sans, © Google       | Latin, combining marks, Greek, Cyrillic, punctuation; `kern`, `liga`, `ccmp`, `mark`, `mkmk`; no hinting |
-| `noto-sans-jp-subset.otf`                     | Noto Sans CJK JP, © Adobe | 日本語の文字テスト and a space                                                                           |
-| `noto-sans-basic.woff2`                       | Noto Sans, © Google       | printable ASCII, WOFF2                                                                                   |
+| File                                          | From                               | Subset                                                                                                   |
+| --------------------------------------------- | ---------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `noto-sans-regular.ttf`, `noto-sans-bold.ttf` | Noto Sans, © Google                | Latin, combining marks, Greek, Cyrillic, punctuation; `kern`, `liga`, `ccmp`, `mark`, `mkmk`; no hinting |
+| `noto-sans-jp-subset.ttf`                     | Noto Sans CJK JP, © Adobe          | 日本語の文字テスト and a space; TrueType outlines                                                        |
+| `inter-basic.otf`                             | Inter, © The Inter Project Authors | printable ASCII; CFF outlines                                                                            |
+| `noto-sans-basic.woff2`                       | Noto Sans, © Google                | printable ASCII, WOFF2                                                                                   |
 
 Made with fontTools' `pyftsubset` in a `python:3.12-slim` container, for example:
 
