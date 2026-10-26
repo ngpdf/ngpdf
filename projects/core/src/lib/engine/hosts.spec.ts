@@ -37,6 +37,15 @@ describe('dissolveHosts', () => {
     expect(out.parent).toBeNull();
   });
 
+  it('keeps pdf-spans and dissolves a component that wraps one inside a pdf-text', () => {
+    const span = el('pdf-span', [createNode('text', '', 'bold')]);
+    const text = el('pdf-text', [el('app-amount', [span])]);
+    const document = el('pdf-document', [el('pdf-page', [text])]);
+    const outText = dissolveHosts(document, vi.fn()).children[0]!.children[0]!;
+    expect(tags(outText)).toEqual(['pdf-span']);
+    expect(tags(outText.children[0]!)).toEqual(['#text']);
+  });
+
   it('leaves the input tree unchanged', () => {
     const page = el('pdf-page');
     const host = el('app-cover', [page]);

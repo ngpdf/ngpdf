@@ -562,6 +562,29 @@ function checkImageChildren(node: PdfNode): void {
   if (child) fail(`pdf-image cannot have children (found <${child.tag}>)`);
 }
 
+const INLINE = new Set(['pdf-text', 'pdf-span']);
+// A pdf-span is part of a line: only what changes how its characters are drawn applies to it.
+const SPAN_PROPERTIES = new Set([
+  'color',
+  'font-family',
+  'font-size',
+  'font-weight',
+  'font-style',
+  'text-decoration',
+]);
+
+function checkInline(node: PdfNode, warn: Warn): void {
+  const inText = INLINE.has(node.parent?.tag ?? '');
+  if (node.tag === 'pdf-span') {
+    if (!inText) fail('pdf-span must be inside a pdf-text');
+    for (const property of Object.keys(node.rawStyle)) {
+      if (!SPAN_PROPERTIES.has(property)) warn(`ngpdf: ${property} has no effect on pdf-span`);
+    }
+  } else if (node.tag === 'pdf-text' && inText) {
+    warn('ngpdf: a pdf-text inside a pdf-text is drawn in the outer style; use pdf-span');
+  }
+}
+
 /**
  * Resolves every element under `root`; text and comment nodes get no entry. Warnings (a border
  * style drawn solid) go to `warn`, which the caller dedupes and prints in dev mode only. Runs
@@ -577,6 +600,7 @@ export function resolveStyles(
   for (let item = stack.pop(); item; item = stack.pop()) {
     if (item.depth > MAX_NESTING) fail(`nesting deeper than ${String(MAX_NESTING)}`);
     checkImageChildren(item.node);
+    checkInline(item.node, warn);
     const style = resolveOne(item.node, item.inherited, warn);
     result.set(item.node, style);
     const inherited = textPartOf(style);

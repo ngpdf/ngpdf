@@ -111,6 +111,27 @@ describe('renderDocument', () => {
     expect(labels).toEqual(['1/2', '2/2']);
   });
 
+  it('draws the text of pdf-spans, also inside a component host, in their own styles', async () => {
+    const writer = recordingWriter();
+    const span = el('pdf-span', { 'font-weight': 'bold' }, [createNode('text', '', '42')]);
+    const paragraph = el('pdf-text', {}, [
+      createNode('text', '', 'Total: '),
+      el('app-amount', {}, [span]),
+    ]);
+    paragraph.children[0]!.parent = paragraph;
+    await renderDocument(host({}, [el('pdf-page', {}, [paragraph], { size: 'A4' })]), {
+      writer,
+      dev: false,
+    });
+    const ops = writer.recorded[0]!.pages[0]!.ops.flatMap((op) =>
+      op.op === 'text' ? [[op.text, op.font]] : [],
+    );
+    expect(ops).toEqual([
+      ['Total: ', 'Helvetica'],
+      ['42', 'Helvetica-Bold'],
+    ]);
+  });
+
   it('rejects a pdf-image with children before fetching it, naming the element', async () => {
     const fetchFn = vi.fn(() => Promise.reject(new TypeError('Failed to fetch')));
     vi.stubGlobal('fetch', fetchFn);
@@ -408,6 +429,18 @@ describe('renderDocument with fonts', () => {
     expect(cjk!.x).toBeCloseTo(latin!.x + real.widthOf('Zoë ', 'font:0', 10), 6);
     // Fallback fonts sit on one baseline, not at one top.
     expect(cjk!.y + real.ascent('font:2', 10)).toBeCloseTo(latin!.y + real.ascent('font:0', 10), 6);
+  });
+
+  it('loads and draws a family named only on a pdf-span', async () => {
+    const writer = await fontWriter();
+    const span = el('pdf-span', { 'font-family': 'Noto Sans' }, [createNode('text', '', 'Łódź')]);
+    const paragraph = el('pdf-text', {}, [createNode('text', '', 'City: '), span]);
+    paragraph.children[0]!.parent = paragraph;
+    await renderDocument(onePage(paragraph), { writer, dev: false, fonts });
+    expect(textOps(writer).map((op) => [op.text, op.font])).toEqual([
+      ['City: ', 'Helvetica'],
+      ['Łódź', 'font:0'],
+    ]);
   });
 
   it('picks the bold face for bold text', async () => {
