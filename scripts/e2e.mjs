@@ -37,6 +37,7 @@ const DOCUMENTS = [
   },
   { name: 'span-sample', pages: 1, contains: ['#1024', '12 days overdue', 'Łódź'] },
   { name: 'article-sample', pages: 3, contains: ['Field notes', 'Page 3 of 3'] },
+  { name: 'fixed-sample', pages: 3, contains: ['Stock count', 'Sheet 3 of 3', 'SKU-1069'] },
 ];
 
 const update = process.argv.includes('--update');
