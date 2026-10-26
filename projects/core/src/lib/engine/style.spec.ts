@@ -462,6 +462,7 @@ describe('resolveStyles property coverage', () => {
     expect(styleOf({ 'border-right-width': 'medium' }).borderWidth.right).toBe(3);
     expect(styleOf({ 'border-right-width': 'Medium' }).borderWidth.right).toBe(3);
     expect(styleOf({ 'border-right-width': ' thin ' }).borderWidth.right).toBe(1);
+    expect(() => styleOf({ 'border-right-width': '\u00a0thin' })).toThrow(/^ngpdf: /);
   });
 
   it('rejects negative border widths', () => {
