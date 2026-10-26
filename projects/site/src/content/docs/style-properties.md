@@ -29,6 +29,8 @@ All text properties are inherited by child elements.
 | `text-align` | `left`, `center`, `right` | `left` |
 | `text-decoration` | `none`, `underline`, `line-through` | `none` |
 
+A `pdf-span` takes `color`, `font-family`, `font-size`, `font-weight`, `font-style` and `text-decoration`; `line-height` and `text-align` come from its `pdf-text`. See [Styled runs](/docs/text-and-fonts#styled-runs-pdf-span).
+
 Without a registered family in the list: `font-family` contains `courier` or `mono`: Courier. Contains `times`, or `serif` without `sans`: Times. Otherwise Helvetica. With one, each character takes the first font in the list that has it. See [Text and fonts](/docs/text-and-fonts).
 
 ## Flexbox
@@ -110,7 +112,8 @@ Some styles are ignored in specific places:
 - `width`, `height`, the `min-`/`max-` sizes and `margin` on a `pdf-page`;
 - horizontal padding, left and right borders, margins, `justify-content`, `flex-direction` and `gap` on a `pdf-row` inside a table;
 - margins, `min-width` and `max-width` on a `pdf-cell` inside a table;
-- position and size styles other than `height` on `pdf-page-number`.
+- position and size styles other than `height` on `pdf-page-number`;
+- everything except the six text properties above on a `pdf-span` (with a warning).
 
 ## Throws
 

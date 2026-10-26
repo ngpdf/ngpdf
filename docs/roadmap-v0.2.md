@@ -15,8 +15,6 @@ it does not affect a correct document. Items that change behaviour need a design
   XObject) per faded box.
 - **Half-leading.** Text sits at the top of its line box; CSS splits the extra line height above
   and below the text.
-- **Nested `pdf-text` styles.** A `pdf-text` inside a `pdf-text` is flattened to its text, so
-  inline runs (one bold word in a sentence) cannot have their own style.
 - **Content-sized table columns** (`auto` columns measured from their cells).
 - **A positioned page number.** `pdf-page-number` always sits at the bottom of the content area,
   across its width; other position styles are ignored.

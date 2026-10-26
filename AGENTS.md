@@ -86,9 +86,9 @@ The site (`projects/site`) is a prerendered Angular app. Its docs are the Markdo
 
 ## Product rules
 
-- **Selectors:** `pdf-document`, `pdf-page`, `pdf-view`, `pdf-text`, `pdf-image`, `pdf-table`,
-  `pdf-row`, `pdf-cell`, `pdf-page-number`. The `pdf-` prefix is mandatory: `table`, `image` and
-  `text` exist in HTML and SVG.
+- **Selectors:** `pdf-document`, `pdf-page`, `pdf-view`, `pdf-text`, `pdf-span`, `pdf-image`,
+  `pdf-table`, `pdf-row`, `pdf-cell`, `pdf-page-number`. The `pdf-` prefix is mandatory: `table`,
+  `image` and `text` exist in HTML and SVG.
 - **Units:**
   - a bare number and `pt` are points;
   - 1in = 72pt, 1cm = 72/2.54pt, 1mm = 72/25.4pt;
@@ -125,6 +125,9 @@ The site (`projects/site`) is a prerendered Angular app. Its docs are the Markdo
   - Wrapper backgrounds and borders are sliced per page.
 - **Text wrapping:** text wraps at Unicode line-break opportunities. A word wider than its box breaks
   at the box edge.
+- **Styled runs:** a `pdf-span` inside a `pdf-text` changes only `color`, `font-family`,
+  `font-size`, `font-weight`, `font-style` and `text-decoration`. The paragraph breaks as one text,
+  and runs of different sizes share a baseline. A `pdf-span` outside a `pdf-text` throws.
 - **Images:**
   - Formats are PNG and JPEG, from a data URL, an http(s) URL, a `Blob` or an `ArrayBuffer`.
   - `object-fit` is `contain` (default) or `cover`.
