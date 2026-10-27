@@ -374,7 +374,9 @@ describe('auto table columns', () => {
 
   it('measures an auto column without the width a cell style sets', () => {
     const root = table(['auto', '1fr'], [[cell('ab', { width: '500' }), cell('x')]]);
-    expect(widthsOf(lay(root, 300))[0]).toBeLessThan(one('ab') + 0.01);
+    const [auto] = widthsOf(lay(root, 300));
+    expect(auto).toBeGreaterThanOrEqual(one('ab'));
+    expect(auto).toBeLessThan(one('ab') + 0.01);
   });
 
   it('ignores spanning cells when sizing an auto column', () => {
