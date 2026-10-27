@@ -59,7 +59,6 @@ These items are in the [v0.2 roadmap](https://github.com/ngpdf/ngpdf/blob/main/d
 - Fill the remaining page height.
 - Group opacity, so a faded view is composited as one.
 - Half-leading: extra line height split above and below the text, as in CSS.
-- Content-sized table columns (`auto`).
 - Rounded borders that follow `border-radius`.
 - Table headers: a warning or a fix when a header is dropped or too tall to repeat, and `breakBefore` kept on header rows.
 

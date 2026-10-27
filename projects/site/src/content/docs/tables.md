@@ -1,6 +1,6 @@
 ---
 title: Tables
-description: Build tables with pdf-table, pdf-row and pdf-cell, size columns in points, fr or percent, merge cells with span and repeat header rows on each page.
+description: Build tables with pdf-table, pdf-row and pdf-cell, size columns in points, fr, percent or to their content, merge cells with span and repeat header rows on each page.
 section: Guide
 order: 5
 ---
@@ -73,16 +73,31 @@ export class ExpensesDocument {
 | `64` | a fixed width in points |
 | `'15%'` | a percentage of the table's content width |
 | `'1fr'` | a share of the width that is left |
+| `'auto'` | the widest content of its cells, on one line |
 
 Widths are resolved in this order:
 
 1. Fixed columns take their width.
 2. Percentage columns take their share of the table's content width (its width minus its own padding and borders).
-3. What is left is split among the `fr` columns in proportion to their numbers.
+3. `auto` columns take the width of their widest cell content laid out on one line, the cell's padding and border included.
+4. What is left is split among the `fr` columns in proportion to their numbers.
 
-If the fixed and percentage columns already take the whole width or more, the `fr` columns get 0. The table does not shrink columns to fit. Points are numbers, not strings. A negative amount, or a string that is not `Nfr` or `N%` (`'64'` included), throws `ngpdf: invalid column "<value>" on pdf-table`.
+If the fixed and percentage columns already take the whole width or more, the `auto` and `fr` columns get 0. If the `auto` columns do not fit in what is left, they shrink in proportion to their widths until they do, their text wraps, and the `fr` columns get 0. The table never shrinks fixed or percentage columns to fit. Points are numbers, not strings. A negative amount, or a string that is not `Nfr` or `N%` (`'64'` included), throws `ngpdf: invalid column "<value>" on pdf-table`.
 
-When you declare the columns in the class, type them as `readonly TableColumn[]` (or use `as const`) so the strings keep their `fr`/`%` literal types. Columns sized from their content (`auto`) are planned for v0.2.
+When you declare the columns in the class, type them as `readonly TableColumn[]` (or use `as const`) so the strings keep their `fr`/`%` literal types. 
+
+### Auto columns
+
+An `auto` column fits short values such as codes, dates and totals without wrapping:
+
+```html
+<pdf-table [columns]="['auto', '1fr', 'auto']">…</pdf-table>
+```
+
+- Every row is measured, so the widest value decides, wherever it is. Only cells in `auto` columns are measured, so tables without them do no extra work.
+- A cell that spans several columns does not size an `auto` column.
+- An `auto` column with no content in any row is 0 wide.
+- For long text that should wrap, prefer an `fr` column: several long `auto` columns that do not fit shrink in proportion, not to a balance between them.
 
 ## Cells and span
 

@@ -105,7 +105,7 @@ A table with declared columns.
 
 | Input | Type | Default | Description |
 | --- | --- | --- | --- |
-| `columns` | `readonly TableColumn[]` | required | One entry per column: a number of points, `` `${number}fr` `` or `` `${number}%` ``. |
+| `columns` | `readonly TableColumn[]` | required | One entry per column: a number of points, `` `${number}fr` ``, `` `${number}%` `` or `'auto'`. See [Columns](/docs/tables#columns). |
 
 `TableColumn` is an exported type:
 

@@ -109,11 +109,11 @@ The site (`projects/site`) is a prerendered Angular app. Its docs are the Markdo
   - Only the faces of families a document names are loaded, so an unused broken font never fails
     a render.
 - **Tables:**
-  - Columns are declared on the table: `[columns]` with points, `'Nfr'` or `'N%'`.
-  - Column widths are resolved in this order: fixed widths first, then percentages, then `fr`
-    shares of what is left.
+  - Columns are declared on the table: `[columns]` with points, `'Nfr'`, `'N%'` or `'auto'`.
+  - Column widths are resolved in this order: fixed widths first, then percentages, then `auto`
+    columns at their widest one-line cell content (shrunk in proportion if they overflow), then
+    `fr` shares of what is left. Spanning cells don't size `auto` columns.
   - A `pdf-cell` takes its column's width by position, and `span` merges columns.
-  - Content-sized columns are v0.2.
 - **Pagination:**
   - Units are the children of a page, at any depth through column `pdf-view`s and tables. A table
     yields its rows as units. A row `pdf-view` is one unit.
