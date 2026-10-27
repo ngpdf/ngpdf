@@ -205,7 +205,7 @@ function parsePoints(value: string, tag?: string): number {
 }
 
 function parseBorderWidth(value: string, tag?: string): number {
-  const keyword = value.replace(/^[ \t\n\f\r]+|[ \t\n\f\r]+$/g, '').toLowerCase();
+  const keyword = value.trim().toLowerCase();
   const keywordWidth = BORDER_WIDTHS.get(keyword);
   if (keywordWidth !== undefined) return keywordWidth;
   return rejectNegative(parsePoints(value, tag), value, tag);
