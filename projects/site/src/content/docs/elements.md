@@ -137,10 +137,10 @@ The cell's width comes from its columns. Margins, `min-width` and `max-width` on
 
 ## pdf-page-number
 
-The sheet number, at the bottom of the content area of every sheet of its page.
+The sheet number. As a direct child of `pdf-page`, it sits at the bottom of the content area of every sheet; anywhere else, it is laid out where it is and shows the number of the sheet it is drawn on.
 
 | Input | Type | Default | Description |
 | --- | --- | --- | --- |
 | `format` | `string` | `'{page} / {total}'` | `{page}` is replaced with the sheet number and `{total}` with the number of sheets in the document. |
 
-It must be a direct child of `pdf-page`. It is right-aligned unless it or an ancestor sets `text-align`, and it reserves one line of height on every sheet. Content inside it is ignored. See [Pagination](/docs/pagination#page-numbers).
+As a direct child of `pdf-page`, it is right-aligned unless it or an ancestor sets `text-align`, and it reserves one line of height on every sheet. Elsewhere, for example in a [fixed header](/docs/pagination#fixed-headers-and-footers), its box is measured with three-digit numbers and the text is aligned in it by `text-align`. Content inside it is ignored. See [Pagination](/docs/pagination#page-numbers).

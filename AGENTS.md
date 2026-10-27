@@ -122,7 +122,9 @@ The site (`projects/site`) is a prerendered Angular app. Its docs are the Markdo
     A short text, `break-inside: avoid`, a fixed `height` or a `max-height` keeps it one unit.
   - A `header` row repeats at the top of every page its table runs onto.
   - `breakBefore` starts a new page.
-  - `pdf-page-number` reserves its height at the bottom of the content area.
+  - `pdf-page-number` as a direct child of `pdf-page` reserves its height at the bottom of the
+    content area. Anywhere else it is a one-line leaf, measured with three-digit numbers and drawn
+    with the numbers of the sheet it lands on.
   - A `pdf-view` with `fixed="top"` or `fixed="bottom"`, a direct child of `pdf-page`, is laid
     out once and drawn on every sheet; the flow gets the space between them. Bottom views sit
     above the page number.

@@ -35,7 +35,6 @@ ngpdf v0.1 covers documents built from text, tables, boxes and images. This page
 
 ### Pagination
 
-- `pdf-page-number` always sits at the bottom of the content area.
 - A unit taller than a page (a row, or a `pdf-view` in a column) is clipped to its page. So is a `pdf-text` that stays one unit: one inside a row, or one with `break-inside: avoid`, a fixed `height` or `max-height`, or fewer than `orphans + widows` lines. Other text breaks between lines instead.
 
 ### Images
@@ -61,7 +60,6 @@ These items are in the [v0.2 roadmap](https://github.com/ngpdf/ngpdf/blob/main/d
 - Group opacity, so a faded view is composited as one.
 - Half-leading: extra line height split above and below the text, as in CSS.
 - Content-sized table columns (`auto`).
-- A positioned page number.
 - Rounded borders that follow `border-radius`.
 - Table headers: a warning or a fix when a header is dropped or too tall to repeat, and `breakBefore` kept on header rows.
 

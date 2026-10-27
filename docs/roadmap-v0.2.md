@@ -16,8 +16,6 @@ it does not affect a correct document. Items that change behaviour need a design
 - **Half-leading.** Text sits at the top of its line box; CSS splits the extra line height above
   and below the text.
 - **Content-sized table columns** (`auto` columns measured from their cells).
-- **A positioned page number.** `pdf-page-number` always sits at the bottom of the content area,
-  across its width; other position styles are ignored.
 - **Rounded borders.** `border-radius` together with borders draws square border lines whose
   corners poke out of the rounded background.
 - **A clipped border line** of a unit taller than a page can overshoot the cut by half its width.

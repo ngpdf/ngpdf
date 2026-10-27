@@ -209,7 +209,6 @@ Some problems still produce a PDF. ngpdf collects them during the render and pri
 | `ngpdf: ignored inside tables: <list>` | Row or cell styles that tables do not use. See [Tables](/docs/tables#padding-and-borders). |
 | `ngpdf: styles on <tag> are ignored; style a pdf-* element inside it` | Styles on a component host. See [Components in documents](/docs/components-in-documents#hosts-are-transparent). |
 | `ngpdf: border style "<style>" is not supported; drawing solid` | `dashed`, `dotted` and other styles are drawn solid. |
-| `ngpdf: pdf-page-number must be a direct child of pdf-page` | A nested page number, which is not drawn. |
 | `ngpdf: a fixed pdf-view must be a direct child of pdf-page` | A nested `fixed` view, laid out in the flow instead. |
 | `ngpdf: <property> has no effect on pdf-span` | A box property on a `pdf-span`. See [Styled runs](/docs/text-and-fonts#styled-runs-pdf-span). |
 | `ngpdf: a pdf-text inside a pdf-text is drawn in the outer style; use pdf-span` | A nested `pdf-text`. |
