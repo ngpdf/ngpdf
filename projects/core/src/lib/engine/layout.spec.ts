@@ -164,6 +164,14 @@ describe('layoutBox', () => {
     expect(box?.h).toBeCloseTo(12, 3);
   });
 
+  it('measures a page number on one line even when its format is wider than its box', () => {
+    const number = el('pdf-page-number', { width: '30' }, [], {
+      format: 'Sheet {page} of {total} in this report',
+    });
+    const box = lay(el('pdf-view', { 'flex-direction': 'row' }, [number]), 400).children[0];
+    expect(box?.h).toBeCloseTo(12, 3);
+  });
+
   it('never makes a text box narrower than its text', () => {
     const root = el('pdf-view', { 'flex-direction': 'row' }, [
       el('pdf-text', {}, [textNode('Hello wide world of text')]),

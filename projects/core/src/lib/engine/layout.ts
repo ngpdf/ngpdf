@@ -426,8 +426,10 @@ export function layoutBox(
     let measure = measures.get(textNode);
     if (!measure) {
       const inner = measureRanges(rangesOf(textNode), style, ctx.metrics, textCache);
+      // A page number is drawn on one line, so it is measured on one line whatever the width.
+      const oneLine = textNode.tag === 'pdf-page-number';
       measure = (available, mode) => {
-        const measured = inner(available, mode);
+        const measured = inner(available, oneLine ? yoga.MEASURE_MODE_UNDEFINED : mode);
         return { width: measured.width + WIDTH_SLACK, height: measured.height };
       };
       measures.set(textNode, measure);
