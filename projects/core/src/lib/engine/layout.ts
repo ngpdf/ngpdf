@@ -83,23 +83,36 @@ function columnAmount(column: TableColumn, suffix: '' | 'fr' | '%'): number {
   return amount;
 }
 
-function suffixOf(column: TableColumn): '' | 'fr' | '%' {
+function suffixOf(column: TableColumn): '' | 'fr' | '%' | 'auto' {
   if (typeof column === 'number') return '';
+  if (column === 'auto') return 'auto';
   return column.endsWith('%') ? '%' : 'fr';
 }
 
 /**
- * Column widths in points: fixed columns first, then percentages of `tableWidth`, then the rest
- * split by `fr` shares. Fixed and percentage columns that overflow leave the fr columns at 0.
+ * Column widths in points: fixed columns first, then percentages of `tableWidth`, then `auto`
+ * columns at their measured `contentWidths` (shrunk in proportion to fit what is left), then the
+ * rest split by `fr` shares. Columns that overflow leave the fr columns at 0.
  */
-export function resolveColumns(columns: readonly TableColumn[], tableWidth: number): number[] {
+export function resolveColumns(
+  columns: readonly TableColumn[],
+  tableWidth: number,
+  contentWidths: readonly number[] = [],
+): number[] {
   const parsed = columns.map((column) => {
     const suffix = suffixOf(column);
-    return { suffix, amount: columnAmount(column, suffix) };
+    return { suffix, amount: suffix === 'auto' ? 0 : columnAmount(column, suffix) };
   });
   const widths = parsed.map(({ suffix, amount }) => {
     if (suffix === '') return amount;
     return suffix === '%' ? (amount / 100) * tableWidth : 0;
+  });
+  const left = Math.max(0, tableWidth - widths.reduce((sum, width) => sum + width, 0));
+  const wanted = parsed.map(({ suffix }, i) => (suffix === 'auto' ? (contentWidths[i] ?? 0) : 0));
+  const totalAuto = wanted.reduce((sum, width) => sum + width, 0);
+  const scale = totalAuto > left ? left / totalAuto : 1;
+  wanted.forEach((width, i) => {
+    if (width > 0) widths[i] = width * scale;
   });
   const totalFr = parsed.reduce(
     (sum, { suffix, amount }) => sum + (suffix === 'fr' ? amount : 0),
@@ -469,7 +482,10 @@ export function layoutBox(
     if (current.tag === 'pdf-table') {
       const known = tableWidths.get(current);
       const declared = (propsOf(current)['columns'] ?? []) as readonly TableColumn[];
-      childColumns = known === undefined ? null : resolveColumns(declared, known);
+      childColumns =
+        known === undefined
+          ? null
+          : resolveColumns(declared, known, contentWidthsOf(current, declared));
       for (const child of current.children) {
         if (child.kind === 'element' && child.tag === 'pdf-row') {
           checkRowCells(child, declared.length);
@@ -510,6 +526,35 @@ export function layoutBox(
       yogaNode.insertChild(builtChild.yoga, index++);
     }
     return built;
+  };
+
+  // The widest one-line width of each auto column's cells, measured once per table. A cell is laid
+  // out on its own with no width, which Yoga sizes to its content; spanning cells don't count.
+  const contentWidths = new Map<PdfNode, readonly number[]>();
+  const contentWidthsOf = (table: PdfNode, declared: readonly TableColumn[]): readonly number[] => {
+    let found = contentWidths.get(table);
+    if (!found) {
+      const widths = declared.map(() => 0);
+      if (declared.includes('auto')) {
+        for (const row of table.children) {
+          if (row.kind !== 'element' || row.tag !== 'pdf-row') continue;
+          let column = 0;
+          for (const cell of row.children) {
+            if (cell.kind !== 'element' || cell.tag !== 'pdf-cell') continue;
+            const span = spanOf(cell);
+            if (span === 1 && declared[column] === 'auto') {
+              const alone = build(cell, new Map(), null, { next: 0 });
+              alone.yoga.calculateLayout(undefined, undefined, yoga.DIRECTION_LTR);
+              widths[column] = Math.max(widths[column] ?? 0, alone.yoga.getComputedWidth());
+            }
+            column += span;
+          }
+        }
+      }
+      found = widths;
+      contentWidths.set(table, found);
+    }
+    return found;
   };
 
   const collectTableWidths = (built: Built, found: Map<PdfNode, number>): void => {

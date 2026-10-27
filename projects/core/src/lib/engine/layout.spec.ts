@@ -78,7 +78,23 @@ describe('resolveColumns', () => {
     expect(resolveColumns([300, '1fr'], 200)).toEqual([300, 0]);
   });
 
-  it.each([['abc'], ['2px'], ['fr'], ['%'], ['-1fr'], [' 1fr'], ['1e999%'], [-5], [NaN]])(
+  it('gives auto columns their content width before the fr shares', () => {
+    expect(resolveColumns(['auto', '1fr', 'auto'], 300, [50, 999, 30])).toEqual([50, 220, 30]);
+    expect(resolveColumns([40, '25%', 'auto'], 400, [0, 0, 60])).toEqual([40, 100, 60]);
+  });
+
+  it('shrinks auto columns in proportion when they overflow, leaving fr columns nothing', () => {
+    expect(resolveColumns([100, 'auto', 'auto', '1fr'], 200, [0, 150, 50, 0])).toEqual([
+      100, 75, 25, 0,
+    ]);
+    expect(resolveColumns([300, 'auto'], 200, [0, 80])).toEqual([300, 0]);
+  });
+
+  it('gives an auto column without a measured width nothing', () => {
+    expect(resolveColumns(['auto', '1fr'], 200)).toEqual([0, 200]);
+  });
+
+  it.each([['abc'], ['2px'], ['fr'], ['%'], ['-1fr'], [' 1fr'], ['1e999%'], [-5], [NaN], ['Auto']])(
     'throws on the column %j instead of computing NaN',
     (column) => {
       expect(() => resolveColumns([column as TableColumn, '1fr'], 400)).toThrow(
@@ -314,6 +330,68 @@ describe('tables', () => {
 
   it('lays out a table without rows', () => {
     expect(() => lay(table([], []), 100)).not.toThrow();
+  });
+});
+
+describe('auto table columns', () => {
+  const cell = (content: string, style: Record<string, string> = {}, span = 1): PdfNode =>
+    el('pdf-cell', style, [el('pdf-text', {}, [textNode(content)])], { span });
+  const widthsOf = (box: Box): number[] =>
+    (box.children[0]?.children ?? []).map((cellBox) => cellBox.w);
+  const one = (text: string): number => writer.widthOf(text, 'Helvetica', 10);
+
+  it('sizes an auto column to the widest one-line content of its cells', () => {
+    const root = table(
+      ['auto', '1fr'],
+      [
+        [cell('A-1'), cell('first')],
+        [cell('B-20000'), cell('second')],
+        [cell('C'), cell('third')],
+      ],
+    );
+    const [auto, fr] = widthsOf(lay(root, 300));
+    expect(auto).toBeGreaterThanOrEqual(one('B-20000'));
+    expect(auto).toBeLessThan(one('B-20000') + 0.01);
+    expect(fr).toBeCloseTo(300 - auto!, 3);
+  });
+
+  it('counts the cell padding and border', () => {
+    const root = table(
+      ['auto', '1fr'],
+      [[cell('Total', { padding: '0 6', 'border-left': '2 solid black' }), cell('x')]],
+    );
+    expect(widthsOf(lay(root, 300))[0]).toBeCloseTo(one('Total') + 12 + 2, 2);
+  });
+
+  it('wraps the text of auto columns shrunk to fit', () => {
+    const long = 'a long value that does not fit';
+    const root = table([100, 'auto'], [[cell('x'), cell(long)]]);
+    const box = lay(root, 200);
+    expect(widthsOf(box)[1]).toBeCloseTo(100, 3);
+    const text = box.children[0]?.children[1]?.children[0]?.text;
+    expect(text?.lines.length).toBeGreaterThan(1);
+  });
+
+  it('ignores spanning cells when sizing an auto column', () => {
+    const root = table(
+      ['auto', '1fr'],
+      [[cell('a very wide spanning cell content', {}, 2)], [cell('ab'), cell('x')]],
+    );
+    const box = lay(root, 400);
+    expect(box.children[1]?.children[0]?.w).toBeLessThan(one('ab') + 0.01);
+  });
+
+  it('gives an empty auto column nothing', () => {
+    const root = table(['auto', '1fr'], [[el('pdf-cell'), cell('x')]]);
+    expect(widthsOf(lay(root, 300))).toEqual([0, 300]);
+  });
+
+  it('sizes auto columns of a table nested in a cell', () => {
+    const inner = table(['auto', '1fr'], [[cell('inner'), cell('y')]]);
+    const root = table(['1fr'], [[el('pdf-cell', {}, [inner])]]);
+    const innerBox = lay(root, 300).children[0]?.children[0]?.children[0];
+    expect(innerBox?.children[0]?.children[0]?.w).toBeLessThan(one('inner') + 0.01);
+    expect(innerBox?.children[0]?.children[0]?.w).toBeGreaterThanOrEqual(one('inner'));
   });
 });
 

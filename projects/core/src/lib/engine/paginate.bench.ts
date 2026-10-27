@@ -40,13 +40,19 @@ function row(index: number, header = false): PdfNode {
   return adopt(el('pdf-row', zebra, { header }), cells);
 }
 
-const page = adopt(el('pdf-page', { padding: '36' }, { size: 'A4' }), [
-  adopt(el('pdf-table', {}, { columns: [30, '2fr', '3fr', '1fr'] }), [
-    row(0, true),
-    ...Array.from({ length: 1000 }, (_, i) => row(i + 1)),
-  ]),
-  el('pdf-page-number', { 'font-size': '9' }),
-]);
+function pageOf(columns: unknown[], rows: number): PdfNode {
+  return adopt(el('pdf-page', { padding: '36' }, { size: 'A4' }), [
+    adopt(el('pdf-table', {}, { columns }), [
+      row(0, true),
+      ...Array.from({ length: rows }, (_, i) => row(i + 1)),
+    ]),
+    el('pdf-page-number', { 'font-size': '9' }),
+  ]);
+}
+
+const page = pageOf([30, '2fr', '3fr', '1fr'], 1000);
+// The same table with content-sized first and last columns: every cell of those is measured.
+const autoPage = pageOf(['auto', '2fr', '3fr', 'auto'], 1000);
 const { loadYoga } = await import('yoga-layout/load');
 const yoga = await loadYoga();
 const writer = await createPdfkitWriter({ compress: false });
@@ -61,4 +67,11 @@ test('lays out and paginates a 1,000-row table', async ({ bench }) => {
   const tolerance = Number(process.env['BENCH_BASELINE_TOLERANCE']);
   if (tolerance > 0)
     expect(result.latency.p50).toBeLessThanOrEqual(BASELINE_MEDIAN_MS * (1 + tolerance));
+});
+
+test('lays out and paginates a 1,000-row table with auto columns', async ({ bench }) => {
+  // Reported next to the plain table, not gated: auto columns add one measure per cell.
+  await bench('paginate 1,000 rows, two auto columns', () => {
+    paginatePage(autoPage, resolveStyles(autoPage), { yoga, metrics: writer, images: new Map() });
+  }).run();
 });
