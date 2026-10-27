@@ -1,133 +1,133 @@
 Licenças ativas
-#    Produto                 Cliente                         Início       Fim          Nota fiscal         Valor
+#   Produto                 Cliente                         Início       Fim          Nota fiscal         Valor
 
-1    Agenda Integrada        Escritório Contábil Horizonte   04/02/2025   04/02/2026   NF-2026013     R$ 867,01
+1   Agenda Integrada        Escritório Contábil Horizonte   04/02/2025   04/02/2026   NF-2026013     R$ 867,01
 
-2    Portal do Cliente       Construtora Pedra Forte         07/03/2025   07/03/2026   NF-2026026    R$ 1.244,02
+2   Portal do Cliente       Construtora Pedra Forte         07/03/2025   07/03/2026   NF-2026026    R$ 1.244,02
 
-3    Controle de Estoque     Padaria Trigo Dourado Ltda      10/04/2025   10/04/2026   NF-2026039    R$ 1.621,03
+3   Controle de Estoque     Padaria Trigo Dourado Ltda      10/04/2025   10/04/2026   NF-2026039    R$ 1.621,03
 
-4    Emissor de Notas        Mercearia Vila Nova             13/05/2025   13/05/2026   NF-2026052    R$ 1.998,04
+4   Emissor de Notas        Mercearia Vila Nova             13/05/2025   13/05/2026   NF-2026052    R$ 1.998,04
 
-5    Gestão de Contratos     Clínica Bem Viver               16/06/2025   16/06/2026   NF-2026065    R$ 2.375,05
+5   Gestão de Contratos     Clínica Bem Viver               16/06/2025   16/06/2026   NF-2026065    R$ 2.375,05
 
-6    Painel de Indicadores   Distribuidora Sol Nascente      19/07/2025   19/07/2026   NF-2026078    R$ 2.752,06
+6   Painel de Indicadores   Distribuidora Sol Nascente      19/07/2025   19/07/2026   NF-2026078    R$ 2.752,06
 
-7    Agenda Integrada        Clínica Vida e Saúde            22/08/2025   22/08/2026   NF-2026091    R$ 3.129,07
+7   Agenda Integrada        Clínica Vida e Saúde            22/08/2025   22/08/2026   NF-2026091    R$ 3.129,07
 
-8    Portal do Cliente       Transportadora Serra Azul       25/09/2025   25/09/2026   NF-2026104    R$ 3.506,08
+8   Portal do Cliente       Transportadora Serra Azul       25/09/2025   25/09/2026   NF-2026104    R$ 3.506,08
 
-9    Controle de Estoque     Hotel Vista Alegre              28/10/2025   28/10/2026   NF-2026117    R$ 3.883,09
+9   Controle de Estoque     Hotel Vista Alegre              28/10/2025   28/10/2026   NF-2026117    R$ 3.883,09
 
-10   Emissor de Notas        Oficina Mecânica Rio Claro      03/11/2025   03/11/2026   NF-2026130    R$ 4.260,10
+10 Emissor de Notas         Oficina Mecânica Rio Claro      03/11/2025   03/11/2026   NF-2026130    R$ 4.260,10
 
-11   Gestão de Contratos     Escritório Contábil Horizonte   06/12/2025   06/12/2026   NF-2026143    R$ 4.637,11
+11 Gestão de Contratos      Escritório Contábil Horizonte   06/12/2025   06/12/2026   NF-2026143    R$ 4.637,11
 
-12   Painel de Indicadores   Construtora Pedra Forte         09/01/2025   09/01/2026   NF-2026156    R$ 5.014,12
+12 Painel de Indicadores    Construtora Pedra Forte         09/01/2025   09/01/2026   NF-2026156    R$ 5.014,12
 
-13   Agenda Integrada        Padaria Trigo Dourado Ltda      12/02/2025   12/02/2026   NF-2026169    R$ 5.391,13
+13 Agenda Integrada         Padaria Trigo Dourado Ltda      12/02/2025   12/02/2026   NF-2026169    R$ 5.391,13
 
-14   Portal do Cliente       Mercearia Vila Nova             15/03/2025   15/03/2026   NF-2026182    R$ 5.768,14
+14 Portal do Cliente        Mercearia Vila Nova             15/03/2025   15/03/2026   NF-2026182    R$ 5.768,14
 
-15   Controle de Estoque     Clínica Bem Viver               18/04/2025   18/04/2026   NF-2026195    R$ 6.145,15
+15 Controle de Estoque      Clínica Bem Viver               18/04/2025   18/04/2026   NF-2026195    R$ 6.145,15
 
-16   Emissor de Notas        Distribuidora Sol Nascente      21/05/2025   21/05/2026   NF-2026208    R$ 6.522,16
+16 Emissor de Notas         Distribuidora Sol Nascente      21/05/2025   21/05/2026   NF-2026208    R$ 6.522,16
 
-17   Gestão de Contratos     Clínica Vida e Saúde            24/06/2025   24/06/2026   NF-2026221    R$ 6.899,17
+17 Gestão de Contratos      Clínica Vida e Saúde            24/06/2025   24/06/2026   NF-2026221    R$ 6.899,17
 
-18   Painel de Indicadores   Transportadora Serra Azul       27/07/2025   27/07/2026   NF-2026234    R$ 7.276,18
+18 Painel de Indicadores    Transportadora Serra Azul       27/07/2025   27/07/2026   NF-2026234    R$ 7.276,18
 
-19   Agenda Integrada        Hotel Vista Alegre              02/08/2025   02/08/2026   NF-2026247    R$ 7.653,19
+19 Agenda Integrada         Hotel Vista Alegre              02/08/2025   02/08/2026   NF-2026247    R$ 7.653,19
 
-20   Portal do Cliente       Oficina Mecânica Rio Claro      05/09/2025   05/09/2026   NF-2026260    R$ 8.030,20
+20 Portal do Cliente        Oficina Mecânica Rio Claro      05/09/2025   05/09/2026   NF-2026260    R$ 8.030,20
 
-21   Controle de Estoque     Escritório Contábil Horizonte   08/10/2025   08/10/2026   NF-2026273    R$ 8.407,21
+21 Controle de Estoque      Escritório Contábil Horizonte   08/10/2025   08/10/2026   NF-2026273    R$ 8.407,21
 
-22   Emissor de Notas        Construtora Pedra Forte         11/11/2025   11/11/2026   NF-2026286    R$ 8.784,22
+22 Emissor de Notas         Construtora Pedra Forte         11/11/2025   11/11/2026   NF-2026286    R$ 8.784,22
 
-23   Gestão de Contratos     Padaria Trigo Dourado Ltda      14/12/2025   14/12/2026   NF-2026299    R$ 9.161,23
+23 Gestão de Contratos      Padaria Trigo Dourado Ltda      14/12/2025   14/12/2026   NF-2026299    R$ 9.161,23
 
-24   Painel de Indicadores   Mercearia Vila Nova             17/01/2025   17/01/2026   NF-2026312     R$ 538,24
+24 Painel de Indicadores    Mercearia Vila Nova             17/01/2025   17/01/2026   NF-2026312     R$ 538,24
 
-                                                                                                     Página 1 de 3
-#    Produto                 Cliente                         Início       Fim          Nota fiscal         Valor
+                                                                                                    Página 1 de 3
+#   Produto                Cliente                         Início       Fim          Nota fiscal         Valor
 
-25   Agenda Integrada        Clínica Bem Viver               20/02/2025   20/02/2026   NF-2026325     R$ 915,25
+25 Agenda Integrada        Clínica Bem Viver               20/02/2025   20/02/2026   NF-2026325     R$ 915,25
 
-26   Portal do Cliente       Distribuidora Sol Nascente      23/03/2025   23/03/2026   NF-2026338    R$ 1.292,26
+26 Portal do Cliente       Distribuidora Sol Nascente      23/03/2025   23/03/2026   NF-2026338    R$ 1.292,26
 
-27   Controle de Estoque     Clínica Vida e Saúde            26/04/2025   26/04/2026   NF-2026351    R$ 1.669,27
+27 Controle de Estoque     Clínica Vida e Saúde            26/04/2025   26/04/2026   NF-2026351    R$ 1.669,27
 
-28   Emissor de Notas        Transportadora Serra Azul       01/05/2025   01/05/2026   NF-2026364    R$ 2.046,28
+28 Emissor de Notas        Transportadora Serra Azul       01/05/2025   01/05/2026   NF-2026364    R$ 2.046,28
 
-29   Gestão de Contratos     Hotel Vista Alegre              04/06/2025   04/06/2026   NF-2026377    R$ 2.423,29
+29 Gestão de Contratos     Hotel Vista Alegre              04/06/2025   04/06/2026   NF-2026377    R$ 2.423,29
 
-30   Painel de Indicadores   Oficina Mecânica Rio Claro      07/07/2025   07/07/2026   NF-2026390    R$ 2.800,30
+30 Painel de Indicadores   Oficina Mecânica Rio Claro      07/07/2025   07/07/2026   NF-2026390    R$ 2.800,30
 
-31   Agenda Integrada        Escritório Contábil Horizonte   10/08/2025   10/08/2026   NF-2026403    R$ 3.177,31
+31 Agenda Integrada        Escritório Contábil Horizonte   10/08/2025   10/08/2026   NF-2026403    R$ 3.177,31
 
-32   Portal do Cliente       Construtora Pedra Forte         13/09/2025   13/09/2026   NF-2026416    R$ 3.554,32
+32 Portal do Cliente       Construtora Pedra Forte         13/09/2025   13/09/2026   NF-2026416    R$ 3.554,32
 
-33   Controle de Estoque     Padaria Trigo Dourado Ltda      16/10/2025   16/10/2026   NF-2026429    R$ 3.931,33
+33 Controle de Estoque     Padaria Trigo Dourado Ltda      16/10/2025   16/10/2026   NF-2026429    R$ 3.931,33
 
-34   Emissor de Notas        Mercearia Vila Nova             19/11/2025   19/11/2026   NF-2026442    R$ 4.308,34
+34 Emissor de Notas        Mercearia Vila Nova             19/11/2025   19/11/2026   NF-2026442    R$ 4.308,34
 
-35   Gestão de Contratos     Clínica Bem Viver               22/12/2025   22/12/2026   NF-2026455    R$ 4.685,35
+35 Gestão de Contratos     Clínica Bem Viver               22/12/2025   22/12/2026   NF-2026455    R$ 4.685,35
 
-36   Painel de Indicadores   Distribuidora Sol Nascente      25/01/2025   25/01/2026   NF-2026468    R$ 5.062,36
+36 Painel de Indicadores   Distribuidora Sol Nascente      25/01/2025   25/01/2026   NF-2026468    R$ 5.062,36
 
-37   Agenda Integrada        Clínica Vida e Saúde            28/02/2025   28/02/2026   NF-2026481    R$ 5.439,37
+37 Agenda Integrada        Clínica Vida e Saúde            28/02/2025   28/02/2026   NF-2026481    R$ 5.439,37
 
-38   Portal do Cliente       Transportadora Serra Azul       03/03/2025   03/03/2026   NF-2026494    R$ 5.816,38
+38 Portal do Cliente       Transportadora Serra Azul       03/03/2025   03/03/2026   NF-2026494    R$ 5.816,38
 
-39   Controle de Estoque     Hotel Vista Alegre              06/04/2025   06/04/2026   NF-2026507    R$ 6.193,39
+39 Controle de Estoque     Hotel Vista Alegre              06/04/2025   06/04/2026   NF-2026507    R$ 6.193,39
 
-40   Emissor de Notas        Oficina Mecânica Rio Claro      09/05/2025   09/05/2026   NF-2026520    R$ 6.570,40
+40 Emissor de Notas        Oficina Mecânica Rio Claro      09/05/2025   09/05/2026   NF-2026520    R$ 6.570,40
 
-41   Gestão de Contratos     Escritório Contábil Horizonte   12/06/2025   12/06/2026   NF-2026533    R$ 6.947,41
+41 Gestão de Contratos     Escritório Contábil Horizonte   12/06/2025   12/06/2026   NF-2026533    R$ 6.947,41
 
-42   Painel de Indicadores   Construtora Pedra Forte         15/07/2025   15/07/2026   NF-2026546    R$ 7.324,42
+42 Painel de Indicadores   Construtora Pedra Forte         15/07/2025   15/07/2026   NF-2026546    R$ 7.324,42
 
-43   Agenda Integrada        Padaria Trigo Dourado Ltda      18/08/2025   18/08/2026   NF-2026559    R$ 7.701,43
+43 Agenda Integrada        Padaria Trigo Dourado Ltda      18/08/2025   18/08/2026   NF-2026559    R$ 7.701,43
 
-44   Portal do Cliente       Mercearia Vila Nova             21/09/2025   21/09/2026   NF-2026572    R$ 8.078,44
+44 Portal do Cliente       Mercearia Vila Nova             21/09/2025   21/09/2026   NF-2026572    R$ 8.078,44
 
-45   Controle de Estoque     Clínica Bem Viver               24/10/2025   24/10/2026   NF-2026585    R$ 8.455,45
+45 Controle de Estoque     Clínica Bem Viver               24/10/2025   24/10/2026   NF-2026585    R$ 8.455,45
 
-46   Emissor de Notas        Distribuidora Sol Nascente      27/11/2025   27/11/2026   NF-2026598    R$ 8.832,46
+46 Emissor de Notas        Distribuidora Sol Nascente      27/11/2025   27/11/2026   NF-2026598    R$ 8.832,46
 
-47   Gestão de Contratos     Clínica Vida e Saúde            02/12/2025   02/12/2026   NF-2026611    R$ 9.209,47
+47 Gestão de Contratos     Clínica Vida e Saúde            02/12/2025   02/12/2026   NF-2026611    R$ 9.209,47
 
-48   Painel de Indicadores   Transportadora Serra Azul       05/01/2025   05/01/2026   NF-2026624     R$ 586,48
+48 Painel de Indicadores   Transportadora Serra Azul       05/01/2025   05/01/2026   NF-2026624     R$ 586,48
 
-49   Agenda Integrada        Hotel Vista Alegre              08/02/2025   08/02/2026   NF-2026637     R$ 963,49
+49 Agenda Integrada        Hotel Vista Alegre              08/02/2025   08/02/2026   NF-2026637     R$ 963,49
 
-50   Portal do Cliente       Oficina Mecânica Rio Claro      11/03/2025   11/03/2026   NF-2026650    R$ 1.340,50
+50 Portal do Cliente       Oficina Mecânica Rio Claro      11/03/2025   11/03/2026   NF-2026650    R$ 1.340,50
 
-                                                                                                     Página 2 de 3
-#    Produto                 Cliente                         Início       Fim          Nota fiscal         Valor
+                                                                                                   Página 2 de 3
+#   Produto                Cliente                         Início       Fim          Nota fiscal         Valor
 
-51   Controle de Estoque     Escritório Contábil Horizonte   14/04/2025   14/04/2026   NF-2026663    R$ 1.717,51
+51 Controle de Estoque     Escritório Contábil Horizonte   14/04/2025   14/04/2026   NF-2026663    R$ 1.717,51
 
-52   Emissor de Notas        Construtora Pedra Forte         17/05/2025   17/05/2026   NF-2026676    R$ 2.094,52
+52 Emissor de Notas        Construtora Pedra Forte         17/05/2025   17/05/2026   NF-2026676    R$ 2.094,52
 
-53   Gestão de Contratos     Padaria Trigo Dourado Ltda      20/06/2025   20/06/2026   NF-2026689    R$ 2.471,53
+53 Gestão de Contratos     Padaria Trigo Dourado Ltda      20/06/2025   20/06/2026   NF-2026689    R$ 2.471,53
 
-54   Painel de Indicadores   Mercearia Vila Nova             23/07/2025   23/07/2026   NF-2026702    R$ 2.848,54
+54 Painel de Indicadores   Mercearia Vila Nova             23/07/2025   23/07/2026   NF-2026702    R$ 2.848,54
 
-55   Agenda Integrada        Clínica Bem Viver               26/08/2025   26/08/2026   NF-2026715    R$ 3.225,55
+55 Agenda Integrada        Clínica Bem Viver               26/08/2025   26/08/2026   NF-2026715    R$ 3.225,55
 
-56   Portal do Cliente       Distribuidora Sol Nascente      01/09/2025   01/09/2026   NF-2026728    R$ 3.602,56
+56 Portal do Cliente       Distribuidora Sol Nascente      01/09/2025   01/09/2026   NF-2026728    R$ 3.602,56
 
-57   Controle de Estoque     Clínica Vida e Saúde            04/10/2025   04/10/2026   NF-2026741    R$ 3.979,57
+57 Controle de Estoque     Clínica Vida e Saúde            04/10/2025   04/10/2026   NF-2026741    R$ 3.979,57
 
-58   Emissor de Notas        Transportadora Serra Azul       07/11/2025   07/11/2026   NF-2026754    R$ 4.356,58
+58 Emissor de Notas        Transportadora Serra Azul       07/11/2025   07/11/2026   NF-2026754    R$ 4.356,58
 
-59   Gestão de Contratos     Hotel Vista Alegre              10/12/2025   10/12/2026   NF-2026767    R$ 4.733,59
+59 Gestão de Contratos     Hotel Vista Alegre              10/12/2025   10/12/2026   NF-2026767    R$ 4.733,59
 
-60   Painel de Indicadores   Oficina Mecânica Rio Claro      13/01/2025   13/01/2026   NF-2026780    R$ 5.110,60
+60 Painel de Indicadores   Oficina Mecânica Rio Claro      13/01/2025   13/01/2026   NF-2026780    R$ 5.110,60
 
 
 
 
-                                                                                                     Página 3 de 3
+                                                                                                   Página 3 de 3

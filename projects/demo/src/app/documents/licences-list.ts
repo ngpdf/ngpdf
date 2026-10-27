@@ -12,7 +12,7 @@ import type { Licence } from '../data';
         <pdf-text style="font-size: 16; font-weight: bold; margin-bottom: 10">
           Licenças ativas
         </pdf-text>
-        <pdf-table [columns]="[30, '2fr', '3fr', 70, 70, 80, 80]">
+        <pdf-table [columns]="['auto', '2fr', '3fr', 70, 70, 80, 'auto']">
           <pdf-row
             header
             style="padding-top: 5; padding-bottom: 5; background-color: #dd0031; color: #ffffff; font-weight: bold"
