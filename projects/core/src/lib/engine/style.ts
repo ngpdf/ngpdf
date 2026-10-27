@@ -76,6 +76,11 @@ export interface BorderParts {
 export const MAX_NESTING = 64;
 
 const BLACK: Color = Object.freeze({ r: 0, g: 0, b: 0, a: 1 });
+const BORDER_WIDTHS: ReadonlyMap<string, number> = new Map([
+  ['thin', 1],
+  ['medium', 3],
+  ['thick', 5],
+]);
 
 export const ROOT_TEXT_STYLE: TextStyle = Object.freeze({
   color: BLACK,
@@ -180,7 +185,7 @@ function tokenize(value: string): string[] {
 
 export function parseLength(value: string, tag?: string): Length {
   const text = value.trim();
-  if (text === 'auto') return 'auto';
+  if (text.toLowerCase() === 'auto') return 'auto';
   const end = scanNumber(text);
   if (end === 0) return fail(`invalid length "${show(value)}"`, tag);
   const amount = Number(text.slice(0, end));
@@ -199,7 +204,14 @@ function parsePoints(value: string, tag?: string): number {
   return length;
 }
 
-/** Font sizes and padding can't go below 0 in CSS; margins can. */
+function parseBorderWidth(value: string, tag?: string): number {
+  const keyword = value.trim().toLowerCase();
+  const keywordWidth = BORDER_WIDTHS.get(keyword);
+  if (keywordWidth !== undefined) return keywordWidth;
+  return rejectNegative(parsePoints(value, tag), value, tag);
+}
+
+/** Font sizes, padding, and border widths can't go below 0 in CSS; margins can. */
 function rejectNegative<T extends Length>(length: T, value: string, tag?: string): T {
   const amount = typeof length === 'object' ? length.percent : length;
   if (typeof amount === 'number' && amount < 0) {
@@ -239,11 +251,18 @@ export function parseBorder(value: string, tag?: string): BorderParts {
   if (tokens.length > 3) return fail(`too many values in "${show(value)}"`, tag);
   for (const token of tokens) {
     const code = token.charCodeAt(0);
-    if (isDigit(code) || code === 46 || code === 43 || code === 45) {
-      width = parsePoints(token, tag);
-    } else if (BORDER_STYLES.has(token)) {
-      if (token === 'none' || token === 'hidden') none = true;
-      else if (token !== 'solid') unsupportedStyle = token;
+    if (
+      isDigit(code) ||
+      code === 46 ||
+      code === 43 ||
+      code === 45 ||
+      BORDER_WIDTHS.has(token.toLowerCase())
+    ) {
+      width = parseBorderWidth(token, tag);
+    } else if (BORDER_STYLES.has(token.toLowerCase())) {
+      const style = token.toLowerCase();
+      if (style === 'none' || style === 'hidden') none = true;
+      else if (style !== 'solid') unsupportedStyle = style;
     } else {
       color = parseColor(token, tag);
     }
@@ -259,8 +278,9 @@ export function parseFlex(value: string, tag?: string): FlexParts {
     return fail(`expected 1 to 3 values in "${show(value)}"`, tag);
   }
   if (tokens.length === 1) {
-    if (first === 'auto') return { grow: 1, shrink: 1, basis: 'auto' };
-    if (first === 'none') return { grow: 0, shrink: 0, basis: 'auto' };
+    const keyword = first.toLowerCase();
+    if (keyword === 'auto') return { grow: 1, shrink: 1, basis: 'auto' };
+    if (keyword === 'none') return { grow: 0, shrink: 0, basis: 'auto' };
     const grow = parseNumber(first);
     if (grow !== null) return { grow, shrink: 1, basis: 0 };
     return { grow: 1, shrink: 1, basis: parseLength(first, tag) };
@@ -287,20 +307,27 @@ function allSides<T>(value: T): Edges<T> {
   return { top: value, right: value, bottom: value, left: value };
 }
 
+/** CSS keywords are case-insensitive, so `CENTER` and ` center ` both read as `center`. */
+function keywordOf(value: string): string {
+  return value.trim().toLowerCase();
+}
+
 function oneOf<T extends string>(
   value: string,
   allowed: readonly T[],
   property: string,
   tag: string,
 ): T {
-  const found = allowed.find((candidate) => candidate === value);
+  const keyword = keywordOf(value);
+  const found = allowed.find((candidate) => candidate === keyword);
   if (found === undefined) return fail(`invalid value "${show(value)}" for ${property}`, tag);
   return found;
 }
 
 function fontWeightOf(value: string): TextStyle['fontWeight'] {
-  if (value === 'bold' || value === 'bolder') return 'bold';
-  const weight = parseNumber(value);
+  const keyword = keywordOf(value);
+  if (keyword === 'bold' || keyword === 'bolder') return 'bold';
+  const weight = parseNumber(keyword);
   return weight !== null && weight >= 600 ? 'bold' : 'normal';
 }
 
@@ -363,7 +390,7 @@ function apply(
     return;
   }
   if (side && property === `border-${side}-width`) {
-    style.borderWidth = withSide(style.borderWidth, side, parsePoints(value, tag));
+    style.borderWidth = withSide(style.borderWidth, side, parseBorderWidth(value, tag));
     return;
   }
   if (side && property === `border-${side}-color`) {
@@ -383,9 +410,11 @@ function apply(
     case 'font-weight':
       style.fontWeight = fontWeightOf(value);
       break;
-    case 'font-style':
-      style.fontStyle = value === 'italic' || value === 'oblique' ? 'italic' : 'normal';
+    case 'font-style': {
+      const keyword = keywordOf(value);
+      style.fontStyle = keyword === 'italic' || keyword === 'oblique' ? 'italic' : 'normal';
       break;
+    }
     case 'text-align':
       style.textAlign = oneOf(value, ['left', 'center', 'right'], property, tag);
       break;
@@ -470,7 +499,7 @@ function apply(
       break;
     }
     case 'border-width':
-      style.borderWidth = parseEdgeValues(value, (token) => parsePoints(token, tag), tag);
+      style.borderWidth = parseEdgeValues(value, (token) => parseBorderWidth(token, tag), tag);
       break;
     case 'border-color':
       style.borderColor = parseEdgeValues(value, (token) => parseColor(token, tag), tag);
@@ -490,10 +519,10 @@ function apply(
       style.objectFit = oneOf(value, ['contain', 'cover'], property, tag);
       break;
     case 'break-before':
-      style.breakBefore = style.breakBefore || value === 'page';
+      style.breakBefore = style.breakBefore || keywordOf(value) === 'page';
       break;
     case 'break-inside':
-      style.breakInside = ['avoid', 'avoid-page'].includes(value.trim()) ? 'avoid' : 'auto';
+      style.breakInside = ['avoid', 'avoid-page'].includes(keywordOf(value)) ? 'avoid' : 'auto';
       break;
     case 'orphans':
     case 'widows':

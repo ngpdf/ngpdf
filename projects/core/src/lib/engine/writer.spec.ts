@@ -1,5 +1,11 @@
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
-import { createPdfkitWriter, type DrawOp, type FontName, type PdfWriter } from './writer';
+import {
+  createPdfkitWriter,
+  type DrawOp,
+  type FontName,
+  type PdfWriter,
+  type StandardFont,
+} from './writer';
 import { testFont } from '../../testing/test-fonts';
 
 /** 3x2 8-bit grayscale PNG, generated so no binary file sits in the repo. */
@@ -166,6 +172,43 @@ describe('createPdfkitWriter', () => {
     expect(writer.widthOf('Hello', 'Courier', 10)).toBeCloseTo(30, 2);
   });
 
+  it('measures and draws each of the twelve standard fonts', async () => {
+    // pdfkit's browser build knows only the fonts registered with registerStdFonts().
+    const fonts: StandardFont[] = [
+      'Helvetica',
+      'Helvetica-Bold',
+      'Helvetica-Oblique',
+      'Helvetica-BoldOblique',
+      'Times-Roman',
+      'Times-Bold',
+      'Times-Italic',
+      'Times-BoldItalic',
+      'Courier',
+      'Courier-Bold',
+      'Courier-Oblique',
+      'Courier-BoldOblique',
+    ];
+    const ops: DrawOp[] = fonts.map((font, i) => ({
+      op: 'text',
+      x: 10,
+      y: 10 + i * 20,
+      text: 'Ag',
+      font,
+      size: 12,
+      color: '#000',
+      opacity: 1,
+      underline: false,
+      strike: false,
+    }));
+    for (const font of fonts) {
+      expect(writer.widthOf('Ag', font, 12)).toBeGreaterThan(0);
+      expect(writer.ascent(font, 12)).toBeGreaterThan(0);
+    }
+    const blob = await writer.write([{ ...A4, ops }], info);
+    const text = new TextDecoder('latin1').decode(new Uint8Array(await blob.arrayBuffer()));
+    for (const font of fonts) expect(text).toContain(`/BaseFont /${font}\n`);
+  });
+
   it('reports a positive ascent that scales with size', () => {
     const ascent = writer.ascent('Helvetica', 10);
     expect(ascent).toBeGreaterThan(0);
@@ -292,39 +335,71 @@ describe('createPdfkitWriter', () => {
       width: 20,
       height: 40,
     });
+    // pdfkit reads the value as a SHORT whatever the type: a little-endian BYTE or LONG of 8 starts
+    // with the bytes of SHORT 8, a big-endian one does not.
     for (const type of [1, 4] as const) {
-      for (const order of ['MM', 'II'] as const) {
-        expect(writer.imageSize(orientedJpeg(40, 20, 8, { type, order }))).toEqual({
-          width: 20,
-          height: 40,
-        });
-      }
-    }
-  });
-
-  it('ignores an orientation that pdfkit would not read either', () => {
-    const xmp = [0xff, 0xe1, 0x00, 0x0a, ...Array.from('http://', (ch) => ch.charCodeAt(0)), 0];
-    const comment = [0xff, 0xfe, 0x00, 0x04, 0x68, 0x69];
-    for (const before of [xmp, comment]) {
-      expect(writer.imageSize(orientedJpeg(40, 20, 6, { before }))).toEqual({
+      expect(writer.imageSize(orientedJpeg(40, 20, 8, { type, order: 'II' }))).toEqual({
+        width: 20,
+        height: 40,
+      });
+      expect(writer.imageSize(orientedJpeg(40, 20, 8, { type, order: 'MM' }))).toEqual({
         width: 40,
         height: 20,
       });
     }
-    // An Exif header with an unknown byte order, a cut-short TIFF header, or an IFD past the end.
+    // An APP1 that is not Exif (XMP) or a comment before the Exif APP1 is skipped, not a stop.
+    const xmp = [0xff, 0xe1, 0x00, 0x0a, ...Array.from('http://', (ch) => ch.charCodeAt(0)), 0];
+    const comment = [0xff, 0xfe, 0x00, 0x04, 0x68, 0x69];
+    for (const before of [xmp, comment]) {
+      expect(writer.imageSize(orientedJpeg(40, 20, 6, { before }))).toEqual({
+        width: 20,
+        height: 40,
+      });
+    }
+  });
+
+  it('ignores an orientation that pdfkit would not read either', () => {
     const exif = [0x45, 0x78, 0x69, 0x66, 0, 0];
     const app1 = (tiff: number[]) => [0xff, 0xe1, 0x00, 8 + tiff.length, ...exif, ...tiff];
+    const entry = (value: number) => [0x01, 0x12, 0, 3, 0, 0, 0, 1, 0, value, 0, 0];
+    const withApp1 = (tiff: number[]) =>
+      new Uint8Array([0xff, 0xd8, ...app1(tiff), ...orientedJpeg(40, 20, 1).subarray(2)]);
     for (const tiff of [
-      [0x58, 0x58, 0, 42, 0, 0, 0, 8],
-      [0x4d, 0x4d, 0, 42],
-      [0x4d, 0x4d, 0, 42, 0, 0, 0, 0x40],
-      [0x4d, 0x4d, 0, 42, 0, 0, 0, 8, 0, 1, 0x01, 0x12, 0, 3],
-      [0x4d, 0x4d, 0, 42, 0, 0, 0, 8, 0, 1, 0x01, 0x12, 0, 7, 0, 0, 0, 1, 0, 6, 0, 0],
+      // An unknown byte order, and a TIFF magic number other than 42.
+      [0x58, 0x58, 0, 42, 0, 0, 0, 8, 0, 1, ...entry(6)],
+      [0x4d, 0x4d, 0, 43, 0, 0, 0, 8, 0, 1, ...entry(6)],
+      // An IFD offset past the end of the file.
+      [0x4d, 0x4d, 0, 42, 0x7f, 0, 0, 0],
+      // An orientation outside 1 to 8.
+      [0x4d, 0x4d, 0, 42, 0, 0, 0, 8, 0, 1, ...entry(0)],
+      [0x4d, 0x4d, 0, 42, 0, 0, 0, 8, 0, 1, ...entry(9)],
+      // An IFD with no Orientation entry: the later Exif APP1 is not read.
+      [0x4d, 0x4d, 0, 42, 0, 0, 0, 8, 0, 0],
     ]) {
-      const jpeg = orientedJpeg(40, 20, 1);
-      const withApp1 = new Uint8Array([0xff, 0xd8, ...app1(tiff), ...jpeg.subarray(2)]);
-      expect(writer.imageSize(withApp1)).toEqual({ width: 40, height: 20 });
+      expect(writer.imageSize(withApp1(tiff))).toEqual({ width: 40, height: 20 });
     }
+    // Entries counted past the end of the file, a TIFF header cut short by the end of the file, an
+    // Exif APP1 after the scan starts, and a file too short to hold one.
+    const cutEntries = new Uint8Array([0xff, 0xd8, ...app1([0x4d, 0x4d, 0, 42, 0, 0, 0, 8, 0, 9])]);
+    const cutHeader = new Uint8Array([0xff, 0xd8, 0xff, 0xe1, 0, 12, ...exif, 0x4d, 0x4d, 0, 42]);
+    const sos = [0xff, 0xda, 0x00, 0x02];
+    const late = orientedJpeg(40, 20, 6, { before: sos });
+    expect(() => writer.imageSize(cutEntries)).toThrow(/frame/);
+    expect(() => writer.imageSize(cutHeader)).toThrow(/frame/);
+    expect(() => writer.imageSize(new Uint8Array([0xff, 0xd8, 0xff, 0xd9]))).toThrow(/frame/);
+    expect(writer.imageSize(late)).toEqual({ width: 40, height: 20 });
+    // A TIFF header cut short in a file long enough to scan, and no marker before the end.
+    const app0 = [0xff, 0xe0, 0x00, 0x06, 0, 0, 0, 0];
+    const cutLate = [0xff, 0xd8, ...app0, 0xff, 0xe1, 0, 12, ...exif, 0x4d, 0x4d, 0, 42];
+    expect(() => writer.imageSize(new Uint8Array(cutLate))).toThrow(/frame/);
+    expect(() =>
+      writer.imageSize(new Uint8Array([0xff, 0xd8, ...Array<number>(20).fill(0)])),
+    ).toThrow(/marker/);
+    // A standalone RST marker before the Exif APP1 has no length to skip.
+    expect(writer.imageSize(orientedJpeg(40, 20, 6, { before: [0xff, 0xd0] }))).toEqual({
+      width: 20,
+      height: 40,
+    });
   });
 
   it.each([5, 6, 7, 8])(
@@ -347,6 +422,44 @@ describe('createPdfkitWriter', () => {
       expect(corners[2]).toEqual(topLeft);
     },
   );
+
+  it('lays out a JPEG at the turn pdfkit draws it with, so it keeps its aspect ratio', async () => {
+    const xmp = [0xff, 0xe1, 0x00, 0x0a, ...Array.from('http://', (ch) => ch.charCodeAt(0)), 0];
+    const comment = [0xff, 0xfe, 0x00, 0x04, 0x68, 0x69];
+    const undefinedType = orientedJpeg(40, 20, 1);
+    // The Orientation entry's type is the last 2 bytes before its count (00 00 00 01) and value.
+    const entry = undefinedType.findIndex(
+      (_, i) => undefinedType[i] === 0x01 && undefinedType[i + 1] === 0x12,
+    );
+    undefinedType[entry + 3] = 7;
+    undefinedType[entry + 9] = 6;
+    const jpegs = [
+      ...[1, 2, 3, 4, 5, 6, 7, 8, 9].map((orientation) => orientedJpeg(40, 20, orientation)),
+      orientedJpeg(40, 20, 6, { order: 'II' }),
+      orientedJpeg(40, 20, 6, { jfif: true }),
+      orientedJpeg(40, 20, 6, { before: xmp }),
+      orientedJpeg(40, 20, 6, { before: comment }),
+      orientedJpeg(40, 20, 6, { before: [0xff, 0xda, 0x00, 0x02] }),
+      ...([1, 4] as const).flatMap((type) =>
+        (['MM', 'II'] as const).map((order) => orientedJpeg(40, 20, 8, { type, order })),
+      ),
+      undefinedType,
+    ];
+    for (const [i, jpeg] of jpegs.entries()) {
+      const { width: w, height: h } = writer.imageSize(jpeg);
+      const clip = { x: 0, y: 0, w: 100, h: 100 };
+      const ops: DrawOp[] = [{ op: 'image', x: 10, y: 20, w, h, clip, data: jpeg, opacity: 1 }];
+      const blob = await writer.write([{ width: 100, height: 100, ops }], info);
+      const place = imagePlacement(new TextDecoder('latin1').decode(await blob.arrayBuffer()));
+      const [x0, y0] = place(0, 0);
+      const [xu, yu] = place(1, 0);
+      const [xv, yv] = place(0, 1);
+      // One stored pixel spans as many points along the stored width (40) as along its height (20).
+      const perPixelU = Math.hypot(xu - x0, yu - y0) / 40;
+      const perPixelV = Math.hypot(xv - x0, yv - y0) / 20;
+      expect(perPixelU / perPixelV, `JPEG ${String(i)}`).toBeCloseTo(1, 6);
+    }
+  });
 
   it('rejects malformed PNG and JPEG headers', () => {
     const sig = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];

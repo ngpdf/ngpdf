@@ -11,19 +11,26 @@ export function describeError(reason: unknown): string {
   return reason instanceof Error ? reason.message : String(reason);
 }
 
-/** Percent-decodes to bytes (not UTF-8 text), leaving a stray `%` as it is. */
+/**
+ * Percent-decodes to bytes (not UTF-8 text), leaving a stray `%` as it is. Every character gives
+ * at most one byte, so the output is sized to the input and cut to the bytes written. The asset
+ * keeps the bytes for the whole render, so when escapes leave more than half the buffer unused
+ * the bytes are copied out rather than kept as a view of it.
+ */
 function percentDecode(text: string): Uint8Array {
-  const bytes: number[] = [];
+  const bytes = new Uint8Array(text.length);
+  let length = 0;
   for (let at = 0; at < text.length; at++) {
     const hex = text.slice(at + 1, at + 3);
     if (text[at] === '%' && /^[0-9a-f]{2}$/i.test(hex)) {
-      bytes.push(parseInt(hex, 16));
+      bytes[length++] = parseInt(hex, 16);
       at += 2;
     } else {
-      bytes.push(text.charCodeAt(at) & 0xff);
+      bytes[length++] = text.charCodeAt(at) & 0xff;
     }
   }
-  return Uint8Array.from(bytes);
+  // A copy, so the oversized buffer (escapes make the text longer than the bytes) can be freed.
+  return bytes.slice(0, length);
 }
 
 function decodeDataUrl(src: string): Uint8Array {

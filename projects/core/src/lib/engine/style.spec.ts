@@ -461,6 +461,54 @@ describe('resolveStyles property coverage', () => {
     );
   });
 
+  // CSS keywords are case-insensitive, and a value can arrive with spaces around it.
+  it.each([
+    ['text-align', 'CENTER', 'textAlign', 'center'],
+    ['text-align', ' Right ', 'textAlign', 'right'],
+    ['text-decoration', 'Line-Through', 'textDecoration', 'line-through'],
+    ['flex-direction', 'ROW', 'flexDirection', 'row'],
+    ['flex-direction', 'Column', 'flexDirection', 'column'],
+    ['justify-content', 'Space-Between', 'justifyContent', 'space-between'],
+    ['justify-content', 'CENTER', 'justifyContent', 'center'],
+    ['align-items', 'CENTER', 'alignItems', 'center'],
+    ['align-self', 'Flex-End', 'alignSelf', 'flex-end'],
+    ['align-self', 'STRETCH', 'alignSelf', 'stretch'],
+    ['object-fit', 'COVER', 'objectFit', 'cover'],
+    ['object-fit', 'Contain', 'objectFit', 'contain'],
+    ['font-weight', 'BOLD', 'fontWeight', 'bold'],
+    ['font-weight', 'Bolder', 'fontWeight', 'bold'],
+    ['font-weight', ' 700 ', 'fontWeight', 'bold'],
+    ['font-style', 'ITALIC', 'fontStyle', 'italic'],
+    ['font-style', 'Oblique', 'fontStyle', 'italic'],
+    ['break-before', 'PAGE', 'breakBefore', true],
+    ['break-inside', 'Avoid', 'breakInside', 'avoid'],
+  ])('reads %s "%s" case-insensitively', (property, value, key, expected) => {
+    expect(styleOf({ [property]: value })).toMatchObject({ [key]: expected });
+  });
+
+  it('reads auto, none and border styles in any case', () => {
+    expect(styleOf({ width: 'AUTO', margin: 'Auto' })).toMatchObject({
+      width: 'auto',
+      margin: { top: 'auto', left: 'auto' },
+    });
+    expect(styleOf({ flex: 'AUTO' })).toMatchObject({ flexGrow: 1, flexShrink: 1 });
+    expect(styleOf({ flex: 'None' })).toMatchObject({ flexGrow: 0, flexShrink: 0 });
+    expect(styleOf({ border: '2 SOLID red' }).borderWidth.top).toBe(2);
+    expect(styleOf({ border: '2 None red' }).borderWidth.top).toBe(0);
+    const warn = vi.fn();
+    styleOf({ border: '1 Dashed red' }, 'pdf-view', warn);
+    expect(warn).toHaveBeenCalledWith(
+      'ngpdf: border style "dashed" is not supported; drawing solid',
+    );
+  });
+
+  it('still rejects an unknown keyword in any case, naming the value as written', () => {
+    expect(() => styleOf({ 'text-align': 'JUSTIFY' })).toThrow(
+      'ngpdf: invalid value "JUSTIFY" for text-align on pdf-view',
+    );
+    expect(styleOf({ 'font-weight': 'HEAVY' }).fontWeight).toBe('normal');
+  });
+
   it.each(['flex-grow', 'flex-shrink', 'opacity'])('rejects a non-numeric %s', (property) => {
     expect(() => styleOf({ [property]: 'lots' })).toThrow(
       `ngpdf: invalid value "lots" for ${property} on pdf-view`,
@@ -515,6 +563,36 @@ describe('resolveStyles property coverage', () => {
     expect(styleOf({ border: 'hidden' }).borderWidth.left).toBe(0);
     expect(styleOf({ border: '1 solid rgb(1, 2, 3)' }).borderColor.top).toEqual(rgb(1, 2, 3));
     expect(() => styleOf({ border: '1 solid red blue' })).toThrow(/^ngpdf: too many values/);
+  });
+
+  it('supports CSS border width keywords', () => {
+    expect(styleOf({ border: 'thin solid red' }).borderWidth.top).toBe(1);
+    expect(styleOf({ 'border-top': 'medium solid red' }).borderWidth.top).toBe(3);
+    expect(styleOf({ 'border-top': 'MEDIUM solid red' }).borderWidth.top).toBe(3);
+    expect(styleOf({ 'border-width': 'thick' }).borderWidth).toEqual({
+      top: 5,
+      right: 5,
+      bottom: 5,
+      left: 5,
+    });
+    expect(styleOf({ 'border-right-width': 'medium' }).borderWidth.right).toBe(3);
+    expect(styleOf({ 'border-right-width': 'Medium' }).borderWidth.right).toBe(3);
+    expect(styleOf({ 'border-right-width': ' thin ' }).borderWidth.right).toBe(1);
+  });
+
+  it('rejects negative border widths', () => {
+    expect(() => styleOf({ border: '-2 solid red' })).toThrow(
+      'ngpdf: expected a non-negative length in "-2" on pdf-view',
+    );
+    expect(() => styleOf({ 'border-top': '-2 solid red' })).toThrow(
+      'ngpdf: expected a non-negative length in "-2" on pdf-view',
+    );
+    expect(() => styleOf({ 'border-width': '-2' })).toThrow(
+      'ngpdf: expected a non-negative length in "-2" on pdf-view',
+    );
+    expect(() => styleOf({ 'border-right-width': '-2' })).toThrow(
+      'ngpdf: expected a non-negative length in "-2" on pdf-view',
+    );
   });
 
   it('warns for an unsupported border style on a side shorthand too', () => {
