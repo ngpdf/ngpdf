@@ -1,7 +1,10 @@
 import { Component } from '@angular/core';
 import { PDF_ELEMENTS } from '@ngpdf/core';
 
-/** A fixed header and footer, drawn on every sheet while a table runs over several. */
+/**
+ * A fixed header with the sheet number and a fixed footer, drawn on every sheet while a table runs
+ * over several.
+ */
 @Component({
   selector: 'app-fixed-sample',
   imports: [PDF_ELEMENTS],
@@ -13,7 +16,8 @@ import { PDF_ELEMENTS } from '@ngpdf/core';
           style="flex-direction: row; padding-bottom: 6; margin-bottom: 12; border-bottom: 1 solid #999"
         >
           <pdf-text style="flex: 1; font-weight: bold">Stock count</pdf-text>
-          <pdf-text style="color: #555">Warehouse 7</pdf-text>
+          <pdf-text style="color: #555; margin-right: 12">Warehouse 7</pdf-text>
+          <pdf-page-number format="Sheet {page} of {total}" style="color: #555" />
         </pdf-view>
 
         <pdf-table [columns]="['3fr', '1fr']">
@@ -32,7 +36,7 @@ import { PDF_ELEMENTS } from '@ngpdf/core';
         <pdf-view fixed="bottom" style="margin-top: 8">
           <pdf-text style="font-size: 8; color: #777">Made-up data for the ngpdf demo</pdf-text>
         </pdf-view>
-        <pdf-page-number format="Sheet {page} of {total}" style="font-size: 8" />
+        <pdf-page-number format="{page}/{total}" style="font-size: 8" />
       </pdf-page>
     </pdf-document>
   `,

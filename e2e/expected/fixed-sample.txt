@@ -1,94 +1,94 @@
-Stock count                       Warehouse 7
+Stock count                       Warehouse 7   Sheet 1 of 3
 
 
-Item                                   Count
-SKU-1000 Bolts                                0
-SKU-1001 Washers                            37
-SKU-1002 Hinges                             74
-SKU-1003 Brackets                          111
-SKU-1004 Screws                            148
-SKU-1005 Bolts                             185
-SKU-1006 Washers                           222
-SKU-1007 Hinges                            259
-SKU-1008 Brackets                          296
-SKU-1009 Screws                            333
-SKU-1010 Bolts                             370
-SKU-1011 Washers                           407
-SKU-1012 Hinges                            444
-SKU-1013 Brackets                          481
-SKU-1014 Screws                             18
-SKU-1015 Bolts                              55
-SKU-1016 Washers                            92
-SKU-1017 Hinges                            129
-SKU-1018 Brackets                          166
-SKU-1019 Screws                            203
-SKU-1020 Bolts                             240
-SKU-1021 Washers                           277
-SKU-1022 Hinges                            314
-SKU-1023 Brackets                          351
-SKU-1024 Screws                            388
-
-Made-up data for the ngpdf demo
-                                    Sheet 1 of 3
-Stock count                       Warehouse 7
-
-
-Item                                   Count
-SKU-1025 Bolts                             425
-SKU-1026 Washers                           462
-SKU-1027 Hinges                            499
-SKU-1028 Brackets                           36
-SKU-1029 Screws                             73
-SKU-1030 Bolts                             110
-SKU-1031 Washers                           147
-SKU-1032 Hinges                            184
-SKU-1033 Brackets                          221
-SKU-1034 Screws                            258
-SKU-1035 Bolts                             295
-SKU-1036 Washers                           332
-SKU-1037 Hinges                            369
-SKU-1038 Brackets                          406
-SKU-1039 Screws                            443
-SKU-1040 Bolts                             480
-SKU-1041 Washers                            17
-SKU-1042 Hinges                             54
-SKU-1043 Brackets                           91
-SKU-1044 Screws                            128
-SKU-1045 Bolts                             165
-SKU-1046 Washers                           202
-SKU-1047 Hinges                            239
-SKU-1048 Brackets                          276
-SKU-1049 Screws                            313
+Item                                                      Count
+SKU-1000 Bolts                                                   0
+SKU-1001 Washers                                               37
+SKU-1002 Hinges                                                74
+SKU-1003 Brackets                                              111
+SKU-1004 Screws                                                148
+SKU-1005 Bolts                                                 185
+SKU-1006 Washers                                               222
+SKU-1007 Hinges                                                259
+SKU-1008 Brackets                                              296
+SKU-1009 Screws                                                333
+SKU-1010 Bolts                                                 370
+SKU-1011 Washers                                               407
+SKU-1012 Hinges                                                444
+SKU-1013 Brackets                                              481
+SKU-1014 Screws                                                18
+SKU-1015 Bolts                                                 55
+SKU-1016 Washers                                               92
+SKU-1017 Hinges                                                129
+SKU-1018 Brackets                                              166
+SKU-1019 Screws                                                203
+SKU-1020 Bolts                                                 240
+SKU-1021 Washers                                               277
+SKU-1022 Hinges                                                314
+SKU-1023 Brackets                                              351
+SKU-1024 Screws                                                388
 
 Made-up data for the ngpdf demo
-                                    Sheet 2 of 3
-Stock count                       Warehouse 7
+                                                                1/3
+Stock count                       Warehouse 7   Sheet 2 of 3
 
 
-Item                                   Count
-SKU-1050 Bolts                             350
-SKU-1051 Washers                           387
-SKU-1052 Hinges                            424
-SKU-1053 Brackets                          461
-SKU-1054 Screws                            498
-SKU-1055 Bolts                              35
-SKU-1056 Washers                            72
-SKU-1057 Hinges                            109
-SKU-1058 Brackets                          146
-SKU-1059 Screws                            183
-SKU-1060 Bolts                             220
-SKU-1061 Washers                           257
-SKU-1062 Hinges                            294
-SKU-1063 Brackets                          331
-SKU-1064 Screws                            368
-SKU-1065 Bolts                             405
-SKU-1066 Washers                           442
-SKU-1067 Hinges                            479
-SKU-1068 Brackets                           16
-SKU-1069 Screws                             53
+Item                                                      Count
+SKU-1025 Bolts                                                 425
+SKU-1026 Washers                                               462
+SKU-1027 Hinges                                                499
+SKU-1028 Brackets                                              36
+SKU-1029 Screws                                                73
+SKU-1030 Bolts                                                 110
+SKU-1031 Washers                                               147
+SKU-1032 Hinges                                                184
+SKU-1033 Brackets                                              221
+SKU-1034 Screws                                                258
+SKU-1035 Bolts                                                 295
+SKU-1036 Washers                                               332
+SKU-1037 Hinges                                                369
+SKU-1038 Brackets                                              406
+SKU-1039 Screws                                                443
+SKU-1040 Bolts                                                 480
+SKU-1041 Washers                                               17
+SKU-1042 Hinges                                                54
+SKU-1043 Brackets                                              91
+SKU-1044 Screws                                                128
+SKU-1045 Bolts                                                 165
+SKU-1046 Washers                                               202
+SKU-1047 Hinges                                                239
+SKU-1048 Brackets                                              276
+SKU-1049 Screws                                                313
+
+Made-up data for the ngpdf demo
+                                                                2/3
+Stock count                       Warehouse 7   Sheet 3 of 3
+
+
+Item                                                      Count
+SKU-1050 Bolts                                                 350
+SKU-1051 Washers                                               387
+SKU-1052 Hinges                                                424
+SKU-1053 Brackets                                              461
+SKU-1054 Screws                                                498
+SKU-1055 Bolts                                                 35
+SKU-1056 Washers                                               72
+SKU-1057 Hinges                                                109
+SKU-1058 Brackets                                              146
+SKU-1059 Screws                                                183
+SKU-1060 Bolts                                                 220
+SKU-1061 Washers                                               257
+SKU-1062 Hinges                                                294
+SKU-1063 Brackets                                              331
+SKU-1064 Screws                                                368
+SKU-1065 Bolts                                                 405
+SKU-1066 Washers                                               442
+SKU-1067 Hinges                                                479
+SKU-1068 Brackets                                              16
+SKU-1069 Screws                                                53
 
 
 
 
 Made-up data for the ngpdf demo
-                                    Sheet 3 of 3
+                                                                3/3
