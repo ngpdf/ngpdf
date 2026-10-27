@@ -110,7 +110,7 @@ A table with declared columns.
 `TableColumn` is an exported type:
 
 ```ts
-type TableColumn = number | `${number}fr` | `${number}%`;
+type TableColumn = number | `${number}fr` | `${number}%` | 'auto';
 ```
 
 Each row of the table is a pagination unit. See [Tables](/docs/tables).

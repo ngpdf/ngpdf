@@ -544,6 +544,10 @@ export function layoutBox(
             const span = spanOf(cell);
             if (span === 1 && declared[column] === 'auto') {
               const alone = build(cell, new Map(), null, { next: 0 });
+              // In the table the column sets the cell's width, so its own width styles don't count.
+              alone.yoga.setWidth('auto');
+              alone.yoga.setMinWidth(undefined);
+              alone.yoga.setMaxWidth(undefined);
               alone.yoga.calculateLayout(undefined, undefined, yoga.DIRECTION_LTR);
               widths[column] = Math.max(widths[column] ?? 0, alone.yoga.getComputedWidth());
             }
