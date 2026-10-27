@@ -1,3 +1,16 @@
+import Courier from 'pdfkit/standard-fonts/Courier';
+import CourierBold from 'pdfkit/standard-fonts/CourierBold';
+import CourierBoldOblique from 'pdfkit/standard-fonts/CourierBoldOblique';
+import CourierOblique from 'pdfkit/standard-fonts/CourierOblique';
+import Helvetica from 'pdfkit/standard-fonts/Helvetica';
+import HelveticaBold from 'pdfkit/standard-fonts/HelveticaBold';
+import HelveticaBoldOblique from 'pdfkit/standard-fonts/HelveticaBoldOblique';
+import HelveticaOblique from 'pdfkit/standard-fonts/HelveticaOblique';
+import TimesBold from 'pdfkit/standard-fonts/TimesBold';
+import TimesBoldItalic from 'pdfkit/standard-fonts/TimesBoldItalic';
+import TimesItalic from 'pdfkit/standard-fonts/TimesItalic';
+import TimesRoman from 'pdfkit/standard-fonts/TimesRoman';
+
 export type StandardFont =
   | 'Helvetica'
   | 'Helvetica-Bold'
@@ -135,33 +148,48 @@ function readUint16(data: Uint8Array, at: number, bigEndian: boolean): number {
   return ((high ?? 0) << 8) | (low ?? 0);
 }
 
-/** The Orientation tag (0x0112) of IFD0 in the Exif APP1 segment `[start, end)`, or 1. */
-function exifOrientation(data: Uint8Array, start: number, end: number): number {
-  const isExif = [0x45, 0x78, 0x69, 0x66, 0, 0].every((byte, i) => data[start + i] === byte);
-  const tiff = start + 6;
-  if (!isExif || tiff + 8 > end) return 1;
+/** The Orientation tag (0x0112) of IFD0 in the Exif header at `tiff - 6`, or 1. */
+function exifOrientation(data: Uint8Array, tiff: number): number {
+  if (tiff + 8 > data.length) return 1;
   const order = readUint16(data, tiff, true);
   if (order !== 0x4d4d && order !== 0x4949) return 1;
   const bigEndian = order === 0x4d4d;
+  if (readUint16(data, tiff + 2, bigEndian) !== 42) return 1;
   const offset = bigEndian ? readUint32(data, tiff + 4) : readUint32LE(data, tiff + 4);
   const ifd = tiff + offset;
-  if (ifd + 2 > end) return 1;
+  if (ifd + 2 > data.length) return 1;
   const count = readUint16(data, ifd, bigEndian);
   for (let i = 0; i < count; i++) {
     const entry = ifd + 2 + i * 12;
-    if (entry + 12 > end) break;
+    if (entry + 12 > data.length) return 1;
     if (readUint16(data, entry, bigEndian) !== 0x0112) continue;
-    // SHORT is what the spec says; BYTE and LONG are read the way pdfkit's jpeg-exif reads them.
-    switch (readUint16(data, entry + 2, bigEndian)) {
-      case 1:
-        return data[entry + 8] ?? 1;
-      case 3:
-        return readUint16(data, entry + 8, bigEndian);
-      case 4:
-        return bigEndian ? readUint32(data, entry + 8) : readUint32LE(data, entry + 8);
-      default:
-        return 1;
-    }
+    // Read as a SHORT whatever the entry's type says, as pdfkit does.
+    const value = readUint16(data, entry + 8, bigEndian);
+    return value >= 1 && value <= 8 ? value : 1;
+  }
+  return 1;
+}
+
+/**
+ * The EXIF orientation pdfkit 0.20 draws a JPEG with, or 1. It is read the way pdfkit reads it:
+ * from the first APP1 with an Exif header anywhere before the scan, with offsets bounded by the
+ * whole file, not the segment. Reading it from the same place keeps the box in step with the
+ * drawing.
+ */
+function jpegOrientation(data: Uint8Array): number {
+  if (data.length < 20) return 1;
+  let at = 2;
+  while (at < data.length - 4) {
+    while (at < data.length && data[at] !== 0xff) at++;
+    if (at >= data.length - 4) return 1;
+    const marker = readUint16(data, at, true);
+    at += 2;
+    if (marker === 0xffda) return 1;
+    if ((marker >= 0xffd0 && marker <= 0xffd9) || marker === 0xff01) continue;
+    const length = readUint16(data, at, true);
+    const isExif = [0x45, 0x78, 0x69, 0x66, 0, 0].every((byte, i) => data[at + 2 + i] === byte);
+    if (marker === 0xffe1 && isExif) return exifOrientation(data, at + 8);
+    at += length;
   }
   return 1;
 }
@@ -172,19 +200,10 @@ function exifOrientation(data: Uint8Array, start: number, end: number): number {
  */
 function jpegSize(data: Uint8Array): { width: number; height: number } {
   let at = 2;
-  let orientation = 1;
-  // pdfkit (through jpeg-exif) reads the orientation only from the first APP1 in the run of APPn
-  // segments right after SOI. Reading it from the same place keeps the box in step with the drawing.
-  let inLeadingApps = true;
+  const orientation = jpegOrientation(data);
   while (at + 4 <= data.length) {
     if (data[at] !== 0xff) throw new Error('ngpdf: invalid JPEG marker');
     const marker = data[at + 1] ?? 0;
-    const isApp = marker >= 0xe0 && marker <= 0xef;
-    if (inLeadingApps && marker === 0xe1) {
-      const end = Math.min(data.length, at + 2 + readUint16(data, at + 2, true));
-      orientation = exifOrientation(data, at + 4, end);
-    }
-    if (!isApp || marker === 0xe1) inLeadingApps = false;
     if (marker === 0xff) {
       at += 1; // fill byte
       continue;
@@ -217,7 +236,10 @@ function imageSize(data: Uint8Array): { width: number; height: number } {
   throw new Error('ngpdf: image is neither PNG nor JPEG');
 }
 
-/** pdfkit only takes Node Buffers or data URLs; a data URL works in the browser too. */
+/**
+ * pdfkit caches an image only when its `src` is a string, so a repeated image given as a data URL
+ * is embedded once. It also accepts a `Uint8Array`, but then embeds each use again.
+ */
 function toDataUrl(data: Uint8Array): string {
   let binary = '';
   for (let at = 0; at < data.length; at += 0x8000) {
@@ -232,8 +254,35 @@ interface FontInternals {
   _font: { ascender: number; font?: { hasGlyphForCodePoint(codePoint: number): boolean } };
 }
 
+type StandardFontData = typeof Helvetica;
+
+/** pdfkit 0.20's standard-font registry, which `@types/pdfkit` (written for 0.17) does not know. */
+interface StandardFontRegistry {
+  registerStdFonts?: (...fonts: readonly StandardFontData[]) => void;
+}
+
+/** The metrics of the twelve fonts in `StandardFont`; pdfkit's browser build bundles none. */
+const STANDARD_FONTS: readonly StandardFontData[] = [
+  Helvetica,
+  HelveticaBold,
+  HelveticaOblique,
+  HelveticaBoldOblique,
+  TimesRoman,
+  TimesBold,
+  TimesItalic,
+  TimesBoldItalic,
+  Courier,
+  CourierBold,
+  CourierOblique,
+  CourierBoldOblique,
+];
+
 export async function createPdfkitWriter(options: { compress?: boolean } = {}): Promise<PdfWriter> {
-  const { default: PDFDocument } = await import('pdfkit/js/pdfkit.standalone.js');
+  const pdfkit = await import('pdfkit');
+  const PDFDocument = pdfkit.default;
+  // The browser build throws on a standard font nobody registered. Registering the same data again
+  // changes nothing. The Node build (a user's test runner) loads its own and has no such function.
+  (pdfkit as StandardFontRegistry).registerStdFonts?.(...STANDARD_FONTS);
   const compress = options.compress ?? true;
 
   // One document only measures; write() builds a fresh one so renders never share state.
@@ -315,7 +364,7 @@ export async function createPdfkitWriter(options: { compress?: boolean } = {}): 
   };
 }
 
-type Doc = InstanceType<Awaited<typeof import('pdfkit/js/pdfkit.standalone.js')>['default']>;
+type Doc = PDFKit.PDFDocument;
 
 /**
  * pdfkit options that draw `op.text` as the one line the layout made of it. Any `width` turns on
