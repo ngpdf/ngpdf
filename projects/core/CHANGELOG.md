@@ -1,5 +1,49 @@
 # @ngpdf/core
 
+## 0.4.0
+
+### Minor Changes
+
+- [#119](https://github.com/ngpdf/ngpdf/pull/119) [`9844b8c`](https://github.com/ngpdf/ngpdf/commit/9844b8c09f824a4872f67dd07d3162d227a65d09) Thanks [@GabeSilvaDev](https://github.com/GabeSilvaDev)! - Add `'auto'` table columns: `[columns]="['auto', '1fr', 'auto']"` sizes a column to the widest
+  content of its cells on one line, so codes, dates and totals fit without wrapping. `auto` columns
+  come after fixed and percentage columns and before `fr` ones, and shrink in proportion when they do
+  not fit.
+
+- [#111](https://github.com/ngpdf/ngpdf/pull/111) [`b2ac328`](https://github.com/ngpdf/ngpdf/commit/b2ac3283566eaa8b30ce87af4b0a7e9b25ef2a82) Thanks [@Aaqibhafeezkhan](https://github.com/Aaqibhafeezkhan)! - Add optional document language, application attribution and initial page-view preferences to generated PDFs. Language tags and viewer preferences are validated, and the PDF producer metadata now identifies ngpdf instead of PDFKit.
+
+- [#122](https://github.com/ngpdf/ngpdf/pull/122) [`59006e9`](https://github.com/ngpdf/ngpdf/commit/59006e912ed7cfbadfa0852061ee38a002d81517) Thanks [@GabeSilvaDev](https://github.com/GabeSilvaDev)! - Add `max-lines` to cut a `pdf-text` to a number of lines. When text was cut, the last kept line ends with `…`, shortened until it fits the box, and the text is only as tall as the lines it keeps. A font without `…` gets `...` instead.
+
+- [#117](https://github.com/ngpdf/ngpdf/pull/117) [`353ff5e`](https://github.com/ngpdf/ngpdf/commit/353ff5e317d1dce5a3c9c3ebc1dfa7e3e5a29b77) Thanks [@GabeSilvaDev](https://github.com/GabeSilvaDev)! - `pdf-page-number` now works anywhere in a page, not only as a direct child of `pdf-page`. Put it in
+  a fixed header to show "Page 2 of 5" on every sheet, or anywhere in the content to show the number
+  of the sheet it lands on. A direct child of `pdf-page` still reserves the bottom of every sheet as
+  before.
+
+- [#121](https://github.com/ngpdf/ngpdf/pull/121) [`6fb4354`](https://github.com/ngpdf/ngpdf/commit/6fb4354f6bf7dc5182598f4e4a0b185e5faf13ac) Thanks [@GabeSilvaDev](https://github.com/GabeSilvaDev)! - Add `text-align: justify`. Every line of a paragraph but the last is stretched to both edges of its
+  box by widening the gaps between words, across `pdf-span`s and across a page break. The last line,
+  a line with one word and a word wider than the box stay at the start.
+
+### Patch Changes
+
+- [#58](https://github.com/ngpdf/ngpdf/pull/58) [`ced90e0`](https://github.com/ngpdf/ngpdf/commit/ced90e026753732aa1254e61d12de6cf2c6945c8) Thanks [@arxigen](https://github.com/arxigen)! - Style keywords are matched case-insensitively and trimmed, as in CSS. `text-align: CENTER` no longer
+  throws, and `font-weight: BOLD` and `font-style: ITALIC` are no longer dropped silently. This covers
+  `text-align`, `text-decoration`, `flex-direction`, `justify-content`, `align-items`, `align-self`,
+  `object-fit`, `font-weight`, `font-style` and `break-before`. Unknown keywords behave as before:
+  they throw for `text-align`, `text-decoration`, `flex-direction`, `justify-content`, `align-items`,
+  `align-self` and `object-fit`, fall back to `normal` for `font-weight` and `font-style`, and are
+  ignored for `break-before`.
+
+- [#63](https://github.com/ngpdf/ngpdf/pull/63) [`df2b007`](https://github.com/ngpdf/ngpdf/commit/df2b007064094fad1a5f6d3201474f9c917bea6e) Thanks [@arxigen](https://github.com/arxigen)! - ngpdf now uses pdfkit 0.20. pdfkit's ES module browser build replaces its old standalone bundle, so the combined PDF engine payload loaded on the first render drops from about 1.5 MB to about 610 KB before compression, and from about 433 KB to about 238 KB gzipped. The initial bundle is unchanged.
+
+  The text and layout of the PDFs you get are unchanged. Their bytes are not: pdfkit 0.20 compresses streams with a different library and writes `/UserUnit 1` on every page.
+
+  A JPEG's EXIF orientation is now read the way pdfkit 0.20 reads it: from the first Exif segment before the image data, even when an XMP segment or a comment comes first. The image's laid-out size keeps matching how pdfkit turns it.
+
+  In an Angular CLI app, pdfkit no longer needs to be listed under `allowedCommonJsDependencies`. Angular may now name fontkit's CommonJS dependencies instead (`brotli`, `clone`, `dfa`, `fast-deep-equal` and `tiny-inflate`).
+
+- [#60](https://github.com/ngpdf/ngpdf/pull/60) [`82788a8`](https://github.com/ngpdf/ngpdf/commit/82788a8ec46366baadd18ab80731f1ba0ab9d7c4) Thanks [@arxigen](https://github.com/arxigen)! - Large images given as percent-encoded data URLs load faster. The decoded image is unchanged.
+
+- [#56](https://github.com/ngpdf/ngpdf/pull/56) [`af957f2`](https://github.com/ngpdf/ngpdf/commit/af957f25849b1b0f2e8b33edafba056c91d5cfbf) Thanks [@jay23606](https://github.com/jay23606)! - Support `thin`, `medium` and `thick` border widths, and reject negative border widths.
+
 ## 0.3.0
 
 ### Minor Changes
