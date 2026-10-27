@@ -603,6 +603,24 @@ describe('layoutRanges with maxLines', () => {
     expect(block.height).toBe(clamped(1, 10).height);
   });
 
+  it('finds the longest cut when a smaller face after a large one makes the ellipsis narrower', () => {
+    // Each character is as wide as its font size: "QX…" is 9 + 60 + 60 = 129pt, "QXa…" 87pt.
+    const sized: FontMetrics = {
+      widthOf: (chunk, _font, size) => size * chunk.length,
+      ascent: () => 0,
+      hasGlyph: () => false,
+    };
+    const big: TextStyle = { ...style, fontSize: 60 };
+    const ranges = [
+      { text: 'Q', style },
+      { text: 'X', style: big },
+      { text: 'a bbbbbbbb', style },
+    ];
+    const [line] = layoutRanges(ranges, { ...style, maxLines: 1 }, 88, sized).lines;
+    expect(line?.text).toBe('QXa…');
+    expect(line?.width).toBe(87);
+  });
+
   it('marks a cut line as the last, so justify leaves it alone', () => {
     const lines = clamped(2).lines;
     expect(lines.map((line) => line.last)).toEqual([false, true]);

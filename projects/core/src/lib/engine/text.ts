@@ -385,14 +385,20 @@ function breakLines(
   const widthOfRange = (start: number, end: number): number =>
     runsOf(start, end).reduce((sum, run) => sum + run.width, 0);
 
-  /**
-   * The runs of `[start, end)` without its trailing spaces, then the ellipsis in the face of the
-   * last kept character (`fallback` when nothing is kept).
-   */
-  const runsWithEllipsis = (start: number, end: number, fallback: number): TextRun[] => {
+  /** `end` without the spaces before it, down to `start`. */
+  const keptEnd = (start: number, end: number): number => {
     let kept = end;
     while (kept > start && collapsed.charCodeAt(kept - 1) === 32) kept--;
-    const index = kept > start ? (fontAt[kept - 1] ?? fallback) : fallback;
+    return kept;
+  };
+  /** The face the ellipsis takes after `[start, end)`: its last kept character's, or `fallback`. */
+  const ellipsisFace = (start: number, end: number, fallback: number): number => {
+    const kept = keptEnd(start, end);
+    return kept > start ? (fontAt[kept - 1] ?? fallback) : fallback;
+  };
+  /** The runs of `[start, end)` without its trailing spaces, then the ellipsis in face `index`. */
+  const runsWithEllipsis = (start: number, end: number, index: number): TextRun[] => {
+    const kept = keptEnd(start, end);
     const runs = runsOf(start, kept);
     const ellipsis = ellipses[index] ?? ELLIPSIS;
     const face = faces[index] ?? faces[0];
@@ -467,16 +473,28 @@ function breakLines(
     // The paragraph's ends are trimmed, so anything after `end` is text that gets cut.
     const clamped = lines.length + 1 >= maxLines && end < length;
     if (clamped) {
-      const index = fontAt[drawnEnd(end) - 1] ?? 0;
-      const widthWith = (k: number): number =>
-        runsWithEllipsis(start, cut(k), index).reduce((sum, run) => sum + run.width, 0);
-      const first = cutIndex(start);
-      const k = Math.max(
-        lastWhere(first, cutIndex(drawnEnd(end)), (i) => widthWith(i) <= maxWidth),
-        first,
-      );
+      const fallback = fontAt[drawnEnd(end) - 1] ?? 0;
+      const widthWith = (k: number, face: number): number =>
+        runsWithEllipsis(start, cut(k), face).reduce((sum, run) => sum + run.width, 0);
+      // The ellipsis takes the face of the last kept character, so a cut that ends in a smaller
+      // face can fit where a shorter one did not. With the face fixed, width only grows with the
+      // cut, so each face gets its own search over the cuts that end in it.
+      const cutsByFace = new Map<number, number[]>();
+      for (let k = cutIndex(start); k <= cutIndex(drawnEnd(end)); k++) {
+        const face = ellipsisFace(start, cut(k), fallback);
+        const cuts = cutsByFace.get(face) ?? [];
+        cuts.push(k);
+        cutsByFace.set(face, cuts);
+      }
+      let best = -1;
+      let bestFace = fallback;
+      for (const [face, cuts] of cutsByFace) {
+        const i = lastWhere(0, cuts.length - 1, (j) => widthWith(cuts[j] ?? 0, face) <= maxWidth);
+        const k = cuts[i] ?? -1;
+        if (k > best) [best, bestFace] = [k, face];
+      }
       // A box narrower than the ellipsis gets an empty line rather than one that overflows.
-      runs = widthWith(k) <= maxWidth ? runsWithEllipsis(start, cut(k), index) : [];
+      runs = best >= 0 ? runsWithEllipsis(start, cut(best), bestFace) : [];
     }
     // An empty cut line keeps the height of the text it replaces.
     const sized = runs.length > 0 ? runs : runsOf(start, drawnEnd(end));
