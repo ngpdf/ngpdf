@@ -123,7 +123,7 @@ The same applies to the text of `pdf-page-number`.
 - Widths include the font's kerning, and the ligatures of a custom font.
 - There is no hyphenation, no `text-align: justify` and no right-to-left text in v0.1.
 
-A `pdf-text` is one pagination unit and is never split across pages. Long text belongs in several `pdf-text` elements, one per paragraph, so the paragraphs can flow onto the next page. See [Pagination](/docs/pagination).
+A long `pdf-text` breaks between lines at a page break, keeping `orphans` lines (default 2) before the break and `widows` lines (default 2) after it. `break-inside: avoid` keeps it whole. See [Text across pages](/docs/pagination#text-across-pages).
 
 ## Line height
 
@@ -136,7 +136,7 @@ A `pdf-text` is one pagination unit and is never split across pages. Long text b
 
 Write a length with its unit, such as `line-height: 14pt`, when you mean points. A length is divided by the element's own font size, and the resulting ratio is inherited.
 
-ngpdf places text at the top of its line box. Extra line height goes below the text, not half above and half below as in CSS. A block of text is `number of lines × font-size × line-height` high.
+ngpdf places text at the top of its line box. Extra line height goes below the text, not half above and half below as in CSS. Each line is `font-size × line-height` high, using the largest font size on the line, so a block of text in one size is `number of lines × font-size × line-height` high.
 
 ## Alignment and decoration
 
@@ -146,9 +146,25 @@ ngpdf places text at the top of its line box. Extra line height goes below the t
 
 Unlike CSS, all text styles, `text-decoration` included, are inherited by child elements.
 
-## Nested pdf-text
+## Styled runs: pdf-span
 
-A `pdf-text` inside a `pdf-text` is flattened to its text, and its own style is lost. So one bold word inside a sentence is not possible in v0.1. Elements other than text inside a `pdf-text` are not laid out.
+Wrap part of a text in a `pdf-span` to draw it in other text styles:
+
+```html
+<pdf-text style="font-size: 11pt">
+  Invoice <pdf-span style="font-weight: bold">#{{ number() }}</pdf-span> is
+  <pdf-span style="color: #b00020">{{ days() }} days overdue</pdf-span>.
+</pdf-text>
+```
+
+- A span inherits the text styles around it and can change `color`, `font-family`, `font-size`, `font-weight`, `font-style` and `text-decoration`. Spans nest.
+- The paragraph wraps as one text: a span boundary is not a place to break, and a span wraps over lines like the rest of the text. Kerning is not applied across two spans.
+- Runs of different sizes share a baseline, and a line is as tall as its largest font size times the paragraph's `line-height`.
+- `line-height` and `text-align` belong to the `pdf-text`. Other properties on a span, such as padding or a background, have no effect and get a warning in development mode.
+- A span is drawn in the fonts its own `font-family` names, with the same fallback as any text.
+- `@if`, `@for` and components work inside a `pdf-text` as anywhere else.
+
+A `pdf-text` inside a `pdf-text` is drawn in the outer text's style, with a warning in development mode: use `pdf-span` instead. Elements other than `pdf-span` and text inside a `pdf-text` are not laid out.
 
 ## Bare text
 

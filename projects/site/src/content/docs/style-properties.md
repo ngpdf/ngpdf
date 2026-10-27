@@ -29,6 +29,8 @@ All text properties are inherited by child elements.
 | `text-align` | `left`, `center`, `right` | `left` |
 | `text-decoration` | `none`, `underline`, `line-through` | `none` |
 
+A `pdf-span` takes `color`, `font-family`, `font-size`, `font-weight`, `font-style` and `text-decoration`; `line-height` and `text-align` come from its `pdf-text`. See [Styled runs](/docs/text-and-fonts#styled-runs-pdf-span).
+
 Without a registered family in the list: `font-family` contains `courier` or `mono`: Courier. Contains `times`, or `serif` without `sans`: Times. Otherwise Helvetica. With one, each character takes the first font in the list that has it. See [Text and fonts](/docs/text-and-fonts).
 
 ## Flexbox
@@ -87,12 +89,15 @@ Shorthands with 1 to 4 values follow CSS order: top, right, bottom, left.
 
 In `border`, a missing width is 1 and a missing color is black. The width keywords `thin`, `medium` and `thick` mean 1, 3 and 5 points. The styles `none` and `hidden` set the width to 0; `solid` draws solid; `dashed`, `dotted`, `double`, `groove`, `ridge`, `inset` and `outset` are drawn solid with a dev-mode warning. `border-radius` rounds the background only; borders stay square.
 
-## Images and pages
+## Images, pages and breaks
 
 | Property | Values | Default |
 | --- | --- | --- |
 | `object-fit` | `contain`, `cover` | `contain` |
 | `break-before` | `page` starts a new sheet; other values do nothing | |
+| `break-inside` | `avoid` or `avoid-page` keeps a `pdf-text` on one sheet; other values do nothing | `auto` |
+| `orphans` | integer ≥ 1: the fewest lines of a `pdf-text` before a page break (inherited) | `2` |
+| `widows` | integer ≥ 1: the fewest lines of a `pdf-text` after a page break (inherited) | `2` |
 
 ## Ignored
 
@@ -110,7 +115,8 @@ Some styles are ignored in specific places:
 - `width`, `height`, the `min-`/`max-` sizes and `margin` on a `pdf-page`;
 - horizontal padding, left and right borders, margins, `justify-content`, `flex-direction` and `gap` on a `pdf-row` inside a table;
 - margins, `min-width` and `max-width` on a `pdf-cell` inside a table;
-- position and size styles other than `height` on `pdf-page-number`.
+- position and size styles other than `height` on `pdf-page-number`;
+- everything except the six text properties above on a `pdf-span` (with a warning).
 
 ## Throws
 

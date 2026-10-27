@@ -30,7 +30,7 @@ ngpdf runs change detection once, then hands the tree to the engine.
 
 ### 2. Dissolving hosts
 
-Elements that are not one of the nine `pdf-*` elements, such as your own components' hosts, are replaced by their children, like CSS `display: contents`. Every later stage sees only `pdf-*` elements, however you split the template into components.
+Elements that are not one of the ten `pdf-*` elements, such as your own components' hosts, are replaced by their children, like CSS `display: contents`. Every later stage sees only `pdf-*` elements, however you split the template into components.
 
 ### 3. Styles
 

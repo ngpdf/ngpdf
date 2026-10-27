@@ -23,6 +23,10 @@ export interface TextStyle {
   readonly lineHeight: number;
   readonly textAlign: 'left' | 'center' | 'right';
   readonly textDecoration: 'none' | 'underline' | 'line-through';
+  /** The fewest lines of a split text left at the bottom of a page. */
+  readonly orphans: number;
+  /** The fewest lines of a split text carried to the top of the next page. */
+  readonly widows: number;
 }
 
 type AlignItems = 'stretch' | 'flex-start' | 'center' | 'flex-end';
@@ -53,6 +57,7 @@ export interface ResolvedStyle extends TextStyle {
   readonly opacity: number;
   readonly objectFit: 'contain' | 'cover';
   readonly breakBefore: boolean;
+  readonly breakInside: 'auto' | 'avoid';
 }
 
 export interface FlexParts {
@@ -86,6 +91,8 @@ export const ROOT_TEXT_STYLE: TextStyle = Object.freeze({
   lineHeight: 1.2,
   textAlign: 'left',
   textDecoration: 'none',
+  orphans: 2,
+  widows: 2,
 });
 
 const POINTS_PER_INCH = 72;
@@ -343,6 +350,7 @@ function defaultStyle(node: PdfNode, inherited: TextStyle): Mutable<ResolvedStyl
     opacity: 1,
     objectFit: 'contain',
     breakBefore: propsOf(node)['breakBefore'] === true,
+    breakInside: 'auto',
   };
 }
 
@@ -502,9 +510,24 @@ function apply(
     case 'break-before':
       style.breakBefore = style.breakBefore || value === 'page';
       break;
+    case 'break-inside':
+      style.breakInside = ['avoid', 'avoid-page'].includes(value.trim()) ? 'avoid' : 'auto';
+      break;
+    case 'orphans':
+    case 'widows':
+      style[property] = lineCountOf(value, property, tag);
+      break;
     default:
       break;
   }
+}
+
+function lineCountOf(value: string, property: string, tag: string): number {
+  const number = parseNumber(value.trim());
+  if (number === null || !Number.isInteger(number) || number < 1) {
+    return fail(`expected an integer of at least 1 in "${show(value)}" for ${property}`, tag);
+  }
+  return number;
 }
 
 function numberOf(value: string, property: string, tag: string): number {
@@ -553,6 +576,8 @@ function textPartOf(style: ResolvedStyle): TextStyle {
     lineHeight: style.lineHeight,
     textAlign: style.textAlign,
     textDecoration: style.textDecoration,
+    orphans: style.orphans,
+    widows: style.widows,
   };
 }
 
@@ -580,6 +605,29 @@ function checkImageChildren(node: PdfNode): void {
   if (child) fail(`pdf-image cannot have children (found <${child.tag}>)`);
 }
 
+const INLINE = new Set(['pdf-text', 'pdf-span']);
+// A pdf-span is part of a line: only what changes how its characters are drawn applies to it.
+const SPAN_PROPERTIES = new Set([
+  'color',
+  'font-family',
+  'font-size',
+  'font-weight',
+  'font-style',
+  'text-decoration',
+]);
+
+function checkInline(node: PdfNode, warn: Warn): void {
+  const inText = INLINE.has(node.parent?.tag ?? '');
+  if (node.tag === 'pdf-span') {
+    if (!inText) fail('pdf-span must be inside a pdf-text');
+    for (const property of Object.keys(node.rawStyle)) {
+      if (!SPAN_PROPERTIES.has(property)) warn(`ngpdf: ${property} has no effect on pdf-span`);
+    }
+  } else if (node.tag === 'pdf-text' && inText) {
+    warn('ngpdf: a pdf-text inside a pdf-text is drawn in the outer style; use pdf-span');
+  }
+}
+
 /**
  * Resolves every element under `root`; text and comment nodes get no entry. Warnings (a border
  * style drawn solid) go to `warn`, which the caller dedupes and prints in dev mode only. Runs
@@ -595,6 +643,7 @@ export function resolveStyles(
   for (let item = stack.pop(); item; item = stack.pop()) {
     if (item.depth > MAX_NESTING) fail(`nesting deeper than ${String(MAX_NESTING)}`);
     checkImageChildren(item.node);
+    checkInline(item.node, warn);
     const style = resolveOne(item.node, item.inherited, warn);
     result.set(item.node, style);
     const inherited = textPartOf(style);

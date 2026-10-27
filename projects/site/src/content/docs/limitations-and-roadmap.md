@@ -13,7 +13,6 @@ ngpdf v0.1 covers documents built from text, tables, boxes and images. This page
 
 - In the standard PDF fonts (Helvetica, Times and Courier), only WinAnsi characters: any other is drawn as `?`, with a warning in development mode. [Custom fonts](/docs/text-and-fonts#custom-fonts) have no such limit.
 - No font collections (`.ttc`), no color emoji fonts, and no kerning across two fonts in one line.
-- A `pdf-text` inside a `pdf-text` is flattened to its text, so one bold word inside a sentence is not possible.
 - Text sits at the top of its line box: extra `line-height` goes below the text, not half above and half below as in CSS.
 - A bare number is in points, except in `line-height`, where it multiplies the font size as in CSS (`line-height: 1.4`). Write `line-height: 14pt` for points.
 - Bare text inside an element other than `pdf-text` (`<pdf-cell>{{ x }}</pdf-cell>`) is laid out as an anonymous `pdf-text` with its parent's text styles.
@@ -36,8 +35,7 @@ ngpdf v0.1 covers documents built from text, tables, boxes and images. This page
 
 ### Pagination
 
-- `pdf-page-number` always sits at the bottom of the content area.
-- A unit taller than a page (a row, a `pdf-text`, or a `pdf-view` in a column) is clipped to its page. A text block is never split across pages.
+- A unit taller than a page (a row, or a `pdf-view` in a column) is clipped to its page. So is a `pdf-text` that stays one unit: one inside a row, or one with `break-inside: avoid`, a fixed `height` or `max-height`, or fewer than `orphans + widows` lines. Other text breaks between lines instead.
 
 ### Images
 
@@ -61,9 +59,7 @@ These items are in the [v0.2 roadmap](https://github.com/ngpdf/ngpdf/blob/main/d
 - Fill the remaining page height.
 - Group opacity, so a faded view is composited as one.
 - Half-leading: extra line height split above and below the text, as in CSS.
-- Styles on nested `pdf-text`, for inline runs such as one bold word.
 - Content-sized table columns (`auto`).
-- A positioned page number.
 - Rounded borders that follow `border-radius`.
 - Table headers: a warning or a fix when a header is dropped or too tall to repeat, and `breakBefore` kept on header rows.
 

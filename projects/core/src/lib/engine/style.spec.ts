@@ -69,6 +69,8 @@ describe('resolveStyles', () => {
       lineHeight: 1.2,
       textAlign: 'left',
       textDecoration: 'none',
+      orphans: 2,
+      widows: 2,
     });
   });
 
@@ -276,6 +278,45 @@ describe('resolveStyles', () => {
     expect(() => resolveStyles(build(100000))).toThrow('ngpdf: nesting deeper than 64');
   });
 
+  it('lets a pdf-span inherit and override the text styles of its pdf-text', () => {
+    const span = el('pdf-span', { 'font-weight': 'bold', color: 'red' }, [
+      createNode('text', '', 'x'),
+    ]);
+    const text = el('pdf-text', { 'font-size': '14', color: 'blue' }, [span]);
+    const style = resolveStyles(el('pdf-document', {}, [text])).get(span);
+    expect(style).toMatchObject({ fontSize: 14, fontWeight: 'bold', color: { r: 255, b: 0 } });
+  });
+
+  it('accepts a pdf-span inside a pdf-span and throws for one outside a pdf-text', () => {
+    const nested = el('pdf-text', {}, [el('pdf-span', {}, [el('pdf-span')])]);
+    expect(() => resolveStyles(el('pdf-document', {}, [nested]))).not.toThrow();
+    expect(() =>
+      resolveStyles(el('pdf-document', {}, [el('pdf-view', {}, [el('pdf-span')])])),
+    ).toThrow('ngpdf: pdf-span must be inside a pdf-text');
+  });
+
+  it('warns about properties that have no effect on a pdf-span', () => {
+    const warn = vi.fn();
+    const span = el('pdf-span', { 'font-style': 'italic', padding: '4', 'text-align': 'right' });
+    resolveStyles(el('pdf-document', {}, [el('pdf-text', {}, [span])]), warn);
+    expect(warn.mock.calls).toEqual([
+      ['ngpdf: padding has no effect on pdf-span'],
+      ['ngpdf: text-align has no effect on pdf-span'],
+    ]);
+  });
+
+  it('warns that a pdf-text inside a pdf-text is flattened', () => {
+    const warn = vi.fn();
+    const inner = el('pdf-text', { 'font-weight': 'bold' });
+    resolveStyles(
+      el('pdf-document', {}, [el('pdf-text', {}, [el('pdf-span', {}, [inner])])]),
+      warn,
+    );
+    expect(warn).toHaveBeenCalledExactlyOnceWith(
+      'ngpdf: a pdf-text inside a pdf-text is drawn in the outer style; use pdf-span',
+    );
+  });
+
   it('throws a clear error for a pdf-image with an element child, which Yoga cannot lay out', () => {
     const image = el('pdf-image', {}, [el('pdf-text', {}, [createNode('text', '', 'x')])]);
     expect(() => resolveStyles(el('pdf-document', {}, [image]))).toThrow(
@@ -371,6 +412,33 @@ describe('resolveStyles property coverage', () => {
     expect(style.backgroundColor).toEqual(rgb(238, 238, 238));
     expect(style.borderRadius).toBe(3);
     expect(style.objectFit).toBe('cover');
+  });
+
+  it('reads orphans and widows as integers of at least 1, inherited, default 2', () => {
+    expect(styleOf({})).toMatchObject({ orphans: 2, widows: 2 });
+    expect(styleOf({ orphans: '3', widows: ' 1 ' })).toMatchObject({ orphans: 3, widows: 1 });
+    const text = el('pdf-text');
+    const view = el('pdf-view', { orphans: '4', widows: '5' }, [text]);
+    expect(resolveStyles(view).get(text)).toMatchObject({ orphans: 4, widows: 5 });
+    for (const property of ['orphans', 'widows']) {
+      for (const value of ['0', '-1', '1.5', 'two']) {
+        expect(() => styleOf({ [property]: value })).toThrow(
+          `ngpdf: expected an integer of at least 1 in "${value}" for ${property}`,
+        );
+      }
+    }
+  });
+
+  it('reads break-inside: avoid, not inherited', () => {
+    expect(styleOf({}).breakInside).toBe('auto');
+    expect(styleOf({ 'break-inside': 'avoid' }).breakInside).toBe('avoid');
+    expect(styleOf({ 'break-inside': 'avoid-page' }).breakInside).toBe('avoid');
+    expect(styleOf({ 'break-inside': 'auto' }).breakInside).toBe('auto');
+    // Columns don't exist here, so avoiding a column break avoids nothing.
+    expect(styleOf({ 'break-inside': 'avoid-column' }).breakInside).toBe('auto');
+    const text = el('pdf-text');
+    const view = el('pdf-view', { 'break-inside': 'avoid' }, [text]);
+    expect(resolveStyles(view).get(text)?.breakInside).toBe('auto');
   });
 
   it('clamps opacity to 0..1', () => {

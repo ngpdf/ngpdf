@@ -129,7 +129,7 @@ invalidation would buy nothing here.
   stage that collects children (pages, rows, cells, pagination units, layout) would otherwise
   have to look through hosts.
 - **Decision.** `dissolveHosts` copies the document's tree with every element that is not one of
-  the nine `pdf-*` elements replaced by its children, like CSS `display: contents`. A host's
+  the ten `pdf-*` elements replaced by its children, like CSS `display: contents`. A host's
   own style is ignored, with one dev-mode warning per tag. The stages after it never see a host.
 - **Alternative.** Teaching each stage to skip hosts. It loses because five places would each
   need the same rule, and missing one gives a silent wrong layout.
