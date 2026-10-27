@@ -26,7 +26,7 @@ All text properties are inherited by child elements.
 | `font-weight` | `bold`, `bolder`, a number ≥ 600 (bold); anything else is normal | normal |
 | `font-style` | `italic`, `oblique` (italic); anything else is normal | normal |
 | `line-height` | number (× font size), `N%`, length, `normal` (keeps the inherited value) | `1.2` |
-| `text-align` | `left`, `center`, `right` | `left` |
+| `text-align` | `left`, `center`, `right`, `justify` | `left` |
 | `text-decoration` | `none`, `underline`, `line-through` | `none` |
 
 A `pdf-span` takes `color`, `font-family`, `font-size`, `font-weight`, `font-style` and `text-decoration`; `line-height` and `text-align` come from its `pdf-text`. See [Styled runs](/docs/text-and-fonts#styled-runs-pdf-span).

@@ -612,6 +612,52 @@ describe('createPdfkitWriter', () => {
       expect(Number(to) - Number(from)).toBeCloseTo(width, 3);
     });
 
+    it('draws word-spaced text word by word at the measured positions, underlined through the gaps', async () => {
+      const line = 'Bem Viver  agora';
+      const spacing = 4;
+      const content = contentOf(
+        await pdfText([
+          { ...TEXT_OP, text: line, opacity: 1, strike: false, wordSpacing: spacing },
+        ]),
+      );
+      const starts = [...content.matchAll(/^1 0 0 1 ([\d.]+) [\d.]+ Tm$/gm)].map((m) =>
+        Number(m[1]),
+      );
+      const width = (part: string) => writer.widthOf(part, 'Helvetica', 12);
+      // A word starts where the text through it ends, minus its own width: ' V' kerns by -0.6pt.
+      const at = (through: string, word: string, gaps: number) =>
+        TEXT_OP.x + width(through) - width(word) + gaps * spacing;
+      expect(starts).toHaveLength(3);
+      expect(starts[0]).toBeCloseTo(TEXT_OP.x, 3);
+      expect(starts[1]).toBeCloseTo(at('Bem Viver', 'Viver', 1), 3);
+      expect(starts[2]).toBeCloseTo(at(line, 'agora', 2), 3);
+      const strokes = [...content.matchAll(/^([\d.]+) [\d.]+ m\n([\d.]+) [\d.]+ l$/gm)];
+      const [from, to] = [Number(strokes[0]![1]), Number(strokes.at(-1)![2])];
+      expect(from).toBeCloseTo(TEXT_OP.x, 3);
+      expect(to).toBeCloseTo(at(line, '', 2), 3);
+    });
+
+    it('draws a leading gap as space, moving the first word right', async () => {
+      const content = contentOf(
+        await pdfText([
+          {
+            ...TEXT_OP,
+            text: ' tail',
+            opacity: 1,
+            underline: false,
+            strike: false,
+            wordSpacing: 5,
+          },
+        ]),
+      );
+      const starts = [...content.matchAll(/^1 0 0 1 ([\d.]+) [\d.]+ Tm$/gm)].map((m) =>
+        Number(m[1]),
+      );
+      expect(starts).toEqual([
+        expect.closeTo(TEXT_OP.x + writer.widthOf(' ', 'Helvetica', 12) + 5, 3),
+      ]);
+    });
+
     it('draws the strike-through across the whole line, half a line height below its top', async () => {
       const width = writer.widthOf(TEXT_OP.text, 'Helvetica', 12);
       const content = contentOf(await pdfText([{ ...TEXT_OP, opacity: 1, underline: false }]));

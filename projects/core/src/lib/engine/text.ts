@@ -27,6 +27,8 @@ export interface TextLine {
   readonly height: number;
   /** The baseline, below `y`: the largest ascent of the line's runs. */
   readonly ascent: number;
+  /** The paragraph's last line, which `text-align: justify` leaves at the start. */
+  readonly last: boolean;
   readonly runs: readonly TextRun[];
 }
 
@@ -48,6 +50,11 @@ export interface TextBlock {
   readonly lines: readonly TextLine[];
   readonly width: number;
   readonly height: number;
+}
+
+/** The word gaps in `text` that justified text widens: runs of spaces and no-break spaces, as in CSS. */
+export function wordGaps(text: string): number {
+  return text.match(/[ \u00a0]+/g)?.length ?? 0;
 }
 
 const MAX_TEXT_LENGTH = 1_048_576;
@@ -430,6 +437,8 @@ function breakLines(
       y: top,
       height,
       ascent,
+      // The text is trimmed, so only the last line reaches its end.
+      last: end === length,
       runs,
     });
     top += height;

@@ -448,7 +448,7 @@ describe('resolveStyles property coverage', () => {
   });
 
   it.each([
-    ['text-align', 'justify'],
+    ['text-align', 'start'],
     ['text-decoration', 'overline'],
     ['flex-direction', 'row-reverse'],
     ['justify-content', 'start'],
@@ -465,6 +465,7 @@ describe('resolveStyles property coverage', () => {
   it.each([
     ['text-align', 'CENTER', 'textAlign', 'center'],
     ['text-align', ' Right ', 'textAlign', 'right'],
+    ['text-align', 'Justify', 'textAlign', 'justify'],
     ['text-decoration', 'Line-Through', 'textDecoration', 'line-through'],
     ['flex-direction', 'ROW', 'flexDirection', 'row'],
     ['flex-direction', 'Column', 'flexDirection', 'column'],
@@ -503,8 +504,8 @@ describe('resolveStyles property coverage', () => {
   });
 
   it('still rejects an unknown keyword in any case, naming the value as written', () => {
-    expect(() => styleOf({ 'text-align': 'JUSTIFY' })).toThrow(
-      'ngpdf: invalid value "JUSTIFY" for text-align on pdf-view',
+    expect(() => styleOf({ 'text-align': 'START' })).toThrow(
+      'ngpdf: invalid value "START" for text-align on pdf-view',
     );
     expect(styleOf({ 'font-weight': 'HEAVY' }).fontWeight).toBe('normal');
   });

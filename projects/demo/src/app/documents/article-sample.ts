@@ -9,7 +9,7 @@ const SENTENCES = [
   'Back at the hut the numbers were checked against the previous year and the differences marked.',
 ];
 
-/** Paragraphs long enough to break across pages, with orphans and widows kept. */
+/** Justified paragraphs long enough to break across pages, with orphans and widows kept. */
 @Component({
   selector: 'app-article-sample',
   imports: [PDF_ELEMENTS],
@@ -22,12 +22,12 @@ const SENTENCES = [
         @for (paragraph of paragraphs; track $index; let i = $index) {
           @if (i === 3) {
             <pdf-text
-              style="margin-bottom: 10; padding: 8; background-color: #eef3fb; border-left: 3 solid #3366cc"
+              style="margin-bottom: 10; padding: 8; text-align: justify; background-color: #eef3fb; border-left: 3 solid #3366cc"
             >
               Note. {{ paragraph }}
             </pdf-text>
           } @else {
-            <pdf-text style="margin-bottom: 10">{{ paragraph }}</pdf-text>
+            <pdf-text style="margin-bottom: 10; text-align: justify">{{ paragraph }}</pdf-text>
           }
         }
         <pdf-text style="break-inside: avoid">

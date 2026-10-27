@@ -142,7 +142,7 @@ The site (`projects/site`) is a prerendered Angular app. Its docs are the Markdo
 - **Out of v0.1:**
   - server rendering;
   - SVG, links, bookmarks;
-  - hyphenation, justify, RTL;
+  - hyphenation, RTL;
   - forms, encryption;
   - a preview component;
   - capturing the DOM.

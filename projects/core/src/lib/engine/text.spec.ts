@@ -49,6 +49,12 @@ describe('layoutText', () => {
     expect(block.width).toBe(Math.max(...block.lines.map((line) => line.width)));
   });
 
+  it('marks only the last line of the paragraph as last', () => {
+    const block = layoutText('Gabriela Teixeira de Albuquerque Cavalcanti', style, 120, writer);
+    expect(block.lines.map((line) => line.last)).toEqual([false, true]);
+    expect(layoutText('Ana', style, 120, writer).lines.map((line) => line.last)).toEqual([true]);
+  });
+
   it('collapses runs of whitespace into one space', () => {
     const block = layoutText('a   b\n c', style, 500, writer);
     expect(block.lines.map((line) => line.text)).toEqual(['a b c']);
