@@ -385,10 +385,14 @@ function breakLines(
   const widthOfRange = (start: number, end: number): number =>
     runsOf(start, end).reduce((sum, run) => sum + run.width, 0);
 
-  /** The runs of `[start, end)` without its trailing spaces, then `ellipsis` in face `index`. */
-  const runsWithEllipsis = (start: number, end: number, index: number): TextRun[] => {
+  /**
+   * The runs of `[start, end)` without its trailing spaces, then the ellipsis in the face of the
+   * last kept character (`fallback` when nothing is kept).
+   */
+  const runsWithEllipsis = (start: number, end: number, fallback: number): TextRun[] => {
     let kept = end;
     while (kept > start && collapsed.charCodeAt(kept - 1) === 32) kept--;
+    const index = kept > start ? (fontAt[kept - 1] ?? fallback) : fallback;
     const runs = runsOf(start, kept);
     const ellipsis = ellipses[index] ?? ELLIPSIS;
     const face = faces[index] ?? faces[0];
@@ -467,12 +471,18 @@ function breakLines(
       const widthWith = (k: number): number =>
         runsWithEllipsis(start, cut(k), index).reduce((sum, run) => sum + run.width, 0);
       const first = cutIndex(start);
-      const k = lastWhere(first, cutIndex(drawnEnd(end)), (i) => widthWith(i) <= maxWidth);
-      runs = runsWithEllipsis(start, cut(Math.max(k, first)), index);
+      const k = Math.max(
+        lastWhere(first, cutIndex(drawnEnd(end)), (i) => widthWith(i) <= maxWidth),
+        first,
+      );
+      // A box narrower than the ellipsis gets an empty line rather than one that overflows.
+      runs = widthWith(k) <= maxWidth ? runsWithEllipsis(start, cut(k), index) : [];
     }
+    // An empty cut line keeps the height of the text it replaces.
+    const sized = runs.length > 0 ? runs : runsOf(start, drawnEnd(end));
     let size = 0;
     let ascent = 0;
-    for (const run of runs) {
+    for (const run of sized) {
       size = Math.max(size, run.size);
       ascent = Math.max(ascent, run.ascent);
     }
@@ -484,7 +494,7 @@ function breakLines(
       height,
       ascent,
       // The text is trimmed, so only the last line reaches its end.
-      last: end === length,
+      last: end === length || clamped,
       runs,
     });
     top += height;

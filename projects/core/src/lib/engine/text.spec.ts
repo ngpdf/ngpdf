@@ -579,6 +579,35 @@ describe('layoutRanges with maxLines', () => {
     expect(last?.text.endsWith('…')).toBe(true);
   });
 
+  it('draws the ellipsis in the style of the last kept run when the cut removes a whole run', () => {
+    const bold: TextStyle = { ...style, fontWeight: 'bold' };
+    // The box holds "Status aprovado x" with 2pt to spare, so the ellipsis fits only once "x" is gone.
+    const maxWidth =
+      writer.widthOf('Status aprovado ', 'Helvetica', 9) +
+      writer.widthOf('x', 'Helvetica-Bold', 9) +
+      2;
+    const [line] = clamped(1, maxWidth, [
+      { text: 'Status aprovado ', style },
+      { text: 'x', style: bold },
+      { text: ' com ressalvas', style },
+    ]).lines;
+    expect(line?.text).toBe('Status aprovado…');
+    expect(line?.runs.map((run) => run.font)).toEqual(['Helvetica']);
+    expect(line?.width).toBeCloseTo(writer.widthOf('Status aprovado…', 'Helvetica', 9), 6);
+  });
+
+  it('draws nothing when not even the ellipsis fits the box, keeping the line height', () => {
+    const block = clamped(1, 3);
+    expect(block.lines[0]?.text).toBe('');
+    expect(block.width).toBe(0);
+    expect(block.height).toBe(clamped(1, 10).height);
+  });
+
+  it('marks a cut line as the last, so justify leaves it alone', () => {
+    const lines = clamped(2).lines;
+    expect(lines.map((line) => line.last)).toEqual([false, true]);
+  });
+
   it('falls back to three dots when the font has no ellipsis', () => {
     const [line] = clamped(1, 120, [{ text, style, fonts: { chain: ['font:0'] } }]).lines;
     expect(line?.text.endsWith('...')).toBe(true);

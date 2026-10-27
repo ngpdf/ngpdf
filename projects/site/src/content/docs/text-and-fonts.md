@@ -127,7 +127,7 @@ A long `pdf-text` breaks between lines at a page break, keeping `orphans` lines 
 
 ## Cutting text to a number of lines
 
-`max-lines` keeps at most that many lines of a `pdf-text`. When text was cut, the last kept line ends with an ellipsis: characters come off its end until the line and `…` fit the box. The ellipsis is drawn in the style of the last run on that line. A font without `…` gets `...` instead. The standard fonts have it.
+`max-lines` keeps at most that many lines of a `pdf-text`. When text was cut, the last kept line ends with an ellipsis: characters come off its end until the line and `…` fit the box. The ellipsis is drawn in the style of the last character kept on that line. A font without `…` gets `...` instead. The standard fonts have it. In a box too narrow for the ellipsis itself, the line is left empty. With `text-align: justify`, the cut line is not stretched, like a paragraph's last line.
 
 ```html
 <pdf-cell><pdf-text style="max-lines: 2">{{ product.description }}</pdf-text></pdf-cell>
