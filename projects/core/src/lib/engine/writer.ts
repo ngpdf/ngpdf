@@ -398,11 +398,20 @@ const WORD_AND_GAP = /([^ \u00a0]*)([ \u00a0]*)/g;
 function drawWordSpaced(doc: Doc, op: Extract<DrawOp, { op: 'text' }>, spacing: number): void {
   const pieces: { text: string; x: number }[] = [];
   let gaps = 0;
+  // Width of op.text up to `measuredTo`, grown one word at a time. Each step re-measures the
+  // character before it so the kerning pair across the boundary still counts.
+  let measured = 0;
+  let measuredTo = 0;
   for (const match of op.text.matchAll(WORD_AND_GAP)) {
     const [whole, word = '', gap = ''] = match;
     if (whole === '') continue;
     const through = match.index + word.length;
-    const x = doc.widthOfString(op.text.slice(0, through)) - doc.widthOfString(word);
+    const from = previousCodePoint(op.text, measuredTo);
+    measured +=
+      doc.widthOfString(op.text.slice(from, through)) -
+      doc.widthOfString(op.text.slice(from, measuredTo));
+    measuredTo = through;
+    const x = measured - doc.widthOfString(word);
     // A gap alone draws nothing, but keeps its decoration.
     pieces.push({ text: word || whole, x: op.x + x + gaps * spacing });
     if (gap !== '') gaps++;
@@ -413,6 +422,15 @@ function drawWordSpaced(doc: Doc, op: Extract<DrawOp, { op: 'text' }>, spacing: 
     const width = (pieces[i + 1]?.x ?? end) - piece.x;
     doc.text(piece.text, piece.x, op.y, singleLine(op, width));
   }
+}
+
+/** Index of the code point that ends just before `index`, or 0 at the start. */
+function previousCodePoint(text: string, index: number): number {
+  if (index === 0) return 0;
+  const low = text.charCodeAt(index - 1);
+  const high = index > 1 ? text.charCodeAt(index - 2) : 0;
+  const pair = low >= 0xdc00 && low <= 0xdfff && high >= 0xd800 && high <= 0xdbff;
+  return pair ? index - 2 : index - 1;
 }
 
 function drawOp(doc: Doc, op: DrawOp, dataUrls: WeakMap<Uint8Array, string>): void {

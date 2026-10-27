@@ -637,6 +637,18 @@ describe('createPdfkitWriter', () => {
       expect(to).toBeCloseTo(at(line, '', 2), 3);
     });
 
+    it('measures a justified line in linear time, not one growing prefix per word', async () => {
+      const { default: PDFDocument } = await import('pdfkit');
+      const measured = vi.spyOn(PDFDocument.prototype, 'widthOfString');
+      const line = Array.from({ length: 400 }, () => 'ab').join(' ');
+      await pdfText([
+        { ...TEXT_OP, text: line, opacity: 1, underline: false, strike: false, wordSpacing: 1 },
+      ]);
+      const total = measured.mock.calls.reduce((sum, [text]) => sum + String(text).length, 0);
+      // A prefix per word would measure about 400 * 1200 / 2 characters.
+      expect(total).toBeLessThan(line.length * 10);
+    });
+
     it('draws a leading gap as space, moving the first word right', async () => {
       const content = contentOf(
         await pdfText([
