@@ -131,7 +131,8 @@ The site (`projects/site`) is a prerendered Angular app. Its docs are the Markdo
   - A unit taller than a page goes on a page of its own, is clipped, and gets a dev-mode warning.
   - Wrapper backgrounds and borders are sliced per page.
 - **Text wrapping:** text wraps at Unicode line-break opportunities. A word wider than its box breaks
-  at the box edge.
+  at the box edge. `max-lines` keeps at most N lines of a `pdf-text`; when text was cut, the last
+  line ends with `…` in the face of its last run, or `...` in a font without `…`.
 - **Styled runs:** a `pdf-span` inside a `pdf-text` changes only `color`, `font-family`,
   `font-size`, `font-weight`, `font-style` and `text-decoration`. The paragraph breaks as one text,
   and runs of different sizes share a baseline. A `pdf-span` outside a `pdf-text` throws.

@@ -4,5 +4,7 @@ example.com/pay.
 A narrow box wraps across
 span boundaries and inside
 spans as one paragraph.
+Delivery window agreed by
+phone: weekdays after 2 pm,…
 
 Ships to Łódź from WAREHOUSE-7.

@@ -1,6 +1,6 @@
 ---
 title: Text and fonts
-description: Write text with pdf-text, use the standard PDF fonts or your own with providePdfFonts, and learn how ngpdf falls back between fonts, wraps lines and handles line height.
+description: Write text with pdf-text, use the standard PDF fonts or your own with providePdfFonts, and learn how ngpdf falls back between fonts, wraps lines, cuts text with max-lines and handles line height.
 section: Guide
 order: 4
 ---
@@ -124,6 +124,16 @@ The same applies to the text of `pdf-page-number`.
 - There is no hyphenation, no `text-align: justify` and no right-to-left text in v0.1.
 
 A long `pdf-text` breaks between lines at a page break, keeping `orphans` lines (default 2) before the break and `widows` lines (default 2) after it. `break-inside: avoid` keeps it whole. See [Text across pages](/docs/pagination#text-across-pages).
+
+## Cutting text to a number of lines
+
+`max-lines` keeps at most that many lines of a `pdf-text`. When text was cut, the last kept line ends with an ellipsis: characters come off its end until the line and `…` fit the box. The ellipsis is drawn in the style of the last run on that line. A font without `…` gets `...` instead. The standard fonts have it.
+
+```html
+<pdf-cell><pdf-text style="max-lines: 2">{{ product.description }}</pdf-text></pdf-cell>
+```
+
+The box is as tall as the kept lines. `max-lines: none`, the default, keeps every line. The property is not inherited, so set it on the `pdf-text` itself.
 
 ## Line height
 

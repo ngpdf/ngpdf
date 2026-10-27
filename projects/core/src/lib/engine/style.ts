@@ -58,6 +58,11 @@ export interface ResolvedStyle extends TextStyle {
   readonly objectFit: 'contain' | 'cover';
   readonly breakBefore: boolean;
   readonly breakInside: 'auto' | 'avoid';
+  /**
+   * The most lines a text keeps; the last kept line ends in an ellipsis when text was cut. Null for
+   * no limit.
+   */
+  readonly maxLines: number | null;
 }
 
 export interface FlexParts {
@@ -360,6 +365,7 @@ function defaultStyle(node: PdfNode, inherited: TextStyle): Mutable<ResolvedStyl
     objectFit: 'contain',
     breakBefore: propsOf(node)['breakBefore'] === true,
     breakInside: 'auto',
+    maxLines: null,
   };
 }
 
@@ -527,6 +533,9 @@ function apply(
     case 'orphans':
     case 'widows':
       style[property] = lineCountOf(value, property, tag);
+      break;
+    case 'max-lines':
+      style.maxLines = keywordOf(value) === 'none' ? null : lineCountOf(value, property, tag);
       break;
     default:
       break;

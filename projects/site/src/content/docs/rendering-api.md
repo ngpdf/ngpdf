@@ -188,7 +188,7 @@ The returned promise rejects with an `Error`. Errors from ngpdf start with `ngpd
 | `ngpdf: could not load image "<source>": <reason>` | An image that failed to load or is not PNG or JPEG. |
 | `ngpdf: fixed views leave no room for content on pdf-page` | The `fixed` views and the page number take the whole content area. |
 | `ngpdf: pdf-span must be inside a pdf-text` | A `pdf-span` outside a `pdf-text`. |
-| `ngpdf: expected an integer of at least 1 in "<value>" for <property> on <element>` | `orphans` or `widows` below 1, or not a whole number; `<property>` names which. |
+| `ngpdf: expected an integer of at least 1 in "<value>" for <property> on <element>` | `orphans`, `widows` or `max-lines` below 1, or not a whole number; `<property>` names which. |
 | `ngpdf: nesting deeper than 64` | More than 64 nested elements. |
 | `ngpdf: text longer than 1 MB` | One text longer than 1,048,576 characters. |
 | `ngpdf: could not load font "<src>": <reason>` | A font from `providePdfFonts` could not be fetched or read. The URL is shown without its query string. |

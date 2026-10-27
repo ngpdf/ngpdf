@@ -596,6 +596,13 @@ describe('paginatePage: text split across pages', () => {
     expect(bottom(pieces.at(-1)!)).toBeCloseTo(CONTENT_TOP + AREA - 5, 3);
   });
 
+  it('splits a text cut by max-lines between its kept lines only', () => {
+    const pages = paginate(page([filler(35), paragraph(10, { 'max-lines': '6' })]));
+    expect(pages).toHaveLength(2);
+    expect(linesOn(pages[0]!)).toEqual(['w0', 'w1', 'w2']);
+    expect(linesOn(pages[1]!)).toEqual(['w3', 'w4', 'w5…']);
+  });
+
   it('leaves at least orphans lines at the bottom of a page', () => {
     const pages = paginate(page([filler(15), paragraph(10)]));
     expect(linesOn(pages[0]!)).toEqual([]);

@@ -516,3 +516,79 @@ describe('layoutRanges', () => {
     expect(() => lay([range(half), range(half)])).toThrow('ngpdf: text longer than 1 MB');
   });
 });
+
+describe('layoutRanges with maxLines', () => {
+  let writer: PdfWriter;
+  beforeAll(async () => {
+    writer = await createPdfkitWriter({ compress: false });
+    writer.registerFont('font:0', testFont('inter-basic.otf'));
+  });
+  const text = 'Gabriela Teixeira de Albuquerque Cavalcanti mora em Recife desde 2019';
+  const clamped = (maxLines: number | null, maxWidth = 120, ranges?: readonly TextRange[]) =>
+    layoutRanges(ranges ?? [{ text, style }], { ...style, maxLines }, maxWidth, writer);
+
+  it('keeps every line when the text fits in maxLines', () => {
+    const all = clamped(null);
+    expect(clamped(all.lines.length)).toEqual(all);
+  });
+
+  it('keeps maxLines lines and measures only those', () => {
+    const block = clamped(2);
+    expect(block.lines).toHaveLength(2);
+    expect(block.height).toBe(27);
+  });
+
+  it('ends the last kept line with an ellipsis that fits the box', () => {
+    const all = clamped(null);
+    const [, second] = clamped(2).lines;
+    const kept = second?.text.slice(0, -1) ?? '';
+    expect(second?.text.endsWith('…')).toBe(true);
+    expect(second?.width).toBeLessThanOrEqual(120);
+    expect(kept).toBe(kept.trimEnd());
+    expect(all.lines[1]?.text.startsWith(kept)).toBe(true);
+    expect(second?.width).toBeCloseTo(writer.widthOf(second?.text ?? '', 'Helvetica', 9), 6);
+  });
+
+  it('cuts characters off the last line until the ellipsis fits', () => {
+    // At 30pt the first line is a piece of "Gabriela", which leaves no room for the ellipsis.
+    const full = clamped(null, 30).lines[0]?.text ?? '';
+    const [line] = clamped(1, 30).lines;
+    expect(line?.width).toBeLessThanOrEqual(30);
+    expect(line?.text.endsWith('…')).toBe(true);
+    const kept = line?.text.slice(0, -1) ?? '';
+    expect(kept.length).toBeLessThan(full.length);
+    expect(writer.widthOf(`${text.slice(0, kept.length + 1)}…`, 'Helvetica', 9)).toBeGreaterThan(
+      30,
+    );
+  });
+
+  it('draws the ellipsis in the style of the last run on the line', () => {
+    const bold: TextStyle = { ...style, fontWeight: 'bold' };
+    const [line] = clamped(1, 120, [
+      { text: 'Status: ', style },
+      { text: 'aprovado sem ressalvas pela comissão', style: bold },
+    ]).lines;
+    const last = line?.runs.at(-1);
+    expect(last?.font).toBe('Helvetica-Bold');
+    expect(last?.text.endsWith('…')).toBe(true);
+  });
+
+  it('falls back to three dots when the font has no ellipsis', () => {
+    const [line] = clamped(1, 120, [{ text, style, fonts: { chain: ['font:0'] } }]).lines;
+    expect(line?.text.endsWith('...')).toBe(true);
+    expect(line?.width).toBeLessThanOrEqual(120);
+  });
+
+  it('keeps the ellipsis alone when not even one character fits beside it', () => {
+    const [line] = clamped(1, 10).lines;
+    expect(line?.text).toBe('…');
+  });
+
+  it('does not reuse a block cached without the limit', () => {
+    const cache = new TextMeasureCache();
+    const lay = (maxLines: number | null) =>
+      layoutRanges([{ text, style }], { ...style, maxLines }, 120, writer, undefined, cache);
+    expect(lay(null).lines.length).toBeGreaterThan(2);
+    expect(lay(2).lines).toHaveLength(2);
+  });
+});

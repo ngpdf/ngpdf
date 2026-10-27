@@ -1,7 +1,7 @@
 import { Component } from '@angular/core';
 import { PDF_ELEMENTS } from '@ngpdf/core';
 
-/** Styled runs inside one paragraph, each in a pdf-span. */
+/** Styled runs inside one paragraph, each in a pdf-span, and a note cut to two lines. */
 @Component({
   selector: 'app-span-sample',
   imports: [PDF_ELEMENTS],
@@ -22,6 +22,9 @@ import { PDF_ELEMENTS } from '@ngpdf/core';
           <pdf-span style="font-weight: bold">across span boundaries and inside spans</pdf-span>
           as one paragraph.
         </pdf-text>
+        <pdf-text style="width: 160; max-lines: 2; margin-bottom: 8">
+          {{ note }} <pdf-span style="font-weight: bold">{{ signature }}</pdf-span>
+        </pdf-text>
         <pdf-text>
           Ships to
           <pdf-span style="font-family: 'Noto Sans'">Łódź</pdf-span>
@@ -35,4 +38,7 @@ export class SpanSample {
   readonly invoice = 1024;
   readonly total = '€ 1,280.00';
   readonly days = 12;
+  readonly note =
+    'Delivery window agreed by phone: weekdays after 2 pm, at the side gate, with a call ahead.';
+  readonly signature = 'Signed by the warehouse team';
 }

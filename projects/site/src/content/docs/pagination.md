@@ -40,6 +40,7 @@ A `pdf-text` that is a unit by the rules above, as a child of the page or of a c
 ```
 
 - `orphans` is the fewest lines left at the bottom of a page before the break, and `widows` the fewest carried to the top of the next. Both are integers of at least 1, are inherited, and default to 2.
+- A text cut by `max-lines` splits the same way, over the lines it keeps.
 - A text with fewer than `orphans + widows` lines moves to the next page whole, as do texts with `break-inside: avoid`, a fixed `height` or a `max-height`.
 - A text longer than a page continues over as many pages as it needs. The first `orphans` and last `widows` lines always stay together. Lines are placed one by one between them, so a page in the middle of the text can end up with fewer than `orphans` lines only when its lines are so tall that fewer than `orphans + widows` of them fit on a page, such as a very large `pdf-span`.
 - Its top padding and border stay with its first lines, the bottom ones with its last lines. A background or border is sliced like a [wrapper's](#wrapper-backgrounds-and-borders).

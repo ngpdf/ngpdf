@@ -212,7 +212,12 @@ export interface ShapedText {
 
 const isSpace = (cluster: string): boolean => cluster === ' ' || cluster === ' ';
 
-function covers(font: FontName, cluster: string, metrics: Pick<FontMetrics, 'hasGlyph'>): boolean {
+/** Whether `font` has every character of `cluster`. */
+export function covers(
+  font: FontName,
+  cluster: string,
+  metrics: Pick<FontMetrics, 'hasGlyph'>,
+): boolean {
   for (const char of cluster) {
     const codePoint = char.codePointAt(0) ?? 0;
     if (isStandardFont(font) ? !isWinAnsi(codePoint) : !metrics.hasGlyph(font, codePoint)) {

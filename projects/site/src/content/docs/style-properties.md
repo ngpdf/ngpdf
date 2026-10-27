@@ -12,7 +12,7 @@ In the tables:
 - **length** is a number with an optional unit: none or `pt` (points), `px` (= 1pt), `in`, `cm` or `mm`. Any other unit throws.
 - **length/%** also accepts a percentage of the parent's content box.
 - **color** is hex (3, 4, 6 or 8 digits), `rgb()`/`rgba()`, a CSS named color or `transparent`.
-- Keywords are matched in any case, as in CSS: `CENTER` is `center`. That covers the keywords of `text-align`, `text-decoration`, `flex-direction`, `justify-content`, `align-items`, `align-self`, `object-fit`, `font-weight`, `font-style`, `break-before` and `break-inside`, `auto` in lengths, `auto` and `none` in `flex`, and the border styles.
+- Keywords are matched in any case, as in CSS: `CENTER` is `center`. That covers the keywords of `text-align`, `text-decoration`, `flex-direction`, `justify-content`, `align-items`, `align-self`, `object-fit`, `font-weight`, `font-style`, `break-before` and `break-inside`, `none` in `max-lines`, `auto` in lengths, `auto` and `none` in `flex`, and the border styles.
 
 ## Text
 
@@ -29,7 +29,13 @@ All text properties are inherited by child elements.
 | `text-align` | `left`, `center`, `right` | `left` |
 | `text-decoration` | `none`, `underline`, `line-through` | `none` |
 
-A `pdf-span` takes `color`, `font-family`, `font-size`, `font-weight`, `font-style` and `text-decoration`; `line-height` and `text-align` come from its `pdf-text`. See [Styled runs](/docs/text-and-fonts#styled-runs-pdf-span).
+`max-lines` is not inherited:
+
+| Property | Values | Default |
+| --- | --- | --- |
+| `max-lines` | integer ≥ 1: the most lines a `pdf-text` keeps, the last ending in `…` when text was cut; `none` | `none` |
+
+A `pdf-span` takes `color`, `font-family`, `font-size`, `font-weight`, `font-style` and `text-decoration`; `line-height`, `text-align` and `max-lines` come from its `pdf-text`. See [Styled runs](/docs/text-and-fonts#styled-runs-pdf-span).
 
 Without a registered family in the list: `font-family` contains `courier` or `mono`: Courier. Contains `times`, or `serif` without `sans`: Times. Otherwise Helvetica. With one, each character takes the first font in the list that has it. See [Text and fonts](/docs/text-and-fonts).
 

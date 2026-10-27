@@ -429,6 +429,20 @@ describe('resolveStyles property coverage', () => {
     }
   });
 
+  it('reads max-lines as an integer of at least 1 or none, not inherited', () => {
+    expect(styleOf({}).maxLines).toBeNull();
+    expect(styleOf({ 'max-lines': ' 3 ' }).maxLines).toBe(3);
+    expect(styleOf({ 'max-lines': 'NONE' }).maxLines).toBeNull();
+    const text = el('pdf-text');
+    const view = el('pdf-view', { 'max-lines': '2' }, [text]);
+    expect(resolveStyles(view).get(text)?.maxLines).toBeNull();
+    for (const value of ['0', '-1', '1.5', 'two']) {
+      expect(() => styleOf({ 'max-lines': value })).toThrow(
+        `ngpdf: expected an integer of at least 1 in "${value}" for max-lines`,
+      );
+    }
+  });
+
   it('reads break-inside: avoid, not inherited', () => {
     expect(styleOf({}).breakInside).toBe('auto');
     expect(styleOf({ 'break-inside': 'avoid' }).breakInside).toBe('avoid');
