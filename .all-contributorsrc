@@ -3,9 +3,7 @@
   "projectOwner": "ngpdf",
   "repoType": "github",
   "repoHost": "https://github.com",
-  "files": [
-    "README.md"
-  ],
+  "files": ["README.md"],
   "imageSize": 100,
   "commit": false,
   "commitType": "docs",
@@ -18,25 +16,29 @@
       "name": "Gabriel Silva",
       "avatar_url": "https://avatars.githubusercontent.com/u/96894950?v=4",
       "profile": "https://github.com/GabeSilvaDev",
-      "contributions": [
-        "code",
-        "doc",
-        "design",
-        "test",
-        "infra",
-        "maintenance"
-      ]
+      "contributions": ["code", "doc", "design", "test", "infra", "maintenance"]
     },
     {
       "login": "arxigen",
       "name": "ARXIGEN",
       "avatar_url": "https://avatars.githubusercontent.com/u/341682957?v=4",
       "profile": "https://github.com/arxigen",
-      "contributions": [
-        "code",
-        "test",
-        "doc"
-      ]
+      "contributions": ["code", "test", "doc"]
+    },
+    {
+      "login": "Aaqibhafeezkhan",
+      "name": "Aaqibhafeez Khan",
+      "avatar_url": "https://avatars.githubusercontent.com/u/292322256?v=4",
+      "profile": "https://aaqibhafeezkhan.github.io/aaqibhafeezkhan.cv/",
+      "contributions": ["code", "test", "doc"]
+    },
+    {
+      "login": "jay23606",
+      "name": "Jay",
+      "avatar_url": "https://avatars.githubusercontent.com/u/4602056?v=4",
+      "profile": "https://github.com/jay23606",
+      "contributions": ["code", "test", "doc"]
     }
   ]
 }
+
