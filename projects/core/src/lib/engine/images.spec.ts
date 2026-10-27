@@ -85,6 +85,18 @@ describe('loadImages', () => {
     expect(assets.get(node)?.width).toBe(200);
   });
 
+  it('decodes fully escaped and mostly plain percent-encoded data URLs to the same bytes', async () => {
+    const escaped = imageNode(
+      `data:image/png,${Array.from(png, (b) => `%${b.toString(16).padStart(2, '0')}`).join('')}`,
+    );
+    expect((await loadImages(root(escaped), writer)).get(escaped)?.data).toEqual(png);
+
+    // Bytes written as Latin-1 characters, only `%` escaped.
+    const text = Array.from(png, (b) => (b === 0x25 ? '%25' : String.fromCharCode(b))).join('');
+    const plain = imageNode(`data:image/png,${text}`);
+    expect((await loadImages(root(plain), writer)).get(plain)?.data).toEqual(png);
+  });
+
   it('rejects a data URL without a comma', async () => {
     const bad = imageNode('data:image/png;base64');
     await expect(loadImages(root(bad), writer)).rejects.toThrow(/malformed data URL/);
@@ -99,6 +111,30 @@ describe('loadImages', () => {
     const node = imageNode(`data:image/png,${encoded}`);
     const assets = await loadImages(root(node), writer);
     expect(assets.get(node)).toEqual({ data: bytes, width: 37, height: 100 });
+  });
+
+  it('decodes a percent-encoded data URL of a few hundred KB, mixing escapes and plain bytes', async () => {
+    // 300 KB after the PNG header; bytes that are letters or digits stay as they are, the rest
+    // are escaped, so the encoded text is longer than the bytes and the output must be cut to fit.
+    const header = pngHeader(640, 480);
+    const bytes = new Uint8Array(header.length + 300_000);
+    bytes.set(header);
+    for (let i = header.length; i < bytes.length; i++) bytes[i] = (i * 31) & 0xff;
+    const plain = (b: number) => /[0-9a-z]/i.test(String.fromCharCode(b));
+    const encoded = Array.from(bytes, (b) =>
+      plain(b) ? String.fromCharCode(b) : `%${b.toString(16).padStart(2, '0')}`,
+    ).join('');
+    const node = imageNode(`data:image/png,${encoded}`);
+    const started = performance.now();
+    const assets = await loadImages(root(node), writer);
+    // About 90 ms on a developer machine. As with the text budget, the margin only has to separate
+    // a linear decode on a busy CI runner with coverage on from a quadratic one.
+    expect(performance.now() - started).toBeLessThan(2000);
+    const asset = assets.get(node);
+    expect([asset?.width, asset?.height]).toEqual([640, 480]);
+    // A plain loop: `toEqual` walks a 300 KB typed array slowly enough to hit the test timeout.
+    expect(asset?.data.length).toBe(bytes.length);
+    expect(asset?.data.every((byte, i) => byte === bytes[i])).toBe(true);
   });
 
   it('loads a Blob and an ArrayBuffer the same way', async () => {
