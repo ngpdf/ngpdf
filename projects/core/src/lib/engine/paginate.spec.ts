@@ -398,13 +398,13 @@ describe('paginatePage: page number', () => {
     expect(pages[0]!.pageNumber!.box.style.textAlign).toBe('center');
   });
 
-  it('warns about a pdf-page-number below a direct child and does not place it', () => {
+  it('leaves a pdf-page-number below a direct child in the flow, without a warning', () => {
     const nested = pageNumber();
     const warn = vi.fn<(message: string) => void>();
     const pages = paginate(page([el('pdf-view', {}, [el('pdf-view', {}, [nested])])]), warn);
-    expect(warn).toHaveBeenCalledTimes(1);
-    expect(warn).toHaveBeenCalledWith('ngpdf: pdf-page-number must be a direct child of pdf-page');
+    expect(warn).not.toHaveBeenCalled();
     expect(pages[0]!.pageNumber).toBeUndefined();
+    expect(pages[0]!.placed).toHaveLength(1);
   });
 
   it('is the same on every page', () => {

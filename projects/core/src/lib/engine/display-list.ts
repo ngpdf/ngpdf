@@ -1,8 +1,7 @@
-import { propsOf } from '../tree/node';
 import { toHex, type Color } from './color';
 import { fontChain, fontFor, shapeText, type FontRegistry } from './fonts';
 import { fitImage } from './images';
-import type { Box } from './layout';
+import { pageNumberFormat, type Box } from './layout';
 import type { PageLayout, PlacedBox } from './paginate';
 import type { ResolvedStyle } from './style';
 import type { DrawOp, FontMetrics } from './writer';
@@ -17,8 +16,6 @@ export interface DisplayListOptions {
   /** Receives the characters of the page number that no font in its family has. */
   readonly warnMissing?: (chars: string[]) => void;
 }
-
-const DEFAULT_FORMAT = '{page} / {total}';
 
 /** The op color and opacity for `color`; null when its alpha leaves nothing to paint. */
 function paint(color: Color, opacity: number): { color: string; opacity: number } | null {
@@ -36,6 +33,15 @@ interface Cuts {
  * lines are shortened to it, text lines that would end below it are dropped, and images get
  * their `clip` rectangle cut at it. No op gained a clip field.
  */
+/** What a pdf-page-number needs to draw its text on one sheet. */
+interface Numbering {
+  readonly pageIndex: number;
+  readonly pageCount: number;
+  /** Overrides every page number's own format. */
+  readonly format: string | undefined;
+  readonly options: DisplayListOptions;
+}
+
 function drawBox(
   box: Box,
   x: number,
@@ -43,6 +49,7 @@ function drawBox(
   limit: number,
   cuts: Cuts,
   inherited: number,
+  numbering: Numbering,
   out: DrawOp[],
 ): void {
   const { style } = box;
@@ -96,7 +103,7 @@ function drawBox(
 
   for (const child of box.children) {
     const nested = { top: false, bottom: false };
-    drawBox(child, x + child.x, y + child.y, limit, nested, opacity, out);
+    drawBox(child, x + child.x, y + child.y, limit, nested, opacity, numbering, out);
   }
 
   if (box.text) {
@@ -120,6 +127,13 @@ function drawBox(
           strike: run.decoration === 'line-through',
         });
       }
+    }
+  }
+
+  if (box.node.tag === 'pdf-page-number') {
+    const lineBottom = contentTop + style.fontSize * style.lineHeight;
+    if (lineBottom <= limit + 1e-6) {
+      drawPageNumber(box, contentLeft, contentTop, contentWidth, opacity, numbering, out);
     }
   }
 
@@ -152,7 +166,7 @@ function alignedX(
   return left;
 }
 
-function drawPlaced(placed: PlacedBox, out: DrawOp[]): void {
+function drawPlaced(placed: PlacedBox, numbering: Numbering, out: DrawOp[]): void {
   drawBox(
     placed.box,
     placed.x,
@@ -160,8 +174,60 @@ function drawPlaced(placed: PlacedBox, out: DrawOp[]): void {
     placed.clipBottom ?? Infinity,
     { top: placed.sliceTop === true, bottom: placed.sliceBottom === true },
     placed.opacity ?? 1,
+    numbering,
     out,
   );
+}
+
+/** A page number's text, filled in for the sheet and aligned in its content box on one line. */
+function drawPageNumber(
+  box: Box,
+  left: number,
+  top: number,
+  contentWidth: number,
+  opacity: number,
+  numbering: Numbering,
+  out: DrawOp[],
+): void {
+  const { style } = box;
+  const { options } = numbering;
+  const ink = paint(style.color, opacity);
+  if (!ink) return;
+  const format = numbering.format ?? pageNumberFormat(box.node);
+  const filled = format
+    .replaceAll('{page}', () => String(numbering.pageIndex + 1))
+    .replaceAll('{total}', () => String(numbering.pageCount));
+  const chain = options.fonts ? fontChain(style, options.fonts) : [fontFor(style)];
+  const shaped = shapeText(filled, chain, options.metrics);
+  if (shaped.replaced.length > 0) options.warn?.([...shaped.replaced]);
+  if (shaped.missing.length > 0) options.warnMissing?.([...shaped.missing]);
+  // The format is short: one op per font change is enough, no line breaking.
+  const runs: { text: string; font: (typeof chain)[number]; width: number }[] = [];
+  for (let from = 0; from < shaped.text.length;) {
+    const index = shaped.fontAt[from] ?? 0;
+    let to = from + 1;
+    while (to < shaped.text.length && shaped.fontAt[to] === index) to++;
+    const text = shaped.text.slice(from, to);
+    const font = chain[index] ?? fontFor(style);
+    runs.push({ text, font, width: options.metrics.widthOf(text, font, style.fontSize) });
+    from = to;
+  }
+  const width = runs.reduce((sum, run) => sum + run.width, 0);
+  let runX = alignedX(left, contentWidth, width, style.textAlign);
+  for (const run of runs) {
+    out.push({
+      op: 'text',
+      x: runX,
+      y: top,
+      text: run.text,
+      font: run.font,
+      size: style.fontSize,
+      ...ink,
+      underline: style.textDecoration === 'underline',
+      strike: style.textDecoration === 'line-through',
+    });
+    runX += run.width;
+  }
 }
 
 /**
@@ -172,63 +238,17 @@ export function displayList(
   page: PageLayout,
   pageIndex: number,
   pageCount: number,
-  pageNumberFormat: string | undefined,
+  formatOverride: string | undefined,
   options: DisplayListOptions,
 ): DrawOp[] {
   const out: DrawOp[] = [];
-  for (const decoration of page.decorations) drawPlaced(decoration, out);
-  for (const placed of page.placed) drawPlaced(placed, out);
-
+  const numbering: Numbering = { pageIndex, pageCount, format: formatOverride, options };
+  for (const decoration of page.decorations) drawPlaced(decoration, numbering, out);
+  for (const placed of page.placed) drawPlaced(placed, numbering, out);
   if (page.pageNumber) {
     const { box, x, y } = page.pageNumber;
-    const opacity = page.pageNumber.opacity ?? 1;
-    drawBox(box, x, y, Infinity, { top: false, bottom: false }, opacity, out);
-    const { style } = box;
-    const ink = paint(style.color, opacity * style.opacity);
-    if (ink) {
-      const format = pageNumberFormat ?? stringProp(propsOf(box.node)['format']) ?? DEFAULT_FORMAT;
-      const filled = format
-        .replaceAll('{page}', () => String(pageIndex + 1))
-        .replaceAll('{total}', () => String(pageCount));
-      const chain = options.fonts ? fontChain(style, options.fonts) : [fontFor(style)];
-      const shaped = shapeText(filled, chain, options.metrics);
-      if (shaped.replaced.length > 0) options.warn?.([...shaped.replaced]);
-      if (shaped.missing.length > 0) options.warnMissing?.([...shaped.missing]);
-      // The format is short: one op per font change is enough, no line breaking.
-      const runs: { text: string; font: (typeof chain)[number]; width: number }[] = [];
-      for (let from = 0; from < shaped.text.length;) {
-        const index = shaped.fontAt[from] ?? 0;
-        let to = from + 1;
-        while (to < shaped.text.length && shaped.fontAt[to] === index) to++;
-        const text = shaped.text.slice(from, to);
-        const font = chain[index] ?? fontFor(style);
-        runs.push({ text, font, width: options.metrics.widthOf(text, font, style.fontSize) });
-        from = to;
-      }
-      const left = box.padding.left + box.border.left;
-      const top = box.padding.top + box.border.top;
-      const contentWidth = Math.max(0, box.w - left - box.padding.right - box.border.right);
-      const width = runs.reduce((sum, run) => sum + run.width, 0);
-      let runX = alignedX(x + left, contentWidth, width, style.textAlign);
-      for (const run of runs) {
-        out.push({
-          op: 'text',
-          x: runX,
-          y: y + top,
-          text: run.text,
-          font: run.font,
-          size: style.fontSize,
-          ...ink,
-          underline: style.textDecoration === 'underline',
-          strike: style.textDecoration === 'line-through',
-        });
-        runX += run.width;
-      }
-    }
+    const cuts = { top: false, bottom: false };
+    drawBox(box, x, y, Infinity, cuts, page.pageNumber.opacity ?? 1, numbering, out);
   }
   return out;
-}
-
-function stringProp(value: unknown): string | undefined {
-  return typeof value === 'string' ? value : undefined;
 }

@@ -201,6 +201,39 @@ describe('displayList', () => {
     expect(last.x).toBeCloseTo(595.28 - 36 - writer.widthOf('Página 2 de 5', 'Helvetica', 10), 3);
   });
 
+  it('draws a nested page number with the numbers of the sheet it lands on', () => {
+    const number = el('pdf-page-number', {}, [], { format: 'p{page}/{total}' });
+    const [first] = layout(page([text('a'), el('pdf-view', {}, [number])]));
+    expect(first!.pageNumber).toBeUndefined();
+    expect(only(list(first!, 2, 7), 'text').map((op) => op.text)).toEqual(['a', 'p3/7']);
+  });
+
+  it('draws a page number in a fixed view on every sheet', () => {
+    const header = el(
+      'pdf-view',
+      {},
+      [el('pdf-page-number', {}, [], { format: 'Page {page} of {total}' })],
+      {
+        fixed: 'top',
+      },
+    );
+    const blocks = [el('pdf-view', { height: '500' }), el('pdf-view', { height: '500' })];
+    const sheets = layout(page([header, ...blocks]));
+    expect(sheets).toHaveLength(2);
+    const numbers = sheets.map((sheet, i) => only(list(sheet, i, sheets.length), 'text')[0]?.text);
+    expect(numbers).toEqual(['Page 1 of 2', 'Page 2 of 2']);
+  });
+
+  it('aligns a nested page number inside its box by text-align', () => {
+    const number = el('pdf-page-number', { width: '100', 'text-align': 'right' }, [], {
+      format: '{page}',
+    });
+    const [first] = layout(page([el('pdf-view', { 'flex-direction': 'row' }, [number])]));
+    const [op] = only(list(first!, 0, 1), 'text');
+    expect(op!.x).toBeCloseTo(36 + 100 - writer.widthOf('1', 'Helvetica', 10), 3);
+    expect(op!.y).toBeCloseTo(36, 3);
+  });
+
   it('reads the format from the page number props and replaces every placeholder', () => {
     const number = el('pdf-page-number', {}, [], { format: '{page}-{page}/{total}$&' });
     const [first] = layout(page([number]));

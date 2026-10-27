@@ -351,13 +351,6 @@ function hasNestedFixed(page: PdfNode): boolean {
   return page.children.some((child) => below(child));
 }
 
-/** Whether a pdf-page-number sits anywhere below the page's direct children. */
-function hasNestedPageNumber(page: PdfNode): boolean {
-  const below = (node: PdfNode): boolean =>
-    node.children.some((child) => isPageNumber(child) || below(child));
-  return page.children.some((child) => !isPageNumber(child) && below(child));
-}
-
 /** The page number box: content-wide, one line of its font high unless sized, right-aligned. */
 function measurePageNumber(
   node: PdfNode,
@@ -428,7 +421,6 @@ export function paginatePage(
   const base = frameOf(page, pageStyle);
 
   const numberNode = page.children.find(isPageNumber);
-  if (hasNestedPageNumber(page)) warn('ngpdf: pdf-page-number must be a direct child of pdf-page');
   const numberBox = numberNode
     ? measurePageNumber(numberNode, styles, base.contentWidth, ctx)
     : undefined;

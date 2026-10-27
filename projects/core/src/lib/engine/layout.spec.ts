@@ -155,6 +155,15 @@ describe('layoutBox', () => {
     expect(runs.map((run) => [run.text, run.font])).toEqual([['a b', 'Helvetica']]);
   });
 
+  it('measures a nested page number with every number taken as three digits', () => {
+    const number = el('pdf-page-number', {}, [], { format: 'Page {page} of {total}' });
+    const box = lay(el('pdf-view', { 'flex-direction': 'row' }, [number]), 400).children[0];
+    const width = writer.widthOf('Page 000 of 000', 'Helvetica', 10);
+    expect(box?.w).toBeGreaterThanOrEqual(width);
+    expect(box?.w).toBeLessThan(width + 1);
+    expect(box?.h).toBeCloseTo(12, 3);
+  });
+
   it('never makes a text box narrower than its text', () => {
     const root = el('pdf-view', { 'flex-direction': 'row' }, [
       el('pdf-text', {}, [textNode('Hello wide world of text')]),
