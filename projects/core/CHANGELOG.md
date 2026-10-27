@@ -1,5 +1,25 @@
 # @ngpdf/core
 
+## 0.3.0
+
+### Minor Changes
+
+- [#116](https://github.com/ngpdf/ngpdf/pull/116) [`1c7adcf`](https://github.com/ngpdf/ngpdf/commit/1c7adcfc5bda7c96915375ff8429774a0ee8783f) Thanks [@GabeSilvaDev](https://github.com/GabeSilvaDev)! - Add fixed headers and footers: a `pdf-view` with `fixed="top"` or `fixed="bottom"`, placed directly
+  inside a `pdf-page`, is drawn on every sheet of that page, and the content flows in the space
+  between them. A footer sits above the `pdf-page-number`.
+
+- [#112](https://github.com/ngpdf/ngpdf/pull/112) [`2e89379`](https://github.com/ngpdf/ngpdf/commit/2e893798fbd7e0c2b4e7c43a8f79df2c07ebe356) Thanks [@GabeSilvaDev](https://github.com/GabeSilvaDev)! - Add the `pdf-span` element to style part of a text, such as one bold word in a sentence:
+  `<pdf-text>Total: <pdf-span style="font-weight: bold">{{ total }}</pdf-span></pdf-text>`. A span
+  can change the color, font family, size, weight, style and decoration; the paragraph still wraps as
+  one text, and runs of different sizes share a baseline. Characters drawn in a fallback font now
+  share the baseline of the text around them instead of its top.
+
+- [#114](https://github.com/ngpdf/ngpdf/pull/114) [`646d783`](https://github.com/ngpdf/ngpdf/commit/646d783589883f8e99860bf1783231f452ca8de1) Thanks [@GabeSilvaDev](https://github.com/GabeSilvaDev)! - A long `pdf-text` now breaks between its lines at a page break instead of moving to the next page
+  whole, or being clipped when taller than a page. `orphans` and `widows` (default 2) set the fewest
+  lines kept before and after the break. A text keeps the old behaviour, moving whole, when it has
+  `break-inside: avoid`, a fixed `height` or a `max-height`, or when it sits inside a table row or a
+  row `pdf-view`.
+
 ## 0.2.0
 
 ### Minor Changes
