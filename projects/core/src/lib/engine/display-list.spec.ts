@@ -163,6 +163,73 @@ describe('displayList', () => {
     ]);
   });
 
+  describe('text-align: justify', () => {
+    const words = 'one two three four five six seven eight nine ten';
+    const gapsOf = (line: string) => line.split(' ').length - 1;
+
+    it('stretches the word gaps of every line but the last to the content width', () => {
+      const box = text(words, { 'text-align': 'justify', width: '120', padding: '0 10' });
+      const [laid] = layout(page([box]));
+      const lines = laid!.placed[0]!.box.text!.lines;
+      expect(lines.length).toBeGreaterThan(1);
+      const ops = only(list(laid!, 0, 1), 'text');
+      for (const [i, line] of lines.entries()) {
+        const op = ops[i]!;
+        expect(op.x).toBe(46);
+        if (line.last) {
+          expect(op.wordSpacing ?? 0).toBe(0);
+        } else {
+          expect(op.wordSpacing).toBeCloseTo((100 - line.width) / gapsOf(line.text), 6);
+        }
+      }
+    });
+
+    it('leaves a line without gaps and an overflowing word at the start', () => {
+      const box = text('Antidisestablishment end', { 'text-align': 'justify', width: '40' });
+      const ops = only(list(layout(page([box]))[0]!, 0, 1), 'text');
+      expect(ops.length).toBeGreaterThan(1);
+      for (const op of ops) {
+        expect(op.x).toBe(36);
+        expect(op.wordSpacing ?? 0).toBe(0);
+      }
+    });
+
+    it('moves each run right by the gaps before it, across pdf-spans', () => {
+      const bold = el('pdf-span', { 'font-weight': 'bold' });
+      const run = createNode('text', '', 'two three');
+      run.parent = bold;
+      bold.children.push(run);
+      const paragraph = el('pdf-text', { 'text-align': 'justify', width: '100' }, [
+        createNode('text', '', 'one '),
+        bold,
+        createNode('text', '', ' four five six seven eight'),
+      ]);
+      for (const child of paragraph.children) child.parent = paragraph;
+      const [laid] = layout(page([paragraph]));
+      const first = laid!.placed[0]!.box.text!.lines[0]!;
+      const ops = only(list(laid!, 0, 1), 'text').slice(0, first.runs.length);
+      const gaps = gapsOf(first.text);
+      const spacing = (100 - first.width) / gaps;
+      expect(ops.map((op) => op.text)).toEqual(first.runs.map((r) => r.text));
+      expect(ops[0]).toMatchObject({ x: 36, wordSpacing: spacing });
+      // 'one ' ends with a gap, so the bold run starts one spacing further right.
+      expect(ops[1]!.x).toBeCloseTo(36 + first.runs[1]!.x + spacing, 6);
+      expect(ops[2]!.x).toBeCloseTo(36 + first.runs[2]!.x + 2 * spacing, 6);
+    });
+
+    it('keeps the last line of each piece of a split paragraph justified unless it ends the text', () => {
+      const lines = Array.from({ length: 6 }, () => 'aa bb').join(' ');
+      const box = text(lines, { 'text-align': 'justify', width: '30', 'line-height': '1' });
+      const filler = el('pdf-view', { height: String(841.89 - 72 - 30) });
+      const pages = layout(page([filler, box]));
+      expect(pages).toHaveLength(2);
+      const firstPage = only(list(pages[0]!, 0, 2), 'text');
+      expect(firstPage.length).toBeGreaterThan(0);
+      for (const op of firstPage) expect(op.wordSpacing).toBeGreaterThan(0);
+      expect(only(list(pages[1]!, 1, 2), 'text').at(-1)!.wordSpacing ?? 0).toBe(0);
+    });
+  });
+
   it('draws each pdf-span run in its own size, color and decoration on one baseline', () => {
     const span = (style: Record<string, string>, content: string): PdfNode => {
       const node = el('pdf-span', style);

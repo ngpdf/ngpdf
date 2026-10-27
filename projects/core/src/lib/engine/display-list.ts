@@ -4,6 +4,7 @@ import { fitImage } from './images';
 import { pageNumberFormat, type Box } from './layout';
 import type { PageLayout, PlacedBox } from './paginate';
 import type { ResolvedStyle } from './style';
+import { wordGaps, type TextLine } from './text';
 import type { DrawOp, FontMetrics } from './writer';
 
 export interface DisplayListOptions {
@@ -111,12 +112,17 @@ function drawBox(
       const lineTop = contentTop + textLine.y;
       if (lineTop + textLine.height > limit + 1e-6) continue;
       const lineLeft = alignedX(contentLeft, contentWidth, textLine.width, style.textAlign);
+      const spacing = style.textAlign === 'justify' ? wordSpacing(textLine, contentWidth) : 0;
+      let gapsBefore = 0;
       for (const run of textLine.runs) {
+        const x = lineLeft + run.x + gapsBefore * spacing;
+        const gaps = spacing > 0 ? wordGaps(run.text) : 0;
+        gapsBefore += gaps;
         const ink = paint(run.color, opacity);
         if (!ink) continue;
         out.push({
           op: 'text',
-          x: lineLeft + run.x,
+          x,
           // Runs of different sizes share the line's baseline.
           y: lineTop + textLine.ascent - run.ascent,
           text: run.text,
@@ -125,6 +131,7 @@ function drawBox(
           ...ink,
           underline: run.decoration === 'underline',
           strike: run.decoration === 'line-through',
+          ...(gaps > 0 && { wordSpacing: spacing }),
         });
       }
     }
@@ -153,6 +160,17 @@ function drawBox(
       });
     }
   }
+}
+
+/**
+ * The width a justified line adds to each word gap to reach the content width. The last line, a
+ * line without gaps and one already too wide stay as laid out.
+ */
+function wordSpacing(line: TextLine, contentWidth: number): number {
+  if (line.last) return 0;
+  const gaps = line.runs.reduce((sum, run) => sum + wordGaps(run.text), 0);
+  const extra = contentWidth - line.width;
+  return gaps > 0 && extra > 0 ? extra / gaps : 0;
 }
 
 function alignedX(

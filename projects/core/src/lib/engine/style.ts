@@ -21,7 +21,7 @@ export interface TextStyle {
   readonly fontStyle: 'normal' | 'italic';
   /** Multiplier of the font size. */
   readonly lineHeight: number;
-  readonly textAlign: 'left' | 'center' | 'right';
+  readonly textAlign: 'left' | 'center' | 'right' | 'justify';
   readonly textDecoration: 'none' | 'underline' | 'line-through';
   /** The fewest lines of a split text left at the bottom of a page. */
   readonly orphans: number;
@@ -422,7 +422,7 @@ function apply(
       break;
     }
     case 'text-align':
-      style.textAlign = oneOf(value, ['left', 'center', 'right'], property, tag);
+      style.textAlign = oneOf(value, ['left', 'center', 'right', 'justify'], property, tag);
       break;
     case 'text-decoration':
       style.textDecoration = oneOf(value, ['none', 'underline', 'line-through'], property, tag);

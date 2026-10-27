@@ -121,7 +121,7 @@ The same applies to the text of `pdf-page-number`.
 - Lines wrap at Unicode line-break opportunities (UAX #14), so they break after spaces and hyphens, and not inside words.
 - A word wider than its box is broken at the box edge, between characters as you see them (grapheme clusters), so an accent stays with its letter.
 - Widths include the font's kerning, and the ligatures of a custom font.
-- There is no hyphenation, no `text-align: justify` and no right-to-left text in v0.1.
+- There is no hyphenation and no right-to-left text.
 
 A long `pdf-text` breaks between lines at a page break, keeping `orphans` lines (default 2) before the break and `widows` lines (default 2) after it. `break-inside: avoid` keeps it whole. See [Text across pages](/docs/pagination#text-across-pages).
 
@@ -150,7 +150,8 @@ ngpdf places text at the top of its line box. Extra line height goes below the t
 
 ## Alignment and decoration
 
-- `text-align`: `left`, `center` or `right`. It aligns each line inside the `pdf-text` box. In a row, a `pdf-text` is only as wide as its text, so give it a width or `flex: 1` when you want alignment to show. Inside a column, the box takes the full width.
+- `text-align`: `left`, `center`, `right` or `justify`. It aligns each line inside the `pdf-text` box. In a row, a `pdf-text` is only as wide as its text, so give it a width or `flex: 1` when you want alignment to show. Inside a column, the box takes the full width.
+- `justify` widens the gaps between words so that each line reaches both edges of the box. The last line of the paragraph stays at the left, as in CSS. So does a line with a single word, and a word wider than the box. A gap is a run of spaces or no-break spaces, and only gaps are widened: the space between letters stays as the font sets it. A paragraph split across pages keeps its lines justified up to its real last line.
 - `text-decoration`: `none`, `underline` or `line-through`. One value only.
 - `color` and `opacity` apply to the text.
 
