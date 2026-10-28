@@ -69,6 +69,16 @@ describe('toWinAnsi', () => {
     expect(warn).not.toHaveBeenCalled();
   });
 
+  it('turns the other whitespace that trim() strips into a space, and drops U+FEFF', () => {
+    // collapseWhitespace trims these at the paragraph ends, so they must not draw as ?.
+    const warn = vi.fn();
+    for (const space of ['\v', '\f', '\u1680', '\u2028', '\u2029', '\u3000']) {
+      expect(toWinAnsi(`a${space}b`, warn)).toBe('a b');
+    }
+    expect(toWinAnsi('a\uFEFFb', warn)).toBe('ab');
+    expect(warn).not.toHaveBeenCalled();
+  });
+
   it('drops soft hyphens and zero-width spaces, which are never drawn', () => {
     const warn = vi.fn();
     expect(toWinAnsi('co­operation', warn)).toBe('cooperation');

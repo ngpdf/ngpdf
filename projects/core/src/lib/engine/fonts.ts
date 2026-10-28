@@ -154,15 +154,26 @@ function isWinAnsi(codePoint: number): boolean {
 // linebreak also treats as glue.
 const isNoBreakSpace = (codePoint: number): boolean => codePoint === 0x2007 || codePoint === 0x202f;
 const isSpaceSeparator = (codePoint: number): boolean =>
-  (codePoint >= 0x2000 && codePoint <= 0x200a) || codePoint === 0x202f || codePoint === 0x205f;
+  (codePoint >= 0x2000 && codePoint <= 0x200a) ||
+  codePoint === 0x202f ||
+  codePoint === 0x205f ||
+  codePoint === 0x1680 ||
+  codePoint === 0x3000;
+// Vertical tab, form feed and the line and paragraph separators are whitespace to `trim()`, which
+// collapseWhitespace uses, so they become a space too instead of `?` in WinAnsi.
+const isOtherWhitespace = (codePoint: number): boolean =>
+  codePoint === 0x0b || codePoint === 0x0c || codePoint === 0x2028 || codePoint === 0x2029;
 
-// Soft hyphen and zero-width space: invisible unless a line breaks there, and ngpdf never breaks at
-// them, so they are dropped rather than drawn as a hyphen (WinAnsi 0xAD) or as a missing glyph.
-const isInvisible = (codePoint: number): boolean => codePoint === 0xad || codePoint === 0x200b;
+// Soft hyphen, zero-width space and U+FEFF (a byte order mark, or the old zero-width no-break
+// space): invisible unless a line breaks there, and ngpdf never breaks at them, so they are dropped
+// rather than drawn as a hyphen (WinAnsi 0xAD) or as a missing glyph.
+const isInvisible = (codePoint: number): boolean =>
+  codePoint === 0xad || codePoint === 0x200b || codePoint === 0xfeff;
 
 /**
- * Maps Unicode space separators to U+0020 (or U+00A0 for the no-break ones) and drops soft hyphens
- * and zero-width spaces. Applies to every font.
+ * Maps Unicode space separators, vertical tab, form feed and the line and paragraph separators to
+ * U+0020 (or U+00A0 for the no-break spaces), and drops soft hyphens, zero-width spaces and U+FEFF.
+ * Applies to every font.
  */
 export function normalizeText(text: string): string {
   let out = '';
@@ -170,6 +181,7 @@ export function normalizeText(text: string): string {
     const codePoint = char.codePointAt(0) ?? 0;
     if (isInvisible(codePoint)) continue;
     if (isSpaceSeparator(codePoint)) out += isNoBreakSpace(codePoint) ? ' ' : ' ';
+    else if (isOtherWhitespace(codePoint)) out += ' ';
     else out += char;
   }
   return out;

@@ -199,6 +199,15 @@ describe('layoutText', () => {
     expect(warn).toHaveBeenCalledExactlyOnceWith(['\u{1F600}']);
   });
 
+  it('treats each whitespace character trim() strips as whitespace, not as ?', () => {
+    for (const space of ['\v', '\f', '\u1680', '\u2028', '\u2029', '\u3000', '\uFEFF']) {
+      expect(layoutText(space, style, 500, writer).lines).toEqual([]);
+      expect(layoutText(`${space}a${space}`, style, 500, writer).lines.map((l) => l.text)).toEqual([
+        'a',
+      ]);
+    }
+  });
+
   it('does not collapse a non-breaking space', () => {
     const block = layoutText('a  b', style, 500, writer);
     expect(block.lines.map((line) => line.text)).toEqual(['a  b']);
