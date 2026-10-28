@@ -351,17 +351,22 @@ describe('layoutText with custom fonts', () => {
     expect(warn).not.toHaveBeenCalled();
   });
 
-  it('does not collapse ideographic spaces into one plain space', () => {
-    const block = layoutText(
-      '日\u3000\u3000本',
-      style,
-      Infinity,
-      writer,
-      undefined,
-      undefined,
-      fonts,
-    );
-    expect(block.lines.map((line) => line.text)).toEqual(['日\u3000\u3000本']);
+  it('draws ideographic spaces in a custom font that has them, without collapsing them', () => {
+    // The Japanese test subset has no U+3000, so these metrics give it one.
+    const metrics: FontMetrics = {
+      widthOf: (chunk, font, size) => writer.widthOf(chunk, font, size),
+      ascent: (font, size) => writer.ascent(font, size),
+      hasGlyph: (font, codePoint) =>
+        (font === 'font:1' && codePoint === 0x3000) || writer.hasGlyph(font, codePoint),
+    };
+    const missing = vi.fn();
+    const text = '日\u3000\u3000本';
+    const block = layoutText(text, style, Infinity, metrics, undefined, undefined, {
+      ...fonts,
+      missing,
+    });
+    expect(block.lines[0]?.runs.map((run) => [run.text, run.font])).toEqual([[text, 'font:1']]);
+    expect(missing).not.toHaveBeenCalled();
   });
 
   it('gives each line its runs, one per font, placed one after another', () => {

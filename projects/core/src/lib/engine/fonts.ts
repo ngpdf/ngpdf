@@ -279,7 +279,7 @@ export function shapeText(
     if (index < 0) {
       index = 0;
       if (first && isStandardFont(first)) {
-        if (isWideSpace(segment.codePointAt(0) ?? 0)) {
+        if (segment.length === 1 && isWideSpace(segment.charCodeAt(0))) {
           drawn = ' ';
         } else {
           replaced.add(segment);

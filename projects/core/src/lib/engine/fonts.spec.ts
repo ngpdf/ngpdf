@@ -245,6 +245,12 @@ describe('shapeText', () => {
     expect(shaped.replaced).toEqual([]);
   });
 
+  it('replaces an ideographic space with a combining mark no font has with ?', () => {
+    const { runs, shaped } = runsOf('a\u3000\u0301', ['Helvetica', 'font:0']);
+    expect(runs).toEqual([{ text: 'a?', font: 'Helvetica' }]);
+    expect(shaped.replaced).toEqual(['\u3000\u0301']);
+  });
+
   it('replaces a character no font has with ? when the chain starts with a standard font', () => {
     const { runs, shaped } = runsOf('a☃', ['Helvetica', 'font:2']);
     expect(runs).toEqual([{ text: 'a?', font: 'Helvetica' }]);
