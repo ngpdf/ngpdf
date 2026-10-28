@@ -744,6 +744,9 @@ describe('paginatePage: text split across pages', () => {
       for (const placed of textPieces(laid))
         expect(bottom(placed)).toBeLessThanOrEqual(CONTENT_BOTTOM);
     }
+    // The padding under the last piece still fits on the last page.
+    const last = textPieces(pages.at(-1)!).at(-1)!;
+    expect(bottom(last) + 300).toBeLessThanOrEqual(CONTENT_BOTTOM + 1e-6);
   });
 
   it('counts the top padding of a wrapper that opens with a text moved to a new page', () => {
@@ -753,6 +756,8 @@ describe('paginatePage: text split across pages', () => {
     // Without the padding the new page would take 4 lines and overflow by it.
     expect(lineCounts(pages)).toEqual([0, 3, 2, 2]);
     expect(pages.flatMap(linesOn)).toEqual(letters(7));
+    // The first piece sits under the padding at the top of its new page.
+    expect(textPieces(pages[1]!)[0]!.y).toBeCloseTo(CONTENT_TOP + 200, 6);
     for (const laid of pages) {
       for (const placed of textPieces(laid))
         expect(bottom(placed)).toBeLessThanOrEqual(CONTENT_BOTTOM);
