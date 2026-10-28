@@ -29,7 +29,6 @@ it does not affect a correct document. Items that change behaviour need a design
 - **Kerning across fonts.** With fallback along `font-family`, each font's run is kerned on its
   own; a pair that straddles two fonts is not.
 - **Font collections** (`.ttc`) in `providePdfFonts`.
-- **Control characters** (`\f`, `\v`, U+2028, U+0085) are not collapsed as whitespace.
 - More timing tests: the mid-word narrowing path under an inflating metric, and a 100,000-character
   unbreakable word at a narrow width.
 

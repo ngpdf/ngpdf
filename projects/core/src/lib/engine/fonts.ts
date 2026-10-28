@@ -158,10 +158,15 @@ const isSpaceSeparator = (codePoint: number): boolean =>
 // The ideographic space and the Ogham space mark have glyphs of their own in fonts for those
 // scripts, so they stay as they are until a standard font has to draw them as a space.
 const isWideSpace = (codePoint: number): boolean => codePoint === 0x1680 || codePoint === 0x3000;
-// Vertical tab, form feed and the line and paragraph separators are whitespace to `trim()`, which
-// collapseWhitespace uses, so they become a space too instead of `?` in WinAnsi.
+// Vertical tab, form feed, next line (U+0085) and the line and paragraph separators: line ends or
+// spacing in the source text, so they become a space that collapses like any other, instead of
+// `?` in WinAnsi.
 const isOtherWhitespace = (codePoint: number): boolean =>
-  codePoint === 0x0b || codePoint === 0x0c || codePoint === 0x2028 || codePoint === 0x2029;
+  codePoint === 0x0b ||
+  codePoint === 0x0c ||
+  codePoint === 0x85 ||
+  codePoint === 0x2028 ||
+  codePoint === 0x2029;
 
 // Soft hyphen, zero-width space and U+FEFF (a byte order mark, or the old zero-width no-break
 // space): invisible unless a line breaks there, and ngpdf never breaks at them, so they are dropped
@@ -170,8 +175,8 @@ const isInvisible = (codePoint: number): boolean =>
   codePoint === 0xad || codePoint === 0x200b || codePoint === 0xfeff;
 
 /**
- * Maps Unicode space separators, vertical tab, form feed and the line and paragraph separators to
- * U+0020 (or U+00A0 for the no-break spaces), and drops soft hyphens, zero-width spaces and U+FEFF.
+ * Maps Unicode space separators, vertical tab, form feed, next line and the line and paragraph
+ * separators to U+0020 (or U+00A0 for the no-break spaces), and drops soft hyphens, zero-width spaces and U+FEFF.
  * Applies to every font.
  */
 export function normalizeText(text: string): string {
