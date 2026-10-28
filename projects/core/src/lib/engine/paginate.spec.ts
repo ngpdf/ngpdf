@@ -733,6 +733,45 @@ describe('paginatePage: text split across pages', () => {
     expect(pages.flatMap(linesOn)).toEqual(letters(7));
   });
 
+  it('counts the bottom padding of a wrapper that closes with the text', () => {
+    const heights = [10, 10, 300, 300, 300, 100, 100];
+    const wrapper = el('pdf-view', { 'padding-bottom': '300' }, [tallLines(heights)]);
+    const pages = paginate(page([wrapper]));
+    // Without the padding the last two groups would share a page: 4 and 3 lines.
+    expect(lineCounts(pages)).toEqual([3, 2, 2]);
+    expect(pages.flatMap(linesOn)).toEqual(letters(7));
+    for (const laid of pages) {
+      for (const placed of textPieces(laid))
+        expect(bottom(placed)).toBeLessThanOrEqual(CONTENT_BOTTOM);
+    }
+  });
+
+  it('counts the top padding of a wrapper that opens with a text moved to a new page', () => {
+    const heights = [10, 10, 300, 300, 300, 100, 100];
+    const wrapper = el('pdf-view', { 'padding-top': '200' }, [tallLines(heights)]);
+    const pages = paginate(page([filler(10), wrapper]));
+    // Without the padding the new page would take 4 lines and overflow by it.
+    expect(lineCounts(pages)).toEqual([0, 3, 2, 2]);
+    expect(pages.flatMap(linesOn)).toEqual(letters(7));
+    for (const laid of pages) {
+      for (const placed of textPieces(laid))
+        expect(bottom(placed)).toBeLessThanOrEqual(CONTENT_BOTTOM);
+    }
+  });
+
+  it('places a text under a repeated table header greedily, line by line', () => {
+    const heights = [10, 10, 390, 350, 400, 200, 200];
+    const pages = paginate(
+      page([el('pdf-table', {}, [row(20, true), tallLines(heights)], { columns: ['1fr'] })]),
+    );
+    // Each page loses 20pt to the header, so the middle pages get one line each.
+    expect(lineCounts(pages)).toEqual([3, 1, 1, 2]);
+    expect(pages.flatMap(linesOn)).toEqual(letters(7));
+    for (const laid of pages) {
+      expect(laid.placed.filter((placed) => isHeader(placed.box.node))).toHaveLength(1);
+    }
+  });
+
   it('falls back to greedy placement when no break meets the limits', () => {
     const warn = vi.fn<(message: string) => void>();
     const pages = paginate(page([tallLines([10, 10, 700, 700, 700, 10, 10])]), warn);
