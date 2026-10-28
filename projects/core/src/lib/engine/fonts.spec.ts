@@ -234,6 +234,17 @@ describe('shapeText', () => {
     expect(shaped.replaced).toEqual([]);
   });
 
+  it('keeps an ideographic space for a custom font that has it', () => {
+    const { runs } = runsOf('日\u3000\u3000本', ['font:2', 'Helvetica']);
+    expect(runs).toEqual([{ text: '日\u3000\u3000本', font: 'font:2' }]);
+  });
+
+  it('draws an ideographic or Ogham space no font has as a space, not ?', () => {
+    const { runs, shaped } = runsOf('a\u3000b\u1680c', ['Helvetica', 'font:0']);
+    expect(runs).toEqual([{ text: 'a b c', font: 'Helvetica' }]);
+    expect(shaped.replaced).toEqual([]);
+  });
+
   it('replaces a character no font has with ? when the chain starts with a standard font', () => {
     const { runs, shaped } = runsOf('a☃', ['Helvetica', 'font:2']);
     expect(runs).toEqual([{ text: 'a?', font: 'Helvetica' }]);

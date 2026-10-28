@@ -111,7 +111,8 @@ In a standard font, any other character is drawn as `?`. That includes emoji, Gr
 Some characters are handled first, in every font, so they are never drawn as `?` or as a missing glyph:
 
 - The Unicode spaces that locale data puts in pipe output, such as the thin space (U+2009) and the narrow no-break space (U+202F), and the other spaces from U+2000 to U+200A and U+205F, are drawn as a normal space. The narrow no-break space and the figure space (U+2007) become a no-break space (U+00A0), so `3:00 PM` from `date: 'short'` still does not break between the time and `PM`.
-- The Ogham space mark (U+1680), the ideographic space (U+3000), vertical tab, form feed, and the line and paragraph separators (U+2028, U+2029) are drawn as a normal space, so they collapse and trim like any other whitespace.
+- Vertical tab, form feed, and the line and paragraph separators (U+2028, U+2029) are drawn as a normal space, so they collapse and trim like any other whitespace.
+- The ideographic space (U+3000) and the Ogham space mark (U+1680) are kept for a custom font that has them, and drawn as a normal space when no font in the list has them and the list starts with a standard font. They are trimmed at the ends of the text but never collapsed.
 - A soft hyphen (U+00AD), a zero-width space (U+200B) and U+FEFF (a byte order mark or zero-width no-break space) are removed. v0.1 does not break lines at them, so they are never drawn.
 
 The same applies to the text of `pdf-page-number`.

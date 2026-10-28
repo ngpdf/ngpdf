@@ -154,11 +154,10 @@ function isWinAnsi(codePoint: number): boolean {
 // linebreak also treats as glue.
 const isNoBreakSpace = (codePoint: number): boolean => codePoint === 0x2007 || codePoint === 0x202f;
 const isSpaceSeparator = (codePoint: number): boolean =>
-  (codePoint >= 0x2000 && codePoint <= 0x200a) ||
-  codePoint === 0x202f ||
-  codePoint === 0x205f ||
-  codePoint === 0x1680 ||
-  codePoint === 0x3000;
+  (codePoint >= 0x2000 && codePoint <= 0x200a) || codePoint === 0x202f || codePoint === 0x205f;
+// The ideographic space and the Ogham space mark have glyphs of their own in fonts for those
+// scripts, so they stay as they are until a standard font has to draw them as a space.
+const isWideSpace = (codePoint: number): boolean => codePoint === 0x1680 || codePoint === 0x3000;
 // Vertical tab, form feed and the line and paragraph separators are whitespace to `trim()`, which
 // collapseWhitespace uses, so they become a space too instead of `?` in WinAnsi.
 const isOtherWhitespace = (codePoint: number): boolean =>
@@ -188,14 +187,18 @@ export function normalizeText(text: string): string {
 }
 
 /**
- * `normalizeText`, then any character outside WinAnsi becomes `?`, reporting each distinct one
- * once. The text of a standard font.
+ * `normalizeText`, then the ideographic space and the Ogham space mark become a space and any
+ * other character outside WinAnsi becomes `?`, reporting each distinct one once. The text of a
+ * standard font.
  */
 export function toWinAnsi(text: string, warn: (chars: string[]) => void): string {
   const unsupported = new Set<string>();
   let out = '';
   for (const char of normalizeText(text)) {
-    if (isWinAnsi(char.codePointAt(0) ?? 0)) {
+    const codePoint = char.codePointAt(0) ?? 0;
+    if (isWideSpace(codePoint)) {
+      out += ' ';
+    } else if (isWinAnsi(codePoint)) {
       out += char;
     } else {
       unsupported.add(char);
@@ -276,8 +279,12 @@ export function shapeText(
     if (index < 0) {
       index = 0;
       if (first && isStandardFont(first)) {
-        replaced.add(segment);
-        drawn = '?';
+        if (isWideSpace(segment.codePointAt(0) ?? 0)) {
+          drawn = ' ';
+        } else {
+          replaced.add(segment);
+          drawn = '?';
+        }
       } else {
         missing.add(segment);
       }

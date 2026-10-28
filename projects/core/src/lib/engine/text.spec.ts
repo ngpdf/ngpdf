@@ -351,6 +351,19 @@ describe('layoutText with custom fonts', () => {
     expect(warn).not.toHaveBeenCalled();
   });
 
+  it('does not collapse ideographic spaces into one plain space', () => {
+    const block = layoutText(
+      '日\u3000\u3000本',
+      style,
+      Infinity,
+      writer,
+      undefined,
+      undefined,
+      fonts,
+    );
+    expect(block.lines.map((line) => line.text)).toEqual(['日\u3000\u3000本']);
+  });
+
   it('gives each line its runs, one per font, placed one after another', () => {
     const block = layoutText('Zoë 日本語 ok', style, Infinity, writer, undefined, undefined, fonts);
     const [line] = block.lines;
