@@ -199,6 +199,15 @@ describe('layoutText', () => {
     expect(warn).toHaveBeenCalledExactlyOnceWith(['\u{1F600}']);
   });
 
+  it('treats each whitespace character trim() strips as whitespace, not as ?', () => {
+    for (const space of ['\v', '\f', '\u1680', '\u2028', '\u2029', '\u3000', '\uFEFF']) {
+      expect(layoutText(space, style, 500, writer).lines).toEqual([]);
+      expect(layoutText(`${space}a${space}`, style, 500, writer).lines.map((l) => l.text)).toEqual([
+        'a',
+      ]);
+    }
+  });
+
   it('does not collapse a non-breaking space', () => {
     const block = layoutText('a  b', style, 500, writer);
     expect(block.lines.map((line) => line.text)).toEqual(['a  b']);
@@ -340,6 +349,24 @@ describe('layoutText with custom fonts', () => {
     expect(block.lines.map((line) => line.text)).toEqual(['Łódź Жук']);
     expect(block.width).toBeCloseTo(writer.widthOf('Łódź Жук', 'font:0', 9), 6);
     expect(warn).not.toHaveBeenCalled();
+  });
+
+  it('draws ideographic spaces in a custom font that has them, without collapsing them', () => {
+    // The Japanese test subset has no U+3000, so these metrics give it one.
+    const metrics: FontMetrics = {
+      widthOf: (chunk, font, size) => writer.widthOf(chunk, font, size),
+      ascent: (font, size) => writer.ascent(font, size),
+      hasGlyph: (font, codePoint) =>
+        (font === 'font:1' && codePoint === 0x3000) || writer.hasGlyph(font, codePoint),
+    };
+    const missing = vi.fn();
+    const text = '日\u3000\u3000本';
+    const block = layoutText(text, style, Infinity, metrics, undefined, undefined, {
+      ...fonts,
+      missing,
+    });
+    expect(block.lines[0]?.runs.map((run) => [run.text, run.font])).toEqual([[text, 'font:1']]);
+    expect(missing).not.toHaveBeenCalled();
   });
 
   it('gives each line its runs, one per font, placed one after another', () => {

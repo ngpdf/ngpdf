@@ -45,6 +45,10 @@ describe('layoutText properties', () => {
     fc.assert(property(), { seed: -1214594155 });
   });
 
+  it('holds for the seed that once found an ideographic space drawn as ?', () => {
+    fc.assert(property(), { seed: 280 });
+  });
+
   it('loses nothing and overflows nowhere with kerning that widens text', () => {
     // Each "-b", "rt" and "_r" draws wider than the sum of its characters, so sums under-estimate.
     const kerning: FontMetrics = {

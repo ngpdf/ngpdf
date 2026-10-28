@@ -69,6 +69,16 @@ describe('toWinAnsi', () => {
     expect(warn).not.toHaveBeenCalled();
   });
 
+  it('turns the other whitespace that trim() strips into a space, and drops U+FEFF', () => {
+    // collapseWhitespace trims these at the paragraph ends, so they must not draw as ?.
+    const warn = vi.fn();
+    for (const space of ['\v', '\f', '\u1680', '\u2028', '\u2029', '\u3000']) {
+      expect(toWinAnsi(`a${space}b`, warn)).toBe('a b');
+    }
+    expect(toWinAnsi('a\uFEFFb', warn)).toBe('ab');
+    expect(warn).not.toHaveBeenCalled();
+  });
+
   it('drops soft hyphens and zero-width spaces, which are never drawn', () => {
     const warn = vi.fn();
     expect(toWinAnsi('co­operation', warn)).toBe('cooperation');
@@ -222,6 +232,23 @@ describe('shapeText', () => {
     expect(runs).toEqual([{ text: 'a☃b', font: 'font:0' }]);
     expect(shaped.missing).toEqual(['☃']);
     expect(shaped.replaced).toEqual([]);
+  });
+
+  it('keeps an ideographic space for a custom font that has it', () => {
+    const { runs } = runsOf('日\u3000\u3000本', ['font:2', 'Helvetica']);
+    expect(runs).toEqual([{ text: '日\u3000\u3000本', font: 'font:2' }]);
+  });
+
+  it('draws an ideographic or Ogham space no font has as a space, not ?', () => {
+    const { runs, shaped } = runsOf('a\u3000b\u1680c', ['Helvetica', 'font:0']);
+    expect(runs).toEqual([{ text: 'a b c', font: 'Helvetica' }]);
+    expect(shaped.replaced).toEqual([]);
+  });
+
+  it('replaces an ideographic space with a combining mark no font has with ?', () => {
+    const { runs, shaped } = runsOf('a\u3000\u0301', ['Helvetica', 'font:0']);
+    expect(runs).toEqual([{ text: 'a?', font: 'Helvetica' }]);
+    expect(shaped.replaced).toEqual(['\u3000\u0301']);
   });
 
   it('replaces a character no font has with ? when the chain starts with a standard font', () => {
