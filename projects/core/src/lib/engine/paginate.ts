@@ -92,9 +92,18 @@ interface Wrapper extends Flowed {
   last: number;
 }
 
+/** A split text: its line groups are units first..last. */
+interface TextRun {
+  readonly first: number;
+  readonly last: number;
+  readonly orphans: number;
+  readonly widows: number;
+}
+
 interface Collected {
   readonly units: Unit[];
   readonly wrappers: Wrapper[];
+  readonly texts: TextRun[];
 }
 
 const ZERO_EDGES: Edges<Length> = { top: 0, right: 0, bottom: 0, left: 0 };
@@ -165,6 +174,7 @@ function isHeaderRow(node: PdfNode): boolean {
 function collectUnits(content: Box, maxHeader: number, pageOpacity: number): Collected {
   const units: Unit[] = [];
   const wrappers: Wrapper[] = [];
+  const texts: TextRun[] = [];
 
   const visit = (
     box: Box,
@@ -289,6 +299,12 @@ function collectUnits(content: Box, maxHeader: number, pageOpacity: number): Col
       });
     }
     wrapper.last = units.length - 1;
+    texts.push({
+      first: wrapper.first,
+      last: wrapper.last,
+      orphans: box.style.orphans,
+      widows: box.style.widows,
+    });
   };
 
   if (content.style.flexDirection === 'row') {
@@ -298,7 +314,7 @@ function collectUnits(content: Box, maxHeader: number, pageOpacity: number): Col
   } else {
     for (const child of content.children) visit(child, child.x, child.y, null, pageOpacity);
   }
-  return { units, wrappers };
+  return { units, wrappers, texts };
 }
 
 interface PageFrame {
@@ -488,7 +504,7 @@ export function paginatePage(
   const contentStyles = new Map(styles).set(content, contentStyle);
   const laid = layoutBox(content, contentStyles, frame.contentWidth, ctx);
   const contentHeight = frame.bottom - frame.top;
-  const { units, wrappers } = collectUnits(laid, contentHeight, pageStyle.opacity);
+  const { units, wrappers, texts } = collectUnits(laid, contentHeight, pageStyle.opacity);
 
   // Per unit: the outermost wrapper top opening at it, the outermost wrapper bottom closing at
   // it, and whether any of them asks for a page break.
@@ -520,6 +536,89 @@ export function paginatePage(
   startPage();
 
   const placements: Placement[] = [];
+
+  /**
+   * The units a split text starts a page at, when its first group would go below `startTop`.
+   * Placing the groups one by one can leave a page in the middle with fewer lines than the
+   * limits ask for, so each page takes as many groups as fit while the rest of the text can
+   * still be laid out within them. Null when no layout keeps the limits: the groups are then
+   * placed one by one. Linear in the groups, plus a binary search per group.
+   */
+  const planText = (run: TextRun, startTop: number, fresh: boolean): Set<number> | null => {
+    const count = run.last - run.first + 1;
+    const group = (i: number): Unit => at(units, run.first + i);
+    const linesBefore = [0];
+    for (let i = 0; i < count; i++) {
+      linesBefore.push(at(linesBefore, i) + (group(i).box.text?.lines.length ?? 0));
+    }
+    const lines = (i: number, k: number): number => at(linesBefore, k) - at(linesBefore, i);
+    const last = group(count - 1);
+    const trail = Math.max(0, (closesAt.get(run.last) ?? last.bottom) - last.bottom);
+    // Page y of group i at the top of a new page, after the wrappers that open with it.
+    const freshTop = (i: number): number =>
+      frame.top + group(i).top - (opensAt.get(run.first + i) ?? group(i).top);
+    // Whether groups i..k-1 fit on a page with group i at `top`.
+    const fits = (i: number, k: number, top: number): boolean =>
+      top + group(k - 1).bottom - group(i).top + (k === count ? trail : 0) <=
+      frame.bottom + EPSILON;
+    // A page ending before a break keeps `orphans` lines, one starting after a break `widows`.
+    const need = (i: number): number => Math.max(run.orphans, i > 0 ? run.widows : 0);
+    const endsHere = (i: number, top: number): boolean =>
+      fits(i, count, top) && (i === 0 || lines(i, count) >= run.widows);
+    // The largest k in [lo, hi] with test(k), for a test true up to some k and false after.
+    const lastWhere = (lo: number, hi: number, test: (k: number) => boolean): number => {
+      let found = lo - 1;
+      while (lo <= hi) {
+        const mid = (lo + hi) >> 1;
+        if (test(mid)) [found, lo] = [mid, mid + 1];
+        else hi = mid - 1;
+      }
+      return found;
+    };
+    // Breaks after groups i..k-1 with k in this range keep the limits on that page and fit.
+    const range = (i: number, top: number): [number, number] => [
+      lastWhere(i, count - 1, (k) => lines(i, k) < need(i)) + 1,
+      lastWhere(i + 1, count - 1, (k) => fits(i, k, top)),
+    ];
+
+    // ok[i]: groups i.. can be laid out within the limits, starting a page at group i.
+    // okAfter[k]: how many of ok[k..count-1] hold, to test a range at once.
+    const ok: boolean[] = new Array<boolean>(count).fill(false);
+    const okAfter: number[] = new Array<number>(count + 1).fill(0);
+    for (let i = count - 1; i > 0; i--) {
+      const [lo, hi] = range(i, freshTop(i));
+      ok[i] = endsHere(i, freshTop(i)) || (lo <= hi && at(okAfter, lo) - at(okAfter, hi + 1) > 0);
+      okAfter[i] = at(okAfter, i + 1) + (ok[i] ? 1 : 0);
+    }
+    // okUpTo[k]: the largest j <= k with ok[j], or -1.
+    const okUpTo: number[] = [];
+    for (let k = 0; k < count; k++) okUpTo.push(ok[k] ? k : k > 0 ? at(okUpTo, k - 1) : -1);
+
+    // Where the page starting at group i with i at `top` ends: as late as the limits allow.
+    const pageEnd = (i: number, top: number): number => {
+      if (endsHere(i, top)) return count;
+      const [lo, hi] = range(i, top);
+      const k = hi >= lo ? at(okUpTo, hi) : -1;
+      return k >= lo ? k : -1;
+    };
+
+    const breaks = new Set<number>();
+    let end = pageEnd(0, startTop);
+    if (end < 0 && !fresh) {
+      breaks.add(run.first);
+      end = pageEnd(0, freshTop(0));
+    }
+    if (end < 0) return null;
+    while (end < count) {
+      breaks.add(run.first + end);
+      end = pageEnd(end, freshTop(end));
+    }
+    return breaks;
+  };
+  const textAt = new Map(texts.map((run) => [run.first, run]));
+  // While placing a split text: the units it starts a page at, or null to place it greedily.
+  let textBreaks: Set<number> | null = null;
+  let textLast = -1;
 
   const place = (box: Box, x: number, y: number, opacity: number): void => {
     if (y + box.h > frame.bottom + EPSILON) {
@@ -556,8 +655,15 @@ export function paginatePage(
       return { header, leadFlow, leadTop, top };
     };
     let next = plan();
+    const run = textAt.get(index);
+    if (run) {
+      textBreaks = unit.header ? null : planText(run, next.top, current.units === 0);
+      textLast = run.last;
+    }
+    const planned = index <= textLast ? textBreaks : null;
     const trail = Math.max(0, (closesAt.get(index) ?? unit.bottom) - unit.bottom);
-    if (next.top + unit.box.h + trail > frame.bottom + EPSILON && current.units > 0) {
+    const overflows = next.top + unit.box.h + trail > frame.bottom + EPSILON;
+    if ((planned ? planned.has(index) : overflows) && current.units > 0) {
       startPage();
       previousBottom = null;
       next = plan();

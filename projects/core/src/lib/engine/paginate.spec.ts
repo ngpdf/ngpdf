@@ -681,6 +681,66 @@ describe('paginatePage: text split across pages', () => {
     }
   });
 
+  /** A text with one line per height: a one-letter pdf-span per line, too wide to share one. */
+  function tallLines(heights: readonly number[], style: Record<string, string> = {}): PdfNode {
+    const node = el('pdf-text', { width: '5', 'font-size': '10', 'line-height': '1', ...style });
+    heights.forEach((height, i) => {
+      if (i > 0) {
+        const space = createNode('text', '', ' ');
+        space.parent = node;
+        node.children.push(space);
+      }
+      const letter = createNode('text', '', String.fromCharCode(97 + i));
+      node.children.push(el('pdf-span', { 'font-size': String(height) }, [letter]));
+      node.children.at(-1)!.parent = node;
+    });
+    return node;
+  }
+
+  const lineCounts = (pages: PageLayout[]): number[] => pages.map((laid) => linesOn(laid).length);
+  const letters = (count: number): string[] =>
+    Array.from({ length: count }, (_, i) => String.fromCharCode(97 + i));
+
+  it('lays out one line per height in the tall-line texts below', () => {
+    const heights = [10, 10, 390, 350, 400, 200, 200];
+    const pages = paginate(page([tallLines(heights, { 'break-inside': 'avoid' })]));
+    const lines = pages.flatMap((laid) => textPieces(laid)).flatMap((p) => p.box.text!.lines);
+    expect(lines.map((line) => line.text)).toEqual(letters(7));
+    expect(lines.map((line) => line.height)).toEqual(heights);
+  });
+
+  it('gives lines back to an earlier page so a middle page keeps orphans and widows', () => {
+    const heights = [10, 10, 390, 350, 400, 200, 200];
+    const pages = paginate(page([tallLines(heights)]));
+    // Placing lines greedily would give 4, 1 and 2 lines.
+    expect(lineCounts(pages)).toEqual([3, 2, 2]);
+    expect(pages.flatMap(linesOn)).toEqual(letters(7));
+  });
+
+  it('keeps the larger of orphans and widows on a middle page with other limits', () => {
+    const heights = [10, 10, 10, 500, 150, 300, 300, 300];
+    const pages = paginate(page([tallLines(heights, { orphans: '3', widows: '1' })]));
+    // Greedily: 5, 2 and 1 lines, with only 2 on the middle page.
+    expect(lineCounts(pages)).toEqual([4, 3, 1]);
+    expect(pages.flatMap(linesOn)).toEqual(letters(8));
+  });
+
+  it('moves a text to the next page when no break on this one keeps the limits', () => {
+    const heights = [10, 10, 390, 350, 400, 200, 200];
+    const pages = paginate(page([filler(400), tallLines(heights)]));
+    // Only the first two lines fit under the filler, and no split of the rest keeps 2 lines a page.
+    expect(lineCounts(pages)).toEqual([0, 3, 2, 2]);
+    expect(pages.flatMap(linesOn)).toEqual(letters(7));
+  });
+
+  it('falls back to greedy placement when no break meets the limits', () => {
+    const warn = vi.fn<(message: string) => void>();
+    const pages = paginate(page([tallLines([10, 10, 700, 700, 700, 10, 10])]), warn);
+    expect(lineCounts(pages)).toEqual([3, 1, 3]);
+    expect(pages.flatMap(linesOn)).toEqual(letters(7));
+    expect(warn).not.toHaveBeenCalled();
+  });
+
   it('starts a new page before a split text with breakBefore', () => {
     const text = paragraph(10);
     text.owner = { pdfProps: () => ({ breakBefore: true }) };
