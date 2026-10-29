@@ -129,7 +129,7 @@ Give a `pdf-view` that is a direct child of `pdf-page` the `fixed` input to draw
 - A fixed view is laid out once at the content width and drawn the same on every sheet that `pdf-page` produces. It is taken out of the flow wherever you write it among the page's children.
 - `fixed="top"` views stack at the top of the content area, and `fixed="bottom"` views at the bottom, in template order, with their margins. The flow gets the space between them on every sheet.
 - Bottom views sit above the `pdf-page-number`, which keeps the very bottom.
-- A fixed view is never a pagination unit: it is not split, moved or clipped, and `breakBefore` inside it does nothing.
+- A fixed view is never a pagination unit: it is not split, moved or clipped, and page breaks on it or inside it (`breakBefore`, `breakAfter`, `break-before`, `break-after`) do nothing.
 - Fixed views that leave no room for content fail the render with `ngpdf: fixed views leave no room for content on pdf-page`.
 - A `fixed` view nested deeper than a direct child of `pdf-page` is laid out as an ordinary view where it is, and logs `ngpdf: a fixed pdf-view must be a direct child of pdf-page` in development mode: inside the flow it stays in the flow, and inside a fixed view it repeats with that view.
 - The content of a fixed view is the same on every sheet, except a `pdf-page-number` inside it, which shows each sheet's number (see [Page numbers](#page-numbers)).
@@ -146,7 +146,7 @@ A `pdf-page-number` shows the sheet's number. Put it directly inside a `pdf-page
 ```
 
 - `format` replaces `{page}` with the sheet's number and `{total}` with the number of sheets in the whole document, across all `pdf-page` elements. Each token can appear any number of times. The default format is `{page} / {total}`.
-- It sits at the bottom of the content area, inside the page padding, across the content width, on every sheet that `pdf-page` produces. It is taken out of the flow wherever you write it among the page's children.
+- It sits at the bottom of the content area, inside the page padding, across the content width, on every sheet that `pdf-page` produces. It is taken out of the flow wherever you write it among the page's children, so `break-before` and `break-after` on it do nothing.
 - It reserves its height on every sheet: one line of its font (`font-size × line-height`) plus its own vertical padding and borders, or its `height` if you set one. Content and bottom fixed views stop above it.
 - It is right-aligned unless it, or an element above it, sets `text-align`.
 - Text styles apply: `font-size`, `color`, `font-weight` and the rest. Other position styles are ignored.

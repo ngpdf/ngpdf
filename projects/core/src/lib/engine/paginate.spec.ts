@@ -950,6 +950,22 @@ describe('paginatePage: fixed views', () => {
     expect(pages[0]!.pageNumber?.y).toBeCloseTo(CONTENT_BOTTOM, 3);
   });
 
+  it('ignores page breaks on fixed views and the page number, which are out of the flow', () => {
+    const breaks = { 'break-before': 'page', 'break-after': 'page' };
+    const pages = paginate(
+      page([
+        block(10),
+        fixed('top', 20, breaks),
+        block(10),
+        fixed('bottom', 20, breaks),
+        block(10),
+        pageNumber({ height: String(NUMBER_HEIGHT), ...breaks }),
+        block(10),
+      ]),
+    );
+    expect(pages.map((laid) => flowOn(laid).length)).toEqual([4]);
+  });
+
   it('throws when fixed views leave no room for content', () => {
     expect(() => paginate(page([fixed('top', 400), fixed('bottom', 400), block(10)]))).toThrow(
       'ngpdf: fixed views leave no room for content on pdf-page',
