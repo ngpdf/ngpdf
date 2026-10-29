@@ -65,7 +65,7 @@ A `pdf-row` with the `header` attribute repeats at the top of every sheet its ta
 
 ## breakBefore
 
-`breakBefore` on a `pdf-view` or `pdf-text` starts a new sheet before that element. On any element, the style `break-before: page` does the same. Inside a unit, a break starts the new sheet before that whole unit, since a unit is never split: `break-before: page` on a `pdf-cell` in a table row, or `breakBefore` on a `pdf-text` inside a row `pdf-view`.
+`breakBefore` on a `pdf-view` or `pdf-text` starts a new sheet before that element. On any element but a `pdf-span`, the style `break-before: page` does the same. Inside a unit, a break starts the new sheet before that whole unit, since a unit is never split: `break-before: page` on a `pdf-cell` in a table row, or `breakBefore` on a `pdf-text` inside a row `pdf-view`.
 
 ```html
 @for (chapter of chapters(); track chapter.title; let first = $first) {
@@ -84,7 +84,7 @@ On a wrapper, the break happens before its first unit. A break on a sheet that h
 
 ## breakAfter
 
-`breakAfter` on a `pdf-view` or `pdf-text`, or the style `break-after: page` on any element, starts a new sheet after that element. It works like `breakBefore` turned around:
+`breakAfter` on a `pdf-view` or `pdf-text`, or the style `break-after: page` on any element but a `pdf-span`, starts a new sheet after that element. It works like `breakBefore` turned around:
 
 - On a wrapper, the next sheet starts after its last unit. A split `pdf-text` breaks after its last line, never between its lines.
 - Inside a unit, the break comes after the whole unit: `break-after: page` on a `pdf-cell` breaks after its row.

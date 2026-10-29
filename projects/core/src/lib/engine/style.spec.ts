@@ -308,11 +308,17 @@ describe('resolveStyles', () => {
 
   it('warns about properties that have no effect on a pdf-span', () => {
     const warn = vi.fn();
-    const span = el('pdf-span', { 'font-style': 'italic', padding: '4', 'text-align': 'right' });
+    const span = el('pdf-span', {
+      'font-style': 'italic',
+      padding: '4',
+      'text-align': 'right',
+      'break-after': 'page',
+    });
     resolveStyles(el('pdf-document', {}, [el('pdf-text', {}, [span])]), warn);
     expect(warn.mock.calls).toEqual([
       ['ngpdf: padding has no effect on pdf-span'],
       ['ngpdf: text-align has no effect on pdf-span'],
+      ['ngpdf: break-after has no effect on pdf-span'],
     ]);
   });
 
