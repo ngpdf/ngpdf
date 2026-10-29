@@ -208,6 +208,13 @@ describe('layoutText', () => {
     }
   });
 
+  it('collapses form feed, vertical tab, U+2028, U+2029 and U+0085 with the spaces around them', () => {
+    for (const control of ['\f', '\v', '\u2028', '\u2029', '\u0085']) {
+      const block = layoutText(`a ${control}${control} b${control}c`, style, 500, writer);
+      expect(block.lines.map((line) => line.text)).toEqual(['a b c']);
+    }
+  });
+
   it('does not collapse a non-breaking space', () => {
     const block = layoutText('a  b', style, 500, writer);
     expect(block.lines.map((line) => line.text)).toEqual(['a  b']);

@@ -72,7 +72,7 @@ describe('toWinAnsi', () => {
   it('turns the other whitespace that trim() strips into a space, and drops U+FEFF', () => {
     // collapseWhitespace trims these at the paragraph ends, so they must not draw as ?.
     const warn = vi.fn();
-    for (const space of ['\v', '\f', '\u1680', '\u2028', '\u2029', '\u3000']) {
+    for (const space of ['\v', '\f', '\u0085', '\u1680', '\u2028', '\u2029', '\u3000']) {
       expect(toWinAnsi(`a${space}b`, warn)).toBe('a b');
     }
     expect(toWinAnsi('a\uFEFFb', warn)).toBe('ab');
