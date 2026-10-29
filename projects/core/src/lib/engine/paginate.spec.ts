@@ -227,6 +227,65 @@ describe('paginatePage: tables', () => {
   });
 });
 
+describe('paginatePage: break-inside: avoid on wrappers', () => {
+  const AREA = CONTENT_BOTTOM - CONTENT_TOP;
+  const filler = (room: number): PdfNode => el('pdf-view', { height: String(AREA - room) });
+  const block = (): PdfNode => el('pdf-view', { height: '20' });
+  const nodesOn = (pages: PageLayout[]): PdfNode[][] =>
+    pages.map((laid) => laid.placed.map((p) => p.box.node));
+
+  it('moves a column view that does not fit here but fits a page to the next page whole', () => {
+    const first = filler(30);
+    const items = [block(), block(), block()];
+    const pages = paginate(page([first, el('pdf-view', { 'break-inside': 'avoid' }, items)]));
+    expect(nodesOn(pages)).toEqual([[first], items]);
+    expect(pages[1]!.placed[0]!.y).toBeCloseTo(CONTENT_TOP, 6);
+  });
+
+  it('leaves a column view without break-inside: avoid split across pages', () => {
+    const items = [block(), block(), block()];
+    const pages = paginate(page([filler(30), el('pdf-view', {}, items)]));
+    expect(nodesOn(pages)[1]).toEqual(items.slice(1));
+  });
+
+  it('moves a table with a header whole, its header drawn once', () => {
+    const first = filler(50);
+    const tableNode = table(3, true, { 'break-inside': 'avoid' });
+    const pages = paginate(page([first, tableNode]));
+    expect(nodesOn(pages)).toEqual([[first], tableNode.children]);
+  });
+
+  it('splits a kept view taller than a page as before, without a warning', () => {
+    const warn = vi.fn<(message: string) => void>();
+    const first = filler(30);
+    const items = Array.from({ length: 50 }, block);
+    const pages = paginate(page([first, el('pdf-view', { 'break-inside': 'avoid' }, items)]), warn);
+    expect(nodesOn(pages)[0]).toEqual([first, items[0]]);
+    expect(nodesOn(pages).flat()).toEqual([first, ...items]);
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it('keeps an inner view whole when the outer kept view is too tall to keep', () => {
+    const items = Array.from({ length: 36 }, block);
+    const inner = [block(), block(), block()];
+    const outer = el('pdf-view', { 'break-inside': 'avoid' }, [
+      ...items,
+      el('pdf-view', { 'break-inside': 'avoid' }, inner),
+    ]);
+    const pages = paginate(page([outer]));
+    // 36 rows of 20pt leave 49.89pt, room for two of the three inner rows.
+    expect(nodesOn(pages)).toEqual([items, inner]);
+  });
+
+  it('counts the bottom padding of the views closing with a kept view', () => {
+    const items = [block(), block()];
+    const kept = el('pdf-view', { 'break-inside': 'avoid' }, items);
+    const first = filler(50);
+    const pages = paginate(page([first, el('pdf-view', { 'padding-bottom': '20' }, [kept])]));
+    expect(nodesOn(pages)).toEqual([[first], items]);
+  });
+});
+
 describe('paginatePage: page breaks', () => {
   it('starts a new page at breakBefore', () => {
     const first = el('pdf-view', { height: '20' });
@@ -281,6 +340,45 @@ describe('paginatePage: page breaks', () => {
     const tableNode = el('pdf-table', {}, [header, row()], { columns: ['1fr'] });
     const pages = paginate(page([el('pdf-view', { height: '20' }), tableNode]));
     expect(pages).toHaveLength(1);
+  });
+
+  it('starts a new page after break-after: page', () => {
+    const first = el('pdf-view', { height: '20', 'break-after': 'page' });
+    const second = el('pdf-view', { height: '20' });
+    const pages = paginate(page([first, second]));
+    expect(pages.map((laid) => laid.placed.map((p) => p.box.node))).toEqual([[first], [second]]);
+    expect(pages[1]!.placed[0]!.y).toBeCloseTo(CONTENT_TOP, 6);
+  });
+
+  it('takes breakAfter from the element prop as well', () => {
+    const first = el('pdf-view', { height: '20' }, [], { breakAfter: true });
+    const pages = paginate(page([first, el('pdf-view', { height: '20' })]));
+    expect(pages).toHaveLength(2);
+  });
+
+  it('adds no empty page for break-after on the last unit', () => {
+    const last = el('pdf-view', { height: '20', 'break-after': 'page' });
+    const pages = paginate(page([el('pdf-view', { height: '20' }), last]));
+    expect(pages).toHaveLength(1);
+  });
+
+  it('ignores break-after keywords other than page', () => {
+    const first = el('pdf-view', { height: '20', 'break-after': 'avoid' });
+    expect(paginate(page([first, el('pdf-view', { height: '20' })]))).toHaveLength(1);
+  });
+
+  it('breaks after the last unit of a wrapper that asks for it', () => {
+    const [a, b, c] = [1, 2, 3].map(() => el('pdf-view', { height: '20' }));
+    const wrapper = el('pdf-view', { 'break-after': 'page' }, [a!, b!]);
+    const pages = paginate(page([wrapper, c!]));
+    expect(pages.map((laid) => laid.placed.map((p) => p.box.node))).toEqual([[a, b], [c]]);
+  });
+
+  it('breaks after a table row whose cell asks for it', () => {
+    const first = el('pdf-row', { height: '20' }, [el('pdf-cell', { 'break-after': 'page' })]);
+    const second = row();
+    const pages = paginate(page([el('pdf-table', {}, [first, second], { columns: ['1fr'] })]));
+    expect(pages.map((laid) => laid.placed.map((p) => p.box.node))).toEqual([[first], [second]]);
   });
 
   it('puts a unit taller than a page on its own page, clipped, with one warning', () => {
@@ -783,6 +881,16 @@ describe('paginatePage: text split across pages', () => {
     expect(lineCounts(pages)).toEqual([3, 1, 3]);
     expect(pages.flatMap(linesOn)).toEqual(letters(7));
     expect(warn).not.toHaveBeenCalled();
+  });
+
+  it('breaks after the last line of a split text with breakAfter, not between its lines', () => {
+    const text = paragraph(10);
+    text.owner = { pdfProps: () => ({ breakAfter: true }) };
+    const next = el('pdf-view', { height: '20' });
+    const pages = paginate(page([text, next]));
+    expect(pages).toHaveLength(2);
+    expect(linesOn(pages[0]!)).toHaveLength(10);
+    expect(pages[1]!.placed.map((p) => p.box.node)).toEqual([next]);
   });
 
   it('starts a new page before a split text with breakBefore', () => {

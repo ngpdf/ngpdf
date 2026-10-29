@@ -1,6 +1,6 @@
 ---
 title: Pagination
-description: How ngpdf breaks content into pages - pagination units, rows that never split, text that breaks between lines with orphans and widows, repeated table headers, breakBefore and pdf-page-number formats.
+description: How ngpdf breaks content into pages - pagination units, rows that never split, text that breaks between lines with orphans and widows, repeated table headers, breakBefore, breakAfter, keeping a view or table together and pdf-page-number formats.
 section: Guide
 order: 6
 ---
@@ -81,6 +81,32 @@ A `pdf-row` with the `header` attribute repeats at the top of every sheet its ta
 ```
 
 On a wrapper, the break happens before its first unit. A break on a sheet that has no units yet is ignored, so you never get a blank page.
+
+## breakAfter
+
+`breakAfter` on a `pdf-view` or `pdf-text`, or the style `break-after: page` on any element, starts a new sheet after that element. It works like `breakBefore` turned around:
+
+- On a wrapper, the next sheet starts after its last unit. A split `pdf-text` breaks after its last line, never between its lines.
+- Inside a unit, the break comes after the whole unit: `break-after: page` on a `pdf-cell` breaks after its row.
+- When nothing follows on that `pdf-page`, it does nothing, so the last element never adds a blank sheet.
+- `break-after` values other than `page`, such as `avoid`, do nothing.
+
+## Keeping a view or table on one sheet
+
+`break-inside: avoid` on a column `pdf-view` or a `pdf-table` keeps it on one sheet when it can:
+
+```html
+<pdf-view style="break-inside: avoid">
+  <pdf-text style="font-weight: bold">Totals</pdf-text>
+  <pdf-table [columns]="['1fr', 80]">…</pdf-table>
+</pdf-view>
+```
+
+- If it does not fit in the space left on the sheet but fits on a whole sheet, it moves to the next sheet in one piece. A table's header is drawn once, above its first row.
+- If it is taller than a sheet, it splits as it would without `avoid`: it is not clipped and there is no warning. A table's header repeats as usual.
+- Wrappers that close with it count: the bottom padding and border of a view that ends with it must fit too.
+- When kept views nest, the outermost one that fits on a sheet is kept. If the outer one is too tall, a view inside it can still be kept on its own.
+- A `pdf-view` or `pdf-table` inside a row is already part of that row's unit, so `avoid` changes nothing there. On a `pdf-text`, `avoid` keeps the text as one unit, as described in [Text across pages](#text-across-pages).
 
 ## Fixed headers and footers
 

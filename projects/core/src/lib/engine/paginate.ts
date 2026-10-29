@@ -271,6 +271,7 @@ function collectUnits(content: Box, maxHeader: number, pageOpacity: number): Col
       borderWidth: NO_BORDER,
       backgroundColor: null,
       breakBefore: false,
+      breakAfter: false,
     };
     for (const [first, end] of lineGroups(text.lines.length, box.style.orphans, box.style.widows)) {
       const lines = text.lines.slice(first, end);
@@ -414,6 +415,11 @@ function asksForBreak(box: Box): boolean {
   return box.style.breakBefore || box.children.some(asksForBreak);
 }
 
+/** Like `asksForBreak`, for a break after the whole unit. */
+function asksForBreakAfter(box: Box): boolean {
+  return box.style.breakAfter || box.children.some(asksForBreakAfter);
+}
+
 function at<T>(list: readonly T[], index: number): T {
   const item = list[index];
   if (item === undefined) throw new Error(`ngpdf: pagination lost unit ${String(index)}`);
@@ -507,14 +513,21 @@ export function paginatePage(
   const { units, wrappers, texts } = collectUnits(laid, contentHeight, pageStyle.opacity);
 
   // Per unit: the outermost wrapper top opening at it, the outermost wrapper bottom closing at
-  // it, and whether any of them asks for a page break.
+  // it, whether any of them asks for a page break before or after it, and the wrappers kept with
+  // `break-inside: avoid` that open at it, outer first.
   const opensAt = new Map<number, number>();
   const closesAt = new Map<number, number>();
   const breaksAt = new Set<number>();
+  const breaksAfter = new Set<number>();
+  const keptAt = new Map<number, Wrapper[]>();
   for (const wrapper of wrappers) {
     if (!opensAt.has(wrapper.first)) opensAt.set(wrapper.first, wrapper.top);
     if (!closesAt.has(wrapper.last)) closesAt.set(wrapper.last, wrapper.bottom);
     if (wrapper.box.style.breakBefore) breaksAt.add(wrapper.first);
+    if (wrapper.box.style.breakAfter) breaksAfter.add(wrapper.last);
+    if (wrapper.box.style.breakInside === 'avoid') {
+      keptAt.set(wrapper.first, [...(keptAt.get(wrapper.first) ?? []), wrapper]);
+    }
   }
 
   const pages: PageBuilder[] = [];
@@ -631,7 +644,9 @@ export function paginatePage(
   };
 
   units.forEach((unit, index) => {
-    if ((breaksAt.has(index) || asksForBreak(unit.box)) && current.units > 0) {
+    const before = units[index - 1];
+    const afterPrevious = breaksAfter.has(index - 1) || (before && asksForBreakAfter(before.box));
+    if ((breaksAt.has(index) || asksForBreak(unit.box) || afterPrevious) && current.units > 0) {
       startPage();
       previousBottom = null;
     }
@@ -655,6 +670,22 @@ export function paginatePage(
       return { header, leadFlow, leadTop, top };
     };
     let next = plan();
+    // The outermost kept wrapper opening here that fits a page moves whole to the next page when
+    // it does not fit on this one. One taller than a page splits as if it were not kept.
+    const keptBottom = (wrapper: Wrapper): number =>
+      Math.max(wrapper.bottom, closesAt.get(wrapper.last) ?? wrapper.bottom);
+    const kept = keptAt
+      .get(index)
+      ?.find((wrapper) => keptBottom(wrapper) - wrapper.top <= contentHeight + EPSILON);
+    if (
+      kept &&
+      current.units > 0 &&
+      next.top - unit.top + keptBottom(kept) > frame.bottom + EPSILON
+    ) {
+      startPage();
+      previousBottom = null;
+      next = plan();
+    }
     const run = textAt.get(index);
     if (run) {
       textBreaks = unit.header ? null : planText(run, next.top, current.units === 0);

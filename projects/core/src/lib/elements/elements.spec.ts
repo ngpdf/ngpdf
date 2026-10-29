@@ -43,8 +43,8 @@ const BLOB = new Blob(['x']);
       <pdf-page size="Letter" orientation="landscape" />
       <pdf-page [size]="[100, 200]" />
       <pdf-view breakBefore />
-      <pdf-view [breakBefore]="false" />
-      <pdf-text breakBefore="true" />
+      <pdf-view [breakBefore]="false" breakAfter />
+      <pdf-text breakBefore="true" [breakAfter]="true" />
       <pdf-image [src]="blob" />
       <pdf-page-number format="Page {page}" />
       <pdf-table [columns]="['1fr', 40]">
@@ -136,8 +136,8 @@ describe('pdf-* elements', () => {
     const page = at(elementChildren(render(DefaultsDocument)), 0);
     const kids = elementChildren(page);
     expect(propsOf(page)).toEqual({ size: 'A4', orientation: 'portrait' });
-    expect(propsOf(at(kids, 0))).toEqual({ breakBefore: false });
-    expect(propsOf(at(kids, 1))).toEqual({ breakBefore: false });
+    expect(propsOf(at(kids, 0))).toEqual({ breakBefore: false, breakAfter: false });
+    expect(propsOf(at(kids, 1))).toEqual({ breakBefore: false, breakAfter: false });
     expect(propsOf(at(kids, 2))).toEqual({ src: 'data:image/png;base64,AAAA' });
     expect(propsOf(at(kids, 4))).toEqual({ format: '{page} / {total}' });
     const cell = at(elementChildren(at(elementChildren(at(kids, 3)), 0)), 0);
@@ -148,9 +148,9 @@ describe('pdf-* elements', () => {
     const children = elementChildren(render(BoundDocument));
     expect(propsOf(at(children, 0))).toEqual({ size: 'Letter', orientation: 'landscape' });
     expect(propsOf(at(children, 1))['size']).toEqual([100, 200]);
-    expect(propsOf(at(children, 2))).toEqual({ breakBefore: true });
-    expect(propsOf(at(children, 3))).toEqual({ breakBefore: false });
-    expect(propsOf(at(children, 4))).toEqual({ breakBefore: true });
+    expect(propsOf(at(children, 2))).toEqual({ breakBefore: true, breakAfter: false });
+    expect(propsOf(at(children, 3))).toEqual({ breakBefore: false, breakAfter: true });
+    expect(propsOf(at(children, 4))).toEqual({ breakBefore: true, breakAfter: true });
     expect(propsOf(at(children, 5))).toEqual({ src: BLOB });
     expect(propsOf(at(children, 6))).toEqual({ format: 'Page {page}' });
     const table = at(children, 7);
@@ -158,7 +158,11 @@ describe('pdf-* elements', () => {
     const row = at(elementChildren(table), 0);
     expect(propsOf(row)['header']).toBe(true);
     expect(propsOf(at(elementChildren(row), 0))).toEqual({ span: 2 });
-    expect(propsOf(at(children, 8))).toEqual({ breakBefore: false, fixed: 'top' });
+    expect(propsOf(at(children, 8))).toEqual({
+      breakBefore: false,
+      breakAfter: false,
+      fixed: 'top',
+    });
   });
 
   it('renders pdf-span with interpolation, @if and @for inside a pdf-text', () => {

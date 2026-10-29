@@ -57,6 +57,7 @@ export interface ResolvedStyle extends TextStyle {
   readonly opacity: number;
   readonly objectFit: 'contain' | 'cover';
   readonly breakBefore: boolean;
+  readonly breakAfter: boolean;
   readonly breakInside: 'auto' | 'avoid';
   /**
    * The most lines a text keeps; the last kept line ends in an ellipsis when text was cut. Null for
@@ -364,6 +365,7 @@ function defaultStyle(node: PdfNode, inherited: TextStyle): Mutable<ResolvedStyl
     opacity: 1,
     objectFit: 'contain',
     breakBefore: propsOf(node)['breakBefore'] === true,
+    breakAfter: propsOf(node)['breakAfter'] === true,
     breakInside: 'auto',
     maxLines: null,
   };
@@ -526,6 +528,9 @@ function apply(
       break;
     case 'break-before':
       style.breakBefore = style.breakBefore || keywordOf(value) === 'page';
+      break;
+    case 'break-after':
+      style.breakAfter = style.breakAfter || keywordOf(value) === 'page';
       break;
     case 'break-inside':
       style.breakInside = ['avoid', 'avoid-page'].includes(keywordOf(value)) ? 'avoid' : 'auto';
