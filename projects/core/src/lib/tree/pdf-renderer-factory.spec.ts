@@ -281,6 +281,19 @@ describe('PdfRendererFactory edge cases', () => {
     expect(el.rawStyle).toEqual({});
   });
 
+  it('matches the style attribute name in any case, as HTML does', () => {
+    const r = setup();
+    const el = r.createElement('x') as PdfNode;
+    r.setAttribute(el, 'STYLE', 'margin: 2');
+    expect(el.rawStyle).toEqual({ margin: '2' });
+    r.removeAttribute(el, 'STYLE');
+    expect(el.rawStyle).toEqual({});
+    r.setAttribute(el, 'Style', 'color: red');
+    expect(el.rawStyle).toEqual({ color: 'red' });
+    r.removeAttribute(el, 'Style');
+    expect(el.rawStyle).toEqual({});
+  });
+
   it('nextSibling is null for a detached node', () => {
     const r = setup();
     expect(r.nextSibling(r.createElement('a') as PdfNode)).toBeNull();

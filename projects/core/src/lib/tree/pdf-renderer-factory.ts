@@ -46,6 +46,9 @@ function parseStyle(source: string): Record<string, string> {
   return style;
 }
 
+// HTML attribute names are case-insensitive, so `[attr.STYLE]` is the style attribute too.
+const isStyleAttribute = (name: string): boolean => name.toLowerCase() === 'style';
+
 function detach(node: PdfNode): void {
   if (!node.parent) return;
   const siblings = node.parent.children;
@@ -107,11 +110,11 @@ class PdfRenderer implements Renderer2 {
   }
 
   setAttribute(el: PdfNode, name: string, value: string): void {
-    if (name === 'style') el.rawStyle = parseStyle(value);
+    if (isStyleAttribute(name)) el.rawStyle = parseStyle(value);
   }
 
   removeAttribute(el: PdfNode, name: string): void {
-    if (name === 'style') el.rawStyle = {};
+    if (isStyleAttribute(name)) el.rawStyle = {};
   }
 
   addClass(): void {
