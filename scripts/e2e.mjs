@@ -4,9 +4,9 @@
 // dist/demo.
 //
 // Runs on the host: needs node, /usr/bin/google-chrome and pdftotext/pdfimages (poppler-utils).
-// The expected files assume poppler 24 (Ubuntu 24.04, which CI uses). Without it on the host, or
-// with NGPDF_E2E_DOCKER=1, one Docker container (Debian bookworm, poppler 22) extracts the text of
-// all PDFs, and the script warns that the versions differ.
+// The expected files assume poppler 24 (Ubuntu 24.04, which CI uses). Without pdftotext on the
+// host, or with NGPDF_E2E_DOCKER=1, one Ubuntu 24.04 container extracts the text of all PDFs. Any
+// other poppler major version fails the run, since its text layout may differ.
 /* global window */
 import { execFileSync, spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -73,6 +73,9 @@ const useDocker = process.env.NGPDF_E2E_DOCKER === '1' || !existsSync(PDFTOTEXT)
 /** Text of every PDF (layout mode) and its embedded image count, keyed by document name. */
 function extractAll(names) {
   if (!useDocker) {
+    // pdftotext prints its version on stderr.
+    const result = spawnSync(PDFTOTEXT, ['-v'], { encoding: 'utf8' });
+    checkPoppler(`${result.stdout}${result.stderr}`);
     return Object.fromEntries(
       names.map((name) => {
         const pdf = join(OUT, `${name}.pdf`);
@@ -89,34 +92,28 @@ function extractAll(names) {
   // One container for all PDFs; the text and image listing are separated by markers.
   const script = [
     'export DEBIAN_FRONTEND=noninteractive',
-    'apt-get -qq update >/dev/null && apt-get -qq install -y poppler-utils >/dev/null 2>&1',
-    'pdftotext -v >&2',
+    // stdout is the text of the PDFs, so apt-get prints only its errors, on stderr.
+    'apt-get -qq update >/dev/null && apt-get -qq install -y --no-install-recommends poppler-utils >/dev/null' +
+      ' || { echo "e2e: apt-get could not install poppler-utils in Docker" >&2; exit 1; }',
+    'echo "@@@VERSION $(pdftotext -v 2>&1 | head -n 1)"',
     `for n in ${names.join(' ')}; do`,
     '  echo "@@@TEXT $n"; pdftotext -layout /w/e2e/out/$n.pdf -',
     '  echo "@@@IMAGES $n"; pdfimages -list /w/e2e/out/$n.pdf',
     'done',
   ].join('\n');
-  const output = execFileSync(
-    'docker',
-    [
-      'run',
-      '--rm',
-      '--name',
-      `ngpdf-e2e-${String(process.pid)}`,
-      '-v',
-      `${ROOT}:/w:ro`,
-      'node:24-bookworm-slim',
-      'sh',
-      '-c',
-      script,
-    ],
-    {
-      encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'inherit'],
-      timeout: 5 * 60_000,
-      maxBuffer: 64 * 1024 * 1024,
-    },
-  );
+  const output = runDocker([
+    'run',
+    '--rm',
+    '--name',
+    `ngpdf-e2e-${String(process.pid)}`,
+    '-v',
+    `${ROOT}:/w:ro`,
+    'ubuntu:24.04',
+    'sh',
+    '-c',
+    script,
+  ]);
+  checkPoppler(output.split('@@@VERSION ')[1]?.split('\n')[0] ?? '');
   const result = {};
   for (const name of names) {
     const text = output.split(`@@@TEXT ${name}\n`)[1]?.split('@@@IMAGES')[0] ?? '';
@@ -124,6 +121,24 @@ function extractAll(names) {
     result[name] = { raw: text, images: countImages(images) };
   }
   return result;
+}
+
+/** Runs `docker` with these arguments and returns its stdout; its stderr goes to the terminal. */
+function runDocker(args) {
+  try {
+    return execFileSync('docker', args, {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'inherit'],
+      timeout: 5 * 60_000,
+      maxBuffer: 64 * 1024 * 1024,
+    });
+  } catch (error) {
+    // The default message repeats the whole shell script; the reason is already on stderr.
+    throw new Error(
+      `e2e: the Docker step failed (${error.status ?? error.code}); see its output above`,
+      { cause: error },
+    );
+  }
 }
 
 /** Images in a `pdfimages -list` listing; soft masks (a PNG's alpha) are not counted. */
@@ -134,11 +149,17 @@ function countImages(listing) {
     .filter((line) => line.trim().split(/\s+/)[2] === 'image').length;
 }
 
-function pdftotextMajor() {
-  if (useDocker) return 22; // Debian bookworm
-  // pdftotext prints its version on stderr.
-  const result = spawnSync(PDFTOTEXT, ['-v'], { encoding: 'utf8' });
-  return Number(/version (\d+)/.exec(`${result.stdout}${result.stderr}`)?.[1]);
+/** Throws unless `pdftotext -v` reports the poppler major version the expected files were made with. */
+function checkPoppler(versionOutput) {
+  const major = Number(/version (\d+)/.exec(versionOutput)?.[1]);
+  if (major === GOLDEN_POPPLER_MAJOR) return;
+  const found = Number.isNaN(major) ? 'an unknown version' : `${major}.x`;
+  const fix = useDocker
+    ? ''
+    : `; install poppler ${GOLDEN_POPPLER_MAJOR} or run with NGPDF_E2E_DOCKER=1`;
+  throw new Error(
+    `e2e: pdftotext is ${found}, but the expected files need poppler ${GOLDEN_POPPLER_MAJOR}.x${fix}`,
+  );
 }
 
 /** Fails with a clear message when a browser step takes longer than TIMEOUT_MS. */
@@ -181,13 +202,6 @@ if (!process.argv.includes('--skip-build')) {
 }
 mkdirSync(OUT, { recursive: true });
 mkdirSync(EXPECTED, { recursive: true });
-
-const major = pdftotextMajor();
-if (major !== GOLDEN_POPPLER_MAJOR) {
-  console.warn(
-    `warning: pdftotext ${major}.x, the expected files were made with ${GOLDEN_POPPLER_MAJOR}.x; text layout may differ`,
-  );
-}
 
 const server = await serve();
 let browser;

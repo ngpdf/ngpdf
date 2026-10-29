@@ -54,8 +54,6 @@ it does not affect a correct document. Items that change behaviour need a design
 - **The bundle budget measures the demo build of the source**, splitting chunks by folder. Measure
   the built package in `dist/core` instead, and grep its `fesm2022` files for a static import of
   the engine, pdfkit or Yoga.
-- **Poppler version detection.** The e2e script's Docker fallback hard-codes poppler's major
-  version, and hides `apt-get` errors.
 - **The e2e Chrome can leak** when `puppeteer.launch` finishes after the script's timeout.
 - Spec hygiene: some component specs destroy in the test body instead of `finally`/`afterEach`,
   a global `URL` stub and the zone.js import leak into later tests, and a few assertions use loose
