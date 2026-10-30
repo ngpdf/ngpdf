@@ -121,7 +121,9 @@ The site (`projects/site`) is a prerendered Angular app. Its docs are the Markdo
     first `orphans` lines, each line between, and the last `widows` lines (2 and 2 by default).
     A short text, `break-inside: avoid`, a fixed `height` or a `max-height` keeps it one unit.
   - A `header` row repeats at the top of every page its table runs onto.
-  - `breakBefore` starts a new page.
+  - `breakBefore` starts a new page, and `breakAfter` starts one after the element.
+  - `break-inside: avoid` on a column `pdf-view` or a `pdf-table` moves it whole to the next page
+    when it fits on one; one taller than a page splits as usual.
   - `pdf-page-number` as a direct child of `pdf-page` reserves its height at the bottom of the
     content area. Anywhere else it is a one-line leaf, measured with three-digit numbers and drawn
     with the numbers of the sheet it lands on.

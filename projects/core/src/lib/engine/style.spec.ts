@@ -252,6 +252,17 @@ describe('resolveStyles', () => {
     expect(styleOf({}).breakBefore).toBe(false);
   });
 
+  it('reads breakAfter from props or break-after: page, and ignores other keywords', () => {
+    const withProp = el('pdf-view');
+    withProp.owner = { pdfProps: () => ({ breakAfter: true }) };
+    const root = el('pdf-document', {}, [withProp, el('pdf-view', { 'break-after': 'page' })]);
+    const styles = resolveStyles(root);
+    expect(styles.get(withProp)?.breakAfter).toBe(true);
+    expect(styles.get(root.children[1]!)?.breakAfter).toBe(true);
+    expect(styleOf({}).breakAfter).toBe(false);
+    expect(styleOf({ 'break-after': 'avoid' }).breakAfter).toBe(false);
+  });
+
   it('ignores unknown properties and throws on unknown units', () => {
     expect(() => styleOf({ 'z-index': '3', cursor: 'pointer' })).not.toThrow();
     expect(() => styleOf({ width: '3em' }, 'pdf-view')).toThrow(
@@ -297,11 +308,17 @@ describe('resolveStyles', () => {
 
   it('warns about properties that have no effect on a pdf-span', () => {
     const warn = vi.fn();
-    const span = el('pdf-span', { 'font-style': 'italic', padding: '4', 'text-align': 'right' });
+    const span = el('pdf-span', {
+      'font-style': 'italic',
+      padding: '4',
+      'text-align': 'right',
+      'break-after': 'page',
+    });
     resolveStyles(el('pdf-document', {}, [el('pdf-text', {}, [span])]), warn);
     expect(warn.mock.calls).toEqual([
       ['ngpdf: padding has no effect on pdf-span'],
       ['ngpdf: text-align has no effect on pdf-span'],
+      ['ngpdf: break-after has no effect on pdf-span'],
     ]);
   });
 
@@ -496,6 +513,7 @@ describe('resolveStyles property coverage', () => {
     ['font-style', 'ITALIC', 'fontStyle', 'italic'],
     ['font-style', 'Oblique', 'fontStyle', 'italic'],
     ['break-before', 'PAGE', 'breakBefore', true],
+    ['break-after', 'Page', 'breakAfter', true],
     ['break-inside', 'Avoid', 'breakInside', 'avoid'],
   ])('reads %s "%s" case-insensitively', (property, value, key, expected) => {
     expect(styleOf({ [property]: value })).toMatchObject({ [key]: expected });

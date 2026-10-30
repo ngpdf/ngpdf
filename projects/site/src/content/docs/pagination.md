@@ -1,6 +1,6 @@
 ---
 title: Pagination
-description: How ngpdf breaks content into pages - pagination units, rows that never split, text that breaks between lines with orphans and widows, repeated table headers, breakBefore and pdf-page-number formats.
+description: How ngpdf breaks content into pages - pagination units, rows that never split, text that breaks between lines with orphans and widows, repeated table headers, breakBefore, breakAfter, keeping a view or table together and pdf-page-number formats.
 section: Guide
 order: 6
 ---
@@ -65,7 +65,7 @@ A `pdf-row` with the `header` attribute repeats at the top of every sheet its ta
 
 ## breakBefore
 
-`breakBefore` on a `pdf-view` or `pdf-text` starts a new sheet before that element. On any element, the style `break-before: page` does the same. Inside a unit, a break starts the new sheet before that whole unit, since a unit is never split: `break-before: page` on a `pdf-cell` in a table row, or `breakBefore` on a `pdf-text` inside a row `pdf-view`.
+`breakBefore` on a `pdf-view` or `pdf-text` starts a new sheet before that element. On any element but a `pdf-span`, the style `break-before: page` does the same. Inside a unit, a break starts the new sheet before that whole unit, since a unit is never split: `break-before: page` on a `pdf-cell` in a table row, or `breakBefore` on a `pdf-text` inside a row `pdf-view`.
 
 ```html
 @for (chapter of chapters(); track chapter.title; let first = $first) {
@@ -81,6 +81,32 @@ A `pdf-row` with the `header` attribute repeats at the top of every sheet its ta
 ```
 
 On a wrapper, the break happens before its first unit. A break on a sheet that has no units yet is ignored, so you never get a blank page.
+
+## breakAfter
+
+`breakAfter` on a `pdf-view` or `pdf-text`, or the style `break-after: page` on any element but a `pdf-span`, starts a new sheet after that element. It works like `breakBefore` turned around:
+
+- On a wrapper, the next sheet starts after its last unit. A split `pdf-text` breaks after its last line, never between its lines.
+- Inside a unit, the break comes after the whole unit: `break-after: page` on a `pdf-cell` breaks after its row.
+- When nothing follows on that `pdf-page`, it does nothing, so the last element never adds a blank sheet.
+- `break-after` values other than `page`, such as `avoid`, do nothing.
+
+## Keeping a view or table on one sheet
+
+`break-inside: avoid` on a column `pdf-view` or a `pdf-table` keeps it on one sheet when it can:
+
+```html
+<pdf-view style="break-inside: avoid">
+  <pdf-text style="font-weight: bold">Totals</pdf-text>
+  <pdf-table [columns]="['1fr', 80]">…</pdf-table>
+</pdf-view>
+```
+
+- If it does not fit in the space left on the sheet but fits on a whole sheet, it moves to the next sheet in one piece. A table's header is drawn once, above its first row.
+- If it is taller than a sheet, it splits as it would without `avoid`: it is not clipped and there is no warning. A table's header repeats as usual.
+- Wrappers that close with it count: the bottom padding and border of a view that ends with it must fit too.
+- When kept views nest, the outermost one that fits on a sheet is kept. If the outer one is too tall, a view inside it can still be kept on its own.
+- A `pdf-view` or `pdf-table` inside a row is already part of that row's unit, so `avoid` changes nothing there. On a `pdf-text`, `avoid` keeps the text as one unit, as described in [Text across pages](#text-across-pages).
 
 ## Fixed headers and footers
 
@@ -103,7 +129,7 @@ Give a `pdf-view` that is a direct child of `pdf-page` the `fixed` input to draw
 - A fixed view is laid out once at the content width and drawn the same on every sheet that `pdf-page` produces. It is taken out of the flow wherever you write it among the page's children.
 - `fixed="top"` views stack at the top of the content area, and `fixed="bottom"` views at the bottom, in template order, with their margins. The flow gets the space between them on every sheet.
 - Bottom views sit above the `pdf-page-number`, which keeps the very bottom.
-- A fixed view is never a pagination unit: it is not split, moved or clipped, and `breakBefore` inside it does nothing.
+- A fixed view is never a pagination unit: it is not split, moved or clipped, and page breaks on it or inside it (`breakBefore`, `breakAfter`, `break-before`, `break-after`) do nothing.
 - Fixed views that leave no room for content fail the render with `ngpdf: fixed views leave no room for content on pdf-page`.
 - A `fixed` view nested deeper than a direct child of `pdf-page` is laid out as an ordinary view where it is, and logs `ngpdf: a fixed pdf-view must be a direct child of pdf-page` in development mode: inside the flow it stays in the flow, and inside a fixed view it repeats with that view.
 - The content of a fixed view is the same on every sheet, except a `pdf-page-number` inside it, which shows each sheet's number (see [Page numbers](#page-numbers)).
@@ -120,7 +146,7 @@ A `pdf-page-number` shows the sheet's number. Put it directly inside a `pdf-page
 ```
 
 - `format` replaces `{page}` with the sheet's number and `{total}` with the number of sheets in the whole document, across all `pdf-page` elements. Each token can appear any number of times. The default format is `{page} / {total}`.
-- It sits at the bottom of the content area, inside the page padding, across the content width, on every sheet that `pdf-page` produces. It is taken out of the flow wherever you write it among the page's children.
+- It sits at the bottom of the content area, inside the page padding, across the content width, on every sheet that `pdf-page` produces. It is taken out of the flow wherever you write it among the page's children, so `break-before` and `break-after` on it do nothing.
 - It reserves its height on every sheet: one line of its font (`font-size × line-height`) plus its own vertical padding and borders, or its `height` if you set one. Content and bottom fixed views stop above it.
 - It is right-aligned unless it, or an element above it, sets `text-align`.
 - Text styles apply: `font-size`, `color`, `font-weight` and the rest. Other position styles are ignored.

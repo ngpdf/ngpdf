@@ -136,7 +136,7 @@ Current limits of header repetition:
 - Headers taller than the page's content area are not repeated; their rows are laid out as ordinary rows.
 - On a page whose first row fits only without the header, that row is placed without it, and the header is not repeated on that page.
 - A table made only of header rows has nothing to repeat over, so its rows are ordinary rows.
-- Header rows lose `break-before`.
+- Header rows lose `break-before` and `break-after`.
 
 See [Pagination](/docs/pagination) for how rows move between pages.
 

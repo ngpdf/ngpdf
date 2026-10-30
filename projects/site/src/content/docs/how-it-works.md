@@ -46,7 +46,7 @@ The tree is laid out with [Yoga](https://www.yogalayout.dev/), the flexbox engin
 
 ### 6. Pagination
 
-The laid-out content is cut into sheets in whole units: rows, text blocks, images and row views. Header rows are repeated, `breakBefore` is honored, the page number's height is reserved, and the backgrounds and borders of wrappers are sliced per sheet. See [Pagination](/docs/pagination).
+The laid-out content is cut into sheets in whole units: rows, text blocks, images and row views. Header rows are repeated, `breakBefore`, `breakAfter` and `break-inside: avoid` are honored, the page number's height is reserved, and the backgrounds and borders of wrappers are sliced per sheet. See [Pagination](/docs/pagination).
 
 ### 7. Display list
 
