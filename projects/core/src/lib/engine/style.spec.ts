@@ -265,6 +265,17 @@ describe('resolveStyles', () => {
     expect(styleOf({ 'break-after': 'avoid' }).breakAfter).toBe(false);
   });
 
+  it('reads break-after: avoid as keepWithNext, not inherited', () => {
+    expect(styleOf({}).keepWithNext).toBe(false);
+    expect(styleOf({ 'break-after': 'avoid' }).keepWithNext).toBe(true);
+    expect(styleOf({ 'break-after': 'avoid-page' }).keepWithNext).toBe(true);
+    expect(styleOf({ 'break-after': 'page' }).keepWithNext).toBe(false);
+    expect(styleOf({ 'break-after': 'avoid-column' }).keepWithNext).toBe(false);
+    const text = el('pdf-text');
+    const view = el('pdf-view', { 'break-after': 'avoid' }, [text]);
+    expect(resolveStyles(view).get(text)?.keepWithNext).toBe(false);
+  });
+
   it('ignores unknown properties and throws on unknown units', () => {
     expect(() => styleOf({ 'z-index': '3', cursor: 'pointer' })).not.toThrow();
     expect(() => styleOf({ width: '3em' }, 'pdf-view')).toThrow(
@@ -753,6 +764,7 @@ describe('resolveStyles property coverage', () => {
     ['break-before', 'PAGE', 'breakBefore', true],
     ['break-after', 'Page', 'breakAfter', true],
     ['break-inside', 'Avoid', 'breakInside', 'avoid'],
+    ['break-after', 'AVOID', 'keepWithNext', true],
     ['text-transform', 'UPPERCASE', 'textTransform', 'uppercase'],
     ['letter-spacing', 'Normal', 'letterSpacing', 0],
     ['overflow', 'HIDDEN', 'overflow', 'hidden'],

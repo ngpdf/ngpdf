@@ -91,7 +91,7 @@ On a wrapper, the break happens before its first unit. A break on a sheet that h
 - On a wrapper, the next sheet starts after its last unit. A split `pdf-text` breaks after its last line, never between its lines.
 - Inside a unit, the break comes after the whole unit: `break-after: page` on a `pdf-cell` breaks after its row.
 - When nothing follows on that `pdf-page`, it does nothing, so the last element never adds a blank sheet.
-- `break-after` values other than `page`, such as `avoid`, do nothing.
+- `break-after: avoid` keeps the element with what follows instead; see [Keeping a heading with what follows](#keeping-a-heading-with-what-follows). Other values do nothing.
 
 ## Keeping a view or table on one sheet
 
@@ -109,6 +109,24 @@ On a wrapper, the break happens before its first unit. A break on a sheet that h
 - Wrappers that close with it count: the bottom padding and border of a view that ends with it must fit too.
 - When kept views nest, the outermost one that fits on a sheet is kept. If the outer one is too tall, a view inside it can still be kept on its own.
 - A `pdf-view` or `pdf-table` inside a row is already part of that row's unit, so `avoid` changes nothing there. On a `pdf-text`, `avoid` keeps the text as one unit, as described in [Text across pages](#text-across-pages).
+
+## Keeping a heading with what follows
+
+`break-after: avoid` (or `avoid-page`) keeps an element on the same sheet as what comes after it, so a heading never ends a sheet alone:
+
+```html
+<pdf-text style="font-size: 14; font-weight: bold; break-after: avoid">Totals</pdf-text>
+<pdf-text>The figures below cover the whole year…</pdf-text>
+```
+
+- When the unit after it does not fit in the space left, the element moves to the next sheet with it.
+- When that unit is a `pdf-text` split across sheets, only its first lines need to fit: the first `orphans` lines. When it is a table, its first row and its header.
+- On a column `pdf-view`, it applies to the view's last unit, and on a split `pdf-text` to its last lines. Inside a unit, such as a cell in a row, it applies to the whole row.
+- Elements in a row that all have `avoid`, such as a heading and a subheading, move together with the unit after the last one.
+- When the whole group would not fit on an empty sheet, `avoid` does nothing and the sheet breaks as usual, so it never pushes a sheet's worth of content forward.
+- A page break asked for between them wins, and an element already at the top of a sheet stays there.
+- A view or table with `break-inside: avoid` after it counts with its whole height.
+- It is a style only; there is no input for it, and it is not inherited.
 
 ## Fixed headers and footers
 
