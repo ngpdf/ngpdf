@@ -1,6 +1,7 @@
 import LineBreaker from 'linebreak';
 import type { Color } from './color';
 import { covers, fontFor, normalizeText, shapeText } from './fonts';
+import { graphemeCount } from './graphemes';
 import type { TextStyle } from './style';
 import type { FontMetrics, FontName } from './writer';
 
@@ -11,6 +12,8 @@ export interface TextRun {
   readonly size: number;
   readonly color: Color;
   readonly decoration: TextStyle['textDecoration'];
+  /** Points after each character, included in `width`. */
+  readonly letterSpacing: number;
   /** Offset from the start of the line. */
   readonly x: number;
   readonly width: number;
@@ -156,6 +159,34 @@ function collapseWhitespace(pieces: readonly string[]): string[] {
   });
 }
 
+/**
+ * CSS `text-transform` over the collapsed pieces of a paragraph, each in its own range's transform.
+ * A word starts at the paragraph start or after whitespace, across pieces. `capitalize` uppercases
+ * a word's first letter, skipping punctuation before it; a word that starts with a digit stays.
+ */
+function transformText(
+  pieces: readonly string[],
+  transforms: readonly TextStyle['textTransform'][],
+): string[] {
+  let wordStart = true;
+  return pieces.map((piece, i) => {
+    const transform = transforms[i] ?? 'none';
+    let out = '';
+    for (const char of piece) {
+      let drawn = char;
+      if (/\s/u.test(char)) wordStart = true;
+      else if (/[\p{L}\p{N}]/u.test(char)) {
+        if (transform === 'capitalize' && wordStart) drawn = char.toUpperCase();
+        wordStart = false;
+      }
+      if (transform === 'uppercase') drawn = char.toUpperCase();
+      else if (transform === 'lowercase') drawn = char.toLowerCase();
+      out += drawn;
+    }
+    return out;
+  });
+}
+
 /** Positions in `text` after which a line may break (UAX #14); the last one is `text.length`. */
 function breakPositions(text: string): number[] {
   const positions: number[] = [];
@@ -218,14 +249,15 @@ interface Face {
   readonly size: number;
   readonly color: Color;
   readonly decoration: TextStyle['textDecoration'];
+  readonly letterSpacing: number;
   readonly ascent: number;
 }
 
 /** What a range contributes to the cache key: its length and everything its faces depend on. */
 function rangeKey(range: TextRange): string {
-  const { fontSize, color, textDecoration } = range.style;
+  const { fontSize, color, textDecoration, letterSpacing, textTransform } = range.style;
   const chain = range.fonts?.chain ?? [fontFor(range.style)];
-  return `${String(range.text.length)}:${chain.join(',')}:${String(fontSize)}:${String(color.r)},${String(color.g)},${String(color.b)},${String(color.a)}:${textDecoration}`;
+  return `${String(range.text.length)}:${chain.join(',')}:${String(fontSize)}:${String(color.r)},${String(color.g)},${String(color.b)},${String(color.a)}:${textDecoration}:${String(letterSpacing)}:${textTransform}`;
 }
 
 /** The text, faces and per-unit face index of a paragraph, each range shaped in its own chain. */
@@ -242,18 +274,22 @@ function shapeRanges(ranges: readonly TextRange[], metrics: FontMetrics): Shaped
   const faces: Face[] = [];
   const faceIndex = new Map<string, number>();
   const faceOf = (font: FontName, style: TextStyle): number => {
-    const { fontSize: size, color, textDecoration: decoration } = style;
-    const key = `${font}:${String(size)}:${String(color.r)},${String(color.g)},${String(color.b)},${String(color.a)}:${decoration}`;
+    const { fontSize: size, color, textDecoration: decoration, letterSpacing } = style;
+    const key = `${font}:${String(size)}:${String(color.r)},${String(color.g)},${String(color.b)},${String(color.a)}:${decoration}:${String(letterSpacing)}`;
     let index = faceIndex.get(key);
     if (index === undefined) {
       index = faces.length;
-      faces.push({ font, size, color, decoration, ascent: metrics.ascent(font, size) });
+      const ascent = metrics.ascent(font, size);
+      faces.push({ font, size, color, decoration, letterSpacing, ascent });
       faceIndex.set(key, index);
     }
     return index;
   };
 
-  const pieces = collapseWhitespace(ranges.map((range) => normalizeText(range.text)));
+  const pieces = transformText(
+    collapseWhitespace(ranges.map((range) => normalizeText(range.text))),
+    ranges.map((range) => range.style.textTransform),
+  );
   const shapedPieces = ranges.map((range, i) => {
     const chain = range.fonts?.chain ?? [fontFor(range.style)];
     // Registered in chain order, so for a single range a face index is its chain index.
@@ -315,7 +351,11 @@ export function layoutRanges(
   const key = `${ranges.map(rangeKey).join(';')} ${String(paragraph.lineHeight)} ${String(maxWidth)} ${String(maxLines)}`;
   const { block, replaced, missing } = cache.block(text, key, () => {
     const shaped = shapeRanges(ranges, metrics);
-    const widthOfs = shaped.faces.map((face) => cache.widthOf(metrics, face.font, face.size));
+    const widthOfs = shaped.faces.map((face) => {
+      const widthOf = cache.widthOf(metrics, face.font, face.size);
+      const spacing = face.letterSpacing;
+      return spacing ? (chunk: string) => widthOf(chunk) + spacing * graphemeCount(chunk) : widthOf;
+    });
     const ellipses = shaped.faces.map((face) =>
       covers(face.font, ELLIPSIS, metrics) ? ELLIPSIS : ELLIPSIS_DOTS,
     );

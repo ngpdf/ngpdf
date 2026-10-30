@@ -115,7 +115,7 @@ Anything else, such as `hsl()`, `currentColor` or `var(--brand)`, throws `ngpdf:
 
 ## Inheritance
 
-Text styles are inherited from parent to child: `color`, `font-family`, `font-size`, `font-weight`, `font-style`, `line-height`, `text-align` and `text-decoration`. Set them on a `pdf-page`, a `pdf-view` or a `pdf-cell` and every text inside follows. No other property is inherited.
+Text styles are inherited from parent to child: `color`, `font-family`, `font-size`, `font-weight`, `font-style`, `line-height`, `text-align`, `text-decoration`, `letter-spacing` and `text-transform`. Set them on a `pdf-page`, a `pdf-view` or a `pdf-cell` and every text inside follows. No other property is inherited.
 
 ## What throws
 

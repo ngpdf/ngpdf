@@ -136,8 +136,9 @@ The site (`projects/site`) is a prerendered Angular app. Its docs are the Markdo
   at the box edge. `max-lines` keeps at most N lines of a `pdf-text`; when text was cut, the last
   line ends with `…` in the face of its last run, or `...` in a font without `…`.
 - **Styled runs:** a `pdf-span` inside a `pdf-text` changes only `color`, `font-family`,
-  `font-size`, `font-weight`, `font-style` and `text-decoration`. The paragraph breaks as one text,
-  and runs of different sizes share a baseline. A `pdf-span` outside a `pdf-text` throws.
+  `font-size`, `font-weight`, `font-style`, `text-decoration`, `letter-spacing` and
+  `text-transform`. The paragraph breaks as one text, and runs of different sizes share a
+  baseline. A `pdf-span` outside a `pdf-text` throws.
 - **Images:**
   - Formats are PNG and JPEG, from a data URL, an http(s) URL, a `Blob` or an `ArrayBuffer`.
   - `object-fit` is `contain` (default) or `cover`.

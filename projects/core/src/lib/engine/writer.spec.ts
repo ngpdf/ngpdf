@@ -677,6 +677,50 @@ describe('createPdfkitWriter', () => {
       expect(to).toBeCloseTo(at(line, '', 2), 3);
     });
 
+    it('draws letter-spaced text one character at a time, kerned, underlined to the end', async () => {
+      const line = 'AV';
+      const content = contentOf(
+        await pdfText([{ ...TEXT_OP, text: line, opacity: 1, strike: false, letterSpacing: 3 }]),
+      );
+      const starts = [...content.matchAll(/^1 0 0 1 ([\d.]+) [\d.]+ Tm$/gm)].map((m) =>
+        Number(m[1]),
+      );
+      const width = (part: string) => writer.widthOf(part, 'Helvetica', 12);
+      // 'AV' kerns, so V starts where the pair ends minus its own width, plus one spacing.
+      expect(starts).toEqual([
+        expect.closeTo(TEXT_OP.x, 3),
+        expect.closeTo(TEXT_OP.x + width('AV') - width('V') + 3, 3),
+      ]);
+      const strokes = [...content.matchAll(/^([\d.]+) [\d.]+ m\n([\d.]+) [\d.]+ l$/gm)];
+      expect(Number(strokes[0]![1])).toBeCloseTo(TEXT_OP.x, 3);
+      expect(Number(strokes.at(-1)![2])).toBeCloseTo(TEXT_OP.x + width('AV') + 2 * 3, 3);
+    });
+
+    it('adds word spacing after each gap of letter-spaced, justified text', async () => {
+      const content = contentOf(
+        await pdfText([
+          {
+            ...TEXT_OP,
+            text: 'a b',
+            opacity: 1,
+            underline: false,
+            strike: false,
+            letterSpacing: 1,
+            wordSpacing: 5,
+          },
+        ]),
+      );
+      const starts = [...content.matchAll(/^1 0 0 1 ([\d.]+) [\d.]+ Tm$/gm)].map((m) =>
+        Number(m[1]),
+      );
+      const width = (part: string) => writer.widthOf(part, 'Helvetica', 12);
+      // The space is not drawn without a decoration.
+      expect(starts).toEqual([
+        expect.closeTo(TEXT_OP.x, 3),
+        expect.closeTo(TEXT_OP.x + width('a ') + 2 * 1 + 5, 3),
+      ]);
+    });
+
     it('measures a justified line in linear time, not one growing prefix per word', async () => {
       const { default: PDFDocument } = await import('pdfkit');
       const measured = vi.spyOn(PDFDocument.prototype, 'widthOfString');

@@ -69,6 +69,8 @@ describe('resolveStyles', () => {
       lineHeight: 1.2,
       textAlign: 'left',
       textDecoration: 'none',
+      letterSpacing: 0,
+      textTransform: 'none',
       orphans: 2,
       widows: 2,
     });
@@ -472,6 +474,33 @@ describe('resolveStyles property coverage', () => {
     expect(resolveStyles(view).get(text)?.breakInside).toBe('auto');
   });
 
+  it('reads letter-spacing as a length, negative or normal, and throws on a percentage', () => {
+    expect(styleOf({}).letterSpacing).toBe(0);
+    expect(styleOf({ 'letter-spacing': '2' }).letterSpacing).toBe(2);
+    expect(styleOf({ 'letter-spacing': '1mm' }).letterSpacing).toBeCloseTo(2.835, 3);
+    expect(styleOf({ 'letter-spacing': '-0.5pt' }).letterSpacing).toBe(-0.5);
+    expect(styleOf({ 'letter-spacing': 'normal' }).letterSpacing).toBe(0);
+    expect(() => styleOf({ 'letter-spacing': '10%' })).toThrow('ngpdf:');
+  });
+
+  it('reads text-transform keywords, none by default', () => {
+    expect(styleOf({}).textTransform).toBe('none');
+    for (const keyword of ['none', 'uppercase', 'lowercase', 'capitalize'] as const) {
+      expect(styleOf({ 'text-transform': keyword }).textTransform).toBe(keyword);
+    }
+  });
+
+  it('inherits letter-spacing and text-transform, and lets a pdf-span set them', () => {
+    const warn = vi.fn();
+    const span = el('pdf-span', { 'letter-spacing': '1', 'text-transform': 'lowercase' });
+    const text = el('pdf-text', {}, [span]);
+    const view = el('pdf-view', { 'letter-spacing': '4', 'text-transform': 'uppercase' }, [text]);
+    const styles = resolveStyles(el('pdf-document', {}, [view]), warn);
+    expect(styles.get(text)).toMatchObject({ letterSpacing: 4, textTransform: 'uppercase' });
+    expect(styles.get(span)).toMatchObject({ letterSpacing: 1, textTransform: 'lowercase' });
+    expect(warn).not.toHaveBeenCalled();
+  });
+
   it('clamps opacity to 0..1', () => {
     expect(styleOf({ opacity: '0.4' }).opacity).toBe(0.4);
     expect(styleOf({ opacity: '3' }).opacity).toBe(1);
@@ -486,6 +515,7 @@ describe('resolveStyles property coverage', () => {
     ['align-items', 'baseline'],
     ['align-self', 'baseline'],
     ['object-fit', 'fill'],
+    ['text-transform', 'full-width'],
   ])('rejects an invalid %s value "%s"', (property, value) => {
     expect(() => styleOf({ [property]: value })).toThrow(
       `ngpdf: invalid value "${value}" for ${property} on pdf-view`,
@@ -515,6 +545,8 @@ describe('resolveStyles property coverage', () => {
     ['break-before', 'PAGE', 'breakBefore', true],
     ['break-after', 'Page', 'breakAfter', true],
     ['break-inside', 'Avoid', 'breakInside', 'avoid'],
+    ['text-transform', 'UPPERCASE', 'textTransform', 'uppercase'],
+    ['letter-spacing', 'Normal', 'letterSpacing', 0],
   ])('reads %s "%s" case-insensitively', (property, value, key, expected) => {
     expect(styleOf({ [property]: value })).toMatchObject({ [key]: expected });
   });

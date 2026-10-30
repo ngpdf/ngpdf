@@ -301,6 +301,28 @@ describe('displayList', () => {
     expect(op!.y).toBeCloseTo(36, 3);
   });
 
+  it('passes letter-spacing to the text op and aligns by the spaced width', () => {
+    const view = text('Total', { 'text-align': 'right', width: '200', 'letter-spacing': '2' });
+    const [op] = only(list(layout(page([view]))[0]!, 0, 1), 'text');
+    expect(op!.letterSpacing).toBe(2);
+    expect(op!.x).toBeCloseTo(36 + 200 - writer.widthOf('Total', 'Helvetica', 10) - 5 * 2, 6);
+    const [plain] = only(list(layout(page([text('Total')]))[0]!, 0, 1), 'text');
+    expect(plain).not.toHaveProperty('letterSpacing');
+  });
+
+  it('spaces the page number but leaves its text untransformed', () => {
+    const number = el(
+      'pdf-page-number',
+      { height: '9', 'letter-spacing': '1', 'text-transform': 'uppercase' },
+      [],
+      { format: 'p{page}' },
+    );
+    const [first] = layout(page([text('a'), number]));
+    const last = only(list(first!, 0, 1), 'text').at(-1)!;
+    expect(last).toMatchObject({ text: 'p1', letterSpacing: 1 });
+    expect(last.x).toBeCloseTo(595.28 - 36 - writer.widthOf('p1', 'Helvetica', 10) - 2, 3);
+  });
+
   it('reads the format from the page number props and replaces every placeholder', () => {
     const number = el('pdf-page-number', {}, [], { format: '{page}-{page}/{total}$&' });
     const [first] = layout(page([number]));

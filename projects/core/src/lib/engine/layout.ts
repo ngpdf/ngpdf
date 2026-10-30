@@ -409,7 +409,8 @@ export function layoutBox(
     let found = ranges.get(textNode);
     if (!found && textNode.tag === 'pdf-page-number') {
       // Laid out once for every sheet, so it is measured with three digits per number.
-      const style = styleFor(textNode);
+      // Its numbers are drawn as given, so its text is never transformed.
+      const style = { ...styleFor(textNode), textTransform: 'none' as const };
       const text = pageNumberFormat(textNode).replaceAll(/\{(?:page|total)\}/g, '000');
       found = [{ text, style, ...withFonts(fontsOf(style)) }];
       ranges.set(textNode, found);

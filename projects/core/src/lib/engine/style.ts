@@ -23,6 +23,9 @@ export interface TextStyle {
   readonly lineHeight: number;
   readonly textAlign: 'left' | 'center' | 'right' | 'justify';
   readonly textDecoration: 'none' | 'underline' | 'line-through';
+  /** Points added after each character. */
+  readonly letterSpacing: number;
+  readonly textTransform: 'none' | 'uppercase' | 'lowercase' | 'capitalize';
   /** The fewest lines of a split text left at the bottom of a page. */
   readonly orphans: number;
   /** The fewest lines of a split text carried to the top of the next page. */
@@ -97,6 +100,8 @@ export const ROOT_TEXT_STYLE: TextStyle = Object.freeze({
   lineHeight: 1.2,
   textAlign: 'left',
   textDecoration: 'none',
+  letterSpacing: 0,
+  textTransform: 'none',
   orphans: 2,
   widows: 2,
 });
@@ -429,6 +434,17 @@ function apply(
     case 'text-decoration':
       style.textDecoration = oneOf(value, ['none', 'underline', 'line-through'], property, tag);
       break;
+    case 'letter-spacing':
+      style.letterSpacing = keywordOf(value) === 'normal' ? 0 : parsePoints(value, tag);
+      break;
+    case 'text-transform':
+      style.textTransform = oneOf(
+        value,
+        ['none', 'uppercase', 'lowercase', 'capitalize'],
+        property,
+        tag,
+      );
+      break;
     case 'flex-direction':
       style.flexDirection = oneOf(value, ['row', 'column'], property, tag);
       break;
@@ -601,6 +617,8 @@ function textPartOf(style: ResolvedStyle): TextStyle {
     lineHeight: style.lineHeight,
     textAlign: style.textAlign,
     textDecoration: style.textDecoration,
+    letterSpacing: style.letterSpacing,
+    textTransform: style.textTransform,
     orphans: style.orphans,
     widows: style.widows,
   };
@@ -639,6 +657,8 @@ const SPAN_PROPERTIES = new Set([
   'font-weight',
   'font-style',
   'text-decoration',
+  'letter-spacing',
+  'text-transform',
 ]);
 
 function checkInline(node: PdfNode, warn: Warn): void {

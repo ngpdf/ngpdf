@@ -153,8 +153,10 @@ ngpdf places text at the top of its line box. Extra line height goes below the t
 ## Alignment and decoration
 
 - `text-align`: `left`, `center`, `right` or `justify`. It aligns each line inside the `pdf-text` box. In a row, a `pdf-text` is only as wide as its text, so give it a width or `flex: 1` when you want alignment to show. Inside a column, the box takes the full width.
-- `justify` widens the gaps between words so that each line reaches both edges of the box. The last line of the paragraph stays at the left, as in CSS. So does a line with a single word, and a word wider than the box. A gap is a run of spaces or no-break spaces, and only gaps are widened: the space between letters stays as the font sets it. A paragraph split across pages keeps its lines justified up to its real last line.
+- `justify` widens the gaps between words so that each line reaches both edges of the box. The last line of the paragraph stays at the left, as in CSS. So does a line with a single word, and a word wider than the box. A gap is a run of spaces or no-break spaces, and only gaps are widened: the space between letters stays as the font and `letter-spacing` set it. A paragraph split across pages keeps its lines justified up to its real last line.
 - `text-decoration`: `none`, `underline` or `line-through`. One value only.
+- `letter-spacing`: a length added after each character, the last one on a line included, as in browsers. It can be negative; `normal` is 0. Wrapping, alignment, justified text and `max-lines` all use the spaced width. A letter and its combining marks count as one character.
+- `text-transform`: `none`, `uppercase`, `lowercase` or `capitalize`. The text is transformed before it is measured, so lines break where the transformed text fits. Case changes don't depend on a locale, so `ß` becomes `SS`. `capitalize` uppercases the first letter of each word, a word being what follows the start of the paragraph or a space, across spans; punctuation before the letter is skipped, and a word that starts with a digit is left as it is. The page number is never transformed.
 - `color` and `opacity` apply to the text.
 
 Unlike CSS, all text styles, `text-decoration` included, are inherited by child elements.
@@ -170,7 +172,7 @@ Wrap part of a text in a `pdf-span` to draw it in other text styles:
 </pdf-text>
 ```
 
-- A span inherits the text styles around it and can change `color`, `font-family`, `font-size`, `font-weight`, `font-style` and `text-decoration`. Spans nest.
+- A span inherits the text styles around it and can change `color`, `font-family`, `font-size`, `font-weight`, `font-style`, `text-decoration`, `letter-spacing` and `text-transform`. Spans nest.
 - The paragraph wraps as one text: a span boundary is not a place to break, and a span wraps over lines like the rest of the text. Kerning is not applied across two spans.
 - Runs of different sizes share a baseline, and a line is as tall as its largest font size times the paragraph's `line-height`.
 - `line-height` and `text-align` belong to the `pdf-text`. Other properties on a span, such as padding or a background, have no effect and get a warning in development mode.

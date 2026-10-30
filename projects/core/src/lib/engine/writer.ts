@@ -1,4 +1,5 @@
 import type { PageLayout, PageMode } from '../tree/viewer-preferences';
+import { graphemeStarts } from './graphemes';
 import Courier from 'pdfkit/standard-fonts/Courier';
 import CourierBold from 'pdfkit/standard-fonts/CourierBold';
 import CourierBoldOblique from 'pdfkit/standard-fonts/CourierBoldOblique';
@@ -72,6 +73,8 @@ export type DrawOp =
       readonly strike: boolean;
       /** Width added to each word gap (a run of spaces and no-break spaces), for justified text. */
       readonly wordSpacing?: number;
+      /** Width added after each grapheme cluster, from `letter-spacing`. */
+      readonly letterSpacing?: number;
     }
   | {
       readonly op: 'image';
@@ -443,6 +446,41 @@ function drawWordSpaced(doc: Doc, op: Extract<DrawOp, { op: 'text' }>, spacing: 
   }
 }
 
+/**
+ * Letter-spaced text, one grapheme cluster at a time, where the layout measured it. A cluster's
+ * advance is the width of it and the next one minus the next one, so the kerning pair between them
+ * still counts; then `letter` follows each cluster, and `word` each word gap of justified text.
+ * Each piece's decoration runs on to the next one.
+ */
+function drawLetterSpaced(
+  doc: Doc,
+  op: Extract<DrawOp, { op: 'text' }>,
+  letter: number,
+  word: number,
+): void {
+  const starts = graphemeStarts(op.text);
+  const pieces: { text: string; x: number }[] = [];
+  let x = op.x;
+  let inGap = false;
+  for (const [k, start] of starts.entries()) {
+    const end = starts[k + 1] ?? op.text.length;
+    const cluster = op.text.slice(start, end);
+    const gap = cluster === ' ' || cluster === '\u00a0';
+    if (inGap && !gap) x += word;
+    inGap = gap;
+    pieces.push({ text: cluster, x });
+    const next = op.text.slice(end, starts[k + 2] ?? op.text.length);
+    x += doc.widthOfString(cluster + next) - doc.widthOfString(next) + letter;
+  }
+  // A gap at the end still counts, as the layout put it before the next run.
+  if (inGap) x += word;
+  for (const [i, piece] of pieces.entries()) {
+    if (piece.text.trim() === '' && !op.underline && !op.strike) continue;
+    const width = (pieces[i + 1]?.x ?? x) - piece.x;
+    doc.text(piece.text, piece.x, op.y, singleLine(op, width));
+  }
+}
+
 /** Index of the code point that ends just before `index`, or 0 at the start. */
 function previousCodePoint(text: string, index: number): number {
   if (index === 0) return 0;
@@ -471,7 +509,8 @@ function drawOp(doc: Doc, op: DrawOp, dataUrls: WeakMap<Uint8Array, string>): vo
     case 'text':
       doc.save();
       doc.font(op.font).fontSize(op.size).fillColor(op.color, op.opacity);
-      if (op.wordSpacing) drawWordSpaced(doc, op, op.wordSpacing);
+      if (op.letterSpacing) drawLetterSpaced(doc, op, op.letterSpacing, op.wordSpacing ?? 0);
+      else if (op.wordSpacing) drawWordSpaced(doc, op, op.wordSpacing);
       else doc.text(op.text, op.x, op.y, singleLine(op, doc.widthOfString(op.text)));
       doc.restore();
       return;
