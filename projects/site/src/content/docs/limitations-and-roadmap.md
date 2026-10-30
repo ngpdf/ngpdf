@@ -21,7 +21,7 @@ ngpdf v0.1 covers documents built from text, tables, boxes and images. This page
 ### Layout and styling
 
 - Colors are hex (3, 4, 6 or 8 digits), `rgb()`/`rgba()`, the CSS named colors and `transparent`. Other forms, such as `hsl()`, throw.
-- `border-radius` together with borders draws square border lines.
+- Children and images of a rounded view are not clipped to its corners.
 - `opacity` multiplies down the tree: a faded view's children are each faded, not composited as one group, so overlapping children show through each other.
 - A box cannot fill the remaining height of a page. Use a fixed height.
 - Your own components inside a document are transparent, like `display: contents`. Styles on a component's host element are ignored with a warning. Style a `pdf-*` element inside it instead. The same goes for the document component you render.
@@ -57,7 +57,6 @@ These items are in the [v0.2 roadmap](https://github.com/ngpdf/ngpdf/blob/main/d
 - Fill the remaining page height.
 - Group opacity, so a faded view is composited as one.
 - Half-leading: extra line height split above and below the text, as in CSS.
-- Rounded borders that follow `border-radius`.
 - Table headers: a warning or a fix when a header is dropped or too tall to repeat, and `breakBefore` kept on header rows.
 
 ### Images
