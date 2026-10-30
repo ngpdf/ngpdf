@@ -12,7 +12,7 @@ In the tables:
 - **length** is a number with an optional unit: none or `pt` (points), `px` (= 1pt), `in`, `cm` or `mm`. Any other unit throws.
 - **length/%** also accepts a percentage of the parent's content box.
 - **color** is hex (3, 4, 6 or 8 digits), `rgb()`/`rgba()`, a CSS named color or `transparent`.
-- Keywords are matched in any case, as in CSS: `CENTER` is `center`. That covers the keywords of `text-align`, `text-decoration`, `flex-direction`, `justify-content`, `align-items`, `align-self`, `object-fit`, `font-weight`, `font-style`, `break-before` and `break-inside`, `none` in `max-lines`, `auto` in lengths, `auto` and `none` in `flex`, and the border styles.
+- Keywords are matched in any case, as in CSS: `CENTER` is `center`. That covers the keywords of `text-align`, `text-decoration`, `flex-direction`, `justify-content`, `align-items`, `align-self`, `object-fit`, `font-weight`, `font-style`, `break-before`, `break-after` and `break-inside`, `none` in `max-lines`, `auto` in lengths, `auto` and `none` in `flex`, and the border styles.
 
 ## Text
 
@@ -101,7 +101,8 @@ In `border`, a missing width is 1 and a missing color is black. The width keywor
 | --- | --- | --- |
 | `object-fit` | `contain`, `cover` | `contain` |
 | `break-before` | `page` starts a new sheet; other values do nothing | |
-| `break-inside` | `avoid` or `avoid-page` keeps a `pdf-text` on one sheet; other values do nothing | `auto` |
+| `break-after` | `page` starts a new sheet after the element; other values do nothing | |
+| `break-inside` | `avoid` or `avoid-page` keeps a `pdf-text`, a column `pdf-view` or a `pdf-table` on one sheet when it fits on one; other values do nothing | `auto` |
 | `orphans` | integer ≥ 1: the fewest lines of a `pdf-text` before a page break (inherited) | `2` |
 | `widows` | integer ≥ 1: the fewest lines of a `pdf-text` after a page break (inherited) | `2` |
 

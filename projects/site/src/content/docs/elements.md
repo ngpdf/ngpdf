@@ -70,6 +70,7 @@ A flex container, like a `div` with `display: flex; flex-direction: column`.
 | Input | Type | Default | Description |
 | --- | --- | --- | --- |
 | `breakBefore` | `boolean` | `false` | Starts a new sheet before this element, or before the table row or row `pdf-view` it is in (see [Pagination](/docs/pagination)). A boolean attribute: `<pdf-view breakBefore>` is `true`. |
+| `breakAfter` | `boolean` | `false` | Starts a new sheet after this element, or after the table row or row `pdf-view` it is in. A boolean attribute. |
 | `fixed` | `'top' \| 'bottom' \| undefined` | `undefined` | Takes the view out of the flow and draws it at the top or bottom of every sheet of its `pdf-page`. Only on a direct child of `pdf-page`. See [Fixed headers and footers](/docs/pagination#fixed-headers-and-footers). |
 
 In pagination, a column `pdf-view` with children is a wrapper whose children are units, and a row `pdf-view` is one unit. See [Pagination](/docs/pagination).
@@ -81,6 +82,7 @@ A block of text. Its content is the text of all its child nodes.
 | Input | Type | Default | Description |
 | --- | --- | --- | --- |
 | `breakBefore` | `boolean` | `false` | Starts a new sheet before this element, or before the table row or row `pdf-view` it is in (see [Pagination](/docs/pagination)). A boolean attribute. |
+| `breakAfter` | `boolean` | `false` | Starts a new sheet after this element, or after the table row or row `pdf-view` it is in. A boolean attribute. |
 
 It wraps at Unicode line-break opportunities, and a long text breaks between lines across sheets (see [Text across pages](/docs/pagination#text-across-pages)). Style part of its text with `pdf-span`. A nested `pdf-text` is drawn in the outer text's style, with a warning in development mode. See [Text and fonts](/docs/text-and-fonts).
 
