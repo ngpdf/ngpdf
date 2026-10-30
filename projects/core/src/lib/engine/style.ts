@@ -12,6 +12,13 @@ export interface Edges<T> {
   readonly left: T;
 }
 
+export interface Corners<T> {
+  readonly topLeft: T;
+  readonly topRight: T;
+  readonly bottomRight: T;
+  readonly bottomLeft: T;
+}
+
 export interface TextStyle {
   readonly color: Color;
   /** The CSS `font-family` list as written; `fonts.ts` turns it into fonts. */
@@ -54,7 +61,7 @@ export interface ResolvedStyle extends TextStyle {
   readonly padding: Edges<Length>;
   readonly borderWidth: Edges<number>;
   readonly borderColor: Edges<Color>;
-  readonly borderRadius: number;
+  readonly borderRadius: Corners<number>;
   /** Null when nothing is painted, also for a fully transparent color. */
   readonly backgroundColor: Color | null;
   readonly opacity: number;
@@ -231,6 +238,24 @@ function rejectNegative<T extends Length>(length: T, value: string, tag?: string
   return length;
 }
 
+function parseRadius(value: string, tag?: string): number {
+  if (value.includes('/'))
+    return fail(`elliptical radii are not supported in "${show(value)}"`, tag);
+  return rejectNegative(parsePoints(value, tag), value, tag);
+}
+
+/** `border-radius`: 1 to 4 lengths from the top-left corner, clockwise. */
+function parseCorners(value: string, tag?: string): Corners<number> {
+  if (value.includes('/'))
+    return fail(`elliptical radii are not supported in "${show(value)}"`, tag);
+  const tokens = tokenize(value);
+  if (tokens.length < 1 || tokens.length > 4) {
+    return fail(`expected 1 to 4 values in "${show(value)}"`, tag);
+  }
+  const [a = 0, b = a, c = a, d = b] = tokens.map((token) => parseRadius(token, tag));
+  return { topLeft: a, topRight: b, bottomRight: c, bottomLeft: d };
+}
+
 /** Padding takes a length or a percentage: CSS has no `auto` or negative padding. */
 function parsePadding(value: string, tag?: string): Length {
   const length = parseLength(value, tag);
@@ -365,7 +390,7 @@ function defaultStyle(node: PdfNode, inherited: TextStyle): Mutable<ResolvedStyl
     padding: allSides(0),
     borderWidth: allSides(0),
     borderColor: allSides(BLACK),
-    borderRadius: 0,
+    borderRadius: { topLeft: 0, topRight: 0, bottomRight: 0, bottomLeft: 0 },
     backgroundColor: null,
     opacity: 1,
     objectFit: 'contain',
@@ -529,7 +554,19 @@ function apply(
       style.borderColor = parseEdgeValues(value, (token) => parseColor(token, tag), tag);
       break;
     case 'border-radius':
-      style.borderRadius = parsePoints(value, tag);
+      style.borderRadius = parseCorners(value, tag);
+      break;
+    case 'border-top-left-radius':
+      style.borderRadius = { ...style.borderRadius, topLeft: parseRadius(value, tag) };
+      break;
+    case 'border-top-right-radius':
+      style.borderRadius = { ...style.borderRadius, topRight: parseRadius(value, tag) };
+      break;
+    case 'border-bottom-right-radius':
+      style.borderRadius = { ...style.borderRadius, bottomRight: parseRadius(value, tag) };
+      break;
+    case 'border-bottom-left-radius':
+      style.borderRadius = { ...style.borderRadius, bottomLeft: parseRadius(value, tag) };
       break;
     case 'background-color': {
       const color = parseColor(value, tag);

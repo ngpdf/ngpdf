@@ -4,9 +4,9 @@ import { graphemeCount } from './graphemes';
 import { fitImage } from './images';
 import { pageNumberFormat, type Box } from './layout';
 import type { PageLayout, PlacedBox } from './paginate';
-import type { ResolvedStyle } from './style';
+import type { Corners, ResolvedStyle } from './style';
 import { wordGaps, type TextLine } from './text';
-import type { DrawOp, FontMetrics } from './writer';
+import type { DrawOp, FontMetrics, PathSegment, Point } from './writer';
 
 export interface DisplayListOptions {
   /** Measures the page number text. */
@@ -31,8 +31,8 @@ interface Cuts {
 }
 
 /**
- * Clipping: a clipped box carries `limit`, the page y below which nothing is drawn. Rects and
- * lines are shortened to it, text lines that would end below it are dropped, and images get
+ * Clipping: a clipped box carries `limit`, the page y below which nothing is drawn. Rects, lines
+ * and paths are shortened to it, text lines that would end below it are dropped, and images get
  * their `clip` rectangle cut at it. No op gained a clip field.
  */
 /** What a pdf-page-number needs to draw its text on one sheet. */
@@ -59,6 +59,11 @@ function drawBox(
   const opacity = inherited * style.opacity;
 
   const bottomEdge = Math.min(y + box.h, limit);
+  // The edges cut by a page break or by the limit keep square corners.
+  const radii = fitRadii(style.borderRadius, box.w, bottomEdge - y, {
+    top: cuts.top,
+    bottom: cuts.bottom || y + box.h > limit,
+  });
   const background = style.backgroundColor && paint(style.backgroundColor, opacity);
   if (background && bottomEdge > y) {
     out.push({
@@ -67,7 +72,7 @@ function drawBox(
       y,
       w: box.w,
       h: bottomEdge - y,
-      radius: style.borderRadius,
+      radii,
       fill: background.color,
       opacity: background.opacity,
     });
@@ -83,13 +88,29 @@ function drawBox(
     if (!stroke || (y1 >= limit && y2 >= limit)) return;
     out.push({ op: 'line', x1, y1: cutY1, x2, y2: cutY2, width, ...stroke });
   };
-  if (top > 0 && !cuts.top) line(x, y + top / 2, x + box.w, y + top / 2, top, color.top);
-  if (right > 0)
+  // A side that touches a rounded corner follows the outline; the others stay square lines.
+  const rounded = (side: BorderSide, width: number, c: Color): boolean => {
+    const path = roundedSide(side, { x, y, w: box.w, h: box.h }, radii, width / 2);
+    if (!path) return false;
+    const stroke = paint(c, opacity);
+    const points = [path.from, ...path.segments.map((segment) => segment.to)];
+    if (stroke && points.some((point) => point.y < limit)) {
+      out.push({ op: 'path', ...clampPath(path, limit), width, ...stroke });
+    }
+    return true;
+  };
+  if (top > 0 && !cuts.top && !rounded(TOP, top, color.top)) {
+    line(x, y + top / 2, x + box.w, y + top / 2, top, color.top);
+  }
+  if (right > 0 && !rounded(RIGHT, right, color.right)) {
     line(x + box.w - right / 2, y, x + box.w - right / 2, y + box.h, right, color.right);
-  if (bottom > 0 && !cuts.bottom) {
+  }
+  if (bottom > 0 && !cuts.bottom && !rounded(BOTTOM, bottom, color.bottom)) {
     line(x, y + box.h - bottom / 2, x + box.w, y + box.h - bottom / 2, bottom, color.bottom);
   }
-  if (left > 0) line(x + left / 2, y, x + left / 2, y + box.h, left, color.left);
+  if (left > 0 && !rounded(LEFT, left, color.left)) {
+    line(x + left / 2, y, x + left / 2, y + box.h, left, color.left);
+  }
 
   // Padding plus border, as laid out.
   const inset = {
@@ -162,6 +183,135 @@ function drawBox(
       });
     }
   }
+}
+
+/**
+ * The radii as drawn: 0 on a cut edge, then all scaled down together, as in CSS, when the two
+ * radii on a side add up to more than its length.
+ */
+function fitRadii(
+  radii: Corners<number>,
+  w: number,
+  h: number,
+  square: { readonly top: boolean; readonly bottom: boolean },
+): Corners<number> {
+  const topLeft = square.top ? 0 : radii.topLeft;
+  const topRight = square.top ? 0 : radii.topRight;
+  const bottomRight = square.bottom ? 0 : radii.bottomRight;
+  const bottomLeft = square.bottom ? 0 : radii.bottomLeft;
+  const fit = (length: number, sum: number): number => (sum > length ? length / sum : 1);
+  const scale = Math.min(
+    fit(w, topLeft + topRight),
+    fit(h, topRight + bottomRight),
+    fit(w, bottomRight + bottomLeft),
+    fit(h, bottomLeft + topLeft),
+  );
+  return {
+    topLeft: topLeft * scale,
+    topRight: topRight * scale,
+    bottomRight: bottomRight * scale,
+    bottomLeft: bottomLeft * scale,
+  };
+}
+
+interface Rect {
+  readonly x: number;
+  readonly y: number;
+  readonly w: number;
+  readonly h: number;
+}
+
+interface OpenPath {
+  readonly from: Point;
+  readonly segments: readonly PathSegment[];
+}
+
+/** A corner's key, where it sits in the rect, and which way its arc's center lies from there. */
+interface Corner {
+  readonly key: keyof Corners<number>;
+  readonly atX: number;
+  readonly atY: number;
+  readonly inX: number;
+  readonly inY: number;
+}
+
+const TOP_LEFT: Corner = { key: 'topLeft', atX: 0, atY: 0, inX: 1, inY: 1 };
+const TOP_RIGHT: Corner = { key: 'topRight', atX: 1, atY: 0, inX: -1, inY: 1 };
+const BOTTOM_RIGHT: Corner = { key: 'bottomRight', atX: 1, atY: 1, inX: -1, inY: -1 };
+const BOTTOM_LEFT: Corner = { key: 'bottomLeft', atX: 0, atY: 1, inX: 1, inY: -1 };
+
+/** A side's corners in clockwise order, and its outward direction in degrees with y down. */
+interface BorderSide {
+  readonly first: Corner;
+  readonly second: Corner;
+  readonly angle: number;
+}
+
+const TOP: BorderSide = { first: TOP_LEFT, second: TOP_RIGHT, angle: 270 };
+const RIGHT: BorderSide = { first: TOP_RIGHT, second: BOTTOM_RIGHT, angle: 0 };
+const BOTTOM: BorderSide = { first: BOTTOM_RIGHT, second: BOTTOM_LEFT, angle: 90 };
+const LEFT: BorderSide = { first: BOTTOM_LEFT, second: TOP_LEFT, angle: 180 };
+
+function polar(center: Point, radius: number, degrees: number): Point {
+  const angle = (degrees * Math.PI) / 180;
+  return { x: center.x + radius * Math.cos(angle), y: center.y + radius * Math.sin(angle) };
+}
+
+/** A 45 degree arc as one cubic curve. */
+function arc(center: Point, radius: number, from: number, to: number): PathSegment {
+  const a = (from * Math.PI) / 180;
+  const b = (to * Math.PI) / 180;
+  const k = (4 / 3) * Math.tan((b - a) / 4) * radius;
+  const start = polar(center, radius, from);
+  const end = polar(center, radius, to);
+  return {
+    kind: 'curve',
+    c1: { x: start.x - k * Math.sin(a), y: start.y + k * Math.cos(a) },
+    c2: { x: end.x + k * Math.sin(b), y: end.y - k * Math.cos(b) },
+    to: end,
+  };
+}
+
+/**
+ * One border side on the outline inset by `half` its width, clockwise from the middle of its
+ * first corner to the middle of its second. A corner no wider than `half` stays square for this
+ * side. Null when both corners are square, so the side is a plain line.
+ */
+function roundedSide(
+  side: BorderSide,
+  rect: Rect,
+  radii: Corners<number>,
+  half: number,
+): OpenPath | null {
+  const { first, second, angle } = side;
+  const r1 = radii[first.key] > half ? radii[first.key] : 0;
+  const r2 = radii[second.key] > half ? radii[second.key] : 0;
+  if (r1 === 0 && r2 === 0) return null;
+  const center = (corner: Corner, radius: number): Point => ({
+    x: rect.x + corner.atX * rect.w + corner.inX * radius,
+    y: rect.y + corner.atY * rect.h + corner.inY * radius,
+  });
+  const c1 = center(first, r1);
+  const c2 = center(second, r2);
+  const segments: PathSegment[] = [];
+  const from = polar(c1, r1 - half, r1 > 0 ? angle - 45 : angle);
+  if (r1 > 0) segments.push(arc(c1, r1 - half, angle - 45, angle));
+  segments.push({ kind: 'line', to: polar(c2, r2 - half, angle) });
+  if (r2 > 0) segments.push(arc(c2, r2 - half, angle, angle + 45));
+  return { from, segments };
+}
+
+/** Moves every point of the path up to `limit`, so it stops there like a cut line. */
+function clampPath(path: OpenPath, limit: number): OpenPath {
+  const clamp = (point: Point): Point => ({ x: point.x, y: Math.min(point.y, limit) });
+  return {
+    from: clamp(path.from),
+    segments: path.segments.map((segment) =>
+      segment.kind === 'line'
+        ? { kind: 'line', to: clamp(segment.to) }
+        : { kind: 'curve', c1: clamp(segment.c1), c2: clamp(segment.c2), to: clamp(segment.to) },
+    ),
+  };
 }
 
 /**

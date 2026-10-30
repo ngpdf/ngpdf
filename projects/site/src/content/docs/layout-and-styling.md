@@ -107,7 +107,10 @@ Anything else, such as `hsl()`, `currentColor` or `var(--brand)`, throws `ngpdf:
 - Per side: `border-top`, `border-right`, `border-bottom`, `border-left`, and `border-<side>-width`, `border-<side>-color`. `border-width` and `border-color` take one to four values.
 - Only solid lines are drawn. `dashed`, `dotted`, `double`, `groove`, `ridge`, `inset` and `outset` are drawn solid, with a dev-mode warning. `border-style` on its own is ignored.
 - `thin`, `medium` and `thick` are not supported as widths.
-- `border-radius` takes one length and rounds the background. Borders on a rounded element are still drawn as square lines, so their corners stick out of the rounded background. Use a background without a border when you need rounded corners.
+- `border-radius` takes one to four lengths, from the top-left corner clockwise, as in CSS. `border-top-left-radius`, `border-top-right-radius`, `border-bottom-right-radius` and `border-bottom-left-radius` set one corner. The background and the borders both follow the rounded corners. When the radii on a side add up to more than its length, all four are scaled down together.
+- Where two border sides of different widths or colors meet at a rounded corner, each keeps its own up to the middle of the arc.
+- A view split across pages keeps square corners where the page cuts it.
+- Children and images of a rounded view are not clipped to its corners.
 
 ## Opacity
 

@@ -146,8 +146,8 @@ invalidation would buy nothing here.
 
 ### `DrawOp` handling: a discriminated union and an exhaustive `switch`, no Visitor
 
-- **Context.** The writer and the tests act on four draw operation kinds: `rect`, `line`, `text`
-  and `image`.
+- **Context.** The writer and the tests act on five draw operation kinds: `rect`, `line`, `path`,
+  `text` and `image`.
 - **Decision.** `DrawOp` is a TypeScript discriminated union. Code that handles it uses a
   `switch (op.op)` with an `assertNever` default, so adding a kind fails to compile wherever it is
   not handled.

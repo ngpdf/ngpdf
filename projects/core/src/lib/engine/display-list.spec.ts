@@ -65,6 +65,8 @@ function list(
 
 type Op<K extends DrawOp['op']> = Extract<DrawOp, { op: K }>;
 
+const SQUARE = { topLeft: 0, topRight: 0, bottomRight: 0, bottomLeft: 0 };
+
 function only<K extends DrawOp['op']>(ops: readonly DrawOp[], kind: K): Op<K>[] {
   return ops.filter((op): op is Op<K> => op.op === kind);
 }
@@ -74,7 +76,7 @@ describe('displayList', () => {
     const root = page([el('pdf-view', { 'background-color': '#DD0031' }, [text('Hello')])]);
     const ops = list(layout(root)[0]!, 0, 1);
     expect(ops.map((op) => op.op)).toEqual(['rect', 'text']);
-    expect(ops[0]).toMatchObject({ op: 'rect', fill: '#dd0031', radius: 0, opacity: 1 });
+    expect(ops[0]).toMatchObject({ op: 'rect', fill: '#dd0031', radii: SQUARE, opacity: 1 });
     expect(ops[1]).toMatchObject({ op: 'text', text: 'Hello', x: 36, y: 36 });
   });
 
@@ -120,15 +122,122 @@ describe('displayList', () => {
     expect(opacityOf('row')).toEqual([0.5]);
   });
 
-  it('passes radius and opacity to the background rect', () => {
+  it('passes the corner radii and opacity to the background rect', () => {
     const style = {
       'background-color': '#000',
-      'border-radius': '6',
+      'border-radius': '6 1 2 3',
       opacity: '0.5',
       height: '20',
     };
     const [rect] = only(list(layout(page([el('pdf-view', style)]))[0]!, 0, 1), 'rect');
-    expect(rect).toMatchObject({ radius: 6, opacity: 0.5, h: 20 });
+    expect(rect).toMatchObject({
+      radii: { topLeft: 6, topRight: 1, bottomRight: 2, bottomLeft: 3 },
+      opacity: 0.5,
+      h: 20,
+    });
+  });
+
+  it('scales all radii down together when two of them overflow a side', () => {
+    const radiiOf = (radius: string) => {
+      const style = { 'background-color': '#000', 'border-radius': radius, width: '100' };
+      const view = el('pdf-view', { ...style, height: '20' });
+      return only(list(layout(page([view]))[0]!, 0, 1), 'rect')[0]!.radii;
+    };
+    expect(radiiOf('20')).toEqual({ topLeft: 10, topRight: 10, bottomRight: 10, bottomLeft: 10 });
+    // The left side is the tightest: 20 / (30 + 0) wins over 20 / (10 + 0).
+    const scaled = radiiOf('30 10 0 0');
+    expect(scaled.topLeft).toBeCloseTo(20, 6);
+    expect(scaled.topRight).toBeCloseTo(20 / 3, 6);
+    expect(scaled).toMatchObject({ bottomRight: 0, bottomLeft: 0 });
+    expect(radiiOf('10 10 0 0')).toEqual({
+      topLeft: 10,
+      topRight: 10,
+      bottomRight: 0,
+      bottomLeft: 0,
+    });
+  });
+
+  describe('rounded borders', () => {
+    const start = (path: Op<'path'>) => path.from;
+    const end = (path: Op<'path'>) => path.segments.at(-1)!.to;
+    const at = (cx: number, cy: number, r: number, degrees: number) => ({
+      x: cx + r * Math.cos((degrees * Math.PI) / 180),
+      y: cy + r * Math.sin((degrees * Math.PI) / 180),
+    });
+    const expectPoint = (actual: { x: number; y: number }, expected: { x: number; y: number }) => {
+      expect(actual.x).toBeCloseTo(expected.x, 6);
+      expect(actual.y).toBeCloseTo(expected.y, 6);
+    };
+
+    it('strokes each side along the rounded outline, meeting mid-corner', () => {
+      const style = { width: '100', height: '40', border: '2 solid #f00', 'border-radius': '8' };
+      const ops = list(layout(page([el('pdf-view', style)]))[0]!, 0, 1);
+      expect(only(ops, 'line')).toEqual([]);
+      const [top, right, bottom, left] = only(ops, 'path');
+      expect(only(ops, 'path')).toHaveLength(4);
+      for (const side of [top, right, bottom, left]) {
+        expect(side).toMatchObject({ width: 2, color: '#ff0000', opacity: 1 });
+      }
+      // The box spans 36..136 by 36..76; the stroke runs 1pt inside it, on radius 7.
+      expectPoint(start(top!), at(44, 44, 7, 225));
+      expect(top!.segments.map((segment) => segment.kind)).toEqual(['curve', 'line', 'curve']);
+      expectPoint(top!.segments[0]!.to, { x: 44, y: 37 });
+      expectPoint(top!.segments[1]!.to, { x: 128, y: 37 });
+      expectPoint(end(top!), at(128, 44, 7, 315));
+      expectPoint(end(right!), at(128, 68, 7, 45));
+      expectPoint(end(bottom!), at(44, 68, 7, 135));
+      // The four sides close into one outline.
+      expectPoint(start(right!), end(top!));
+      expectPoint(start(bottom!), end(right!));
+      expectPoint(start(left!), end(bottom!));
+      expectPoint(start(top!), end(left!));
+    });
+
+    it('keeps each side in its own width and color up to the middle of the corner', () => {
+      const style = {
+        width: '100',
+        height: '40',
+        'border-top': '2 solid #f00',
+        'border-left': '6 solid #00f',
+        'border-radius': '10',
+      };
+      const ops = list(layout(page([el('pdf-view', style)]))[0]!, 0, 1);
+      const [top, left] = only(ops, 'path');
+      expect(only(ops, 'path')).toHaveLength(2);
+      expect(top).toMatchObject({ width: 2, color: '#ff0000' });
+      expect(left).toMatchObject({ width: 6, color: '#0000ff' });
+      expectPoint(start(top!), at(46, 46, 9, 225));
+      expectPoint(top!.segments[0]!.to, { x: 46, y: 37 });
+      expectPoint(end(left!), at(46, 46, 7, 225));
+      expect(left!.segments.some((s) => s.kind === 'line' && Math.abs(s.to.x - 39) < 1e-6)).toBe(
+        true,
+      );
+    });
+
+    it('draws a side as a square line where its corners are no wider than half its width', () => {
+      const style = { width: '100', height: '40', border: '4 solid #000', 'border-radius': '2' };
+      const ops = list(layout(page([el('pdf-view', style)]))[0]!, 0, 1);
+      expect(only(ops, 'path')).toEqual([]);
+      expect(only(ops, 'line')).toHaveLength(4);
+      expect(only(ops, 'line')[0]).toMatchObject({ x1: 36, x2: 136, y1: 38, y2: 38 });
+    });
+
+    it('rounds only the corners a rounded side touches', () => {
+      const style = {
+        width: '100',
+        height: '40',
+        border: '2 solid #000',
+        'border-radius': '0 0 8 0',
+      };
+      const ops = list(layout(page([el('pdf-view', style)]))[0]!, 0, 1);
+      // Top and left touch square corners only.
+      expect(only(ops, 'line')).toHaveLength(2);
+      const [right, bottom] = only(ops, 'path');
+      expect(right!.from).toEqual({ x: 135, y: 36 });
+      expect(right!.segments.map((segment) => segment.kind)).toEqual(['line', 'curve']);
+      expect(bottom!.segments.map((segment) => segment.kind)).toEqual(['curve', 'line']);
+      expect(end(bottom!)).toEqual({ x: 36, y: 75 });
+    });
   });
 
   it('draws one line per border side with a width', () => {
@@ -452,6 +561,30 @@ describe('displayList', () => {
         expect(vertical).toHaveLength(2);
       }
     });
+
+    it('keeps square corners on an edge cut by a page break', () => {
+      const rows = [0, 1, 2].map(() => el('pdf-view', { height: '300' }));
+      const style = { border: '2 solid #123456', 'border-radius': '8', 'background-color': '#eee' };
+      const pages = layout(page([el('pdf-view', style, rows)]));
+      expect(pages).toHaveLength(2);
+      const ops = pages.map((laid, index) => list(laid, index, 2));
+      expect(only(ops[0]!, 'rect')[0]!.radii).toEqual({ ...SQUARE, topLeft: 8, topRight: 8 });
+      expect(only(ops[1]!, 'rect')[0]!.radii).toEqual({
+        ...SQUARE,
+        bottomRight: 8,
+        bottomLeft: 8,
+      });
+      for (const [index, pageOps] of ops.entries()) {
+        // Top, right and left on the first page; right, bottom and left on the second.
+        const paths = only(pageOps, 'path');
+        expect(paths).toHaveLength(3);
+        const rect = only(pageOps, 'rect')[0]!;
+        const cutY = index === 0 ? rect.y + rect.h : rect.y;
+        const ends = paths.flatMap((path) => [path.from, path.segments.at(-1)!.to]);
+        // The sides reach the cut straight, so they end on it.
+        expect(ends.filter((point) => Math.abs(point.y - cutY) < 1e-6)).toHaveLength(2);
+      }
+    });
   });
 
   describe('clipping', () => {
@@ -482,6 +615,29 @@ describe('displayList', () => {
       expect(only(ops, 'rect')).toHaveLength(1);
       // The bottom border lies below the limit and is dropped.
       expect(only(ops, 'line')).toHaveLength(0);
+    });
+
+    it('keeps square corners and rounded sides above clipBottom', () => {
+      const spacer = el('pdf-view', { height: '900' });
+      const style = {
+        'flex-direction': 'row',
+        'background-color': '#abc',
+        border: '2 solid #000',
+        'border-radius': '8',
+      };
+      const laid = layout(page([el('pdf-view', style, [spacer])]))[0]!;
+      const limit = laid.placed[0]!.clipBottom!;
+      const ops = list(laid, 0, 1);
+      expect(only(ops, 'rect')[0]!.radii).toEqual({ ...SQUARE, topLeft: 8, topRight: 8 });
+      const paths = only(ops, 'path');
+      // Top, right and left; the bottom side lies below the limit.
+      expect(paths).toHaveLength(3);
+      for (const path of paths) {
+        const points = [path.from, ...path.segments.map((segment) => segment.to)];
+        for (const point of points) expect(point.y).toBeLessThanOrEqual(limit + 1e-6);
+      }
+      const lowest = Math.max(...paths.map((path) => path.segments.at(-1)!.to.y));
+      expect(lowest).toBeCloseTo(limit, 6);
     });
   });
 

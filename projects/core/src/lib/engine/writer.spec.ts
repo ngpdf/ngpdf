@@ -159,6 +159,7 @@ function imagePlacement(pdf: string): (u: number, v: number) => [number, number]
 }
 
 const A4 = { width: 595.28, height: 841.89 };
+const SQUARE = { topLeft: 0, topRight: 0, bottomRight: 0, bottomLeft: 0 };
 const info = {
   title: 'Quarterly report',
   creationDate: new Date('2026-01-02T03:04:05Z'),
@@ -234,7 +235,16 @@ describe('createPdfkitWriter', () => {
 
   it('writes a PDF blob with a rect and a text op', async () => {
     const ops: DrawOp[] = [
-      { op: 'rect', x: 10, y: 10, w: 100, h: 50, radius: 4, fill: '#ff0000', opacity: 0.5 },
+      {
+        op: 'rect',
+        x: 10,
+        y: 10,
+        w: 100,
+        h: 50,
+        radii: { topLeft: 4, topRight: 4, bottomRight: 4, bottomLeft: 4 },
+        fill: '#ff0000',
+        opacity: 0.5,
+      },
       {
         op: 'text',
         x: 20,
@@ -333,7 +343,7 @@ describe('createPdfkitWriter', () => {
   it('compresses streams by default', async () => {
     const compressed = await createPdfkitWriter();
     const ops: DrawOp[] = [
-      { op: 'rect', x: 0, y: 0, w: 5, h: 5, radius: 0, fill: '#000', opacity: 1 },
+      { op: 'rect', x: 0, y: 0, w: 5, h: 5, radii: SQUARE, fill: '#000', opacity: 1 },
     ];
     const blob = await compressed.write([{ ...A4, ops }], info);
     const text = new TextDecoder('latin1').decode(new Uint8Array(await blob.arrayBuffer()));
@@ -517,7 +527,7 @@ describe('createPdfkitWriter', () => {
 
   it('draws a square-cornered rect without rounding', async () => {
     const ops: DrawOp[] = [
-      { op: 'rect', x: 1, y: 1, w: 9, h: 9, radius: 0, fill: '#0f0', opacity: 1 },
+      { op: 'rect', x: 1, y: 1, w: 9, h: 9, radii: SQUARE, fill: '#0f0', opacity: 1 },
     ];
     const blob = await writer.write([{ width: 20, height: 20, ops }], info);
     expect(blob.size).toBeGreaterThan(0);
@@ -579,20 +589,52 @@ describe('createPdfkitWriter', () => {
     });
 
     it('draws a rounded rect with curve operators and a square one without', async () => {
+      const rect = { op: 'rect', x: 10, y: 10, w: 80, h: 40, fill: '#ff0000', opacity: 1 } as const;
       const rounded = contentOf(
         await pdfText([
-          { op: 'rect', x: 10, y: 10, w: 80, h: 40, radius: 6, fill: '#ff0000', opacity: 1 },
+          { ...rect, radii: { topLeft: 6, topRight: 6, bottomRight: 6, bottomLeft: 6 } },
         ]),
       );
       expect(count(rounded, /\sc\n/g)).toBe(4);
       expect(rounded).toMatch(/\nf\n/);
+      // One curve per rounded corner; a square corner is a plain vertex.
+      const mixed = contentOf(
+        await pdfText([
+          { ...rect, radii: { topLeft: 6, topRight: 0, bottomRight: 3, bottomLeft: 0 } },
+        ]),
+      );
+      expect(count(mixed, /\sc\n/g)).toBe(2);
+      expect(mixed).toMatch(/\n16 10 m\n/);
+      expect(mixed).toContain('90 10 l');
+      expect(mixed).toContain('10 50 l');
+      expect(mixed).toMatch(/\nh\nf\n/);
       const square = contentOf(
         await pdfText([
-          { op: 'rect', x: 10, y: 10, w: 80, h: 40, radius: 0, fill: '#ff0000', opacity: 1 },
+          { op: 'rect', x: 10, y: 10, w: 80, h: 40, radii: SQUARE, fill: '#ff0000', opacity: 1 },
         ]),
       );
       expect(square).toContain('10 10 80 40 re');
       expect(count(square, /\sc\n/g)).toBe(0);
+    });
+
+    it('strokes a path op with its lines and curves', async () => {
+      const content = contentOf(
+        await pdfText([
+          {
+            op: 'path',
+            from: { x: 10, y: 20 },
+            segments: [
+              { kind: 'line', to: { x: 50, y: 20 } },
+              { kind: 'curve', c1: { x: 55, y: 20 }, c2: { x: 60, y: 25 }, to: { x: 60, y: 30 } },
+            ],
+            width: 3,
+            color: '#0000ff',
+            opacity: 1,
+          },
+        ]),
+      );
+      expect(content).toMatch(/\n3 w\n/);
+      expect(content).toMatch(/\n10 20 m\n50 20 l\n55 20 60 25 60 30 c\nS\n/);
     });
 
     it('clips an image with re + W n and paints it with Do', async () => {
@@ -617,8 +659,16 @@ describe('createPdfkitWriter', () => {
 
     it('sets opacity through an ExtGState and balances q and Q', async () => {
       const pdf = await pdfText([
-        { op: 'rect', x: 0, y: 0, w: 10, h: 10, radius: 0, fill: '#000', opacity: 0.5 },
+        { op: 'rect', x: 0, y: 0, w: 10, h: 10, radii: SQUARE, fill: '#000', opacity: 0.5 },
         { op: 'line', x1: 0, y1: 0, x2: 9, y2: 9, width: 1, color: '#00f', opacity: 1 },
+        {
+          op: 'path',
+          from: { x: 0, y: 0 },
+          segments: [{ kind: 'line', to: { x: 5, y: 0 } }],
+          width: 1,
+          color: '#00f',
+          opacity: 0.5,
+        },
         TEXT_OP,
         {
           op: 'image',

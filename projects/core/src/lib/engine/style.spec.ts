@@ -429,8 +429,56 @@ describe('resolveStyles property coverage', () => {
       'auto',
     ]);
     expect(style.backgroundColor).toEqual(rgb(238, 238, 238));
-    expect(style.borderRadius).toBe(3);
+    expect(style.borderRadius).toEqual({ topLeft: 3, topRight: 3, bottomRight: 3, bottomLeft: 3 });
     expect(style.objectFit).toBe('cover');
+  });
+
+  it('expands 1 to 4 border-radius values in CSS corner order', () => {
+    const radiiOf = (value: string) => styleOf({ 'border-radius': value }).borderRadius;
+    expect(styleOf({}).borderRadius).toEqual({
+      topLeft: 0,
+      topRight: 0,
+      bottomRight: 0,
+      bottomLeft: 0,
+    });
+    expect(radiiOf('1 2')).toEqual({ topLeft: 1, topRight: 2, bottomRight: 1, bottomLeft: 2 });
+    expect(radiiOf('1 2 3')).toEqual({ topLeft: 1, topRight: 2, bottomRight: 3, bottomLeft: 2 });
+    expect(radiiOf('1 2 3 4')).toEqual({ topLeft: 1, topRight: 2, bottomRight: 3, bottomLeft: 4 });
+    expect(radiiOf('1in 0')).toEqual({ topLeft: 72, topRight: 0, bottomRight: 72, bottomLeft: 0 });
+    expect(() => radiiOf('1 2 3 4 5')).toThrow(/^ngpdf: expected 1 to 4 values/);
+  });
+
+  it('sets one corner with the border-<corner>-radius longhands', () => {
+    const style = styleOf({
+      'border-radius': '2',
+      'border-top-left-radius': '4',
+      'border-top-right-radius': '5',
+      'border-bottom-right-radius': '6pt',
+      'border-bottom-left-radius': '1in',
+    });
+    expect(style.borderRadius).toEqual({
+      topLeft: 4,
+      topRight: 5,
+      bottomRight: 6,
+      bottomLeft: 72,
+    });
+    const one = styleOf({ 'border-radius': '2', 'border-bottom-left-radius': '0' });
+    expect(one.borderRadius).toEqual({ topLeft: 2, topRight: 2, bottomRight: 2, bottomLeft: 0 });
+  });
+
+  it('throws on elliptical, percent and negative radii', () => {
+    for (const value of ['4 / 8', '4/8', '10%', '-2', '1 -2', 'auto']) {
+      expect(() => styleOf({ 'border-radius': value }), value).toThrow(/^ngpdf:/);
+    }
+    expect(() => styleOf({ 'border-radius': '4 / 8' })).toThrow(
+      'ngpdf: elliptical radii are not supported in "4 / 8"',
+    );
+    expect(() => styleOf({ 'border-radius': '-2' })).toThrow(
+      'ngpdf: expected a non-negative length in "-2"',
+    );
+    for (const value of ['4 8', '10%', '-1', '4/8']) {
+      expect(() => styleOf({ 'border-top-left-radius': value }), value).toThrow(/^ngpdf:/);
+    }
   });
 
   it('reads orphans and widows as integers of at least 1, inherited, default 2', () => {

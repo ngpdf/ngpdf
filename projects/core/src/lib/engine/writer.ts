@@ -1,5 +1,6 @@
 import type { PageLayout, PageMode } from '../tree/viewer-preferences';
 import { graphemeStarts } from './graphemes';
+import type { Corners } from './style';
 import Courier from 'pdfkit/standard-fonts/Courier';
 import CourierBold from 'pdfkit/standard-fonts/CourierBold';
 import CourierBoldOblique from 'pdfkit/standard-fonts/CourierBoldOblique';
@@ -39,6 +40,16 @@ export interface Clip {
   readonly h: number;
 }
 
+export interface Point {
+  readonly x: number;
+  readonly y: number;
+}
+
+export type PathSegment =
+  | { readonly kind: 'line'; readonly to: Point }
+  /** A cubic Bézier curve through control points `c1` and `c2`. */
+  | { readonly kind: 'curve'; readonly c1: Point; readonly c2: Point; readonly to: Point };
+
 export type DrawOp =
   | {
       readonly op: 'rect';
@@ -46,7 +57,8 @@ export type DrawOp =
       readonly y: number;
       readonly w: number;
       readonly h: number;
-      readonly radius: number;
+      /** Each corner's radius, already small enough to fit the rect. */
+      readonly radii: Corners<number>;
       readonly fill: string;
       readonly opacity: number;
     }
@@ -56,6 +68,15 @@ export type DrawOp =
       readonly y1: number;
       readonly x2: number;
       readonly y2: number;
+      readonly width: number;
+      readonly color: string;
+      readonly opacity: number;
+    }
+  /** An open stroked path, such as one side of a rounded border. */
+  | {
+      readonly op: 'path';
+      readonly from: Point;
+      readonly segments: readonly PathSegment[];
       readonly width: number;
       readonly color: string;
       readonly opacity: number;
@@ -490,13 +511,80 @@ function previousCodePoint(text: string, index: number): number {
   return pair ? index - 2 : index - 1;
 }
 
+function isSquare(radii: Corners<number>): boolean {
+  return (
+    radii.topLeft === 0 && radii.topRight === 0 && radii.bottomRight === 0 && radii.bottomLeft === 0
+  );
+}
+
+// Control point distance of a quarter circle drawn as one cubic curve, per unit of radius.
+const KAPPA = 0.5522847498;
+
+/** pdfkit's `roundedRect` takes one radius; this one takes four. */
+function roundedRect(doc: Doc, op: Extract<DrawOp, { op: 'rect' }>): void {
+  const { x, y, w, h } = op;
+  const { topLeft, topRight, bottomRight, bottomLeft } = op.radii;
+  const right = x + w;
+  const bottom = y + h;
+  doc.moveTo(x + topLeft, y);
+  doc.lineTo(right - topRight, y);
+  corner(doc, right - topRight, y, right, y + topRight, topRight, 'x');
+  doc.lineTo(right, bottom - bottomRight);
+  corner(doc, right, bottom - bottomRight, right - bottomRight, bottom, bottomRight, 'y');
+  doc.lineTo(x + bottomLeft, bottom);
+  corner(doc, x + bottomLeft, bottom, x, bottom - bottomLeft, bottomLeft, 'x');
+  doc.lineTo(x, y + topLeft);
+  corner(doc, x, y + topLeft, x + topLeft, y, topLeft, 'y');
+  doc.closePath();
+}
+
+/**
+ * A quarter circle from (x1, y1) to (x2, y2), leaving along `axis`. Nothing for radius 0: the
+ * lines around it already meet at the corner.
+ */
+function corner(
+  doc: Doc,
+  x1: number,
+  y1: number,
+  x2: number,
+  y2: number,
+  radius: number,
+  axis: 'x' | 'y',
+): void {
+  if (radius === 0) return;
+  const dx = (x2 - x1) * KAPPA;
+  const dy = (y2 - y1) * KAPPA;
+  if (axis === 'x') doc.bezierCurveTo(x1 + dx, y1, x2, y2 - dy, x2, y2);
+  else doc.bezierCurveTo(x1, y1 + dy, x2 - dx, y2, x2, y2);
+}
+
+function pathTo(doc: Doc, segment: PathSegment): void {
+  switch (segment.kind) {
+    case 'line':
+      doc.lineTo(segment.to.x, segment.to.y);
+      return;
+    case 'curve':
+      doc.bezierCurveTo(
+        segment.c1.x,
+        segment.c1.y,
+        segment.c2.x,
+        segment.c2.y,
+        segment.to.x,
+        segment.to.y,
+      );
+      return;
+    default:
+      return assertNever(segment);
+  }
+}
+
 function drawOp(doc: Doc, op: DrawOp, dataUrls: WeakMap<Uint8Array, string>): void {
   switch (op.op) {
     case 'rect':
       doc.save();
       doc.fillColor(op.fill, op.opacity);
-      if (op.radius > 0) doc.roundedRect(op.x, op.y, op.w, op.h, op.radius);
-      else doc.rect(op.x, op.y, op.w, op.h);
+      if (isSquare(op.radii)) doc.rect(op.x, op.y, op.w, op.h);
+      else roundedRect(doc, op);
       doc.fill();
       doc.restore();
       return;
@@ -504,6 +592,14 @@ function drawOp(doc: Doc, op: DrawOp, dataUrls: WeakMap<Uint8Array, string>): vo
       doc.save();
       doc.lineWidth(op.width).strokeColor(op.color, op.opacity);
       doc.moveTo(op.x1, op.y1).lineTo(op.x2, op.y2).stroke();
+      doc.restore();
+      return;
+    case 'path':
+      doc.save();
+      doc.lineWidth(op.width).strokeColor(op.color, op.opacity);
+      doc.moveTo(op.from.x, op.from.y);
+      for (const segment of op.segments) pathTo(doc, segment);
+      doc.stroke();
       doc.restore();
       return;
     case 'text':
