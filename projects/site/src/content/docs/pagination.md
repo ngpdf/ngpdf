@@ -17,6 +17,7 @@ Starting from the children of the `pdf-page`, ngpdf looks inside some elements a
 | --- | --- |
 | `pdf-view` with `flex-direction: column` (the default) and children | a wrapper: its children are looked at in turn |
 | `pdf-view` with a `transform` | one unit, with everything inside it, so it is never cut across sheets |
+| `pdf-view` with `overflow: hidden` | one unit, with everything inside it, so its clip is never split |
 | `pdf-table` | a wrapper: each of its rows is a unit |
 | `pdf-view` with `flex-direction: row` | one unit, with everything inside it |
 | `pdf-text` | its lines, grouped by `orphans` and `widows`; one unit if it is short, has `break-inside: avoid`, a fixed height or a `transform` |
@@ -30,7 +31,7 @@ If the page's own `flex-direction` is `row`, its whole content is one unit.
 
 ### Keep units small
 
-A table row, a row `pdf-view` or a `pdf-view` with a `transform` is never split, with everything inside it, text included. Avoid wrapping long lists in a row `pdf-view`.
+A table row, a row `pdf-view` or a `pdf-view` with a `transform` or `overflow: hidden` is never split, with everything inside it, text included. Avoid wrapping long lists in a row `pdf-view`.
 
 ## Text across pages
 

@@ -21,7 +21,7 @@ ngpdf v0.1 covers documents built from text, tables, boxes and images. This page
 ### Layout and styling
 
 - Colors are hex (3, 4, 6 or 8 digits), `rgb()`/`rgba()`, the CSS named colors and `transparent`. Other forms, such as `hsl()`, throw.
-- Children and images of a rounded view are not clipped to its corners.
+- Children and images of a rounded view are clipped to its corners only with `overflow: hidden`.
 - `opacity` multiplies down the tree: a faded view's children are each faded, not composited as one group, so overlapping children show through each other.
 - A box cannot fill the remaining height of a page. Use a fixed height.
 - `transform` takes 2D rotations, scales and translations only: no `skew()`, `matrix()` or 3D functions.

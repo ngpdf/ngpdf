@@ -12,7 +12,7 @@ In the tables:
 - **length** is a number with an optional unit: none or `pt` (points), `px` (= 1pt), `in`, `cm` or `mm`. Any other unit throws.
 - **length/%** also accepts a percentage of the parent's content box.
 - **color** is hex (3, 4, 6 or 8 digits), `rgb()`/`rgba()`, a CSS named color or `transparent`.
-- Keywords are matched in any case, as in CSS: `CENTER` is `center`. That covers the keywords of `text-align`, `text-decoration`, `text-transform`, `normal` in `letter-spacing`, `flex-direction`, `justify-content`, `align-items`, `align-self`, `object-fit`, `font-weight`, `font-style`, `break-before`, `break-after` and `break-inside`, `none` in `max-lines`, `none` and the function names in `transform`, the keywords of `transform-origin`, `auto` in lengths, `auto` and `none` in `flex`, and the border styles.
+- Keywords are matched in any case, as in CSS: `CENTER` is `center`. That covers the keywords of `text-align`, `text-decoration`, `text-transform`, `normal` in `letter-spacing`, `flex-direction`, `justify-content`, `align-items`, `align-self`, `object-fit`, `overflow`, `font-weight`, `font-style`, `break-before`, `break-after` and `break-inside`, `none` in `max-lines`, `none` and the function names in `transform`, the keywords of `transform-origin`, `auto` in lengths, `auto` and `none` in `flex`, and the border styles.
 
 ## Text
 
@@ -97,8 +97,9 @@ Shorthands with 1 to 4 values follow CSS order: top, right, bottom, left.
 | `opacity` | number from 0 to 1 (clamped) | `1` |
 | `transform` | `none`, or a list of `rotate()`, `scale()`, `scaleX()`, `scaleY()`, `translate()`, `translateX()`, `translateY()` | `none` |
 | `transform-origin` | 1 or 2 of `left`, `center`, `right`, `top`, `bottom`, length, `%` of the border box | `center` (`50% 50%`) |
+| `overflow` | `visible`; `hidden`, `clip`, `scroll` or `auto` clip the content to the padding box | `visible` |
 
-In `border`, a missing width is 1 and a missing color is black. The width keywords `thin`, `medium` and `thick` mean 1, 3 and 5 points. The styles `none` and `hidden` set the width to 0; `solid` draws solid; `dashed`, `dotted`, `double`, `groove`, `ridge`, `inset` and `outset` are drawn solid with a dev-mode warning. `border-radius` rounds the background and the borders. Radii that add up to more than a side are scaled down together, as in CSS.
+In `border`, a missing width is 1 and a missing color is black. The width keywords `thin`, `medium` and `thick` mean 1, 3 and 5 points. The styles `none` and `hidden` set the width to 0; `solid` draws solid; `dashed`, `dotted`, `double`, `groove`, `ridge`, `inset` and `outset` are drawn solid with a dev-mode warning. `border-radius` rounds the background and the borders. Radii that add up to more than a side are scaled down together, as in CSS. `overflow` is not inherited and is ignored on a `pdf-page` and a `pdf-table`; see [Overflow](/docs/layout-and-styling#overflow).
 
 `transform` applies its functions left to right, around `transform-origin`, and changes only how the element is drawn, not the layout. Angles take `deg`, `rad` or `turn`, and a positive angle turns clockwise. `scale()` takes one number for both axes or two. Translations take lengths or a percentage of the element's own border box. Neither property is inherited, and `transform` is ignored on a `pdf-page` and a `pdf-table`. See [Transforms](/docs/layout-and-styling#transforms).
 
@@ -117,7 +118,7 @@ In `border`, a missing width is 1 and a missing color is black. The width keywor
 
 Everything else is ignored, including:
 
-- `display`, `position`, `top`/`right`/`bottom`/`left`, `z-index`, `overflow`;
+- `display`, `position`, `top`/`right`/`bottom`/`left`, `z-index`, `overflow-x`, `overflow-y`;
 - `flex-wrap`, `align-content`, `row-gap`, `column-gap`, `order`;
 - `background`, `background-image`, `box-shadow`, `border-style`;
 - `font`, `word-spacing`, `white-space`, `vertical-align`;
@@ -140,7 +141,7 @@ Some styles are ignored in specific places:
 - `auto` in `padding` or a `padding-*` side;
 - a negative `font-size`, padding, border width or radius (margins can be negative, as in CSS);
 - a color that is not one of the forms above, including `hsl()`, `currentColor` and `var()`;
-- a keyword outside the lists above for `text-align`, `text-decoration`, `text-transform`, `flex-direction`, `justify-content`, `align-items`, `align-self` and `object-fit`, in any case;
+- a keyword outside the lists above for `text-align`, `text-decoration`, `text-transform`, `flex-direction`, `justify-content`, `align-items`, `align-self`, `object-fit` and `overflow`, in any case;
 - a `transform` function other than the seven above, such as `skew()`, `matrix()` or `rotate3d()`, an angle without a unit (other than `0`) and a `transform-origin` with three values;
 - a value that is not a number for `flex-grow`, `flex-shrink` and `opacity`;
 - the wrong number of values in a shorthand.

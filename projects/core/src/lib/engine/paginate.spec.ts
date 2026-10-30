@@ -342,6 +342,49 @@ describe('paginatePage: transform', () => {
   });
 });
 
+describe('paginatePage: overflow: hidden', () => {
+  const AREA = CONTENT_BOTTOM - CONTENT_TOP;
+  const block = (): PdfNode => el('pdf-view', { height: '20' });
+  const nodesOn = (pages: PageLayout[]): PdfNode[][] =>
+    pages.map((laid) => laid.placed.map((p) => p.box.node));
+
+  it('places a clipping column view as one unit, moved whole to the next page', () => {
+    const first = el('pdf-view', { height: String(AREA - 30) });
+    const card = el('pdf-view', { overflow: 'hidden' }, [block(), block(), block()]);
+    const pages = paginate(page([first, card]));
+    expect(nodesOn(pages)).toEqual([[first], [card]]);
+    expect(pages[1]!.placed[0]!.y).toBeCloseTo(CONTENT_TOP, 6);
+    expect(pages.flatMap((laid) => laid.decorations)).toEqual([]);
+  });
+
+  it('cuts a clipping view taller than a page at the bottom, with a warning', () => {
+    const warn = vi.fn<(message: string) => void>();
+    const items = Array.from({ length: 50 }, block);
+    const card = el('pdf-view', { overflow: 'hidden' }, items);
+    const pages = paginate(page([card, pageNumber()]), warn);
+    expect(nodesOn(pages)).toEqual([[card]]);
+    expect(pages[0]!.placed[0]!.clipBottom).toBeCloseTo(CONTENT_BOTTOM, 6);
+    expect(warn).toHaveBeenCalledWith(
+      'ngpdf: pdf-view is taller than a page and is cut at the bottom',
+    );
+  });
+
+  it('breaks before and after a clipping view when an element inside asks for it', () => {
+    const before = block();
+    const inner = el('pdf-view', { height: '20' }, [], { breakBefore: true, breakAfter: true });
+    const card = el('pdf-view', { overflow: 'hidden' }, [block(), inner]);
+    const after = block();
+    expect(nodesOn(paginate(page([before, card, after])))).toEqual([[before], [card], [after]]);
+  });
+
+  it('keeps paginating a table with overflow: hidden by rows', () => {
+    const tableNode = table(60, false, { overflow: 'hidden' });
+    const pages = paginate(page([tableNode]));
+    expect(pages).toHaveLength(2);
+    expect(nodesOn(pages).flat()).toEqual(tableNode.children);
+  });
+});
+
 describe('paginatePage: page breaks', () => {
   it('starts a new page at breakBefore', () => {
     const first = el('pdf-view', { height: '20' });

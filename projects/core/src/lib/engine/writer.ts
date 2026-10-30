@@ -112,7 +112,17 @@ export type DrawOp =
     }
   /** Transforms every op up to the matching `untransform`; transforms nest. */
   | { readonly op: 'transform'; readonly matrix: Matrix }
-  | { readonly op: 'untransform' };
+  | { readonly op: 'untransform' }
+  /** Clips every op up to the matching `unclip`; clips nest. */
+  | {
+      readonly op: 'clip';
+      readonly x: number;
+      readonly y: number;
+      readonly w: number;
+      readonly h: number;
+      readonly radii: Corners<number>;
+    }
+  | { readonly op: 'unclip' };
 
 export interface FontMetrics {
   /** With `ligatures` false, the optional ligatures (liga, clig, dlig) are left out. */
@@ -541,7 +551,7 @@ function isSquare(radii: Corners<number>): boolean {
 const KAPPA = 0.5522847498;
 
 /** pdfkit's `roundedRect` takes one radius; this one takes four. */
-function roundedRect(doc: Doc, op: Extract<DrawOp, { op: 'rect' }>): void {
+function roundedRect(doc: Doc, op: Clip & { readonly radii: Corners<number> }): void {
   const { x, y, w, h } = op;
   const { topLeft, topRight, bottomRight, bottomLeft } = op.radii;
   const right = x + w;
@@ -649,6 +659,16 @@ function drawOp(doc: Doc, op: DrawOp, dataUrls: WeakMap<Uint8Array, string>): vo
       doc.transform(...op.matrix);
       return;
     case 'untransform':
+      doc.restore();
+      return;
+    case 'clip':
+      // Restored by the matching unclip, so the ops between are drawn inside it.
+      doc.save();
+      if (isSquare(op.radii)) doc.rect(op.x, op.y, op.w, op.h);
+      else roundedRect(doc, op);
+      doc.clip();
+      return;
+    case 'unclip':
       doc.restore();
       return;
     default:

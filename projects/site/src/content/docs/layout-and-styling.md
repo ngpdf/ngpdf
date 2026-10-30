@@ -110,7 +110,26 @@ Anything else, such as `hsl()`, `currentColor` or `var(--brand)`, throws `ngpdf:
 - `border-radius` takes one to four lengths, from the top-left corner clockwise, as in CSS. `border-top-left-radius`, `border-top-right-radius`, `border-bottom-right-radius` and `border-bottom-left-radius` set one corner. The background and the borders both follow the rounded corners. When the radii on a side add up to more than its length, all four are scaled down together.
 - Where two border sides of different widths or colors meet at a rounded corner, each keeps its own up to the middle of the arc.
 - A view split across pages keeps square corners where the page cuts it.
-- Children and images of a rounded view are not clipped to its corners.
+- Children and images of a rounded view are not clipped to its corners unless it has [`overflow: hidden`](#overflow).
+
+## Overflow
+
+By default, content that does not fit its box is drawn outside it. `overflow: hidden` clips it:
+
+```html
+<pdf-view style="overflow: hidden; height: 120; border: 1 solid #ccc; border-radius: 8">
+  <pdf-image [src]="photo" style="height: 160; object-fit: cover" />
+  <pdf-text>{{ caption() }}</pdf-text>
+</pdf-view>
+```
+
+- The element's children, text and image are clipped to its padding box, inside the border. Its own background and border are not clipped.
+- With `border-radius`, the clip is rounded too. Each corner's radius is the outer radius less the wider of the two borders beside it, never below 0.
+- `clip`, `scroll` and `auto` clip like `hidden`. `overflow-x` and `overflow-y` are ignored.
+- Nested clipping elements clip to the area they share.
+- The layout does not change: sizes and positions are the same with or without clipping.
+- A column `pdf-view` with `overflow: hidden` is one [pagination unit](/docs/pagination#units), so it is never split across sheets.
+- `overflow` is not inherited, and is ignored on a `pdf-page` (a page is not a box to clip) and on a `pdf-table`, which keeps breaking between its rows.
 
 ## Opacity
 

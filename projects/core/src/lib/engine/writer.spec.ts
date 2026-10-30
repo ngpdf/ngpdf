@@ -644,6 +644,33 @@ describe('createPdfkitWriter', () => {
       expect(count(content, /\scm\n/g)).toBe(3);
     });
 
+    it('clips the ops between clip and unclip to a square or rounded rect', async () => {
+      const rect = {
+        op: 'rect',
+        x: 0,
+        y: 0,
+        w: 200,
+        h: 200,
+        radii: SQUARE,
+        fill: '#ff0000',
+        opacity: 1,
+      } as const;
+      const content = contentOf(
+        await pdfText([
+          { op: 'clip', x: 10, y: 20, w: 80, h: 40, radii: SQUARE },
+          { op: 'clip', x: 10, y: 20, w: 80, h: 40, radii: { ...SQUARE, topLeft: 6 } },
+          rect,
+          { op: 'unclip' },
+          { op: 'unclip' },
+        ]),
+      );
+      expect(content).toMatch(/\nq\n10 20 80 40 re\nW n\nq\n16 20 m\n/);
+      expect(count(content, /\sc\n/g)).toBe(1);
+      expect(content).toMatch(/\nh\nW n\n/);
+      // Both clips are restored after the rect.
+      expect(content).toMatch(/0 0 200 200 re\nf\nQ\nQ\nQ\n/);
+    });
+
     it('strokes a path op with its lines and curves', async () => {
       const content = contentOf(
         await pdfText([

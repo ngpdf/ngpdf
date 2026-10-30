@@ -133,7 +133,10 @@ function isWrapper(box: Box): boolean {
   if (box.children.length === 0 || box.style.transform.length > 0) return false;
   return (
     box.node.tag === 'pdf-table' ||
-    (box.node.tag === 'pdf-view' && box.style.flexDirection === 'column')
+    // A clipping view is one unit, like a row view: its clip can't be cut across sheets.
+    (box.node.tag === 'pdf-view' &&
+      box.style.flexDirection === 'column' &&
+      box.style.overflow === 'visible')
   );
 }
 

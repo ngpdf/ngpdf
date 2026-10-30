@@ -117,7 +117,7 @@ The site (`projects/site`) is a prerendered Angular app. Its docs are the Markdo
 - **Pagination:**
   - Units are the children of a page, at any depth through column `pdf-view`s and tables. A table
     yields its rows as units. A row `pdf-view` is one unit, and so is a column `pdf-view` with a
-    `transform`.
+    `transform` or `overflow: hidden`.
   - A unit is never split. A `pdf-text` that would be a unit is cut into line groups instead: the
     first `orphans` lines, each line between, and the last `widows` lines (2 and 2 by default).
     A short text, `break-inside: avoid`, a fixed `height`, a `max-height` or a `transform` keeps it
