@@ -602,6 +602,18 @@ describe('letter-spacing and text-transform', () => {
     for (const line of spaced.lines) expect(line.width).toBeLessThanOrEqual(fitsPlain);
   });
 
+  it('measures letter-spaced text without ligatures, which a cluster at a time cannot draw', () => {
+    // An "fi" ligature 4pt narrower than its letters.
+    const ligatures: FontMetrics = {
+      widthOf: (text, _font, _size, withLigatures) =>
+        10 * text.length - (withLigatures !== false && text.includes('fi') ? 4 : 0),
+      ascent: () => 0,
+      hasGlyph: () => false,
+    };
+    expect(layoutText('fi', style, Infinity, ligatures).width).toBe(16);
+    expect(layoutText('fi', { ...style, letterSpacing: 1 }, Infinity, ligatures).width).toBe(22);
+  });
+
   it('fits the ellipsis of a clamped line by the spaced width', () => {
     const spaced: ParagraphStyle = { ...style, letterSpacing: 2, maxLines: 1 };
     const maxWidth = 80;

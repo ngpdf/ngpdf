@@ -379,8 +379,11 @@ function drawPageNumber(
     while (to < shaped.text.length && shaped.fontAt[to] === index) to++;
     const text = shaped.text.slice(from, to);
     const font = chain[index] ?? fontFor(style);
-    const spacing = style.letterSpacing * graphemeCount(text);
-    runs.push({ text, font, width: options.metrics.widthOf(text, font, style.fontSize) + spacing });
+    const width = style.letterSpacing
+      ? options.metrics.widthOf(text, font, style.fontSize, false) +
+        style.letterSpacing * graphemeCount(text)
+      : options.metrics.widthOf(text, font, style.fontSize);
+    runs.push({ text, font, width });
     from = to;
   }
   const width = runs.reduce((sum, run) => sum + run.width, 0);

@@ -115,9 +115,17 @@ export class TextMeasureCache {
     return cached;
   }
 
-  /** `metrics.widthOf` for one font and size, remembering every string it measures. */
-  widthOf(metrics: FontMetrics, font: FontName, size: number): (chunk: string) => number {
-    const fontKey = `${font} ${String(size)}`;
+  /**
+   * `metrics.widthOf` for one font and size, remembering every string it measures. Without
+   * `ligatures`, as letter-spaced text is measured, the optional ligatures are left out.
+   */
+  widthOf(
+    metrics: FontMetrics,
+    font: FontName,
+    size: number,
+    ligatures = true,
+  ): (chunk: string) => number {
+    const fontKey = `${font} ${String(size)}${ligatures ? '' : ' no-ligatures'}`;
     let widths = this.#widths.get(fontKey);
     if (!widths) {
       widths = new Map();
@@ -127,7 +135,9 @@ export class TextMeasureCache {
     return (chunk) => {
       let width = known.get(chunk);
       if (width === undefined) {
-        width = metrics.widthOf(chunk, font, size);
+        width = ligatures
+          ? metrics.widthOf(chunk, font, size)
+          : metrics.widthOf(chunk, font, size, false);
         known.set(chunk, width);
       }
       return width;
@@ -353,9 +363,10 @@ export function layoutRanges(
   const { block, replaced, missing } = cache.block(text, key, () => {
     const shaped = shapeRanges(ranges, metrics);
     const widthOfs = shaped.faces.map((face) => {
-      const widthOf = cache.widthOf(metrics, face.font, face.size);
       const spacing = face.letterSpacing;
-      return spacing ? (chunk: string) => widthOf(chunk) + spacing * graphemeCount(chunk) : widthOf;
+      if (!spacing) return cache.widthOf(metrics, face.font, face.size);
+      const widthOf = cache.widthOf(metrics, face.font, face.size, false);
+      return (chunk: string) => widthOf(chunk) + spacing * graphemeCount(chunk);
     });
     const ellipses = shaped.faces.map((face) =>
       covers(face.font, ELLIPSIS, metrics) ? ELLIPSIS : ELLIPSIS_DOTS,

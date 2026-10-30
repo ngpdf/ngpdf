@@ -746,6 +746,20 @@ describe('createPdfkitWriter', () => {
       expect(Number(strokes.at(-1)![2])).toBeCloseTo(TEXT_OP.x + width('AV') + 2 * 3, 3);
     });
 
+    it('measures and draws letter-spaced text without optional ligatures', async () => {
+      const { default: PDFDocument } = await import('pdfkit');
+      const measured = vi.spyOn(PDFDocument.prototype, 'widthOfString');
+      const drawn = vi.spyOn(PDFDocument.prototype, 'text');
+      await pdfText([{ ...TEXT_OP, text: 'fit', opacity: 1, letterSpacing: 1 }]);
+      const off = { liga: false, clig: false, dlig: false };
+      expect(measured.mock.calls.length).toBeGreaterThan(0);
+      for (const [, options] of measured.mock.calls)
+        expect(options).toMatchObject({ features: off });
+      for (const call of drawn.mock.calls) expect(call[3]).toMatchObject({ features: off });
+      measured.mockRestore();
+      drawn.mockRestore();
+    });
+
     it('adds word spacing after each gap of letter-spaced, justified text', async () => {
       const content = contentOf(
         await pdfText([
