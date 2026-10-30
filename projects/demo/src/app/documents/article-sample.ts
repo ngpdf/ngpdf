@@ -19,6 +19,11 @@ const SENTENCES = [
         <pdf-text style="font-size: 18; font-weight: bold; margin-bottom: 12">
           Field notes
         </pdf-text>
+        <pdf-text
+          style="font-size: 8; letter-spacing: 0.5; text-transform: uppercase; color: #666666; margin-bottom: 10"
+        >
+          Northern ridge, spring survey
+        </pdf-text>
         @for (paragraph of paragraphs; track $index; let i = $index) {
           @if (i === 3) {
             <pdf-text

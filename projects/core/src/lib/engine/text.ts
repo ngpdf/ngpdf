@@ -168,6 +168,7 @@ function transformText(
   pieces: readonly string[],
   transforms: readonly TextStyle['textTransform'][],
 ): string[] {
+  if (transforms.every((transform) => transform === 'none')) return [...pieces];
   let wordStart = true;
   return pieces.map((piece, i) => {
     const transform = transforms[i] ?? 'none';

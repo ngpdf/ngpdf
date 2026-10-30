@@ -1,6 +1,14 @@
 import { beforeAll, describe, expect, it, vi } from 'vitest';
+import { graphemeCount } from './graphemes';
 import { ROOT_TEXT_STYLE, type TextStyle } from './style';
-import { layoutRanges, layoutText, measureText, TextMeasureCache, type TextRange } from './text';
+import {
+  layoutRanges,
+  layoutText,
+  measureText,
+  TextMeasureCache,
+  type ParagraphStyle,
+  type TextRange,
+} from './text';
 import { testFont } from '../../testing/test-fonts';
 import { createPdfkitWriter, type FontMetrics, type PdfWriter } from './writer';
 
@@ -592,6 +600,22 @@ describe('letter-spacing and text-transform', () => {
     const spaced = layoutText(text, { ...style, letterSpacing: 3 }, fitsPlain, writer);
     expect(spaced.lines.length).toBeGreaterThan(2);
     for (const line of spaced.lines) expect(line.width).toBeLessThanOrEqual(fitsPlain);
+  });
+
+  it('fits the ellipsis of a clamped line by the spaced width', () => {
+    const spaced: ParagraphStyle = { ...style, letterSpacing: 2, maxLines: 1 };
+    const maxWidth = 80;
+    const [line, ...rest] = layoutRanges(
+      [{ text: 'Gabriela Teixeira de Albuquerque', style: spaced }],
+      spaced,
+      maxWidth,
+      writer,
+    ).lines;
+    expect(rest).toHaveLength(0);
+    expect(line?.text.endsWith('…')).toBe(true);
+    const drawn = line?.text ?? '';
+    expect(line?.width).toBeCloseTo(width(drawn) + 2 * graphemeCount(drawn), 6);
+    expect(line?.width).toBeLessThanOrEqual(maxWidth);
   });
 
   it('spaces only the range that sets letter-spacing', () => {

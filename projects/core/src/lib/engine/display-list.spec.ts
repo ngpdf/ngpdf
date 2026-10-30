@@ -310,6 +310,20 @@ describe('displayList', () => {
     expect(plain).not.toHaveProperty('letterSpacing');
   });
 
+  it('justifies letter-spaced text by its spaced width, with word spacing on top', () => {
+    const words = 'ab cd ef gh ij kl mn op';
+    const view = text(words, { width: '100', 'text-align': 'justify', 'letter-spacing': '1' });
+    const [laid] = layout(page([view]));
+    const ops = only(list(laid!, 0, 1), 'text');
+    const first = ops[0]!;
+    expect(first.letterSpacing).toBe(1);
+    const lineText = first.text;
+    const gaps = lineText.split(' ').length - 1;
+    const spaced = writer.widthOf(lineText, 'Helvetica', 10) + lineText.length * 1;
+    // Without a trailing space drawn, the gaps take what is left of the 100pt.
+    expect(first.wordSpacing).toBeCloseTo((100 - spaced) / gaps, 6);
+  });
+
   it('spaces the page number but leaves its text untransformed', () => {
     const number = el(
       'pdf-page-number',
