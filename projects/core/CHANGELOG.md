@@ -1,5 +1,23 @@
 # @ngpdf/core
 
+## 0.5.0
+
+### Minor Changes
+
+- [#133](https://github.com/ngpdf/ngpdf/pull/133) [`76517d0`](https://github.com/ngpdf/ngpdf/commit/76517d087126751fea3bd49346c513270f4afaa3) Thanks [@GabeSilvaDev](https://github.com/GabeSilvaDev)! - `breakAfter` on `pdf-view` and `pdf-text`, and the style `break-after: page` on any element but a `pdf-span`, start a new sheet after that element. Like `breakBefore`, it applies to a whole row when set inside one, and it never adds a blank sheet at the end of a page.
+
+  `break-inside: avoid` now works on a column `pdf-view` and a `pdf-table` too. One that doesn't fit in the space left on a sheet but fits on a whole sheet moves to the next sheet in one piece. One taller than a sheet splits as before.
+
+### Patch Changes
+
+- [#132](https://github.com/ngpdf/ngpdf/pull/132) [`0a5bad9`](https://github.com/ngpdf/ngpdf/commit/0a5bad956abe4b85087c6abc6a4268133db0b701) Thanks [@GabeSilvaDev](https://github.com/GabeSilvaDev)! - Next line (U+0085) is now drawn as a normal space and collapses with the whitespace around it, like form feed, vertical tab and the line and paragraph separators. Before, a standard font drew it as `?`.
+
+- [#134](https://github.com/ngpdf/ngpdf/pull/134) [`2d90fd2`](https://github.com/ngpdf/ngpdf/commit/2d90fd2b2539788bb634fe187f4d8535f1062de1) Thanks [@GabeSilvaDev](https://github.com/GabeSilvaDev)! - The style attribute is recognised in any case, as in HTML: `[attr.STYLE]` or a directive that sets `Style` now styles the element instead of being ignored.
+
+- [#130](https://github.com/ngpdf/ngpdf/pull/130) [`08afbf5`](https://github.com/ngpdf/ngpdf/commit/08afbf539d2ece1af76bf21d315ac27693da1164) Thanks [@GabeSilvaDev](https://github.com/GabeSilvaDev)! - A `pdf-text` split over several pages no longer leaves a page in the middle with fewer lines than `orphans` and `widows` ask for when its lines have very different heights. A page gives lines back to the one before it, or the text starts on the next page, when that keeps the limits. When no layout keeps them, lines are placed one by one as before.
+
+- [#129](https://github.com/ngpdf/ngpdf/pull/129) [`dc34713`](https://github.com/ngpdf/ngpdf/commit/dc34713776196215133a7d5fa56365eb1a9c1b76) Thanks [@GabeSilvaDev](https://github.com/GabeSilvaDev)! - Vertical tab, form feed and the line and paragraph separators (U+2028, U+2029) are now drawn as a normal space, and U+FEFF is removed. A standard font draws the ideographic space (U+3000) and the Ogham space mark (U+1680) as a space too, while a custom font that has them still draws its own glyph. Before, a standard font drew all of these as `?` in the middle of a line, while the same characters at the ends of a paragraph were trimmed as whitespace.
+
 ## 0.4.0
 
 ### Minor Changes
