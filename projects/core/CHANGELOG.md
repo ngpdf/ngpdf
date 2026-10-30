@@ -1,5 +1,13 @@
 # @ngpdf/core
 
+## 0.6.0
+
+### Minor Changes
+
+- [#139](https://github.com/ngpdf/ngpdf/pull/139) [`376630b`](https://github.com/ngpdf/ngpdf/commit/376630b70104f64319398d56de44db4eef7095d7) Thanks [@GabeSilvaDev](https://github.com/GabeSilvaDev)! - `letter-spacing` and `text-transform` are supported and inherited like the other text styles, also on a `pdf-span`. `letter-spacing` adds space after each character and counts in wrapping, alignment and `max-lines`. `text-transform` takes `uppercase`, `lowercase` or `capitalize` and is applied before the text is measured.
+
+- [#140](https://github.com/ngpdf/ngpdf/pull/140) [`4d6e05d`](https://github.com/ngpdf/ngpdf/commit/4d6e05d635d2936e3f61549ffb5a7fb6c6751aaf) Thanks [@GabeSilvaDev](https://github.com/GabeSilvaDev)! - Borders now follow `border-radius`. `border-radius` takes one to four lengths in CSS corner order, and the `border-top-left-radius`, `border-top-right-radius`, `border-bottom-right-radius` and `border-bottom-left-radius` longhands set one corner each. Radii too big for their box are scaled down together, as in CSS, and a view split across pages keeps square corners where the page cuts it. An elliptical radius (`4 / 8`), a percentage or a negative radius throws. Before, `border-radius` took one length and rounded only the background, so square border lines stuck out of it.
+
 ## 0.5.0
 
 ### Minor Changes
