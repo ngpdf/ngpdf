@@ -917,3 +917,334 @@ describe('displayList', () => {
     });
   });
 });
+
+describe('gradient backgrounds', () => {
+  const RED = { color: '#ff0000', opacity: 1 };
+  const BLUE = { color: '#0000ff', opacity: 1 };
+
+  /** The background rect of a 100x50 view at (36, 36) on an A4 page. */
+  function rectOf(style: Record<string, string>, w = '100', h = '50'): Op<'rect'> {
+    const view = el('pdf-view', { width: w, height: h, ...style });
+    const rects = only(list(layout(page([view]))[0]!, 0, 1), 'rect');
+    expect(rects).toHaveLength(1);
+    return rects[0]!;
+  }
+
+  function linear(style: Record<string, string>) {
+    const { gradient } = rectOf(style);
+    if (gradient?.kind !== 'linear') throw new Error('expected a linear gradient');
+    return gradient;
+  }
+
+  function radial(style: Record<string, string>) {
+    const { gradient } = rectOf(style);
+    if (gradient?.kind !== 'radial') throw new Error('expected a radial gradient');
+    return gradient;
+  }
+
+  function expectPoints<T extends object>(actual: T, expected: Partial<Record<keyof T, number>>) {
+    for (const [key, value] of Object.entries(expected)) {
+      expect(actual[key as keyof T]).toBeCloseTo(value as number, 6);
+    }
+  }
+
+  it('fills the border box top to bottom by default, with the radii and no color', () => {
+    const rect = rectOf({
+      'background-image': 'linear-gradient(red, blue)',
+      'border-radius': '6',
+    });
+    expect(rect).toMatchObject({ x: 36, y: 36, w: 100, h: 50, opacity: 1 });
+    expect(rect.radii).toEqual({ topLeft: 6, topRight: 6, bottomRight: 6, bottomLeft: 6 });
+    expect(rect.fill).toBeUndefined();
+    expect(rect.gradient).toEqual({
+      kind: 'linear',
+      x1: 86,
+      y1: 36,
+      x2: 86,
+      y2: 86,
+      stops: [
+        { offset: 0, ...RED },
+        { offset: 1, ...BLUE },
+      ],
+    });
+  });
+
+  it('keeps the background color under the gradient in the same op', () => {
+    const rect = rectOf({ background: 'linear-gradient(red, blue) #eeeeee', opacity: '0.5' });
+    expect(rect).toMatchObject({ fill: '#eeeeee', opacity: 0.5, gradient: { kind: 'linear' } });
+  });
+
+  it('makes an angled gradient line long enough to reach the corners', () => {
+    // |100 sin 45| + |50 cos 45| = 150 / sqrt 2, centered on (86, 61).
+    expectPoints(linear({ 'background-image': 'linear-gradient(45deg, red, blue)' }), {
+      x1: 48.5,
+      y1: 98.5,
+      x2: 123.5,
+      y2: 23.5,
+    });
+    expectPoints(linear({ 'background-image': 'linear-gradient(to left, red, blue)' }), {
+      x1: 136,
+      y1: 61,
+      x2: 36,
+      y2: 61,
+    });
+  });
+
+  it('points a corner gradient so its middle line joins the other two corners', () => {
+    // The direction is (50, -100) normalized, and the line is 200 / sqrt 5 long.
+    expectPoints(linear({ 'background-image': 'linear-gradient(to top right, red, blue)' }), {
+      x1: 66,
+      y1: 101,
+      x2: 106,
+      y2: 21,
+    });
+    expectPoints(linear({ 'background-image': 'linear-gradient(to bottom left, red, blue)' }), {
+      x1: 106,
+      y1: 21,
+      x2: 66,
+      y2: 101,
+    });
+  });
+
+  it('spreads unpositioned stops, raises ones that go backwards and spans the first to the last', () => {
+    const gradient = linear({
+      height: '100',
+      'background-image': 'linear-gradient(red 20px, lime, blue 50%, yellow 10%, white 80%)',
+    });
+    // Stops at 20, 35, 50, 50 and 80 of a 100 point line: the shading runs from y 56 to y 116.
+    expectPoints(gradient, { x1: 86, y1: 56, x2: 86, y2: 116 });
+    const offsets = gradient.stops.map((stop) => Math.round(stop.offset * 1e9) / 1e9);
+    // The repeated 50 is nudged up, as PDF needs strictly increasing offsets.
+    expect(offsets).toEqual([0, 0.25, 0.5, 0.50001, 1]);
+    expect(gradient.stops.map((stop) => stop.color)).toEqual([
+      '#ff0000',
+      '#00ff00',
+      '#0000ff',
+      '#ffff00',
+      '#ffffff',
+    ]);
+  });
+
+  it('pads a hard edge at an end, so the shading extends the right color', () => {
+    const gradient = linear({ 'background-image': 'linear-gradient(red 40%, blue 40%)' });
+    expectPoints(gradient, { y1: 55, y2: 57 });
+    expect(gradient.stops).toEqual([
+      { offset: 0, ...RED },
+      { offset: 0.5, ...RED },
+      { offset: 0.50001, ...BLUE },
+      { offset: 1, ...BLUE },
+    ]);
+    // A radial gradient has nothing before its center to pad.
+    const ring = radial({ 'background-image': 'radial-gradient(red 0, blue 0, lime)' });
+    expect(ring.r1).toBe(0);
+    expect(ring.stops.map((stop) => stop.offset)).toEqual([0, 0.00001, 1]);
+  });
+
+  it('multiplies stop alpha and element opacity into each stop opacity', () => {
+    const gradient = linear({
+      opacity: '0.5',
+      'background-image': 'linear-gradient(rgba(255, 0, 0, 0.5), blue)',
+    });
+    expect(gradient.stops.map((stop) => stop.opacity)).toEqual([0.25, 0.5]);
+  });
+
+  it('gives a transparent stop the color of its neighbours, so it fades without darkening', () => {
+    expect(linear({ 'background-image': 'linear-gradient(red, transparent)' }).stops).toEqual([
+      { offset: 0, ...RED },
+      { offset: 1, color: '#ff0000', opacity: 0 },
+    ]);
+    expect(linear({ 'background-image': 'linear-gradient(red, transparent, blue)' }).stops).toEqual(
+      [
+        { offset: 0, ...RED },
+        { offset: 0.5, color: '#ff0000', opacity: 0 },
+        { offset: 0.50001, color: '#0000ff', opacity: 0 },
+        { offset: 1, ...BLUE },
+      ],
+    );
+  });
+
+  it('fades to transparent between two stops of one color without a second edge', () => {
+    expect(linear({ 'background-image': 'linear-gradient(red, transparent, red)' }).stops).toEqual([
+      { offset: 0, ...RED },
+      { offset: 0.5, color: '#ff0000', opacity: 0 },
+      { offset: 1, ...RED },
+    ]);
+  });
+
+  it('draws nothing for a gradient of transparent stops or a box without area', () => {
+    const rects = (style: Record<string, string>) => {
+      const view = el('pdf-view', { height: '10', ...style });
+      return only(list(layout(page([view]))[0]!, 0, 1), 'rect');
+    };
+    expect(rects({ 'background-image': 'linear-gradient(transparent, rgba(0, 0, 0, 0))' })).toEqual(
+      [],
+    );
+    expect(rects({ 'background-image': 'radial-gradient(transparent, transparent)' })).toEqual([]);
+    for (const direction of ['to right', 'to top right']) {
+      const image = `linear-gradient(${direction}, red, blue)`;
+      expect(rects({ width: '0', height: '0', 'background-image': image })).toEqual([]);
+    }
+  });
+
+  it('sizes a radial gradient by its shape, size keyword and center', () => {
+    const at = (head: string) =>
+      radial({ 'background-image': `radial-gradient(${head}, red, blue)` });
+    // Centered in 100x50: the corner is (50, 25) away.
+    expect(at('circle')).toMatchObject({ cx: 86, cy: 61, r1: 0, scaleY: 1 });
+    expect(at('circle').r2).toBeCloseTo(Math.hypot(50, 25), 6);
+    // An ellipse keeps the farthest-side ratio, 50:25, and passes through the corner.
+    expect(at('ellipse').r2).toBeCloseTo(Math.hypot(50, 50), 6);
+    expect(at('ellipse').scaleY).toBeCloseTo(0.5, 9);
+    // At (20, 10) from the top-left corner: the sides are 20, 80, 10 and 40 away.
+    expect(at('circle closest-side at 20 10')).toMatchObject({ cx: 56, cy: 46, r2: 10 });
+    expect(at('circle farthest-side at 20 10').r2).toBe(80);
+    expect(at('circle closest-corner at 20 10').r2).toBeCloseTo(Math.hypot(20, 10), 6);
+    expect(at('circle farthest-corner at 20 10').r2).toBeCloseTo(Math.hypot(80, 40), 6);
+    expect(at('closest-side at 20 10')).toMatchObject({ r2: 20, scaleY: 0.5 });
+    expect(at('farthest-side at 20 10')).toMatchObject({ r2: 80, scaleY: 0.5 });
+    expect(at('closest-corner at 20 10').r2).toBeCloseTo(Math.SQRT2 * 20, 6);
+    expect(at('closest-corner at 20 10').scaleY).toBeCloseTo(0.5, 9);
+    expect(at('at right bottom')).toMatchObject({ cx: 136, cy: 86 });
+  });
+
+  it('keeps a degenerate ellipse drawable', () => {
+    const gradient = radial({
+      'background-image': 'radial-gradient(closest-side at 0 25, red, blue)',
+    });
+    expect(gradient.r2).toBeGreaterThan(0);
+    expect(Number.isFinite(gradient.scaleY)).toBe(true);
+    expect(gradient.scaleY).toBeGreaterThan(0);
+  });
+
+  it('starts a radial gradient at its first stop and cuts stops before the center', () => {
+    const ring = radial({ 'background-image': 'radial-gradient(circle, red 10px, blue 20px)' });
+    expect(ring).toMatchObject({ r1: 10, r2: 20 });
+    const cut = radial({
+      'background-image': 'radial-gradient(circle closest-side, red -10px, blue 10px)',
+    });
+    expect(cut).toMatchObject({ r1: 0, r2: 10 });
+    expect(cut.stops).toEqual([
+      { offset: 0, color: '#800080', opacity: 1 },
+      { offset: 1, ...BLUE },
+    ]);
+    const gone = radial({ 'background-image': 'radial-gradient(red -20px, blue -10px)' });
+    expect(gone).toMatchObject({ r1: 0, r2: 1 });
+    expect(gone.stops.map((stop) => stop.color)).toEqual(['#0000ff', '#0000ff']);
+  });
+
+  it('gives a transparent stop its neighbour color before cutting at the center', () => {
+    const faded = radial({
+      'background-image': 'radial-gradient(circle closest-side, transparent -10px, blue 10px)',
+    });
+    expect(faded.stops[0]).toEqual({ offset: 0, color: '#0000ff', opacity: 0.5 });
+  });
+
+  it('sends strictly increasing offsets, as PDF stitching functions require', () => {
+    const offsets = (image: string) => {
+      const { gradient } = rectOf({ 'background-image': image });
+      return gradient?.stops.map((stop) => stop.offset) ?? [];
+    };
+    for (const image of [
+      'linear-gradient(red, green 50%, blue 50%, white)',
+      'radial-gradient(circle closest-side, red 0, blue 0, green 10px)',
+      // Two stops closer than the nudge just before the end: pulled back below 1.
+      'linear-gradient(red, lime 99.9999%, blue 99.99995%, white)',
+    ]) {
+      const list = offsets(image);
+      expect(list[0]).toBe(0);
+      expect(list.at(-1)).toBe(1);
+      for (let i = 1; i < list.length; i++) {
+        expect(list[i]!).toBeGreaterThan(list[i - 1]!);
+        expect(list[i]!).toBeLessThanOrEqual(1);
+      }
+    }
+  });
+
+  it('paints a split text gradient once per sheet, over the whole text', () => {
+    const words = Array.from({ length: 100 }, (_, i) => `w${String(i)}`).join(' ');
+    const style = {
+      width: '25',
+      'font-size': '10',
+      'line-height': '1',
+      'background-image': 'linear-gradient(red, blue)',
+    };
+    const pages = layout(page([text(words, style)]));
+    expect(pages).toHaveLength(2);
+    const rects = pages.map((laid, index) => only(list(laid, index, 2), 'rect'));
+    expect(rects.map((ops) => ops.length)).toEqual([1, 1]);
+    const [first, second] = [rects[0]![0]!, rects[1]![0]!];
+    for (const rect of [first, second]) {
+      if (rect.gradient?.kind !== 'linear') throw new Error('expected a linear gradient');
+      expect(rect.gradient.y2 - rect.gradient.y1).toBeCloseTo(first.h + second.h, 6);
+    }
+  });
+
+  it('paints a page gradient once per sheet, over the page', () => {
+    const rows = [0, 1, 2].map(() => el('pdf-view', { height: '300' }));
+    const pages = layout(
+      page(rows, { padding: '36', 'background-image': 'linear-gradient(red, blue)' }),
+    );
+    expect(pages).toHaveLength(2);
+    for (const [index, laid] of pages.entries()) {
+      const rects = only(list(laid, index, 2), 'rect');
+      expect(rects).toHaveLength(1);
+      const [rect] = rects;
+      if (rect!.gradient?.kind !== 'linear') throw new Error('expected a linear gradient');
+      expect(rect!.h).toBeCloseTo(laid.height, 6);
+      expect(rect!.gradient.y2 - rect!.gradient.y1).toBeCloseTo(laid.height, 6);
+    }
+  });
+
+  it('keeps one gradient for the whole height of a view split across sheets', () => {
+    const rows = [0, 1, 2].map(() => el('pdf-view', { height: '300' }));
+    const style = { 'background-image': 'linear-gradient(red, blue)' };
+    const pages = layout(page([el('pdf-view', style, rows)]));
+    expect(pages).toHaveLength(2);
+    const rects = pages.map((laid, index) => only(list(laid, index, 2), 'rect')[0]!);
+    const [first, second] = rects as [Op<'rect'>, Op<'rect'>];
+    const total = first.h + second.h;
+    expect(first.gradient).toMatchObject({ y1: first.y });
+    expect(second.gradient).toMatchObject({ y1: second.y - first.h });
+    for (const rect of rects) {
+      if (rect.gradient?.kind !== 'linear') throw new Error('expected a linear gradient');
+      expect(rect.gradient.y2 - rect.gradient.y1).toBeCloseTo(total, 6);
+    }
+  });
+
+  it('keeps one radial gradient, with the same radii, for a view split across sheets', () => {
+    const rows = [0, 1, 2].map(() => el('pdf-view', { height: '300' }));
+    const style = { 'background-image': 'radial-gradient(circle closest-side, red, blue)' };
+    const pages = layout(page([el('pdf-view', style, rows)]));
+    expect(pages).toHaveLength(2);
+    const rects = pages.map((laid, index) => only(list(laid, index, 2), 'rect')[0]!);
+    const radials = rects.map((rect) => {
+      if (rect.gradient?.kind !== 'radial') throw new Error('expected a radial gradient');
+      return { rect, gradient: rect.gradient };
+    });
+    const [first, second] = [radials[0]!, radials[1]!];
+    const total = first.rect.h + second.rect.h;
+    // The center sits halfway down the whole view, measured from each piece's own top.
+    expect(first.gradient.cy).toBeCloseTo(first.rect.y + total / 2, 6);
+    expect(second.gradient.cy).toBeCloseTo(second.rect.y - first.rect.h + total / 2, 6);
+    expect(second.gradient.r2).toBeCloseTo(first.gradient.r2, 6);
+  });
+
+  it('spans the whole box when a unit taller than the page is cut', () => {
+    const view = el('pdf-view', {
+      height: '1000',
+      'flex-direction': 'row',
+      'background-image': 'linear-gradient(red, blue)',
+    });
+    const [rect] = only(list(layout(page([view]))[0]!, 0, 1), 'rect');
+    expect(rect!.h).toBeLessThan(1000);
+    expect(rect!.gradient).toMatchObject({ y1: 36, y2: 1036 });
+  });
+
+  it('spans the whole wrapper when the unit inside it is cut', () => {
+    const tall = el('pdf-view', { height: '1000', 'flex-direction': 'row' });
+    const style = { 'background-image': 'linear-gradient(red, blue)' };
+    const [rect] = only(list(layout(page([el('pdf-view', style, [tall])]))[0]!, 0, 1), 'rect');
+    expect(rect!.h).toBeLessThan(1000);
+    expect(rect!.gradient).toMatchObject({ y1: 36, y2: 1036 });
+  });
+});

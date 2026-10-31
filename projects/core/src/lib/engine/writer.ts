@@ -53,6 +53,33 @@ export type PathSegment =
 /** A PDF/CSS affine matrix `[a, b, c, d, e, f]`: x' = ax + cy + e, y' = bx + dy + f. */
 export type Matrix = readonly [number, number, number, number, number, number];
 
+export interface GradientStop {
+  /** From 0 at the start point or inner circle to 1 at the end point or outer circle. */
+  readonly offset: number;
+  readonly color: string;
+  readonly opacity: number;
+}
+
+export type GradientFill =
+  | {
+      readonly kind: 'linear';
+      readonly x1: number;
+      readonly y1: number;
+      readonly x2: number;
+      readonly y2: number;
+      readonly stops: readonly GradientStop[];
+    }
+  /** Circles around (cx, cy), squashed vertically by `scaleY` into ellipses. */
+  | {
+      readonly kind: 'radial';
+      readonly cx: number;
+      readonly cy: number;
+      readonly r1: number;
+      readonly r2: number;
+      readonly scaleY: number;
+      readonly stops: readonly GradientStop[];
+    };
+
 export type DrawOp =
   | {
       readonly op: 'rect';
@@ -62,8 +89,11 @@ export type DrawOp =
       readonly h: number;
       /** Each corner's radius, already small enough to fit the rect. */
       readonly radii: Corners<number>;
-      readonly fill: string;
+      /** The color, drawn under `gradient`; none when only the gradient paints. */
+      readonly fill?: string;
+      /** Of `fill`; a gradient carries its opacity in its stops. */
       readonly opacity: number;
+      readonly gradient?: GradientFill;
     }
   | {
       readonly op: 'line';
@@ -306,6 +336,11 @@ interface FontInternals {
 interface PdfKitInternals {
   info: { Creator?: unknown };
   _root: { data: { PageMode?: PageMode; PageLayout?: PageLayout } };
+}
+
+/** pdfkit 0.20's gradient transform, which `@types/pdfkit` leaves out. */
+interface GradientTransform {
+  setTransform(m11: number, m12: number, m21: number, m22: number, dx: number, dy: number): void;
 }
 
 type StandardFontData = typeof Helvetica;
@@ -588,6 +623,27 @@ function corner(
   else doc.bezierCurveTo(x1, y1 + dy, x2 - dx, y2, x2, y2);
 }
 
+function outline(doc: Doc, op: Extract<DrawOp, { op: 'rect' }>): void {
+  if (isSquare(op.radii)) doc.rect(op.x, op.y, op.w, op.h);
+  else roundedRect(doc, op);
+}
+
+/**
+ * pdfkit stretches the first and last stop to 0 and 1 whatever their offsets, so the engine always
+ * sends a first stop at 0 and a last one at 1. Stop opacities below 1 become a soft mask.
+ */
+function shading(doc: Doc, fill: GradientFill): PDFKit.PDFGradient {
+  let gradient: PDFKit.PDFGradient;
+  if (fill.kind === 'linear') {
+    gradient = doc.linearGradient(fill.x1, fill.y1, fill.x2, fill.y2);
+  } else {
+    gradient = doc.radialGradient(0, 0, fill.r1, 0, 0, fill.r2);
+    (gradient as unknown as GradientTransform).setTransform(1, 0, 0, fill.scaleY, fill.cx, fill.cy);
+  }
+  for (const stop of fill.stops) gradient.stop(stop.offset, stop.color, stop.opacity);
+  return gradient;
+}
+
 function pathTo(doc: Doc, segment: PathSegment): void {
   switch (segment.kind) {
     case 'line':
@@ -611,12 +667,20 @@ function pathTo(doc: Doc, segment: PathSegment): void {
 function drawOp(doc: Doc, op: DrawOp, dataUrls: WeakMap<Uint8Array, string>): void {
   switch (op.op) {
     case 'rect':
-      doc.save();
-      doc.fillColor(op.fill, op.opacity);
-      if (isSquare(op.radii)) doc.rect(op.x, op.y, op.w, op.h);
-      else roundedRect(doc, op);
-      doc.fill();
-      doc.restore();
+      // Each fill in its own state: a gradient sets no opacity, so it would keep the color's.
+      if (op.fill !== undefined) {
+        doc.save();
+        doc.fillColor(op.fill, op.opacity);
+        outline(doc, op);
+        doc.fill();
+        doc.restore();
+      }
+      if (op.gradient) {
+        doc.save();
+        outline(doc, op);
+        doc.fill(shading(doc, op.gradient));
+        doc.restore();
+      }
       return;
     case 'line':
       doc.save();

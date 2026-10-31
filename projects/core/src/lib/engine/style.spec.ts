@@ -938,3 +938,202 @@ describe('resolveStyles property coverage', () => {
     expect(() => styleOf({ opacity: '9'.repeat(400) })).toThrow(/^ngpdf: invalid value/);
   });
 });
+
+describe('gradients', () => {
+  const image = (value: string) => styleOf({ 'background-image': value }).backgroundImage;
+  const stop = (color: ReturnType<typeof rgb>, position: unknown = null) => ({ color, position });
+
+  it('has no background image by default and reads none in any case', () => {
+    expect(styleOf({}).backgroundImage).toBeNull();
+    expect(image(' NONE ')).toBeNull();
+  });
+
+  it('reads a linear gradient that goes to bottom by default', () => {
+    expect(image('linear-gradient(red, blue)')).toEqual({
+      kind: 'linear',
+      direction: { angle: 180 },
+      stops: [stop(RED), stop(BLUE)],
+    });
+  });
+
+  it('reads angles in deg, rad and turn, and a bare 0', () => {
+    const angle = (value: string) => {
+      const gradient = image(`linear-gradient(${value}, red, blue)`);
+      if (gradient?.kind !== 'linear' || !('angle' in gradient.direction)) throw new Error(value);
+      return gradient.direction.angle;
+    };
+    expect(angle('45deg')).toBe(45);
+    expect(angle('-90DEG')).toBe(-90);
+    expect(angle(`${String(Math.PI)}rad`)).toBeCloseTo(180, 9);
+    expect(angle('0.25turn')).toBe(90);
+    expect(angle('0')).toBe(0);
+    expect(() => image('linear-gradient(45, red, blue)')).toThrow(
+      'ngpdf: invalid gradient angle "45" on pdf-view',
+    );
+    expect(() => image('linear-gradient(45grad, red, blue)')).toThrow(/^ngpdf: invalid gradient/);
+  });
+
+  it('reads to a side as an angle and to a corner as a corner', () => {
+    const direction = (value: string) => {
+      const gradient = image(`linear-gradient(${value}, red, blue)`);
+      return gradient?.kind === 'linear' ? gradient.direction : null;
+    };
+    expect(direction('to top')).toEqual({ angle: 0 });
+    expect(direction('TO Right')).toEqual({ angle: 90 });
+    expect(direction('to bottom')).toEqual({ angle: 180 });
+    expect(direction('to left')).toEqual({ angle: 270 });
+    expect(direction('to top left')).toEqual({ corner: { x: -1, y: -1 } });
+    expect(direction('to left top')).toEqual({ corner: { x: -1, y: -1 } });
+    expect(direction('to bottom right')).toEqual({ corner: { x: 1, y: 1 } });
+    for (const bad of ['to', 'to top bottom', 'to left right', 'to middle', 'to top left right']) {
+      expect(() => image(`linear-gradient(${bad}, red, blue)`)).toThrow(
+        `ngpdf: invalid gradient direction "${bad}" on pdf-view`,
+      );
+    }
+  });
+
+  it('reads stops with colors that hold commas and optional positions in % or a length', () => {
+    expect(image('linear-gradient(rgb(255, 0, 0) 10%, rgba(0,0,255,0.5) 1in, #00ff00)')).toEqual({
+      kind: 'linear',
+      direction: { angle: 180 },
+      stops: [stop(RED, { percent: 10 }), stop(rgb(0, 0, 255, 0.5), 72), stop(rgb(0, 255, 0))],
+    });
+    // The position may come first, as CSS allows.
+    expect(image('linear-gradient(20px red, blue)')).toMatchObject({
+      stops: [stop(RED, 20), stop(BLUE)],
+    });
+  });
+
+  it('rejects bad stops with an ngpdf error', () => {
+    expect(() => image('linear-gradient(red)')).toThrow(
+      'ngpdf: a gradient needs at least two color stops in "linear-gradient(red)" on pdf-view',
+    );
+    expect(() => image('linear-gradient(red, , blue)')).toThrow(/^ngpdf: invalid color stop/);
+    expect(() => image('linear-gradient(red, 30%, blue)')).toThrow(
+      'ngpdf: color hints are not supported in "linear-gradient(red, 30%, blue)" on pdf-view',
+    );
+    expect(() => image('linear-gradient(red 10% 20%, blue)')).toThrow(
+      'ngpdf: invalid color stop "red 10% 20%" on pdf-view',
+    );
+    expect(() => image('linear-gradient(red auto, blue)')).toThrow(/^ngpdf: invalid color stop/);
+    expect(() => image('linear-gradient(red 3em, blue)')).toThrow(/^ngpdf: unknown unit/);
+    expect(() => image('linear-gradient(nope, blue)')).toThrow('ngpdf: invalid color "nope"');
+  });
+
+  it('reads a radial gradient: ellipse, farthest-corner, at center by default', () => {
+    expect(image('radial-gradient(red, blue)')).toEqual({
+      kind: 'radial',
+      shape: 'ellipse',
+      size: 'farthest-corner',
+      center: { x: { percent: 50 }, y: { percent: 50 } },
+      stops: [stop(RED), stop(BLUE)],
+    });
+  });
+
+  it('reads the radial shape, size and position in any order and case', () => {
+    const radial = (head: string) => image(`radial-gradient(${head}, red, blue)`);
+    expect(radial('CIRCLE')).toMatchObject({ shape: 'circle', size: 'farthest-corner' });
+    expect(radial('closest-side circle')).toMatchObject({ shape: 'circle', size: 'closest-side' });
+    expect(radial('ellipse Farthest-Side')).toMatchObject({
+      shape: 'ellipse',
+      size: 'farthest-side',
+    });
+    expect(radial('closest-corner')).toMatchObject({ shape: 'ellipse', size: 'closest-corner' });
+    const center = (position: string) => {
+      const gradient = radial(`circle at ${position}`);
+      return gradient?.kind === 'radial' ? gradient.center : null;
+    };
+    expect(center('left')).toEqual({ x: { percent: 0 }, y: { percent: 50 } });
+    expect(center('TOP')).toEqual({ x: { percent: 50 }, y: { percent: 0 } });
+    expect(center('center')).toEqual({ x: { percent: 50 }, y: { percent: 50 } });
+    expect(center('20%')).toEqual({ x: { percent: 20 }, y: { percent: 50 } });
+    expect(center('right bottom')).toEqual({ x: { percent: 100 }, y: { percent: 100 } });
+    expect(center('bottom right')).toEqual({ x: { percent: 100 }, y: { percent: 100 } });
+    expect(center('top center')).toEqual({ x: { percent: 50 }, y: { percent: 0 } });
+    expect(center('10 30%')).toEqual({ x: 10, y: { percent: 30 } });
+    expect(radial('at 0 0')).toMatchObject({ shape: 'ellipse', center: { x: 0, y: 0 } });
+  });
+
+  it('rejects bad radial heads', () => {
+    const radial = (head: string) => () => image(`radial-gradient(${head}, red, blue)`);
+    expect(radial('circle 40px')).toThrow(
+      'ngpdf: explicit radial gradient sizes are not supported in "circle 40px" on pdf-view',
+    );
+    expect(radial('circle ellipse')).toThrow(/^ngpdf: invalid radial gradient shape/);
+    expect(radial('closest-side farthest-side')).toThrow(/^ngpdf: invalid radial gradient shape/);
+    for (const position of ['', 'top bottom', 'left right', 'middle', 'left 10 top 5', '10 left']) {
+      expect(radial(`at ${position}`)).toThrow(/^ngpdf: invalid gradient position/);
+    }
+  });
+
+  it('names the unsupported images and several backgrounds', () => {
+    for (const name of [
+      'repeating-linear-gradient',
+      'repeating-radial-gradient',
+      'conic-gradient',
+      'Repeating-Conic-Gradient',
+      'url',
+    ]) {
+      expect(() => image(`${name}(red, blue)`)).toThrow(
+        `ngpdf: ${name.toLowerCase()}() is not supported on pdf-view`,
+      );
+    }
+    expect(() => image('linear-gradient(red, blue), radial-gradient(red, blue)')).toThrow(
+      'ngpdf: several backgrounds are not supported on pdf-view',
+    );
+    for (const bad of ['red', 'linear-gradient(red, blue', 'linear-gradient(red, blue) x', 'x(']) {
+      expect(() => image(bad)).toThrow(`ngpdf: invalid value "${bad}" for background-image`);
+    }
+  });
+
+  it('takes a color, a gradient, or both from the background shorthand', () => {
+    const gradient = { kind: 'linear', direction: { angle: 180 }, stops: [stop(RED), stop(BLUE)] };
+    expect(styleOf({ background: 'navy' })).toMatchObject({
+      backgroundColor: rgb(0, 0, 128),
+      backgroundImage: null,
+    });
+    expect(styleOf({ background: 'linear-gradient(red, blue)' })).toMatchObject({
+      backgroundColor: null,
+      backgroundImage: gradient,
+    });
+    expect(styleOf({ background: 'LINEAR-GRADIENT(red, blue) rgb(0, 0, 128)' })).toMatchObject({
+      backgroundColor: rgb(0, 0, 128),
+      backgroundImage: { ...gradient },
+    });
+    expect(styleOf({ background: 'none' }).backgroundImage).toBeNull();
+    // The shorthand resets what it leaves out; a later longhand wins.
+    const style = styleOf({ 'background-color': 'red', background: 'linear-gradient(red, blue)' });
+    expect(style.backgroundColor).toBeNull();
+    expect(
+      styleOf({ background: 'red', 'background-image': 'linear-gradient(red, blue)' }),
+    ).toMatchObject({ backgroundColor: RED, backgroundImage: gradient });
+  });
+
+  it('rejects anything else in the background shorthand', () => {
+    const background = (value: string) => () => styleOf({ background: value });
+    expect(background('red blue')).toThrow('ngpdf: invalid value "red blue" for background');
+    expect(background('red no-repeat')).toThrow(
+      'ngpdf: invalid value "red no-repeat" for background',
+    );
+    expect(background('')).toThrow('ngpdf: invalid value "" for background');
+    expect(background('linear-gradient(red, blue) linear-gradient(red, blue)')).toThrow(
+      /^ngpdf: invalid value .* for background/,
+    );
+    expect(background('url(a.png)')).toThrow('ngpdf: url() is not supported on pdf-view');
+    expect(background('fancy-gradient(red, blue)')).toThrow(
+      'ngpdf: invalid value "fancy-gradient(red, blue)" for background',
+    );
+    expect(() => image('rgb(1, 2, 3)')).toThrow(
+      'ngpdf: invalid value "rgb(1, 2, 3)" for background-image',
+    );
+    expect(background('red, blue')).toThrow('ngpdf: several backgrounds are not supported');
+  });
+
+  it('is not inherited', () => {
+    const child = el('pdf-text');
+    const parent = el('pdf-view', { 'background-image': 'linear-gradient(red, blue)' }, [child]);
+    const styles = resolveStyles(el('pdf-document', {}, [parent]));
+    expect(styles.get(parent)?.backgroundImage).not.toBeNull();
+    expect(styles.get(child)?.backgroundImage).toBeNull();
+  });
+});

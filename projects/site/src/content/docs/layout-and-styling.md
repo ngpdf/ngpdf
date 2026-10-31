@@ -102,7 +102,8 @@ Anything else, such as `hsl()`, `currentColor` or `var(--brand)`, throws `ngpdf:
 
 ## Backgrounds, borders and radius
 
-- `background-color` fills the element's border box. There are no background images or gradients.
+- `background-color` fills the element's border box.
+- `background-image` takes one `linear-gradient()` or `radial-gradient()`, or `none`. The gradient fills the border box over the background color, follows `border-radius`, and is not inherited. `background` is a shorthand for a color, a gradient, or one of each: `background: linear-gradient(to right, #dd0031, #c3002f) #dd0031`.
 - `border: <width> <style> <color>`, in any order, with every part optional. The width defaults to 1 and the color to black. `none` and `hidden` remove the border.
 - Per side: `border-top`, `border-right`, `border-bottom`, `border-left`, and `border-<side>-width`, `border-<side>-color`. `border-width` and `border-color` take one to four values.
 - Only solid lines are drawn. `dashed`, `dotted`, `double`, `groove`, `ridge`, `inset` and `outset` are drawn solid, with a dev-mode warning. `border-style` on its own is ignored.
@@ -130,6 +131,30 @@ By default, content that does not fit its box is drawn outside it. `overflow: hi
 - The layout does not change: sizes and positions are the same with or without clipping.
 - A column `pdf-view` or a `pdf-text` with `overflow: hidden`, `clip`, `scroll` or `auto` is one [pagination unit](/docs/pagination#units), so it is never split across sheets. One taller than a sheet is cut at the bottom, with a dev-mode warning, and the rest is not drawn.
 - `overflow` is not inherited, and is ignored on a `pdf-page` (a page is not a box to clip) and on a `pdf-table`, which keeps breaking between its rows.
+
+## Gradients
+
+`linear-gradient()` takes an optional direction, then two or more color stops:
+
+- the direction is an angle in `deg`, `rad` or `turn` (`0deg` points up, `90deg` right), or `to` with a side or a corner: `to right`, `to top left`. The default is `to bottom`. The gradient line is as long as CSS makes it, so `45deg` and `to top right` reach the corners;
+- a stop is a color with an optional position in `%` of the gradient line or a length: `#dd0031 20%`, `white 40pt`. Stops without a position are spread evenly between their neighbours, and a position smaller than an earlier one is raised to it, as in CSS. Two stops at one position make a hard edge.
+
+`radial-gradient()` takes an optional shape, size and center, then the stops:
+
+- the shape is `circle` or `ellipse` (the default);
+- the size is `closest-side`, `closest-corner`, `farthest-side` or `farthest-corner` (the default);
+- the center is `at` one or two values, keywords (`left`, `center`, `right`, `top`, `bottom`), lengths or percentages of the box. The default is `at center`;
+- stop positions are measured along the horizontal radius.
+
+```html
+<pdf-view style="padding: 12; background: radial-gradient(circle at top left, #ffffff55, transparent 60%) #1f2a44">
+  <pdf-text style="color: white">Quarterly report</pdf-text>
+</pdf-view>
+```
+
+A stop's alpha and the element's `opacity` multiply into the stop's opacity. A transparent stop takes the color of its neighbours, so `linear-gradient(red, transparent)` fades the red out instead of darkening it. A view split across pages keeps one gradient for its whole height: each sheet shows its part, like `box-decoration-break: slice`.
+
+These throw an `ngpdf:` error: `repeating-linear-gradient()`, `repeating-radial-gradient()`, `conic-gradient()`, `url()`, several comma-separated backgrounds, explicit radial sizes such as `circle 40px`, color hints (`red, 30%, blue`) and stops with two positions.
 
 ## Opacity
 
