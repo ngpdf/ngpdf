@@ -116,6 +116,29 @@ Anything else, such as `hsl()`, `currentColor` or `var(--brand)`, throws `ngpdf:
 
 `opacity` is a number from 0 to 1 (values outside are clamped). It multiplies down the tree: a child of a view with `opacity: 0.5` is drawn at half its own opacity. Each child is faded on its own, not composited as one group, so overlapping children show through each other.
 
+## Transforms
+
+`transform` rotates, scales and moves an element when it is drawn, as in CSS:
+
+```html
+<pdf-view
+  style="transform: rotate(-12deg); align-self: flex-end; padding: 6 12; border: 2 solid #c62828; border-radius: 4"
+>
+  <pdf-text style="color: #c62828; font-size: 18; font-weight: bold">PAID</pdf-text>
+</pdf-view>
+```
+
+- The functions are `rotate()`, `scale()`, `scaleX()`, `scaleY()`, `translate()`, `translateX()` and `translateY()`, applied left to right. Function names are matched in any case.
+- Angles take `deg`, `rad` or `turn`. A positive angle turns clockwise.
+- `scale(2)` scales both axes and `scale(2, 0.5)` each one. Translations take lengths, or a percentage of the element's own border box.
+- `transform-origin` takes one or two values: `left`, `center`, `right`, `top`, `bottom`, lengths or percentages of the border box. It defaults to `center`.
+- The whole element is transformed: its background, border, children, text and image.
+- The layout does not change: sizes and positions are the same with or without a transform, and nothing around the element moves.
+- A transformed element can be drawn outside its box, past the page margins or off the sheet. Nothing clips it.
+- A column `pdf-view` with a transform is one [pagination unit](/docs/pagination#units), and a transformed `pdf-text` stays whole on one sheet, so a rotated box is never cut across sheets.
+- Neither property is inherited. `transform` is ignored on a `pdf-page` and on a `pdf-table`, which keeps breaking between its rows; its value is still checked.
+- `skew()`, `matrix()` and the 3D functions throw, like any unknown function.
+
 ## Inheritance
 
 Text styles are inherited from parent to child: `color`, `font-family`, `font-size`, `font-weight`, `font-style`, `line-height`, `text-align`, `text-decoration`, `letter-spacing` and `text-transform`. Set them on a `pdf-page`, a `pdf-view` or a `pdf-cell` and every text inside follows. No other property is inherited.

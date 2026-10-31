@@ -286,6 +286,62 @@ describe('paginatePage: break-inside: avoid on wrappers', () => {
   });
 });
 
+describe('paginatePage: transform', () => {
+  const AREA = CONTENT_BOTTOM - CONTENT_TOP;
+  const block = (): PdfNode => el('pdf-view', { height: '20' });
+  const nodesOn = (pages: PageLayout[]): PdfNode[][] =>
+    pages.map((laid) => laid.placed.map((p) => p.box.node));
+
+  it('places a transformed column view as one unit, moved whole to the next page', () => {
+    const first = el('pdf-view', { height: String(AREA - 30) });
+    const stamp = el('pdf-view', { transform: 'rotate(-10deg)', 'background-color': '#eee' }, [
+      block(),
+      block(),
+      block(),
+    ]);
+    const pages = paginate(page([first, stamp]));
+    expect(nodesOn(pages)).toEqual([[first], [stamp]]);
+    expect(pages[1]!.placed[0]!.y).toBeCloseTo(CONTENT_TOP, 6);
+    // Its background is drawn with the unit, not sliced as a wrapper's.
+    expect(pages.flatMap((laid) => laid.decorations)).toEqual([]);
+  });
+
+  it('cuts a transformed view taller than a page at the bottom, with a warning', () => {
+    const warn = vi.fn<(message: string) => void>();
+    const stamp = el('pdf-view', { transform: 'scale(0.5)' }, Array.from({ length: 50 }, block));
+    const pages = paginate(page([stamp, pageNumber()]), warn);
+    expect(nodesOn(pages)).toEqual([[stamp]]);
+    expect(pages[0]!.placed[0]!.clipBottom).toBeCloseTo(CONTENT_BOTTOM, 6);
+    expect(warn).toHaveBeenCalledWith(
+      'ngpdf: pdf-view is taller than a page and is cut at the bottom',
+    );
+  });
+
+  it('keeps a transformed pdf-text whole, as with break-inside: avoid', () => {
+    const words = Array.from({ length: 10 }, (_, i) => `w${String(i)}`).join(' ');
+    const paragraph = el('pdf-text', {
+      width: '25',
+      'font-size': '10',
+      'line-height': '1',
+      transform: 'rotate(5deg)',
+    });
+    const run = createNode('text', '', words);
+    run.parent = paragraph;
+    paragraph.children.push(run);
+    const first = el('pdf-view', { height: String(AREA - 35) });
+    const pages = paginate(page([first, paragraph]));
+    expect(nodesOn(pages)).toEqual([[first], [paragraph]]);
+    expect(pages[1]!.placed[0]!.box.text?.lines).toHaveLength(10);
+  });
+
+  it('keeps breaking a table with a transform between its rows', () => {
+    const tableNode = table(60, false, { transform: 'rotate(90deg)' });
+    const pages = paginate(page([tableNode]));
+    expect(pages).toHaveLength(2);
+    expect(nodesOn(pages).flat()).toEqual(tableNode.children);
+  });
+});
+
 describe('paginatePage: page breaks', () => {
   it('starts a new page at breakBefore', () => {
     const first = el('pdf-view', { height: '20' });

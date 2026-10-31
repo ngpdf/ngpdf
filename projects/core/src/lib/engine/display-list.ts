@@ -4,9 +4,9 @@ import { graphemeCount } from './graphemes';
 import { fitImage } from './images';
 import { pageNumberFormat, type Box } from './layout';
 import type { PageLayout, PlacedBox } from './paginate';
-import type { Corners, ResolvedStyle } from './style';
+import type { Corners, Offset, ResolvedStyle, TransformFunction } from './style';
 import { wordGaps, type TextLine } from './text';
-import type { DrawOp, FontMetrics, PathSegment, Point } from './writer';
+import type { DrawOp, FontMetrics, Matrix, PathSegment, Point } from './writer';
 
 export interface DisplayListOptions {
   /** Measures the page number text. */
@@ -57,6 +57,10 @@ function drawBox(
   const { style } = box;
   // Opacity multiplies down the tree, so a faded view fades what it holds.
   const opacity = inherited * style.opacity;
+  const transformed = style.transform.length > 0;
+  const firstOp = out.length;
+  if (transformed)
+    out.push({ op: 'transform', matrix: transformMatrix(style, x, y, box.w, box.h) });
 
   const bottomEdge = Math.min(y + box.h, limit);
   // The edges cut by a page break or by the limit keep square corners.
@@ -183,6 +187,56 @@ function drawBox(
       });
     }
   }
+
+  if (transformed) {
+    // A box that drew nothing needs no transform.
+    if (out.length === firstOp + 1) out.pop();
+    else out.push({ op: 'untransform' });
+  }
+}
+
+function offsetIn(offset: Offset, size: number): number {
+  return typeof offset === 'number' ? offset : (offset.percent / 100) * size;
+}
+
+/** `m · n`: n is applied first. */
+function multiply(m: Matrix, n: Matrix): Matrix {
+  const [a, b, c, d, e, f] = m;
+  const [a2, b2, c2, d2, e2, f2] = n;
+  return [
+    a * a2 + c * b2,
+    b * a2 + d * b2,
+    a * c2 + c * d2,
+    b * c2 + d * d2,
+    a * e2 + c * f2 + e,
+    b * e2 + d * f2 + f,
+  ];
+}
+
+function functionMatrix(fn: TransformFunction, w: number, h: number): Matrix {
+  switch (fn.kind) {
+    case 'rotate': {
+      const cos = Math.cos(fn.angle);
+      const sin = Math.sin(fn.angle);
+      return [cos, sin, -sin, cos, 0, 0];
+    }
+    case 'scale':
+      return [fn.x, 0, 0, fn.y, 0, 0];
+    case 'translate':
+      return [1, 0, 0, 1, offsetIn(fn.x, w), offsetIn(fn.y, h)];
+  }
+}
+
+/**
+ * The box's `transform` as one page-space matrix: the functions left to right, around the origin.
+ * With y pointing down, the CSS matrices apply as they are, so a positive angle turns clockwise.
+ */
+function transformMatrix(style: ResolvedStyle, x: number, y: number, w: number, h: number): Matrix {
+  const ox = x + offsetIn(style.transformOrigin.x, w);
+  const oy = y + offsetIn(style.transformOrigin.y, h);
+  let matrix: Matrix = [1, 0, 0, 1, ox, oy];
+  for (const fn of style.transform) matrix = multiply(matrix, functionMatrix(fn, w, h));
+  return multiply(matrix, [1, 0, 0, 1, -ox, -oy]);
 }
 
 /**
@@ -407,7 +461,8 @@ function drawPageNumber(
 
 /**
  * The draw operations of one page, in paint order: decorations, then the placed units, then the
- * page number. Within a box: background, borders, children, then its own text and image.
+ * page number. Within a box: background, borders, children, then its own text and image, all
+ * between a `transform` and an `untransform` op when the box has a `transform`.
  */
 export function displayList(
   page: PageLayout,

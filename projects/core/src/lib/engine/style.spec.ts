@@ -549,6 +549,144 @@ describe('resolveStyles property coverage', () => {
     expect(warn).not.toHaveBeenCalled();
   });
 
+  describe('transform', () => {
+    const DEG = Math.PI / 180;
+
+    it('is none with a centered origin by default, and not inherited', () => {
+      expect(styleOf({})).toMatchObject({
+        transform: [],
+        transformOrigin: { x: { percent: 50 }, y: { percent: 50 } },
+      });
+      const text = el('pdf-text');
+      const view = el('pdf-view', { transform: 'rotate(10deg)', 'transform-origin': 'left' }, [
+        text,
+      ]);
+      expect(resolveStyles(view).get(text)).toMatchObject({
+        transform: [],
+        transformOrigin: { x: { percent: 50 }, y: { percent: 50 } },
+      });
+      expect(styleOf({ transform: 'NONE' }).transform).toEqual([]);
+    });
+
+    it('reads rotate in deg, rad and turn, and a bare 0', () => {
+      const angle = (value: string) => {
+        const [first] = styleOf({ transform: `rotate(${value})` }).transform;
+        if (first?.kind !== 'rotate') throw new Error('expected a rotation');
+        return first.angle;
+      };
+      expect(angle('90deg')).toBeCloseTo(90 * DEG, 12);
+      expect(angle('-1.5rad')).toBe(-1.5);
+      expect(angle('0.25turn')).toBeCloseTo(Math.PI / 2, 12);
+      expect(angle('45DEG')).toBeCloseTo(45 * DEG, 12);
+      expect(angle('0')).toBe(0);
+    });
+
+    it('reads scale, scaleX and scaleY', () => {
+      expect(styleOf({ transform: 'scale(2)' }).transform).toEqual([{ kind: 'scale', x: 2, y: 2 }]);
+      expect(styleOf({ transform: 'scale(2, -0.5)' }).transform).toEqual([
+        { kind: 'scale', x: 2, y: -0.5 },
+      ]);
+      expect(styleOf({ transform: 'scaleX(3) scaleY(.5)' }).transform).toEqual([
+        { kind: 'scale', x: 3, y: 1 },
+        { kind: 'scale', x: 1, y: 0.5 },
+      ]);
+    });
+
+    it('reads translate, translateX and translateY in lengths and percentages', () => {
+      expect(styleOf({ transform: 'translate(10pt)' }).transform).toEqual([
+        { kind: 'translate', x: 10, y: 0 },
+      ]);
+      expect(styleOf({ transform: 'translate(1in,50%)' }).transform).toEqual([
+        { kind: 'translate', x: 72, y: { percent: 50 } },
+      ]);
+      expect(styleOf({ transform: 'translateX(-25%) translateY(4px)' }).transform).toEqual([
+        { kind: 'translate', x: { percent: -25 }, y: 0 },
+        { kind: 'translate', x: 0, y: 4 },
+      ]);
+    });
+
+    it('keeps the functions in order, in any case, with or without spaces between', () => {
+      expect(
+        styleOf({ transform: ' TRANSLATE( 5 , 6 )Rotate(1rad)  scale(2) ' }).transform,
+      ).toEqual([
+        { kind: 'translate', x: 5, y: 6 },
+        { kind: 'rotate', angle: 1 },
+        { kind: 'scale', x: 2, y: 2 },
+      ]);
+    });
+
+    it.each([
+      ['skew(10deg)', 'unknown transform function "skew" in "skew(10deg)"'],
+      ['matrix(1, 0, 0, 1, 0, 0)', 'unknown transform function "matrix"'],
+      ['rotate3d(1, 0, 0, 45deg)', 'unknown transform function "rotate3d"'],
+      ['translateZ(4pt)', 'unknown transform function "translateZ"'],
+      ['rotate(45)', 'invalid angle "45" in "rotate(45)"'],
+      ['rotate(45grad)', 'invalid angle "45grad"'],
+      ['rotate(1deg, 2deg)', 'expected 1 value in "rotate(1deg, 2deg)"'],
+      ['scale()', 'expected 1 or 2 values in "scale()"'],
+      ['scale(1, 2, 3)', 'expected 1 or 2 values'],
+      ['scaleX(1, 2)', 'expected 1 value'],
+      ['scale(50%)', 'invalid number "50%" in "scale(50%)"'],
+      ['translate(auto)', 'expected a length in "auto"'],
+      ['translate(3em)', 'unknown unit in "3em"'],
+      ['translate(1,)', 'invalid length ""'],
+      ['rotate(10deg', 'invalid transform "rotate(10deg"'],
+      ['rotate(calc(10deg))', 'invalid'],
+      ['10deg', 'invalid transform "10deg"'],
+      ['', 'invalid transform ""'],
+    ])('rejects transform "%s"', (value, message) => {
+      expect(() => styleOf({ transform: value })).toThrow(`ngpdf: ${message}`);
+    });
+
+    it.each([
+      ['left', { x: { percent: 0 }, y: { percent: 50 } }],
+      ['RIGHT', { x: { percent: 100 }, y: { percent: 50 } }],
+      ['top', { x: { percent: 50 }, y: { percent: 0 } }],
+      ['bottom', { x: { percent: 50 }, y: { percent: 100 } }],
+      ['center', { x: { percent: 50 }, y: { percent: 50 } }],
+      ['10pt', { x: 10, y: { percent: 50 } }],
+      ['left top', { x: { percent: 0 }, y: { percent: 0 } }],
+      ['top left', { x: { percent: 0 }, y: { percent: 0 } }],
+      ['bottom Right', { x: { percent: 100 }, y: { percent: 100 } }],
+      ['center top', { x: { percent: 50 }, y: { percent: 0 } }],
+      ['top center', { x: { percent: 50 }, y: { percent: 0 } }],
+      ['25% 1in', { x: { percent: 25 }, y: 72 }],
+      ['right -4', { x: { percent: 100 }, y: -4 }],
+      ['5 bottom', { x: 5, y: { percent: 100 } }],
+    ])('reads transform-origin "%s"', (value, expected) => {
+      expect(styleOf({ 'transform-origin': value }).transformOrigin).toEqual(expected);
+    });
+
+    it.each([
+      ['top 10pt', 'invalid value "top 10pt" for transform-origin'],
+      ['10pt left', 'invalid value "10pt left" for transform-origin'],
+      ['left right', 'invalid value "left right" for transform-origin'],
+      ['top bottom', 'invalid value "top bottom" for transform-origin'],
+      ['left top 4pt', 'expected 1 or 2 values in "left top 4pt"'],
+      ['', 'expected 1 or 2 values in ""'],
+      ['middle', 'invalid length "middle"'],
+      ['auto', 'invalid value "auto" for transform-origin'],
+    ])('rejects transform-origin "%s"', (value, message) => {
+      expect(() => styleOf({ 'transform-origin': value })).toThrow(`ngpdf: ${message}`);
+    });
+
+    it('ignores transform on a pdf-page and a pdf-table but still checks the value', () => {
+      for (const tag of ['pdf-page', 'pdf-table']) {
+        expect(styleOf({ transform: 'rotate(10deg)' }, tag).transform).toEqual([]);
+        expect(() => styleOf({ transform: 'skew(10deg)' }, tag)).toThrow(
+          `ngpdf: unknown transform function "skew" in "skew(10deg)" on ${tag}`,
+        );
+      }
+    });
+
+    it('warns that transform has no effect on a pdf-span', () => {
+      const warn = vi.fn();
+      const span = el('pdf-span', { transform: 'rotate(10deg)' });
+      resolveStyles(el('pdf-document', {}, [el('pdf-text', {}, [span])]), warn);
+      expect(warn).toHaveBeenCalledWith('ngpdf: transform has no effect on pdf-span');
+    });
+  });
+
   it('clamps opacity to 0..1', () => {
     expect(styleOf({ opacity: '0.4' }).opacity).toBe(0.4);
     expect(styleOf({ opacity: '3' }).opacity).toBe(1);

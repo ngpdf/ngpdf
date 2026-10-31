@@ -1,12 +1,21 @@
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
-import { parseBorder, parseEdges, parseFlex, parseLength } from './style';
+import {
+  parseBorder,
+  parseEdges,
+  parseFlex,
+  parseLength,
+  parseTransform,
+  parseTransformOrigin,
+} from './style';
 
 const parsers: Record<string, (value: string) => unknown> = {
   parseLength,
   parseEdges,
   parseBorder,
   parseFlex,
+  parseTransform,
+  parseTransformOrigin,
 };
 
 function returnsOrThrowsNgpdf(parse: (value: string) => unknown, input: string): boolean {
@@ -35,7 +44,15 @@ const cssish = fc.oneof(
         'solid',
         '#fff',
         '(',
+        ')',
+        ',',
         'e',
+        'deg',
+        'rotate(',
+        'scale(',
+        'translate(',
+        'left',
+        'top',
       ),
       {
         maxLength: 12,
@@ -58,6 +75,9 @@ describe('style parsers (property)', () => {
         '1 '.repeat(5e4),
         '1.'.repeat(5e4),
         '-'.repeat(1e5),
+        'rotate('.repeat(1e4),
+        'scale(1)'.repeat(1e4),
+        'translate(1,'.repeat(1e4),
       ];
       for (const input of inputs) {
         let best = Infinity;

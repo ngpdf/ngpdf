@@ -12,6 +12,16 @@ export interface Edges<T> {
   readonly left: T;
 }
 
+/** A length in points, or a percentage of the element's own border box. */
+export type Offset = number | { readonly percent: number };
+
+/** One function of a `transform` list. */
+export type TransformFunction =
+  /** Radians; a positive angle turns clockwise, as in CSS. */
+  | { readonly kind: 'rotate'; readonly angle: number }
+  | { readonly kind: 'scale'; readonly x: number; readonly y: number }
+  | { readonly kind: 'translate'; readonly x: Offset; readonly y: Offset };
+
 export interface Corners<T> {
   readonly topLeft: T;
   readonly topRight: T;
@@ -66,6 +76,9 @@ export interface ResolvedStyle extends TextStyle {
   readonly backgroundColor: Color | null;
   readonly opacity: number;
   readonly objectFit: 'contain' | 'cover';
+  /** Applied left to right when drawn; empty for `none`. Layout never reads it. */
+  readonly transform: readonly TransformFunction[];
+  readonly transformOrigin: { readonly x: Offset; readonly y: Offset };
   readonly breakBefore: boolean;
   readonly breakAfter: boolean;
   readonly breakInside: 'auto' | 'avoid';
@@ -332,6 +345,154 @@ export function parseFlex(value: string, tag?: string): FlexParts {
   return { grow, shrink, basis: parseLength(third ?? '', tag) };
 }
 
+const DEG = Math.PI / 180;
+const ANGLE_UNITS = new Map<string, number>([
+  ['deg', DEG],
+  ['rad', 1],
+  ['turn', 2 * Math.PI],
+]);
+
+/** Radians from `deg`, `rad` or `turn`; a bare 0 is allowed, as in CSS. */
+function parseAngle(token: string, fn: string, tag?: string): number {
+  const end = scanNumber(token);
+  const amount = Number(token.slice(0, end));
+  const factor =
+    end > 0 && Number.isFinite(amount)
+      ? ANGLE_UNITS.get(token.slice(end).toLowerCase())
+      : undefined;
+  if (factor !== undefined) return amount * factor;
+  if (parseNumber(token) === 0) return 0;
+  return fail(`invalid angle "${show(token)}" in "${show(fn)}"`, tag);
+}
+
+function parseScale(token: string, fn: string, tag?: string): number {
+  const number = parseNumber(token);
+  if (number === null) return fail(`invalid number "${show(token)}" in "${show(fn)}"`, tag);
+  return number;
+}
+
+function parseOffset(token: string, tag?: string): Offset {
+  const length = parseLength(token, tag);
+  if (length === 'auto') return fail(`expected a length in "${show(token)}"`, tag);
+  return length;
+}
+
+/** One transform function from its name (any case) and its comma-separated arguments. */
+function transformFunction(
+  name: string,
+  args: string[],
+  fn: string,
+  tag?: string,
+): TransformFunction {
+  const arity = (min: number, max: number): void => {
+    if (args.length < min || args.length > max) {
+      const count = min === max ? '1 value' : '1 or 2 values';
+      fail(`expected ${count} in "${show(fn)}"`, tag);
+    }
+  };
+  const [first = '', second] = args;
+  switch (name.toLowerCase()) {
+    case 'rotate':
+      arity(1, 1);
+      return { kind: 'rotate', angle: parseAngle(first, fn, tag) };
+    case 'scale': {
+      arity(1, 2);
+      const x = parseScale(first, fn, tag);
+      return { kind: 'scale', x, y: second === undefined ? x : parseScale(second, fn, tag) };
+    }
+    case 'scalex':
+      arity(1, 1);
+      return { kind: 'scale', x: parseScale(first, fn, tag), y: 1 };
+    case 'scaley':
+      arity(1, 1);
+      return { kind: 'scale', x: 1, y: parseScale(first, fn, tag) };
+    case 'translate':
+      arity(1, 2);
+      return {
+        kind: 'translate',
+        x: parseOffset(first, tag),
+        y: second === undefined ? 0 : parseOffset(second, tag),
+      };
+    case 'translatex':
+      arity(1, 1);
+      return { kind: 'translate', x: parseOffset(first, tag), y: 0 };
+    case 'translatey':
+      arity(1, 1);
+      return { kind: 'translate', x: 0, y: parseOffset(first, tag) };
+    default:
+      return fail(`unknown transform function "${show(name)}" in "${show(fn)}"`, tag);
+  }
+}
+
+/**
+ * `none` or a list of `name(args)` functions. Each step looks for the next `(` and `)` from where
+ * the last function ended, so the scan is linear; a nested `(` lands in an argument and fails.
+ */
+export function parseTransform(value: string, tag?: string): readonly TransformFunction[] {
+  const text = value.trim();
+  if (text.toLowerCase() === 'none') return [];
+  const functions: TransformFunction[] = [];
+  let start = 0;
+  while (start < text.length) {
+    const open = text.indexOf('(', start);
+    const close = open < 0 ? -1 : text.indexOf(')', open);
+    if (close < 0) return fail(`invalid transform "${show(value)}"`, tag);
+    const fn = text.slice(start, close + 1);
+    const inside = text.slice(open + 1, close).trim();
+    const args = inside === '' ? [] : inside.split(',').map((arg) => arg.trim());
+    functions.push(transformFunction(text.slice(start, open), args, fn, tag));
+    start = close + 1;
+    while (isSpace(text.charCodeAt(start))) start++;
+  }
+  if (functions.length === 0) return fail(`invalid transform "${show(value)}"`, tag);
+  return functions;
+}
+
+const CENTER_ORIGIN = Object.freeze({ x: { percent: 50 }, y: { percent: 50 } });
+const X_KEYWORDS = new Map<string, Offset>([
+  ['left', { percent: 0 }],
+  ['center', { percent: 50 }],
+  ['right', { percent: 100 }],
+]);
+const Y_KEYWORDS = new Map<string, Offset>([
+  ['top', { percent: 0 }],
+  ['center', { percent: 50 }],
+  ['bottom', { percent: 100 }],
+]);
+
+/**
+ * `transform-origin`: one or two of `left`, `center`, `right`, `top`, `bottom`, a length or a
+ * percentage of the border box. Two keywords may come in either order (`top left`).
+ */
+export function parseTransformOrigin(
+  value: string,
+  tag?: string,
+): { readonly x: Offset; readonly y: Offset } {
+  const tokens = tokenize(value).map((token) => token.toLowerCase());
+  const [a = '', b] = tokens;
+  if (tokens.length < 1 || tokens.length > 2) {
+    return fail(`expected 1 or 2 values in "${show(value)}"`, tag);
+  }
+  const invalid = (): never => fail(`invalid value "${show(value)}" for transform-origin`, tag);
+  const offsetOf = (token: string, keywords: ReadonlyMap<string, Offset>): Offset => {
+    const keyword = keywords.get(token);
+    if (keyword) return keyword;
+    if (X_KEYWORDS.has(token) || Y_KEYWORDS.has(token)) return invalid();
+    const length = parseLength(token, tag);
+    return length === 'auto' ? invalid() : length;
+  };
+  if (b === undefined) {
+    if (Y_KEYWORDS.has(a) && a !== 'center')
+      return { x: CENTER_ORIGIN.x, y: offsetOf(a, Y_KEYWORDS) };
+    return { x: offsetOf(a, X_KEYWORDS), y: CENTER_ORIGIN.y };
+  }
+  const keywords =
+    (X_KEYWORDS.has(a) || Y_KEYWORDS.has(a)) && (X_KEYWORDS.has(b) || Y_KEYWORDS.has(b));
+  const swap = keywords && (a === 'top' || a === 'bottom' || b === 'left' || b === 'right');
+  const [x, y] = swap ? [b, a] : [a, b];
+  return { x: offsetOf(x, X_KEYWORDS), y: offsetOf(y, Y_KEYWORDS) };
+}
+
 type Mutable<T> = { -readonly [K in keyof T]: T[K] };
 type Side = 'top' | 'right' | 'bottom' | 'left';
 
@@ -394,6 +555,8 @@ function defaultStyle(node: PdfNode, inherited: TextStyle): Mutable<ResolvedStyl
     backgroundColor: null,
     opacity: 1,
     objectFit: 'contain',
+    transform: [],
+    transformOrigin: CENTER_ORIGIN,
     breakBefore: propsOf(node)['breakBefore'] === true,
     breakAfter: propsOf(node)['breakAfter'] === true,
     breakInside: 'auto',
@@ -578,6 +741,15 @@ function apply(
       break;
     case 'object-fit':
       style.objectFit = oneOf(value, ['contain', 'cover'], property, tag);
+      break;
+    case 'transform': {
+      const functions = parseTransform(value, tag);
+      // A page is not a box to transform, and a table paginates by rows.
+      if (tag !== 'pdf-page' && tag !== 'pdf-table') style.transform = functions;
+      break;
+    }
+    case 'transform-origin':
+      style.transformOrigin = parseTransformOrigin(value, tag);
       break;
     case 'break-before':
       style.breakBefore = style.breakBefore || keywordOf(value) === 'page';
