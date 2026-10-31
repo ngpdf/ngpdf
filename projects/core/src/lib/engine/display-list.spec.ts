@@ -1014,7 +1014,8 @@ describe('gradient backgrounds', () => {
     // Stops at 20, 35, 50, 50 and 80 of a 100 point line: the shading runs from y 56 to y 116.
     expectPoints(gradient, { x1: 86, y1: 56, x2: 86, y2: 116 });
     const offsets = gradient.stops.map((stop) => Math.round(stop.offset * 1e9) / 1e9);
-    expect(offsets).toEqual([0, 0.25, 0.5, 0.5, 1]);
+    // The repeated 50 is nudged up, as PDF needs strictly increasing offsets.
+    expect(offsets).toEqual([0, 0.25, 0.5, 0.50001, 1]);
     expect(gradient.stops.map((stop) => stop.color)).toEqual([
       '#ff0000',
       '#00ff00',
@@ -1030,13 +1031,13 @@ describe('gradient backgrounds', () => {
     expect(gradient.stops).toEqual([
       { offset: 0, ...RED },
       { offset: 0.5, ...RED },
-      { offset: 0.5, ...BLUE },
+      { offset: 0.50001, ...BLUE },
       { offset: 1, ...BLUE },
     ]);
     // A radial gradient has nothing before its center to pad.
     const ring = radial({ 'background-image': 'radial-gradient(red 0, blue 0, lime)' });
     expect(ring.r1).toBe(0);
-    expect(ring.stops.map((stop) => stop.offset)).toEqual([0, 0, 1]);
+    expect(ring.stops.map((stop) => stop.offset)).toEqual([0, 0.00001, 1]);
   });
 
   it('multiplies stop alpha and element opacity into each stop opacity', () => {
@@ -1056,7 +1057,7 @@ describe('gradient backgrounds', () => {
       [
         { offset: 0, ...RED },
         { offset: 0.5, color: '#ff0000', opacity: 0 },
-        { offset: 0.5, color: '#0000ff', opacity: 0 },
+        { offset: 0.50001, color: '#0000ff', opacity: 0 },
         { offset: 1, ...BLUE },
       ],
     );
@@ -1136,6 +1137,57 @@ describe('gradient backgrounds', () => {
       'background-image': 'radial-gradient(circle closest-side, transparent -10px, blue 10px)',
     });
     expect(faded.stops[0]).toEqual({ offset: 0, color: '#0000ff', opacity: 0.5 });
+  });
+
+  it('sends strictly increasing offsets, as PDF stitching functions require', () => {
+    const offsets = (image: string) => {
+      const { gradient } = rectOf({ 'background-image': image });
+      return gradient?.stops.map((stop) => stop.offset) ?? [];
+    };
+    for (const image of [
+      'linear-gradient(red, green 50%, blue 50%, white)',
+      'radial-gradient(circle closest-side, red 0, blue 0, green 10px)',
+    ]) {
+      const list = offsets(image);
+      expect(list[0]).toBe(0);
+      expect(list.at(-1)).toBe(1);
+      for (let i = 1; i < list.length; i++) expect(list[i]!).toBeGreaterThan(list[i - 1]!);
+    }
+  });
+
+  it('paints a split text gradient once per sheet, over the whole text', () => {
+    const words = Array.from({ length: 100 }, (_, i) => `w${String(i)}`).join(' ');
+    const style = {
+      width: '25',
+      'font-size': '10',
+      'line-height': '1',
+      'background-image': 'linear-gradient(red, blue)',
+    };
+    const pages = layout(page([text(words, style)]));
+    expect(pages).toHaveLength(2);
+    const rects = pages.map((laid, index) => only(list(laid, index, 2), 'rect'));
+    expect(rects.map((ops) => ops.length)).toEqual([1, 1]);
+    const [first, second] = [rects[0]![0]!, rects[1]![0]!];
+    for (const rect of [first, second]) {
+      if (rect.gradient?.kind !== 'linear') throw new Error('expected a linear gradient');
+      expect(rect.gradient.y2 - rect.gradient.y1).toBeCloseTo(first.h + second.h, 6);
+    }
+  });
+
+  it('paints a page gradient once per sheet, over the page', () => {
+    const rows = [0, 1, 2].map(() => el('pdf-view', { height: '300' }));
+    const pages = layout(
+      page(rows, { padding: '36', 'background-image': 'linear-gradient(red, blue)' }),
+    );
+    expect(pages).toHaveLength(2);
+    for (const [index, laid] of pages.entries()) {
+      const rects = only(list(laid, index, 2), 'rect');
+      expect(rects).toHaveLength(1);
+      const [rect] = rects;
+      if (rect!.gradient?.kind !== 'linear') throw new Error('expected a linear gradient');
+      expect(rect!.h).toBeCloseTo(laid.height, 6);
+      expect(rect!.gradient.y2 - rect!.gradient.y1).toBeCloseTo(laid.height, 6);
+    }
   });
 
   it('keeps one gradient for the whole height of a view split across sheets', () => {

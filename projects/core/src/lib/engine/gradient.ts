@@ -124,12 +124,35 @@ function spanOf(
   const start = padded[0]?.at ?? 0;
   const end = padded[padded.length - 1]?.at ?? start;
   const length = Math.max(end - start, TINY);
-  const stops = padded.map((stop) => ({
-    offset: Math.min(1, Math.max(0, (stop.at - start) / length)),
+  const offsets = increasing(padded.map((stop) => (stop.at - start) / length));
+  const stops = padded.map((stop, i) => ({
+    offset: offsets[i] ?? 0,
     color: toHex(stop.color),
     opacity: stop.color.a * opacity,
   }));
   return { start, length, stops };
+}
+
+/** Apart enough to survive pdfkit's rounding to 1e-6, too close to see. */
+const STEP = 1e-5;
+
+/**
+ * Offsets in [0, 1], each above the one before: a PDF stitching function needs strictly
+ * increasing bounds, so a hard edge (two stops at one spot) becomes two stops STEP apart.
+ */
+function increasing(offsets: readonly number[]): number[] {
+  const out = offsets.map((offset) => Math.min(1, Math.max(0, offset)));
+  // Rounded so a nudged offset reads as 0.50001, not 0.5000100000000001.
+  const round = (offset: number) => Math.round(offset * 1e9) / 1e9;
+  for (let i = 1; i < out.length; i++) {
+    out[i] = Math.max(out[i] ?? 0, round((out[i - 1] ?? 0) + STEP));
+  }
+  // Pushed past 1 at the end: pull the tail back down from 1.
+  const last = out.length - 1;
+  if (last > 0) out[last] = 1;
+  for (let i = last - 1; i > 0; i--)
+    out[i] = Math.min(out[i] ?? 0, round((out[i + 1] ?? 1) - STEP));
+  return out;
 }
 
 function linearFill(
