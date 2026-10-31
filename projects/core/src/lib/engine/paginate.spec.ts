@@ -462,6 +462,18 @@ describe('paginatePage: break-after: avoid', () => {
     ]);
   });
 
+  it('counts the header once when joined rows start at the first body row', () => {
+    const first = el('pdf-view', { height: '30' });
+    const header = row(20, true);
+    // Header and both rows fit a page with 1pt to spare; counting the header twice would not.
+    const joinedRow = el('pdf-row', { height: String(AREA - 61), 'break-after': 'avoid' }, [
+      el('pdf-cell'),
+    ]);
+    const last = row(40);
+    const table = el('pdf-table', {}, [header, joinedRow, last], { columns: ['1fr'] });
+    expect(nodesOn(paginate(page([first, table])))).toEqual([[first], [header, joinedRow, last]]);
+  });
+
   it('moves a chain of units joined by avoid with the first unit after them', () => {
     const first = filler(45);
     const [h1, h2, body] = [block(20, avoid), block(20, avoid), block()];
