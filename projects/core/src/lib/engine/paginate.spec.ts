@@ -385,6 +385,172 @@ describe('paginatePage: overflow: hidden', () => {
   });
 });
 
+describe('paginatePage: break-after: avoid', () => {
+  // Without a page number, the content area is the page height less the padding.
+  const AREA = A4_HEIGHT - 2 * PADDING;
+  const filler = (room: number): PdfNode => el('pdf-view', { height: String(AREA - room) });
+  const block = (height = 20, style: Record<string, string> = {}): PdfNode =>
+    el('pdf-view', { height: String(height), ...style });
+  const avoid = { 'break-after': 'avoid' };
+  const nodesOn = (pages: PageLayout[]): PdfNode[][] =>
+    pages.map((laid) => laid.placed.map((p) => p.box.node));
+
+  /** A text of `lines` lines, one word per line, each 10pt high. */
+  function paragraph(lines: number, style: Record<string, string> = {}): PdfNode {
+    const words = Array.from({ length: lines }, (_, i) => `w${String(i)}`).join(' ');
+    const node = el('pdf-text', { width: '25', 'font-size': '10', 'line-height': '1', ...style });
+    const run = createNode('text', '', words);
+    run.parent = node;
+    node.children.push(run);
+    return node;
+  }
+
+  it('moves a unit to the next page with the one after it when that one does not fit', () => {
+    const first = filler(30);
+    const [heading, body] = [block(20, avoid), block()];
+    expect(nodesOn(paginate(page([first, heading, body])))).toEqual([[first], [heading, body]]);
+  });
+
+  it('leaves the unit where it is without avoid, or when the next one fits too', () => {
+    const first = filler(30);
+    const [heading, body] = [block(), block()];
+    expect(nodesOn(paginate(page([first, heading, body])))).toEqual([[first, heading], [body]]);
+    const roomy = filler(45);
+    const [kept, small] = [block(20, avoid), block()];
+    expect(nodesOn(paginate(page([roomy, kept, small])))).toEqual([[roomy, kept, small]]);
+  });
+
+  it('needs only the first line group of a split text after it to fit', () => {
+    const tight = filler(35);
+    const [heading, text] = [block(20, avoid), paragraph(10)];
+    const moved = paginate(page([tight, heading, text]));
+    expect(moved[0]!.placed.map((p) => p.box.node)).toEqual([tight]);
+    expect(moved[1]!.placed[0]!.box.node).toBe(heading);
+    const roomy = filler(45);
+    const [stays, after] = [block(20, avoid), paragraph(10)];
+    const kept = paginate(page([roomy, stays, after]));
+    // 25pt left after the heading: the first two lines.
+    expect(kept[0]!.placed.map((p) => p.box.node)).toEqual([roomy, stays, after]);
+  });
+
+  it('counts the header of a table after it', () => {
+    const tight = filler(50);
+    const [heading, rows] = [block(20, avoid), table(3)];
+    expect(paginate(page([tight, heading, rows]))[0]!.placed.map((p) => p.box.node)).toEqual([
+      tight,
+    ]);
+    const roomy = filler(65);
+    const [stays, more] = [block(20, avoid), table(3)];
+    const pages = paginate(page([roomy, stays, more]));
+    expect(pages[0]!.placed.map((p) => p.box.node).slice(0, 2)).toEqual([roomy, stays]);
+  });
+
+  it('counts the repeated header when joined rows would move to the next page', () => {
+    const header = row(20, true);
+    const first = row();
+    // Joined, the two rows fit a page only without the header that repeats above them.
+    const joinedRow = el('pdf-row', { height: String(AREA - 50), 'break-after': 'avoid' }, [
+      el('pdf-cell'),
+    ]);
+    const last = row(40);
+    const root = page([
+      el('pdf-table', {}, [header, first, joinedRow, last], { columns: ['1fr'] }),
+    ]);
+    expect(nodesOn(paginate(root))).toEqual([
+      [header, first, joinedRow],
+      [header, last],
+    ]);
+  });
+
+  it('counts the header once when joined rows start at the first body row', () => {
+    const first = el('pdf-view', { height: '30' });
+    const header = row(20, true);
+    // Header and both rows fit a page with 1pt to spare; counting the header twice would not.
+    const joinedRow = el('pdf-row', { height: String(AREA - 61), 'break-after': 'avoid' }, [
+      el('pdf-cell'),
+    ]);
+    const last = row(40);
+    const table = el('pdf-table', {}, [header, joinedRow, last], { columns: ['1fr'] });
+    expect(nodesOn(paginate(page([first, table])))).toEqual([[first], [header, joinedRow, last]]);
+  });
+
+  it('moves a chain of units joined by avoid with the first unit after them', () => {
+    const first = filler(45);
+    const [h1, h2, body] = [block(20, avoid), block(20, avoid), block()];
+    expect(nodesOn(paginate(page([first, h1, h2, body])))).toEqual([[first], [h1, h2, body]]);
+  });
+
+  it('ignores a chain taller than a page', () => {
+    const [first, tall, body] = [block(10), block(AREA - 30, avoid), block(40)];
+    expect(nodesOn(paginate(page([first, tall, body])))).toEqual([[first, tall], [body]]);
+  });
+
+  it('gives way to a page break between the units', () => {
+    const first = filler(30);
+    const [heading, body] = [block(20, avoid), block(20, { 'break-before': 'page' })];
+    expect(nodesOn(paginate(page([first, heading, body])))).toEqual([[first, heading], [body]]);
+  });
+
+  it('never moves a unit at the top of a page', () => {
+    const [heading, body] = [block(AREA - 10, avoid), block()];
+    expect(nodesOn(paginate(page([heading, body])))).toEqual([[heading], [body]]);
+  });
+
+  it('keeps the last unit of a wrapper with what follows the wrapper', () => {
+    const first = filler(50);
+    const [a, b, c] = [block(), block(), block()];
+    const pages = paginate(page([first, el('pdf-view', avoid, [a, b]), c]));
+    expect(nodesOn(pages)).toEqual([
+      [first, a],
+      [b, c],
+    ]);
+  });
+
+  it('keeps the last line group of a split text with what follows it', () => {
+    // The whole text fits in the 45pt left, but not with the 20pt block after it.
+    const first = filler(45);
+    const [text, body] = [paragraph(4, avoid), block()];
+    const pages = paginate(page([first, text, body]));
+    const lines = (laid: PageLayout) =>
+      laid.placed.flatMap((p) => p.box.text?.lines.map((line) => line.text) ?? []);
+    expect(lines(pages[0]!)).toEqual(['w0', 'w1']);
+    expect(lines(pages[1]!)).toEqual(['w2', 'w3']);
+    expect(pages[1]!.placed.at(-1)!.box.node).toBe(body);
+  });
+
+  it('leaves the tail of a text carried from an earlier page where its plan put it', () => {
+    // Groups [w0 w1], [w2] and [w3 w4]: the text breaks after w1, so w2 opens the second page.
+    const first = filler(25);
+    const text = paragraph(5, avoid);
+    // The last group fits with the block only on an empty page.
+    const body = block(AREA - 25);
+    const pages = paginate(page([first, text, body]));
+    const lines = (laid: PageLayout) =>
+      laid.placed.flatMap((p) => p.box.text?.lines.map((line) => line.text) ?? []);
+    expect(lines(pages[0]!)).toEqual(['w0', 'w1']);
+    expect(lines(pages[1]!)).toEqual(['w2', 'w3', 'w4']);
+    expect(nodesOn(pages)[2]).toEqual([body]);
+  });
+
+  it('keeps a whole row with the next one when one of its cells asks for it', () => {
+    const first = filler(30);
+    const asking = el('pdf-row', { height: '20' }, [el('pdf-cell', avoid)]);
+    const next = row();
+    const rows = el('pdf-table', {}, [asking, next], { columns: ['1fr'] });
+    expect(nodesOn(paginate(page([first, rows])))).toEqual([[first], [asking, next]]);
+  });
+
+  it('counts a kept wrapper after it with its whole height', () => {
+    const first = filler(50);
+    const heading = block(20, avoid);
+    const items = [block(), block()];
+    const pages = paginate(
+      page([first, heading, el('pdf-view', { 'break-inside': 'avoid' }, items)]),
+    );
+    expect(nodesOn(pages)).toEqual([[first], [heading, ...items]]);
+  });
+});
+
 describe('paginatePage: page breaks', () => {
   it('starts a new page at breakBefore', () => {
     const first = el('pdf-view', { height: '20' });
@@ -461,8 +627,8 @@ describe('paginatePage: page breaks', () => {
     expect(pages).toHaveLength(1);
   });
 
-  it('ignores break-after keywords other than page', () => {
-    const first = el('pdf-view', { height: '20', 'break-after': 'avoid' });
+  it('ignores break-after keywords other than page and avoid', () => {
+    const first = el('pdf-view', { height: '20', 'break-after': 'column' });
     expect(paginate(page([first, el('pdf-view', { height: '20' })]))).toHaveLength(1);
   });
 

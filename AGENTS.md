@@ -124,6 +124,9 @@ The site (`projects/site`) is a prerendered Angular app. Its docs are the Markdo
     an `overflow` other than `visible` keeps it one unit.
   - A `header` row repeats at the top of every page its table runs onto.
   - `breakBefore` starts a new page, and `breakAfter` starts one after the element.
+  - `break-after: avoid` (or `avoid-page`) moves an element to the next page with the unit after
+    it when that unit does not fit. An element at the top of a page, a chain that would not fit on
+    an empty page and the tail of a text carried from an earlier page are left alone.
   - `break-inside: avoid` on a column `pdf-view` or a `pdf-table` moves it whole to the next page
     when it fits on one; one taller than a page splits as usual.
   - `pdf-page-number` as a direct child of `pdf-page` reserves its height at the bottom of the

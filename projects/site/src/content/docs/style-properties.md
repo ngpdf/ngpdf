@@ -111,7 +111,7 @@ In `border`, a missing width is 1 and a missing color is black. The width keywor
 | --- | --- | --- |
 | `object-fit` | `contain`, `cover` | `contain` |
 | `break-before` | `page` starts a new sheet; other values do nothing | |
-| `break-after` | `page` starts a new sheet after the element; other values do nothing | |
+| `break-after` | `page` starts a new sheet after the element; `avoid` or `avoid-page` keeps it on a sheet with what follows; other values do nothing | |
 | `break-inside` | `avoid` or `avoid-page` keeps a `pdf-text`, a column `pdf-view` or a `pdf-table` on one sheet when it fits on one; other values do nothing | `auto` |
 | `orphans` | integer ≥ 1: the fewest lines of a `pdf-text` before a page break (inherited) | `2` |
 | `widows` | integer ≥ 1: the fewest lines of a `pdf-text` after a page break (inherited) | `2` |

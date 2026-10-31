@@ -286,6 +286,7 @@ function collectUnits(content: Box, maxHeader: number, pageOpacity: number): Col
       backgroundImage: null,
       breakBefore: false,
       breakAfter: false,
+      keepWithNext: false,
     };
     for (const [first, end] of lineGroups(text.lines.length, box.style.orphans, box.style.widows)) {
       const lines = text.lines.slice(first, end);
@@ -434,6 +435,11 @@ function asksForBreakAfter(box: Box): boolean {
   return box.style.breakAfter || box.children.some(asksForBreakAfter);
 }
 
+/** Like `asksForBreakAfter`, for `break-after: avoid`. */
+function asksToKeepWithNext(box: Box): boolean {
+  return box.style.keepWithNext || box.children.some(asksToKeepWithNext);
+}
+
 function at<T>(list: readonly T[], index: number): T {
   const item = list[index];
   if (item === undefined) throw new Error(`ngpdf: pagination lost unit ${String(index)}`);
@@ -528,18 +534,20 @@ export function paginatePage(
   const { units, wrappers, texts } = collectUnits(laid, contentHeight, pageStyle.opacity);
 
   // Per unit: the outermost wrapper top opening at it, the outermost wrapper bottom closing at
-  // it, whether any of them asks for a page break before or after it, and the wrappers kept with
-  // `break-inside: avoid` that open at it, outer first.
+  // it, whether any of them asks for a page break before or after it or to stay with the next
+  // unit, and the wrappers kept with `break-inside: avoid` that open at it, outer first.
   const opensAt = new Map<number, number>();
   const closesAt = new Map<number, number>();
   const breaksAt = new Set<number>();
   const breaksAfter = new Set<number>();
+  const keepsAfter = new Set<number>();
   const keptAt = new Map<number, Wrapper[]>();
   for (const wrapper of wrappers) {
     if (!opensAt.has(wrapper.first)) opensAt.set(wrapper.first, wrapper.top);
     if (!closesAt.has(wrapper.last)) closesAt.set(wrapper.last, wrapper.bottom);
     if (wrapper.box.style.breakBefore) breaksAt.add(wrapper.first);
     if (wrapper.box.style.breakAfter) breaksAfter.add(wrapper.last);
+    if (wrapper.box.style.keepWithNext) keepsAfter.add(wrapper.last);
     if (wrapper.box.style.breakInside === 'avoid') {
       keptAt.set(wrapper.first, [...(keptAt.get(wrapper.first) ?? []), wrapper]);
     }
@@ -646,6 +654,7 @@ export function paginatePage(
   const textAt = new Map(texts.map((run) => [run.first, run]));
   // While placing a split text: the units it starts a page at, or null to place it greedily.
   let textBreaks: Set<number> | null = null;
+  let textFirst = -1;
   let textLast = -1;
 
   const place = (box: Box, x: number, y: number, opacity: number): void => {
@@ -657,6 +666,22 @@ export function paginatePage(
       current.placed.push({ box, x, y, ...fade(opacity) });
     }
   };
+
+  const breaksBetween = (i: number): boolean =>
+    breaksAfter.has(i) ||
+    asksForBreakAfter(at(units, i).box) ||
+    breaksAt.has(i + 1) ||
+    asksForBreak(at(units, i + 1).box);
+  // Whether unit i stays on a page with unit i + 1 (`break-after: avoid`).
+  const joined = (i: number): boolean =>
+    i + 1 < units.length &&
+    (keepsAfter.has(i) || asksToKeepWithNext(at(units, i).box)) &&
+    !breaksBetween(i);
+  // A kept wrapper opening at unit i that fits a page, with the bottom it needs.
+  const keptBottom = (wrapper: Wrapper): number =>
+    Math.max(wrapper.bottom, closesAt.get(wrapper.last) ?? wrapper.bottom);
+  const keptHere = (i: number): Wrapper | undefined =>
+    keptAt.get(i)?.find((wrapper) => keptBottom(wrapper) - wrapper.top <= contentHeight + EPSILON);
 
   units.forEach((unit, index) => {
     const before = units[index - 1];
@@ -687,11 +712,7 @@ export function paginatePage(
     let next = plan();
     // The outermost kept wrapper opening here that fits a page moves whole to the next page when
     // it does not fit on this one. One taller than a page splits as if it were not kept.
-    const keptBottom = (wrapper: Wrapper): number =>
-      Math.max(wrapper.bottom, closesAt.get(wrapper.last) ?? wrapper.bottom);
-    const kept = keptAt
-      .get(index)
-      ?.find((wrapper) => keptBottom(wrapper) - wrapper.top <= contentHeight + EPSILON);
+    const kept = keptHere(index);
     if (
       kept &&
       current.units > 0 &&
@@ -701,9 +722,45 @@ export function paginatePage(
       previousBottom = null;
       next = plan();
     }
+    // A chain of units joined by `break-after: avoid`, with the unit after it, moves to the next
+    // page when it does not fit here but fits a page. Only where the chain starts, so a chain too
+    // tall for a page is never cut down to the part that fits.
+    // The tail of a text that began on an earlier page stays where its plan put it: moving it
+    // could leave the page before with fewer lines than `orphans` and `widows` ask for.
+    const carriedTail =
+      index > textFirst && index <= textLast && at(placements, textFirst).page < pages.length - 1;
+    if (joined(index) && !(index > 0 && joined(index - 1)) && current.units > 0 && !carriedTail) {
+      let end = index + 1;
+      while (joined(end)) end++;
+      let chainBottom = 0;
+      for (let k = index; k <= end; k++) {
+        const member = at(units, k);
+        const wrapper = keptHere(k);
+        chainBottom = Math.max(
+          chainBottom,
+          closesAt.get(k) ?? member.bottom,
+          member.bottom,
+          wrapper ? keptBottom(wrapper) : 0,
+        );
+      }
+      const chainTop = opensAt.get(index) ?? unit.top;
+      // On the next page, rows of a table get its header repeated above them, unless the chain
+      // opens with the table and already spans the header.
+      const repeated =
+        unit.header && unit.header.top < chainTop ? unit.header.height + unit.header.gap : 0;
+      if (
+        chainBottom - chainTop + repeated <= contentHeight + EPSILON &&
+        next.top - unit.top + chainBottom > frame.bottom + EPSILON
+      ) {
+        startPage();
+        previousBottom = null;
+        next = plan();
+      }
+    }
     const run = textAt.get(index);
     if (run) {
       textBreaks = unit.header ? null : planText(run, next.top, current.units === 0);
+      textFirst = run.first;
       textLast = run.last;
     }
     const planned = index <= textLast ? textBreaks : null;
