@@ -671,6 +671,75 @@ describe('createPdfkitWriter', () => {
       expect(content).toMatch(/0 0 200 200 re\nf\nQ\nQ\nQ\n/);
     });
 
+    describe('gradients', () => {
+      const RECT = { op: 'rect', x: 10, y: 10, w: 80, h: 40, radii: SQUARE, opacity: 1 } as const;
+      const STOPS = [
+        { offset: 0, color: '#ff0000', opacity: 1 },
+        { offset: 0.25, color: '#00ff00', opacity: 1 },
+        { offset: 1, color: '#0000ff', opacity: 1 },
+      ];
+
+      it('fills a rect with an axial shading through every stop', async () => {
+        const pdf = await pdfText([
+          { ...RECT, gradient: { kind: 'linear', x1: 50, y1: 10, x2: 50, y2: 50, stops: STOPS } },
+        ]);
+        expect(pdf).toContain('/ShadingType 2');
+        expect(pdf).toContain('/Coords [50 10 50 50]');
+        expect(pdf).toContain('/Bounds [0.25]');
+        expect(pdf).toMatch(/\/C0 \[1 0 0\]/);
+        expect(pdf).toMatch(/\/C1 \[0 0 1\]/);
+        const content = contentOf(pdf);
+        expect(content).toContain('10 10 80 40 re');
+        expect(content).toMatch(/\/Pattern cs\n\/Sh\d+ scn\nf\n/);
+        // No solid color fill without `fill`.
+        expect(content).not.toMatch(/ rg\n|\/DeviceRGB cs/);
+        expect(pdf).not.toContain('/SMask');
+      });
+
+      it('fills a rounded rect with a radial shading squashed into an ellipse', async () => {
+        const pdf = await pdfText([
+          {
+            ...RECT,
+            radii: { topLeft: 6, topRight: 6, bottomRight: 6, bottomLeft: 6 },
+            gradient: { kind: 'radial', cx: 50, cy: 30, r1: 2, r2: 40, scaleY: 0.5, stops: STOPS },
+          },
+        ]);
+        expect(pdf).toContain('/ShadingType 3');
+        expect(pdf).toContain('/Coords [0 0 2 0 0 40]');
+        // pdfkit's flip of y (1 0 0 -1 0 200) times the gradient's own transform.
+        expect(pdf).toContain('/Matrix [1 0 0 -0.5 50 170]');
+        expect(count(contentOf(pdf), /\sc\n/g)).toBe(4);
+      });
+
+      it('masks the shading with the stop opacities', async () => {
+        const faded = STOPS.map((stop, i) => ({ ...stop, opacity: i === 0 ? 0.25 : 1 }));
+        const pdf = await pdfText([
+          { ...RECT, gradient: { kind: 'linear', x1: 10, y1: 30, x2: 90, y2: 30, stops: faded } },
+        ]);
+        expect(pdf).toContain('/SMask');
+        expect(pdf).toMatch(/\/C0 \[0\.25\]/);
+      });
+
+      it('fills the color first, then the gradient over the same outline at full opacity', async () => {
+        const pdf = await pdfText([
+          {
+            ...RECT,
+            fill: '#eeeeee',
+            opacity: 0.5,
+            gradient: { kind: 'linear', x1: 50, y1: 10, x2: 50, y2: 50, stops: STOPS },
+          },
+        ]);
+        const content = contentOf(pdf);
+        expect(count(content, /10 10 80 40 re/g)).toBe(2);
+        const color = content.indexOf('/Gs1 gs');
+        const pattern = content.indexOf('/Pattern cs');
+        expect(color).toBeGreaterThanOrEqual(0);
+        expect(pattern).toBeGreaterThan(color);
+        // The color's opacity state ends before the gradient fills.
+        expect(content.slice(color, pattern)).toMatch(/\nQ\nq\n/);
+      });
+    });
+
     it('strokes a path op with its lines and curves', async () => {
       const content = contentOf(
         await pdfText([

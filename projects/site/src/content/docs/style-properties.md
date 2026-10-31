@@ -12,7 +12,7 @@ In the tables:
 - **length** is a number with an optional unit: none or `pt` (points), `px` (= 1pt), `in`, `cm` or `mm`. Any other unit throws.
 - **length/%** also accepts a percentage of the parent's content box.
 - **color** is hex (3, 4, 6 or 8 digits), `rgb()`/`rgba()`, a CSS named color or `transparent`.
-- Keywords are matched in any case, as in CSS: `CENTER` is `center`. That covers the keywords of `text-align`, `text-decoration`, `text-transform`, `normal` in `letter-spacing`, `flex-direction`, `justify-content`, `align-items`, `align-self`, `object-fit`, `overflow`, `font-weight`, `font-style`, `break-before`, `break-after` and `break-inside`, `none` in `max-lines`, `none` and the function names in `transform`, the keywords of `transform-origin`, `auto` in lengths, `auto` and `none` in `flex`, and the border styles.
+- Keywords are matched in any case, as in CSS: `CENTER` is `center`. That covers the keywords of `text-align`, `text-decoration`, `text-transform`, `normal` in `letter-spacing`, `flex-direction`, `justify-content`, `align-items`, `align-self`, `object-fit`, `overflow`, `font-weight`, `font-style`, `break-before`, `break-after` and `break-inside`, `none` in `max-lines`, `none` and the function names in `transform`, the keywords of `transform-origin`, `auto` in lengths, `auto` and `none` in `flex`, and the border styles, and the gradient function names and keywords in `background` and `background-image`.
 
 ## Text
 
@@ -94,6 +94,8 @@ Shorthands with 1 to 4 values follow CSS order: top, right, bottom, left.
 | `border-radius` | 1 to 4 lengths, from the top-left corner clockwise | `0` |
 | `border-top-left-radius`, `border-top-right-radius`, `border-bottom-right-radius`, `border-bottom-left-radius` | length | `0` |
 | `background-color` | color | none |
+| `background-image` | `linear-gradient()`, `radial-gradient()` or `none`; see [Gradients](/docs/layout-and-styling#gradients) | `none` |
+| `background` | a color, a gradient, or one of each in any order; it resets the one it leaves out | none |
 | `opacity` | number from 0 to 1 (clamped) | `1` |
 | `transform` | `none`, or a list of `rotate()`, `scale()`, `scaleX()`, `scaleY()`, `translate()`, `translateX()`, `translateY()` | `none` |
 | `transform-origin` | 1 or 2 of `left`, `center`, `right`, `top`, `bottom`, length, `%` of the border box | `center` (`50% 50%`) |
@@ -120,7 +122,7 @@ Everything else is ignored, including:
 
 - `display`, `position`, `top`/`right`/`bottom`/`left`, `z-index`, `overflow-x`, `overflow-y`;
 - `flex-wrap`, `align-content`, `row-gap`, `column-gap`, `order`;
-- `background`, `background-image`, `box-shadow`, `border-style`;
+- `box-shadow`, `border-style`;
 - `font`, `word-spacing`, `white-space`, `vertical-align`;
 - custom properties (`--name`).
 
@@ -144,4 +146,5 @@ Some styles are ignored in specific places:
 - a keyword outside the lists above for `text-align`, `text-decoration`, `text-transform`, `flex-direction`, `justify-content`, `align-items`, `align-self`, `object-fit` and `overflow`, in any case;
 - a `transform` function other than the seven above, such as `skew()`, `matrix()` or `rotate3d()`, an angle without a unit (other than `0`) and a `transform-origin` with three values;
 - a value that is not a number for `flex-grow`, `flex-shrink` and `opacity`;
-- the wrong number of values in a shorthand.
+- the wrong number of values in a shorthand;
+- in `background` or `background-image`: `repeating-*` gradients, `conic-gradient()`, `url()`, several comma-separated backgrounds, explicit radial sizes, color hints, a stop with two positions, fewer than two stops, and anything else that is not a color or a supported gradient.

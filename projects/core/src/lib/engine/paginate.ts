@@ -13,6 +13,8 @@ export interface PlacedBox {
   /** On a sliced decoration: this piece's top or bottom edge is a page cut, so no border there. */
   readonly sliceTop?: boolean;
   readonly sliceBottom?: boolean;
+  /** On a sliced decoration with a gradient: the piece's offset in the whole box and its height. */
+  readonly slice?: { readonly offset: number; readonly height: number };
   /** Product of the opacities of the ancestors that are not part of `box` (default 1). */
   readonly opacity?: number;
 }
@@ -121,7 +123,11 @@ function fade(opacity: number): { opacity?: number } {
 
 function draws(style: ResolvedStyle): boolean {
   const { top, right, bottom, left } = style.borderWidth;
-  return style.backgroundColor !== null || top + right + bottom + left > 0;
+  return (
+    style.backgroundColor !== null ||
+    style.backgroundImage !== null ||
+    top + right + bottom + left > 0
+  );
 }
 
 function isPageNumber(node: PdfNode): boolean {
@@ -277,6 +283,7 @@ function collectUnits(content: Box, maxHeader: number, pageOpacity: number): Col
       padding: ZERO_EDGES,
       borderWidth: NO_BORDER,
       backgroundColor: null,
+      backgroundImage: null,
       breakBefore: false,
       breakAfter: false,
     };
@@ -513,6 +520,7 @@ export function paginatePage(
     padding: ZERO_EDGES,
     borderWidth: NO_BORDER,
     backgroundColor: null,
+    backgroundImage: null,
   };
   const contentStyles = new Map(styles).set(content, contentStyle);
   const laid = layoutBox(content, contentStyles, frame.contentWidth, ctx);
@@ -744,6 +752,7 @@ export function paginatePage(
     if (!draws(wrapper.box.style)) continue;
     const first = at(placements, wrapper.first);
     const last = at(placements, wrapper.last);
+    const pieces: { page: number; top: number; h: number }[] = [];
     for (let p = first.page; p <= last.page; p++) {
       const built = at(pages, p);
       const top = p === first.page ? Math.max(frame.top, wrapper.top + first.leadShift) : frame.top;
@@ -752,14 +761,23 @@ export function paginatePage(
       const end =
         p === last.page ? wrapper.bottom : (closesAt.get(built.lastUnit) ?? lastHere.unit.bottom);
       const bottom = Math.min(end + lastHere.unitShift, frame.bottom);
-      built.decorations.push({
-        box: { ...wrapper.box, h: Math.max(0, bottom - top), children: [] },
+      pieces.push({ page: p, top, h: Math.max(0, bottom - top) });
+    }
+    // A gradient runs once over the pieces put end to end, so each sheet shows its part.
+    const sliced = pieces.length > 1 && wrapper.box.style.backgroundImage !== null;
+    const height = pieces.reduce((sum, piece) => sum + piece.h, 0);
+    let offset = 0;
+    for (const piece of pieces) {
+      at(pages, piece.page).decorations.push({
+        box: { ...wrapper.box, h: piece.h, children: [] },
         x: frame.left + wrapper.x,
-        y: top,
-        sliceTop: p !== first.page,
-        sliceBottom: p !== last.page,
+        y: piece.top,
+        sliceTop: piece.page !== first.page,
+        sliceBottom: piece.page !== last.page,
+        ...(sliced && { slice: { offset, height } }),
         ...fade(wrapper.opacity),
       });
+      offset += piece.h;
     }
   }
 

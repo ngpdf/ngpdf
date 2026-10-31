@@ -133,7 +133,8 @@ The site (`projects/site`) is a prerendered Angular app. Its docs are the Markdo
     out once and drawn on every sheet; the flow gets the space between them. Bottom views sit
     above the page number.
   - A unit taller than a page goes on a page of its own, is clipped, and gets a dev-mode warning.
-  - Wrapper backgrounds and borders are sliced per page.
+  - Wrapper backgrounds and borders are sliced per page; a gradient runs over the whole wrapper,
+    so each sheet shows its part.
 - **Text wrapping:** text wraps at Unicode line-break opportunities. A word wider than its box breaks
   at the box edge. `max-lines` keeps at most N lines of a `pdf-text`; when text was cut, the last
   line ends with `…` in the face of its last run, or `...` in a font without `…`.

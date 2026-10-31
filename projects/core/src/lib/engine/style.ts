@@ -49,6 +49,36 @@ export interface TextStyle {
   readonly widows: number;
 }
 
+/** A stop position: points along the gradient line or ray, or a percentage of its length. */
+export type StopPosition = number | { readonly percent: number };
+
+export interface ColorStop {
+  readonly color: Color;
+  /** Null when the stop sits between its neighbours, as CSS spreads it. */
+  readonly position: StopPosition | null;
+}
+
+/** CSS angle in degrees (0 is up, clockwise), or a corner, whose angle depends on the box. */
+export type LinearDirection =
+  { readonly angle: number } | { readonly corner: { readonly x: -1 | 1; readonly y: -1 | 1 } };
+
+export type RadialSize = 'closest-side' | 'closest-corner' | 'farthest-side' | 'farthest-corner';
+
+export type Gradient =
+  | {
+      readonly kind: 'linear';
+      readonly direction: LinearDirection;
+      readonly stops: readonly ColorStop[];
+    }
+  | {
+      readonly kind: 'radial';
+      readonly shape: 'circle' | 'ellipse';
+      readonly size: RadialSize;
+      /** From the border box's top-left corner. */
+      readonly center: { readonly x: StopPosition; readonly y: StopPosition };
+      readonly stops: readonly ColorStop[];
+    };
+
 type AlignItems = 'stretch' | 'flex-start' | 'center' | 'flex-end';
 
 export interface ResolvedStyle extends TextStyle {
@@ -74,6 +104,8 @@ export interface ResolvedStyle extends TextStyle {
   readonly borderRadius: Corners<number>;
   /** Null when nothing is painted, also for a fully transparent color. */
   readonly backgroundColor: Color | null;
+  /** A gradient drawn over `backgroundColor`, or null. */
+  readonly backgroundImage: Gradient | null;
   readonly opacity: number;
   readonly objectFit: 'contain' | 'cover';
   /** Applied left to right when drawn; empty for `none`. Layout never reads it. */
@@ -495,6 +527,294 @@ export function parseTransformOrigin(
   return { x: offsetOf(x, X_KEYWORDS), y: offsetOf(y, Y_KEYWORDS) };
 }
 
+/** Splits on commas outside parentheses, so `rgb(1, 2, 3)` stays in one part. */
+function splitCommas(value: string): string[] {
+  const parts: string[] = [];
+  let depth = 0;
+  let start = 0;
+  for (let i = 0; i < value.length; i++) {
+    const code = value.charCodeAt(i);
+    if (code === 40) depth++;
+    else if (code === 41 && depth > 0) depth--;
+    else if (code === 44 && depth === 0) {
+      parts.push(value.slice(start, i));
+      start = i + 1;
+    }
+  }
+  parts.push(value.slice(start));
+  return parts;
+}
+
+/** `name(args)` as one balanced call, or null. The name comes back in lower case. */
+function functionOf(value: string): { name: string; args: string } | null {
+  const text = value.trim();
+  const open = text.indexOf('(');
+  if (open <= 0) return null;
+  let depth = 0;
+  for (let i = open; i < text.length; i++) {
+    const code = text.charCodeAt(i);
+    if (code === 40) depth++;
+    else if (code === 41 && --depth === 0) {
+      if (i !== text.length - 1) return null;
+      return { name: text.slice(0, open).trim().toLowerCase(), args: text.slice(open + 1, i) };
+    }
+  }
+  return null;
+}
+
+const UNSUPPORTED_IMAGES = new Set([
+  'repeating-linear-gradient',
+  'repeating-radial-gradient',
+  'conic-gradient',
+  'repeating-conic-gradient',
+  'url',
+]);
+
+const SIDE_ANGLES = new Map([
+  ['top', 0],
+  ['right', 90],
+  ['bottom', 180],
+  ['left', 270],
+]);
+
+const ANGLE_DEGREES = new Map([
+  ['deg', 1],
+  ['rad', 180 / Math.PI],
+  ['turn', 360],
+]);
+
+const RADIAL_SIZES: readonly RadialSize[] = [
+  'closest-side',
+  'closest-corner',
+  'farthest-side',
+  'farthest-corner',
+];
+
+function startsLikeNumber(token: string): boolean {
+  const code = token.charCodeAt(0);
+  return isDigit(code) || code === 46 || code === 43 || code === 45;
+}
+
+/** An angle in degrees, or null when `token` does not start like a number. */
+function angleOf(token: string, tag?: string): number | null {
+  if (!startsLikeNumber(token)) return null;
+  const end = scanNumber(token);
+  const amount = Number(token.slice(0, end));
+  const unit = token.slice(end).toLowerCase();
+  const factor = unit === '' && amount === 0 ? 1 : ANGLE_DEGREES.get(unit);
+  if (end === 0 || factor === undefined || !Number.isFinite(amount)) {
+    return fail(`invalid gradient angle "${show(token)}"`, tag);
+  }
+  return amount * factor;
+}
+
+/** `to <side>` or `to <side> <side>`, one side per axis. */
+function directionOf(tokens: readonly string[], tag?: string): LinearDirection {
+  const [, first = '', second] = tokens.map((token) => token.toLowerCase());
+  const bad = () => fail(`invalid gradient direction "${show(tokens.join(' '))}"`, tag);
+  if (tokens.length === 2) return { angle: SIDE_ANGLES.get(first) ?? bad() };
+  if (tokens.length !== 3 || second === undefined) return bad();
+  const vertical = (side: string) => side === 'top' || side === 'bottom';
+  const horizontal = (side: string) => side === 'left' || side === 'right';
+  const [x, y] = vertical(first) ? [second, first] : [first, second];
+  if (!horizontal(x) || !vertical(y)) return bad();
+  return { corner: { x: x === 'left' ? -1 : 1, y: y === 'top' ? -1 : 1 } };
+}
+
+function stopPositionOf(token: string, part: string, tag?: string): StopPosition {
+  const length = parseLength(token, tag);
+  if (length === 'auto') return fail(`invalid color stop "${show(part.trim())}"`, tag);
+  return length;
+}
+
+/** `<color> [<position>]`, or the position first. */
+function colorStopOf(part: string, whole: string, tag?: string): ColorStop {
+  const tokens = tokenize(part);
+  const [first, second] = tokens;
+  if (first === undefined || tokens.length > 2) {
+    return fail(`invalid color stop "${show(part.trim())}"`, tag);
+  }
+  if (second === undefined) {
+    if (startsLikeNumber(first))
+      return fail(`color hints are not supported in "${show(whole)}"`, tag);
+    return { color: parseColor(first, tag), position: null };
+  }
+  const [color, position] = startsLikeNumber(first) ? [second, first] : [first, second];
+  return { color: parseColor(color, tag), position: stopPositionOf(position, part, tag) };
+}
+
+function colorStopsOf(parts: readonly string[], whole: string, tag?: string): ColorStop[] {
+  if (parts.length < 2)
+    return fail(`a gradient needs at least two color stops in "${show(whole)}"`, tag);
+  return parts.map((part) => colorStopOf(part, whole, tag));
+}
+
+const X_PERCENTS = new Map([
+  ['left', 0],
+  ['center', 50],
+  ['right', 100],
+]);
+const Y_PERCENTS = new Map([
+  ['top', 0],
+  ['center', 50],
+  ['bottom', 100],
+]);
+
+/** `at` followed by one or two values: keywords, lengths or percentages. */
+function centerOf(
+  tokens: readonly string[],
+  tag?: string,
+): Extract<Gradient, { kind: 'radial' }>['center'] {
+  const bad = () => fail(`invalid gradient position "${show(tokens.join(' '))}"`, tag);
+  const axis = (token: string, keywords: ReadonlyMap<string, number>): StopPosition => {
+    if (startsLikeNumber(token)) return stopPositionOf(token, tokens.join(' '), tag);
+    const percent = keywords.get(token.toLowerCase());
+    return percent === undefined ? bad() : { percent };
+  };
+  const [first, second] = tokens;
+  if (first === undefined || tokens.length > 2) return bad();
+  const middle: StopPosition = { percent: 50 };
+  if (second === undefined) {
+    if (Y_PERCENTS.has(first.toLowerCase()) && !X_PERCENTS.has(first.toLowerCase())) {
+      return { x: middle, y: axis(first, Y_PERCENTS) };
+    }
+    return { x: axis(first, X_PERCENTS), y: middle };
+  }
+  // Two keywords may come in either order: `top right` is `right top`.
+  const keywords = !startsLikeNumber(first) && !startsLikeNumber(second);
+  const lower = [first.toLowerCase(), second.toLowerCase()];
+  const swap =
+    keywords &&
+    (lower[0] === 'top' || lower[0] === 'bottom' || lower[1] === 'left' || lower[1] === 'right');
+  const [x, y] = swap ? [second, first] : [first, second];
+  return { x: axis(x, X_PERCENTS), y: axis(y, Y_PERCENTS) };
+}
+
+function linearGradientOf(args: string, whole: string, tag?: string): Gradient {
+  const parts = splitCommas(args);
+  const head = tokenize(parts[0] ?? '');
+  let direction: LinearDirection = { angle: 180 };
+  if (head[0]?.toLowerCase() === 'to') {
+    direction = directionOf(head, tag);
+    parts.shift();
+  } else if (head.length === 1) {
+    const angle = angleOf(head[0] ?? '', tag);
+    if (angle !== null) {
+      direction = { angle };
+      parts.shift();
+    }
+  }
+  return { kind: 'linear', direction, stops: colorStopsOf(parts, whole, tag) };
+}
+
+function radialGradientOf(args: string, whole: string, tag?: string): Gradient {
+  const parts = splitCommas(args);
+  const head = tokenize(parts[0] ?? '');
+  let shape: 'circle' | 'ellipse' | null = null;
+  let size: RadialSize | null = null;
+  let center: Extract<Gradient, { kind: 'radial' }>['center'] = {
+    x: { percent: 50 },
+    y: { percent: 50 },
+  };
+  const keyword = (token: string): boolean => {
+    const lower = token.toLowerCase();
+    return (
+      lower === 'at' ||
+      lower === 'circle' ||
+      lower === 'ellipse' ||
+      RADIAL_SIZES.some((s) => s === lower)
+    );
+  };
+  if (head.some(keyword)) {
+    parts.shift();
+    const at = head.findIndex((token) => token.toLowerCase() === 'at');
+    const ending = at < 0 ? head : head.slice(0, at);
+    if (at >= 0) center = centerOf(head.slice(at + 1), tag);
+    for (const token of ending) {
+      const lower = token.toLowerCase();
+      const found = RADIAL_SIZES.find((candidate) => candidate === lower);
+      if (startsLikeNumber(token)) {
+        return fail(
+          `explicit radial gradient sizes are not supported in "${show(head.join(' '))}"`,
+          tag,
+        );
+      } else if ((lower === 'circle' || lower === 'ellipse') && shape === null) {
+        shape = lower;
+      } else if (found !== undefined && size === null) {
+        size = found;
+      } else {
+        return fail(`invalid radial gradient shape "${show(ending.join(' '))}"`, tag);
+      }
+    }
+  }
+  return {
+    kind: 'radial',
+    shape: shape ?? 'ellipse',
+    size: size ?? 'farthest-corner',
+    center,
+    stops: colorStopsOf(parts, whole, tag),
+  };
+}
+
+/** One gradient call, or null when `value` is not a call at all. */
+function gradientOf(value: string, tag?: string): Gradient | null {
+  const call = functionOf(value);
+  if (call === null) return null;
+  const whole = value.trim();
+  if (call.name === 'linear-gradient') return linearGradientOf(call.args, whole, tag);
+  if (call.name === 'radial-gradient') return radialGradientOf(call.args, whole, tag);
+  if (UNSUPPORTED_IMAGES.has(call.name)) return fail(`${call.name}() is not supported`, tag);
+  return null;
+}
+
+function checkOneBackground(value: string, tag?: string): void {
+  if (splitCommas(value).length > 1) fail('several backgrounds are not supported', tag);
+}
+
+/** `background-image`: `none`, or one `linear-gradient()` or `radial-gradient()`. */
+function parseBackgroundImage(value: string, tag?: string): Gradient | null {
+  if (keywordOf(value) === 'none') return null;
+  checkOneBackground(value, tag);
+  return gradientOf(value, tag) ?? fail(`invalid value "${show(value)}" for background-image`, tag);
+}
+
+/** The `background` shorthand: a color, a gradient (or `none`), or one of each in any order. */
+function parseBackground(
+  value: string,
+  tag?: string,
+): { color: Color | null; image: Gradient | null } {
+  checkOneBackground(value, tag);
+  const bad = () => fail(`invalid value "${show(value)}" for background`, tag);
+  const tokens = tokenize(value);
+  if (tokens.length < 1 || tokens.length > 2) return bad();
+  let color: Color | null = null;
+  let image: Gradient | null = null;
+  let hasImage = false;
+  for (const token of tokens) {
+    const isImage =
+      keywordOf(token) === 'none' ||
+      functionOf(token)?.name.endsWith('gradient') === true ||
+      functionOf(token)?.name === 'url';
+    if (isImage) {
+      if (hasImage) return bad();
+      hasImage = true;
+      image = keywordOf(token) === 'none' ? null : (gradientOf(token, tag) ?? bad());
+    } else {
+      if (color !== null) return bad();
+      color = colorOrNull(token) ?? bad();
+    }
+  }
+  return { color, image };
+}
+
+function colorOrNull(token: string): Color | null {
+  try {
+    return parseColor(token);
+  } catch {
+    return null;
+  }
+}
+
 type Mutable<T> = { -readonly [K in keyof T]: T[K] };
 type Side = 'top' | 'right' | 'bottom' | 'left';
 
@@ -555,6 +875,7 @@ function defaultStyle(node: PdfNode, inherited: TextStyle): Mutable<ResolvedStyl
     borderColor: allSides(BLACK),
     borderRadius: { topLeft: 0, topRight: 0, bottomRight: 0, bottomLeft: 0 },
     backgroundColor: null,
+    backgroundImage: null,
     opacity: 1,
     objectFit: 'contain',
     transform: [],
@@ -737,6 +1058,15 @@ function apply(
     case 'background-color': {
       const color = parseColor(value, tag);
       style.backgroundColor = color.a > 0 ? color : null;
+      break;
+    }
+    case 'background-image':
+      style.backgroundImage = parseBackgroundImage(value, tag);
+      break;
+    case 'background': {
+      const background = parseBackground(value, tag);
+      style.backgroundColor = background.color && background.color.a > 0 ? background.color : null;
+      style.backgroundImage = background.image;
       break;
     }
     case 'opacity':

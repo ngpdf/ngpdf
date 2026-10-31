@@ -1,6 +1,7 @@
 import { toHex, type Color } from './color';
 import { fontChain, fontFor, shapeText, type FontRegistry } from './fonts';
 import { graphemeCount } from './graphemes';
+import { gradientFill } from './gradient';
 import { fitImage } from './images';
 import { pageNumberFormat, type Box } from './layout';
 import type { PageLayout, PlacedBox } from './paginate';
@@ -28,6 +29,8 @@ function paint(color: Color, opacity: number): { color: string; opacity: number 
 interface Cuts {
   readonly top: boolean;
   readonly bottom: boolean;
+  /** On a piece of a box split across pages: where the piece sits in the whole box. */
+  readonly slice?: { readonly offset: number; readonly height: number } | undefined;
 }
 
 /**
@@ -70,7 +73,17 @@ function drawBox(
     bottom: cuts.bottom || y + box.h > limit,
   });
   const background = style.backgroundColor && paint(style.backgroundColor, opacity);
-  if (background && bottomEdge > y) {
+  // A gradient spans the whole box, so a slice or a clipped box shows its part of it.
+  const gradient =
+    style.backgroundImage &&
+    gradientFill(
+      style.backgroundImage,
+      cuts.slice
+        ? { x, y: y - cuts.slice.offset, w: box.w, h: cuts.slice.height }
+        : { x, y, w: box.w, h: box.h },
+      opacity,
+    );
+  if ((background || gradient) && bottomEdge > y) {
     out.push({
       op: 'rect',
       x,
@@ -78,8 +91,8 @@ function drawBox(
       w: box.w,
       h: bottomEdge - y,
       radii,
-      fill: background.color,
-      opacity: background.opacity,
+      ...(background ? { fill: background.color, opacity: background.opacity } : { opacity: 1 }),
+      ...(gradient && { gradient }),
     });
   }
 
@@ -439,7 +452,7 @@ function drawPlaced(placed: PlacedBox, numbering: Numbering, out: DrawOp[]): voi
     placed.x,
     placed.y,
     placed.clipBottom ?? Infinity,
-    { top: placed.sliceTop === true, bottom: placed.sliceBottom === true },
+    { top: placed.sliceTop === true, bottom: placed.sliceBottom === true, slice: placed.slice },
     placed.opacity ?? 1,
     numbering,
     out,

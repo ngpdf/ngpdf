@@ -16,7 +16,9 @@ const SENTENCES = [
   template: `
     <pdf-document title="Article sample" author="ngpdf demo">
       <pdf-page size="A5" style="padding: 36; font-size: 11; line-height: 1.4">
-        <pdf-text style="font-size: 18; font-weight: bold; margin-bottom: 12">
+        <pdf-text
+          style="font-size: 18; font-weight: bold; margin-bottom: 12; padding: 10 12; color: #ffffff; border-radius: 6; background: linear-gradient(to right, #1f4e8c, #3366cc 60%, rgba(51, 102, 204, 0.4))"
+        >
           Field notes
         </pdf-text>
         <pdf-text
