@@ -87,7 +87,7 @@ The header row repeats on every page, rows are never split, and the text stays s
 - Inside a `pdf-table`, horizontal padding, borders and margins on a row are ignored. Put
   horizontal padding on the `pdf-cell`s.
 - A unit taller than a page (a row, or a `pdf-view` in a column) is clipped to its page.
-- Children and images of a rounded view are clipped to its corners only with `overflow: hidden`.
+- Children and images of a rounded view are clipped to its corners only with an `overflow` other than `visible`.
 - A bare number is in points, except in `line-height`, where it multiplies the font size as in
   CSS (`line-height: 1.4`). Write `line-height: 14pt` for points.
 - Text sits at the top of its line box: extra `line-height` goes below the text, not half above
