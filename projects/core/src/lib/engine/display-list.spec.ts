@@ -1147,11 +1147,16 @@ describe('gradient backgrounds', () => {
     for (const image of [
       'linear-gradient(red, green 50%, blue 50%, white)',
       'radial-gradient(circle closest-side, red 0, blue 0, green 10px)',
+      // Two stops closer than the nudge just before the end: pulled back below 1.
+      'linear-gradient(red, lime 99.9999%, blue 99.99995%, white)',
     ]) {
       const list = offsets(image);
       expect(list[0]).toBe(0);
       expect(list.at(-1)).toBe(1);
-      for (let i = 1; i < list.length; i++) expect(list[i]!).toBeGreaterThan(list[i - 1]!);
+      for (let i = 1; i < list.length; i++) {
+        expect(list[i]!).toBeGreaterThan(list[i - 1]!);
+        expect(list[i]!).toBeLessThanOrEqual(1);
+      }
     }
   });
 
