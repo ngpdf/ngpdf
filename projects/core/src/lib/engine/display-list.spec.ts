@@ -798,6 +798,15 @@ describe('displayList', () => {
       });
     });
 
+    it('puts the clip inside the transform of the same box', () => {
+      const style = { overflow: 'hidden', transform: 'rotate(10deg)' };
+      const ops = list(layout(page([el('pdf-view', style, [text('Hello')])]))[0]!, 0, 1);
+      const order = ops
+        .map((op) => op.op)
+        .filter((kind) => ['transform', 'clip', 'unclip', 'untransform'].includes(kind));
+      expect(order).toEqual(['transform', 'clip', 'unclip', 'untransform']);
+    });
+
     it('scales the inner radii down to fit the clip', () => {
       const style = {
         overflow: 'hidden',
