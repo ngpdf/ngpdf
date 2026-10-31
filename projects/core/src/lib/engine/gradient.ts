@@ -215,7 +215,8 @@ function radialFill(
   const radii = radiiOf(gradient, px, py, w, h);
   const rx = Math.max(radii.rx, TINY);
   const ry = Math.max(radii.ry, TINY);
-  const placed = premultiplyFix(cutBeforeCenter(placeStops(gradient.stops, rx)));
+  // Fix transparent stops first, so the color cut at the center mixes their neighbours.
+  const placed = cutBeforeCenter(premultiplyFix(placeStops(gradient.stops, rx)));
   if (placed.every((stop) => stop.color.a <= 0)) return null;
   const { start, length, stops } = spanOf(placed, opacity, 0);
   return {

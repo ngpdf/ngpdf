@@ -1131,6 +1131,13 @@ describe('gradient backgrounds', () => {
     expect(gone.stops.map((stop) => stop.color)).toEqual(['#0000ff', '#0000ff']);
   });
 
+  it('gives a transparent stop its neighbour color before cutting at the center', () => {
+    const faded = radial({
+      'background-image': 'radial-gradient(circle closest-side, transparent -10px, blue 10px)',
+    });
+    expect(faded.stops[0]).toEqual({ offset: 0, color: '#0000ff', opacity: 0.5 });
+  });
+
   it('keeps one gradient for the whole height of a view split across sheets', () => {
     const rows = [0, 1, 2].map(() => el('pdf-view', { height: '300' }));
     const style = { 'background-image': 'linear-gradient(red, blue)' };
@@ -1145,6 +1152,24 @@ describe('gradient backgrounds', () => {
       if (rect.gradient?.kind !== 'linear') throw new Error('expected a linear gradient');
       expect(rect.gradient.y2 - rect.gradient.y1).toBeCloseTo(total, 6);
     }
+  });
+
+  it('keeps one radial gradient, with the same radii, for a view split across sheets', () => {
+    const rows = [0, 1, 2].map(() => el('pdf-view', { height: '300' }));
+    const style = { 'background-image': 'radial-gradient(circle closest-side, red, blue)' };
+    const pages = layout(page([el('pdf-view', style, rows)]));
+    expect(pages).toHaveLength(2);
+    const rects = pages.map((laid, index) => only(list(laid, index, 2), 'rect')[0]!);
+    const radials = rects.map((rect) => {
+      if (rect.gradient?.kind !== 'radial') throw new Error('expected a radial gradient');
+      return { rect, gradient: rect.gradient };
+    });
+    const [first, second] = [radials[0]!, radials[1]!];
+    const total = first.rect.h + second.rect.h;
+    // The center sits halfway down the whole view, measured from each piece's own top.
+    expect(first.gradient.cy).toBeCloseTo(first.rect.y + total / 2, 6);
+    expect(second.gradient.cy).toBeCloseTo(second.rect.y - first.rect.h + total / 2, 6);
+    expect(second.gradient.r2).toBeCloseTo(first.gradient.r2, 6);
   });
 
   it('spans the whole box when a unit taller than the page is cut', () => {
