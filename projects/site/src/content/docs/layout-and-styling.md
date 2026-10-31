@@ -128,7 +128,7 @@ By default, content that does not fit its box is drawn outside it. `overflow: hi
 - `clip`, `scroll` and `auto` clip like `hidden`. `overflow-x` and `overflow-y` are ignored.
 - Nested clipping elements clip to the area they share.
 - The layout does not change: sizes and positions are the same with or without clipping.
-- A column `pdf-view` or a `pdf-text` with `overflow: hidden` is one [pagination unit](/docs/pagination#units), so it is never split across sheets.
+- A column `pdf-view` or a `pdf-text` with `overflow: hidden` is one [pagination unit](/docs/pagination#units), so it is never split across sheets. One taller than a sheet is cut at the bottom, with a dev-mode warning, and the rest is not drawn.
 - `overflow` is not inherited, and is ignored on a `pdf-page` (a page is not a box to clip) and on a `pdf-table`, which keeps breaking between its rows.
 
 ## Opacity

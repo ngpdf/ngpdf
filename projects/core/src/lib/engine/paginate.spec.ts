@@ -803,6 +803,17 @@ describe('paginatePage: text split across pages', () => {
     expect(moved.map((laid) => textPieces(laid).length)).toEqual([0, 1]);
   });
 
+  it('cuts a text with overflow: hidden taller than a page at the bottom, with a warning', () => {
+    const warn = vi.fn<(message: string) => void>();
+    const pages = paginate(page([paragraph(100, { overflow: 'hidden' })]), warn);
+    expect(pages).toHaveLength(1);
+    expect(textPieces(pages[0]!)).toHaveLength(1);
+    expect(textPieces(pages[0]!)[0]!.clipBottom).toBeCloseTo(CONTENT_TOP + AREA, 3);
+    expect(warn).toHaveBeenCalledWith(
+      'ngpdf: pdf-text is taller than a page and is cut at the bottom',
+    );
+  });
+
   it('splits a text cut by max-lines between its kept lines only', () => {
     const pages = paginate(page([filler(35), paragraph(10, { 'max-lines': '6' })]));
     expect(pages).toHaveLength(2);
