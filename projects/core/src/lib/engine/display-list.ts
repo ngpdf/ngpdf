@@ -138,13 +138,16 @@ function drawBox(
   if (clips) {
     // The padding box, cut at the limit like the background.
     const clipBottom = Math.min(y + box.h - bottom, limit);
+    const clipWidth = Math.max(0, box.w - left - right);
+    const clipHeight = Math.max(0, clipBottom - y - top);
     out.push({
       op: 'clip',
       x: x + left,
       y: y + top,
-      w: Math.max(0, box.w - left - right),
-      h: Math.max(0, clipBottom - y - top),
-      radii: innerRadii(radii, box.border),
+      w: clipWidth,
+      h: clipHeight,
+      // Uneven borders can leave inner radii too large for the padding box.
+      radii: fitRadii(innerRadii(radii, box.border), clipWidth, clipHeight, NOT_CUT),
     });
   }
 
@@ -232,6 +235,8 @@ function innerRadii(radii: Corners<number>, border: Box['border']): Corners<numb
     bottomLeft: inset(radii.bottomLeft, border.bottom, border.left),
   };
 }
+
+const NOT_CUT = { top: false, bottom: false } as const;
 
 function offsetIn(offset: Offset, size: number): number {
   return typeof offset === 'number' ? offset : (offset.percent / 100) * size;

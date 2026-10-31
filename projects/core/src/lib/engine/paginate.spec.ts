@@ -793,6 +793,16 @@ describe('paginatePage: text split across pages', () => {
     expect(bottom(pieces.at(-1)!)).toBeCloseTo(CONTENT_TOP + AREA - 5, 3);
   });
 
+  it('keeps a text with overflow: hidden whole, with its padding, so one clip covers it', () => {
+    const text = paragraph(10, { overflow: 'hidden', padding: '4' });
+    const fits = paginate(page([text]));
+    expect(textPieces(fits[0]!)).toHaveLength(1);
+    expect(textPieces(fits[0]!)[0]!.box.padding.top).toBe(4);
+    const first = filler(35);
+    const moved = paginate(page([first, paragraph(10, { overflow: 'hidden', padding: '4' })]));
+    expect(moved.map((laid) => textPieces(laid).length)).toEqual([0, 1]);
+  });
+
   it('splits a text cut by max-lines between its kept lines only', () => {
     const pages = paginate(page([filler(35), paragraph(10, { 'max-lines': '6' })]));
     expect(pages).toHaveLength(2);

@@ -798,6 +798,24 @@ describe('displayList', () => {
       });
     });
 
+    it('scales the inner radii down to fit the clip', () => {
+      const style = {
+        overflow: 'hidden',
+        width: '100',
+        height: '200',
+        'border-width': '30',
+        'border-radius': '80 20 0 0',
+      };
+      const ops = list(layout(page([el('pdf-view', style, [text('Hello')])]))[0]!, 0, 1);
+      const [clip] = only(ops, 'clip');
+      expect(clip!.w).toBeCloseTo(40, 6);
+      // 50 and 0 across a 40pt-wide side: scaled by 0.8.
+      expect(clip!.radii.topLeft).toBeCloseTo(40, 6);
+      expect([clip!.radii.topRight, clip!.radii.bottomRight, clip!.radii.bottomLeft]).toEqual([
+        0, 0, 0,
+      ]);
+    });
+
     it('clips text, an image and a page number drawn by the box itself', () => {
       const asset: ImageAsset = { data: new Uint8Array([1]), width: 100, height: 50 };
       const image = el('pdf-image', {

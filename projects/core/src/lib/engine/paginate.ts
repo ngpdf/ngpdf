@@ -143,7 +143,7 @@ function isWrapper(box: Box): boolean {
 /**
  * A text that may break between lines: long enough to leave `orphans` lines before a break and
  * `widows` after it, not kept whole with `break-inside: avoid`, not of a fixed height, and not
- * transformed.
+ * transformed or clipped: one clip covers the whole text, padding included.
  */
 function isSplittable(box: Box): boolean {
   const { style, text } = box;
@@ -153,7 +153,8 @@ function isSplittable(box: Box): boolean {
     style.breakInside !== 'avoid' &&
     style.height === 'auto' &&
     style.maxHeight === 'auto' &&
-    style.transform.length === 0
+    style.transform.length === 0 &&
+    style.overflow === 'visible'
   );
 }
 
