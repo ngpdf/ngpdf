@@ -112,7 +112,7 @@ On a wrapper, the break happens before its first unit. A break on a sheet that h
 
 ## Keeping a heading with what follows
 
-`break-after: avoid` (or `avoid-page`) keeps an element on the same sheet as what comes after it, so a heading never ends a sheet alone:
+`break-after: avoid` (or `avoid-page`) keeps an element on the same sheet as what comes after it, so a heading does not end a sheet alone, except in the cases listed below:
 
 ```html
 <pdf-text style="font-size: 14; font-weight: bold; break-after: avoid">Totals</pdf-text>
