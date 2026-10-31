@@ -522,6 +522,27 @@ describe('resolveStyles property coverage', () => {
     expect(resolveStyles(view).get(text)?.breakInside).toBe('auto');
   });
 
+  it('reads overflow: hidden, clip, scroll and auto as hidden, not inherited', () => {
+    expect(styleOf({}).overflow).toBe('visible');
+    expect(styleOf({ overflow: 'visible' }).overflow).toBe('visible');
+    for (const keyword of ['hidden', 'clip', 'scroll', 'auto']) {
+      expect(styleOf({ overflow: keyword }).overflow).toBe('hidden');
+    }
+    const text = el('pdf-text');
+    const view = el('pdf-view', { overflow: 'hidden' }, [text]);
+    expect(resolveStyles(view).get(text)?.overflow).toBe('visible');
+    // Only both axes at once are supported.
+    expect(styleOf({ 'overflow-x': 'hidden', 'overflow-y': 'hidden' }).overflow).toBe('visible');
+  });
+
+  it('ignores overflow on a pdf-page and a pdf-table but still checks the keyword', () => {
+    expect(styleOf({ overflow: 'hidden' }, 'pdf-page').overflow).toBe('visible');
+    expect(styleOf({ overflow: 'hidden' }, 'pdf-table').overflow).toBe('visible');
+    expect(() => styleOf({ overflow: 'none' }, 'pdf-table')).toThrow(
+      'ngpdf: invalid value "none" for overflow on pdf-table',
+    );
+  });
+
   it('reads letter-spacing as a length, negative or normal, and throws on a percentage', () => {
     expect(styleOf({}).letterSpacing).toBe(0);
     expect(styleOf({ 'letter-spacing': '2' }).letterSpacing).toBe(2);
@@ -702,6 +723,7 @@ describe('resolveStyles property coverage', () => {
     ['align-self', 'baseline'],
     ['object-fit', 'fill'],
     ['text-transform', 'full-width'],
+    ['overflow', 'none'],
   ])('rejects an invalid %s value "%s"', (property, value) => {
     expect(() => styleOf({ [property]: value })).toThrow(
       `ngpdf: invalid value "${value}" for ${property} on pdf-view`,
@@ -733,6 +755,8 @@ describe('resolveStyles property coverage', () => {
     ['break-inside', 'Avoid', 'breakInside', 'avoid'],
     ['text-transform', 'UPPERCASE', 'textTransform', 'uppercase'],
     ['letter-spacing', 'Normal', 'letterSpacing', 0],
+    ['overflow', 'HIDDEN', 'overflow', 'hidden'],
+    ['overflow', 'Visible', 'overflow', 'visible'],
   ])('reads %s "%s" case-insensitively', (property, value, key, expected) => {
     expect(styleOf({ [property]: value })).toMatchObject({ [key]: expected });
   });

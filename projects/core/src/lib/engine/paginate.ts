@@ -133,14 +133,17 @@ function isWrapper(box: Box): boolean {
   if (box.children.length === 0 || box.style.transform.length > 0) return false;
   return (
     box.node.tag === 'pdf-table' ||
-    (box.node.tag === 'pdf-view' && box.style.flexDirection === 'column')
+    // A clipping view is one unit, like a row view: its clip can't be cut across sheets.
+    (box.node.tag === 'pdf-view' &&
+      box.style.flexDirection === 'column' &&
+      box.style.overflow === 'visible')
   );
 }
 
 /**
  * A text that may break between lines: long enough to leave `orphans` lines before a break and
  * `widows` after it, not kept whole with `break-inside: avoid`, not of a fixed height, and not
- * transformed.
+ * transformed or clipped: one clip covers the whole text, padding included.
  */
 function isSplittable(box: Box): boolean {
   const { style, text } = box;
@@ -150,7 +153,8 @@ function isSplittable(box: Box): boolean {
     style.breakInside !== 'avoid' &&
     style.height === 'auto' &&
     style.maxHeight === 'auto' &&
-    style.transform.length === 0
+    style.transform.length === 0 &&
+    style.overflow === 'visible'
   );
 }
 

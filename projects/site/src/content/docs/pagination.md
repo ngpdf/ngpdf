@@ -17,9 +17,10 @@ Starting from the children of the `pdf-page`, ngpdf looks inside some elements a
 | --- | --- |
 | `pdf-view` with `flex-direction: column` (the default) and children | a wrapper: its children are looked at in turn |
 | `pdf-view` with a `transform` | one unit, with everything inside it, so it is never cut across sheets |
+| `pdf-view` with `overflow: hidden`, `clip`, `scroll` or `auto` | one unit, with everything inside it, so its clip is never split |
 | `pdf-table` | a wrapper: each of its rows is a unit |
 | `pdf-view` with `flex-direction: row` | one unit, with everything inside it |
-| `pdf-text` | its lines, grouped by `orphans` and `widows`; one unit if it is short, has `break-inside: avoid`, a fixed height or a `transform` |
+| `pdf-text` | its lines, grouped by `orphans` and `widows`; one unit if it is short, has `break-inside: avoid`, a fixed height, a `transform` or an `overflow` other than `visible` |
 | `pdf-row`, `pdf-image`, an empty `pdf-view` | one unit |
 
 Wrappers can nest to any depth, so a table inside a column `pdf-view` inside another column `pdf-view` still yields its rows as units. A table inside a cell or inside a row `pdf-view` is part of that unit.
@@ -30,7 +31,7 @@ If the page's own `flex-direction` is `row`, its whole content is one unit.
 
 ### Keep units small
 
-A table row, a row `pdf-view` or a `pdf-view` with a `transform` is never split, with everything inside it, text included. Avoid wrapping long lists in a row `pdf-view`.
+A table row, a row `pdf-view` or a `pdf-view` with a `transform` or an `overflow` other than `visible` is never split, with everything inside it, text included. Avoid wrapping long lists in a row `pdf-view`.
 
 ## Text across pages
 
@@ -42,7 +43,7 @@ A `pdf-text` that is a unit by the rules above, as a child of the page or of a c
 
 - `orphans` is the fewest lines left at the bottom of a page before the break, and `widows` the fewest carried to the top of the next. Both are integers of at least 1, are inherited, and default to 2.
 - A text cut by `max-lines` splits the same way, over the lines it keeps.
-- A text with fewer than `orphans + widows` lines moves to the next page whole, as do texts with `break-inside: avoid`, a fixed `height`, a `max-height` or a `transform`.
+- A text with fewer than `orphans + widows` lines moves to the next page whole, as do texts with `break-inside: avoid`, a fixed `height`, a `max-height`, a `transform` or an `overflow` other than `visible`.
 - A text longer than a page continues over as many pages as it needs. The first `orphans` and last `widows` lines always stay together, and a page in the middle keeps at least as many lines as the larger of the two. Each page takes as many lines as fit while the rest can still be laid out that way, so with lines of very different heights, such as a very large `pdf-span`, a page can end early or the text can start on the next page.
 - When no layout keeps those limits, because a few lines are taller than most of a page, lines are placed one by one between the first and last groups, and a page in the middle can have fewer lines.
 - Its top padding and border stay with its first lines, the bottom ones with its last lines. A background or border is sliced like a [wrapper's](#wrapper-backgrounds-and-borders).

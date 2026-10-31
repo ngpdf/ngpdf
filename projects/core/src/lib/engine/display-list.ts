@@ -33,7 +33,8 @@ interface Cuts {
 /**
  * Clipping: a clipped box carries `limit`, the page y below which nothing is drawn. Rects, lines
  * and paths are shortened to it, text lines that would end below it are dropped, and images get
- * their `clip` rectangle cut at it. No op gained a clip field.
+ * their `clip` rectangle cut at it. No op gained a clip field. A box with `overflow: hidden`
+ * puts what it holds between a `clip` and an `unclip` op instead.
  */
 /** What a pdf-page-number needs to draw its text on one sheet. */
 interface Numbering {
@@ -128,6 +129,28 @@ function drawBox(
   const contentWidth = Math.max(0, box.w - inset.left - inset.right);
   const contentHeight = Math.max(0, box.h - inset.top - inset.bottom);
 
+  const clips =
+    style.overflow === 'hidden' &&
+    (box.children.length > 0 ||
+      box.text !== undefined ||
+      box.image !== undefined ||
+      box.node.tag === 'pdf-page-number');
+  if (clips) {
+    // The padding box, cut at the limit like the background.
+    const clipBottom = Math.min(y + box.h - bottom, limit);
+    const clipWidth = Math.max(0, box.w - left - right);
+    const clipHeight = Math.max(0, clipBottom - y - top);
+    out.push({
+      op: 'clip',
+      x: x + left,
+      y: y + top,
+      w: clipWidth,
+      h: clipHeight,
+      // Uneven borders can leave inner radii too large for the padding box.
+      radii: fitRadii(innerRadii(radii, box.border), clipWidth, clipHeight, NOT_CUT),
+    });
+  }
+
   for (const child of box.children) {
     const nested = { top: false, bottom: false };
     drawBox(child, x + child.x, y + child.y, limit, nested, opacity, numbering, out);
@@ -188,12 +211,32 @@ function drawBox(
     }
   }
 
+  if (clips) out.push({ op: 'unclip' });
+
   if (transformed) {
     // A box that drew nothing needs no transform.
     if (out.length === firstOp + 1) out.pop();
     else out.push({ op: 'untransform' });
   }
 }
+
+/**
+ * The radii of the padding box: each outer radius less the wider of the two borders beside it,
+ * never below 0. CSS takes the widths off the two axes of an elliptic corner apart; corners here
+ * are circular, so one radius per corner is close enough.
+ */
+function innerRadii(radii: Corners<number>, border: Box['border']): Corners<number> {
+  const inset = (radius: number, a: number, b: number): number =>
+    Math.max(0, radius - Math.max(a, b));
+  return {
+    topLeft: inset(radii.topLeft, border.top, border.left),
+    topRight: inset(radii.topRight, border.top, border.right),
+    bottomRight: inset(radii.bottomRight, border.bottom, border.right),
+    bottomLeft: inset(radii.bottomLeft, border.bottom, border.left),
+  };
+}
+
+const NOT_CUT = { top: false, bottom: false } as const;
 
 function offsetIn(offset: Offset, size: number): number {
   return typeof offset === 'number' ? offset : (offset.percent / 100) * size;
@@ -461,8 +504,9 @@ function drawPageNumber(
 
 /**
  * The draw operations of one page, in paint order: decorations, then the placed units, then the
- * page number. Within a box: background, borders, children, then its own text and image, all
- * between a `transform` and an `untransform` op when the box has a `transform`.
+ * page number. Within a box: background, borders, then children and its own text and image,
+ * clipped to the padding box with `overflow: hidden`, all between a `transform` and an
+ * `untransform` op when the box has a `transform`.
  */
 export function displayList(
   page: PageLayout,

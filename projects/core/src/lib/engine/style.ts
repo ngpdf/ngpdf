@@ -79,6 +79,8 @@ export interface ResolvedStyle extends TextStyle {
   /** Applied left to right when drawn; empty for `none`. Layout never reads it. */
   readonly transform: readonly TransformFunction[];
   readonly transformOrigin: { readonly x: Offset; readonly y: Offset };
+  /** `hidden` clips the content to the padding box; `clip`, `scroll` and `auto` read as hidden. */
+  readonly overflow: 'visible' | 'hidden';
   readonly breakBefore: boolean;
   readonly breakAfter: boolean;
   readonly breakInside: 'auto' | 'avoid';
@@ -557,6 +559,7 @@ function defaultStyle(node: PdfNode, inherited: TextStyle): Mutable<ResolvedStyl
     objectFit: 'contain',
     transform: [],
     transformOrigin: CENTER_ORIGIN,
+    overflow: 'visible',
     breakBefore: propsOf(node)['breakBefore'] === true,
     breakAfter: propsOf(node)['breakAfter'] === true,
     breakInside: 'auto',
@@ -751,6 +754,14 @@ function apply(
     case 'transform-origin':
       style.transformOrigin = parseTransformOrigin(value, tag);
       break;
+    case 'overflow': {
+      const keyword = oneOf(value, ['visible', 'hidden', 'clip', 'scroll', 'auto'], property, tag);
+      // A page is not a box to clip, and a table paginates by rows.
+      if (tag !== 'pdf-page' && tag !== 'pdf-table') {
+        style.overflow = keyword === 'visible' ? 'visible' : 'hidden';
+      }
+      break;
+    }
     case 'break-before':
       style.breakBefore = style.breakBefore || keywordOf(value) === 'page';
       break;

@@ -751,6 +751,133 @@ describe('displayList', () => {
     });
   });
 
+  describe('overflow: hidden', () => {
+    const CONTENT_WIDTH = 595.28 - 72;
+    const kinds = (ops: readonly DrawOp[]) => ops.map((op) => op.op);
+
+    it('clips the content to the padding box, after the background and border', () => {
+      const style = {
+        overflow: 'hidden',
+        'background-color': '#eee',
+        border: '2 solid #000',
+        padding: '4',
+        'border-radius': '10',
+      };
+      const laid = layout(page([el('pdf-view', style, [text('Hello')])]))[0]!;
+      const ops = list(laid, 0, 1);
+      expect(kinds(ops)).toEqual([
+        'rect',
+        'path',
+        'path',
+        'path',
+        'path',
+        'clip',
+        'text',
+        'unclip',
+      ]);
+      const box = laid.placed[0]!.box;
+      const clip = only(ops, 'clip')[0]!;
+      expect(clip).toMatchObject({ x: 38, y: 38, h: box.h - 4 });
+      expect(clip.w).toBeCloseTo(CONTENT_WIDTH - 4, 3);
+      // Each corner's radius less the wider border beside it.
+      expect(clip.radii).toEqual({ topLeft: 8, topRight: 8, bottomRight: 8, bottomLeft: 8 });
+    });
+
+    it('takes the wider adjacent border off each corner, never below 0', () => {
+      const style = {
+        overflow: 'hidden',
+        'border-width': '2 6 2 12',
+        'border-radius': '10 10 4 4',
+      };
+      const ops = list(layout(page([el('pdf-view', style, [text('Hello')])]))[0]!, 0, 1);
+      expect(only(ops, 'clip')[0]!.radii).toEqual({
+        topLeft: 0,
+        topRight: 4,
+        bottomRight: 0,
+        bottomLeft: 0,
+      });
+    });
+
+    it('puts the clip inside the transform of the same box', () => {
+      const style = { overflow: 'hidden', transform: 'rotate(10deg)' };
+      const ops = list(layout(page([el('pdf-view', style, [text('Hello')])]))[0]!, 0, 1);
+      const order = ops
+        .map((op) => op.op)
+        .filter((kind) => ['transform', 'clip', 'unclip', 'untransform'].includes(kind));
+      expect(order).toEqual(['transform', 'clip', 'unclip', 'untransform']);
+    });
+
+    it('scales the inner radii down to fit the clip', () => {
+      const style = {
+        overflow: 'hidden',
+        width: '100',
+        height: '200',
+        'border-width': '30',
+        'border-radius': '80 20 0 0',
+      };
+      const ops = list(layout(page([el('pdf-view', style, [text('Hello')])]))[0]!, 0, 1);
+      const [clip] = only(ops, 'clip');
+      expect(clip!.w).toBeCloseTo(40, 6);
+      // 50 and 0 across a 40pt-wide side: scaled by 0.8.
+      expect(clip!.radii.topLeft).toBeCloseTo(40, 6);
+      expect([clip!.radii.topRight, clip!.radii.bottomRight, clip!.radii.bottomLeft]).toEqual([
+        0, 0, 0,
+      ]);
+    });
+
+    it('clips text, an image and a page number drawn by the box itself', () => {
+      const asset: ImageAsset = { data: new Uint8Array([1]), width: 100, height: 50 };
+      const image = el('pdf-image', {
+        overflow: 'hidden',
+        width: '40',
+        height: '40',
+        'object-fit': 'cover',
+      });
+      const paragraph = text('Hello', { overflow: 'hidden', height: '6' });
+      const number = el('pdf-page-number', { overflow: 'hidden' }, [], { format: 'n' });
+      const laid = layout(
+        page([image, paragraph, el('pdf-view', {}, [number])]),
+        new Map([[image, asset]]),
+      );
+      expect(kinds(list(laid[0]!, 0, 1))).toEqual([
+        'clip',
+        'image',
+        'unclip',
+        'clip',
+        'text',
+        'unclip',
+        'clip',
+        'text',
+        'unclip',
+      ]);
+    });
+
+    it('nests the clips of nested views and adds none without overflow: hidden', () => {
+      const inner = el('pdf-view', { overflow: 'hidden', padding: '3' }, [text('Hello')]);
+      const outer = el('pdf-view', { overflow: 'hidden' }, [inner, text('World')]);
+      const plain = el('pdf-view', {}, [text('Plain')]);
+      const empty = el('pdf-view', { overflow: 'hidden', height: '10' });
+      const ops = list(layout(page([outer, plain, empty]))[0]!, 0, 1);
+      expect(kinds(ops)).toEqual(['clip', 'clip', 'text', 'unclip', 'text', 'unclip', 'text']);
+      const [outerClip, innerClip] = only(ops, 'clip');
+      expect(innerClip!.y).toBe(outerClip!.y);
+      expect(innerClip!.radii).toEqual(SQUARE);
+    });
+
+    it('cuts the clip at clipBottom with square bottom corners', () => {
+      const style = { overflow: 'hidden', border: '2 solid #000', 'border-radius': '8' };
+      const card = el('pdf-view', style, [el('pdf-view', { height: '900' }), text('lost')]);
+      const laid = layout(page([card]))[0]!;
+      const limit = laid.placed[0]!.clipBottom!;
+      const ops = list(laid, 0, 1);
+      const clip = only(ops, 'clip')[0]!;
+      expect(clip.y).toBe(38);
+      expect(clip.y + clip.h).toBeCloseTo(limit, 6);
+      expect(clip.radii).toEqual({ ...SQUARE, topLeft: 6, topRight: 6 });
+      expect(only(ops, 'unclip')).toHaveLength(1);
+    });
+  });
+
   describe('images', () => {
     const asset: ImageAsset = { data: new Uint8Array([1]), width: 100, height: 50 };
 
