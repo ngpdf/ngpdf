@@ -86,6 +86,7 @@
   "overrides": {
     "vite": "^8.3.5",
     "qs": "^6.16.0",
-    "basic-ftp": "^6.2.1"
+    "basic-ftp": "^6.2.1",
+    "minimatch": "^11.0.3"
   }
 }
