@@ -17,10 +17,10 @@ Starting from the children of the `pdf-page`, ngpdf looks inside some elements a
 | --- | --- |
 | `pdf-view` with `flex-direction: column` (the default) and children | a wrapper: its children are looked at in turn |
 | `pdf-view` with a `transform` | one unit, with everything inside it, so it is never cut across sheets |
-| `pdf-view` with `overflow: hidden` | one unit, with everything inside it, so its clip is never split |
+| `pdf-view` with `overflow: hidden`, `clip`, `scroll` or `auto` | one unit, with everything inside it, so its clip is never split |
 | `pdf-table` | a wrapper: each of its rows is a unit |
 | `pdf-view` with `flex-direction: row` | one unit, with everything inside it |
-| `pdf-text` | its lines, grouped by `orphans` and `widows`; one unit if it is short, has `break-inside: avoid`, a fixed height a `transform` or `overflow: hidden` |
+| `pdf-text` | its lines, grouped by `orphans` and `widows`; one unit if it is short, has `break-inside: avoid`, a fixed height, a `transform` or `overflow: hidden` |
 | `pdf-row`, `pdf-image`, an empty `pdf-view` | one unit |
 
 Wrappers can nest to any depth, so a table inside a column `pdf-view` inside another column `pdf-view` still yields its rows as units. A table inside a cell or inside a row `pdf-view` is part of that unit.
