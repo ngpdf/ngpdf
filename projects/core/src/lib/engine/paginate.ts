@@ -752,7 +752,8 @@ export function paginatePage(
     if (!draws(wrapper.box.style)) continue;
     const first = at(placements, wrapper.first);
     const last = at(placements, wrapper.last);
-    const pieces: { page: number; top: number; h: number }[] = [];
+    // `full` is the piece's height before the page bottom cuts it.
+    const pieces: { page: number; top: number; h: number; full: number }[] = [];
     for (let p = first.page; p <= last.page; p++) {
       const built = at(pages, p);
       const top = p === first.page ? Math.max(frame.top, wrapper.top + first.leadShift) : frame.top;
@@ -760,12 +761,13 @@ export function paginatePage(
       // On a cut, the piece still covers the wrappers nested in it that close on this page.
       const end =
         p === last.page ? wrapper.bottom : (closesAt.get(built.lastUnit) ?? lastHere.unit.bottom);
-      const bottom = Math.min(end + lastHere.unitShift, frame.bottom);
-      pieces.push({ page: p, top, h: Math.max(0, bottom - top) });
+      const full = Math.max(0, end + lastHere.unitShift - top);
+      pieces.push({ page: p, top, h: Math.min(full, Math.max(0, frame.bottom - top)), full });
     }
-    // A gradient runs once over the pieces put end to end, so each sheet shows its part.
-    const sliced = pieces.length > 1 && wrapper.box.style.backgroundImage !== null;
-    const height = pieces.reduce((sum, piece) => sum + piece.h, 0);
+    // A gradient runs once over the pieces put end to end, uncut, so each sheet shows its part.
+    const cut = pieces.length > 1 || pieces.some((piece) => piece.full > piece.h + EPSILON);
+    const sliced = cut && wrapper.box.style.backgroundImage !== null;
+    const height = pieces.reduce((sum, piece) => sum + piece.full, 0);
     let offset = 0;
     for (const piece of pieces) {
       at(pages, piece.page).decorations.push({
@@ -777,7 +779,7 @@ export function paginatePage(
         ...(sliced && { slice: { offset, height } }),
         ...fade(wrapper.opacity),
       });
-      offset += piece.h;
+      offset += piece.full;
     }
   }
 

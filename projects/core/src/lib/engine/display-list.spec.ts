@@ -1157,4 +1157,12 @@ describe('gradient backgrounds', () => {
     expect(rect!.h).toBeLessThan(1000);
     expect(rect!.gradient).toMatchObject({ y1: 36, y2: 1036 });
   });
+
+  it('spans the whole wrapper when the unit inside it is cut', () => {
+    const tall = el('pdf-view', { height: '1000', 'flex-direction': 'row' });
+    const style = { 'background-image': 'linear-gradient(red, blue)' };
+    const [rect] = only(list(layout(page([el('pdf-view', style, [tall])]))[0]!, 0, 1), 'rect');
+    expect(rect!.h).toBeLessThan(1000);
+    expect(rect!.gradient).toMatchObject({ y1: 36, y2: 1036 });
+  });
 });
