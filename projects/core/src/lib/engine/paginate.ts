@@ -654,6 +654,7 @@ export function paginatePage(
   const textAt = new Map(texts.map((run) => [run.first, run]));
   // While placing a split text: the units it starts a page at, or null to place it greedily.
   let textBreaks: Set<number> | null = null;
+  let textFirst = -1;
   let textLast = -1;
 
   const place = (box: Box, x: number, y: number, opacity: number): void => {
@@ -724,7 +725,11 @@ export function paginatePage(
     // A chain of units joined by `break-after: avoid`, with the unit after it, moves to the next
     // page when it does not fit here but fits a page. Only where the chain starts, so a chain too
     // tall for a page is never cut down to the part that fits.
-    if (joined(index) && !(index > 0 && joined(index - 1)) && current.units > 0) {
+    // The tail of a text that began on an earlier page stays where its plan put it: moving it
+    // could leave the page before with fewer lines than `orphans` and `widows` ask for.
+    const carriedTail =
+      index > textFirst && index <= textLast && at(placements, textFirst).page < pages.length - 1;
+    if (joined(index) && !(index > 0 && joined(index - 1)) && current.units > 0 && !carriedTail) {
       let end = index + 1;
       while (joined(end)) end++;
       let chainBottom = 0;
@@ -755,6 +760,7 @@ export function paginatePage(
     const run = textAt.get(index);
     if (run) {
       textBreaks = unit.header ? null : planText(run, next.top, current.units === 0);
+      textFirst = run.first;
       textLast = run.last;
     }
     const planned = index <= textLast ? textBreaks : null;

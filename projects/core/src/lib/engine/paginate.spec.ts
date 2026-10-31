@@ -518,6 +518,20 @@ describe('paginatePage: break-after: avoid', () => {
     expect(pages[1]!.placed.at(-1)!.box.node).toBe(body);
   });
 
+  it('leaves the tail of a text carried from an earlier page where its plan put it', () => {
+    // Groups [w0 w1], [w2] and [w3 w4]: the text breaks after w1, so w2 opens the second page.
+    const first = filler(25);
+    const text = paragraph(5, avoid);
+    // The last group fits with the block only on an empty page.
+    const body = block(AREA - 25);
+    const pages = paginate(page([first, text, body]));
+    const lines = (laid: PageLayout) =>
+      laid.placed.flatMap((p) => p.box.text?.lines.map((line) => line.text) ?? []);
+    expect(lines(pages[0]!)).toEqual(['w0', 'w1']);
+    expect(lines(pages[1]!)).toEqual(['w2', 'w3', 'w4']);
+    expect(nodesOn(pages)[2]).toEqual([body]);
+  });
+
   it('keeps a whole row with the next one when one of its cells asks for it', () => {
     const first = filler(30);
     const asking = el('pdf-row', { height: '20' }, [el('pdf-cell', avoid)]);

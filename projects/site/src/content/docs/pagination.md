@@ -91,7 +91,7 @@ On a wrapper, the break happens before its first unit. A break on a sheet that h
 - On a wrapper, the next sheet starts after its last unit. A split `pdf-text` breaks after its last line, never between its lines.
 - Inside a unit, the break comes after the whole unit: `break-after: page` on a `pdf-cell` breaks after its row.
 - When nothing follows on that `pdf-page`, it does nothing, so the last element never adds a blank sheet.
-- `break-after: avoid` keeps the element with what follows instead; see [Keeping a heading with what follows](#keeping-a-heading-with-what-follows). Other values do nothing.
+- `break-after: avoid` or `avoid-page` keeps the element with what follows instead; see [Keeping a heading with what follows](#keeping-a-heading-with-what-follows). Other values do nothing.
 
 ## Keeping a view or table on one sheet
 
@@ -125,6 +125,7 @@ On a wrapper, the break happens before its first unit. A break on a sheet that h
 - Elements in a row that all have `avoid`, such as a heading and a subheading, move together with the unit after the last one.
 - When the whole group would not fit on an empty sheet, `avoid` does nothing and the sheet breaks as usual, so it never pushes a sheet's worth of content forward.
 - A page break asked for between them wins, and an element already at the top of a sheet stays there.
+- The last lines of a `pdf-text` that began on an earlier sheet stay where the text's own breaks put them, so `orphans` and `widows` still hold. What follows moves alone.
 - A view or table with `break-inside: avoid` after it counts with its whole height.
 - It is a style only; there is no input for it, and it is not inherited.
 
