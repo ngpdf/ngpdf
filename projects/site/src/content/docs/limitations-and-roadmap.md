@@ -24,6 +24,7 @@ ngpdf v0.1 covers documents built from text, tables, boxes and images. This page
 - Children and images of a rounded view are not clipped to its corners.
 - `opacity` multiplies down the tree: a faded view's children are each faded, not composited as one group, so overlapping children show through each other.
 - A box cannot fill the remaining height of a page. Use a fixed height.
+- `transform` takes 2D rotations, scales and translations only: no `skew()`, `matrix()` or 3D functions.
 - Your own components inside a document are transparent, like `display: contents`. Styles on a component's host element are ignored with a warning. Style a `pdf-*` element inside it instead. The same goes for the document component you render.
 
 ### Tables
@@ -33,7 +34,7 @@ ngpdf v0.1 covers documents built from text, tables, boxes and images. This page
 
 ### Pagination
 
-- A unit taller than a page (a row, or a `pdf-view` in a column) is clipped to its page. So is a `pdf-text` that stays one unit: one inside a row, or one with `break-inside: avoid`, a fixed `height` or `max-height`, or fewer than `orphans + widows` lines. Other text breaks between lines instead.
+- A unit taller than a page (a row, or a `pdf-view` in a column) is clipped to its page. So is a `pdf-text` that stays one unit: one inside a row, or one with `break-inside: avoid`, a fixed `height` or `max-height`, a `transform`, or fewer than `orphans + widows` lines. A transformed unit is cut in its own coordinates, before the transform, so the cut turns with it. Other text breaks between lines instead.
 
 ### Images
 

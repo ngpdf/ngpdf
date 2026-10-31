@@ -1,7 +1,10 @@
 import { Component } from '@angular/core';
 import { PDF_ELEMENTS } from '@ngpdf/core';
 
-/** Styled runs inside one paragraph, each in a pdf-span, and a note cut to two lines. */
+/**
+ * Styled runs inside one paragraph, each in a pdf-span, a note cut to two lines, and a rotated
+ * stamp.
+ */
 @Component({
   selector: 'app-span-sample',
   imports: [PDF_ELEMENTS],
@@ -30,6 +33,13 @@ import { PDF_ELEMENTS } from '@ngpdf/core';
           <pdf-span style="font-family: 'Noto Sans'">Łódź</pdf-span>
           from <pdf-span style="font-family: Courier">WAREHOUSE-7</pdf-span>.
         </pdf-text>
+        <pdf-view
+          style="align-self: flex-end; margin-top: 24; padding: 4 10; border: 2 solid #b00020; border-radius: 4; transform: rotate(-12deg)"
+        >
+          <pdf-text style="color: #b00020; font-size: 16; font-weight: bold; letter-spacing: 2">
+            OVERDUE
+          </pdf-text>
+        </pdf-view>
       </pdf-page>
     </pdf-document>
   `,

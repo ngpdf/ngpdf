@@ -16,9 +16,10 @@ Starting from the children of the `pdf-page`, ngpdf looks inside some elements a
 | Element | Treated as |
 | --- | --- |
 | `pdf-view` with `flex-direction: column` (the default) and children | a wrapper: its children are looked at in turn |
+| `pdf-view` with a `transform` | one unit, with everything inside it, so it is never cut across sheets |
 | `pdf-table` | a wrapper: each of its rows is a unit |
 | `pdf-view` with `flex-direction: row` | one unit, with everything inside it |
-| `pdf-text` | its lines, grouped by `orphans` and `widows`; one unit if it is short, has `break-inside: avoid` or a fixed height |
+| `pdf-text` | its lines, grouped by `orphans` and `widows`; one unit if it is short, has `break-inside: avoid`, a fixed height or a `transform` |
 | `pdf-row`, `pdf-image`, an empty `pdf-view` | one unit |
 
 Wrappers can nest to any depth, so a table inside a column `pdf-view` inside another column `pdf-view` still yields its rows as units. A table inside a cell or inside a row `pdf-view` is part of that unit.
@@ -29,7 +30,7 @@ If the page's own `flex-direction` is `row`, its whole content is one unit.
 
 ### Keep units small
 
-A table row or a row `pdf-view` is never split, with everything inside it, text included. Avoid wrapping long lists in a row `pdf-view`.
+A table row, a row `pdf-view` or a `pdf-view` with a `transform` is never split, with everything inside it, text included. Avoid wrapping long lists in a row `pdf-view`.
 
 ## Text across pages
 
@@ -41,7 +42,7 @@ A `pdf-text` that is a unit by the rules above, as a child of the page or of a c
 
 - `orphans` is the fewest lines left at the bottom of a page before the break, and `widows` the fewest carried to the top of the next. Both are integers of at least 1, are inherited, and default to 2.
 - A text cut by `max-lines` splits the same way, over the lines it keeps.
-- A text with fewer than `orphans + widows` lines moves to the next page whole, as do texts with `break-inside: avoid`, a fixed `height` or a `max-height`.
+- A text with fewer than `orphans + widows` lines moves to the next page whole, as do texts with `break-inside: avoid`, a fixed `height`, a `max-height` or a `transform`.
 - A text longer than a page continues over as many pages as it needs. The first `orphans` and last `widows` lines always stay together, and a page in the middle keeps at least as many lines as the larger of the two. Each page takes as many lines as fit while the rest can still be laid out that way, so with lines of very different heights, such as a very large `pdf-span`, a page can end early or the text can start on the next page.
 - When no layout keeps those limits, because a few lines are taller than most of a page, lines are placed one by one between the first and last groups, and a page in the middle can have fewer lines.
 - Its top padding and border stay with its first lines, the bottom ones with its last lines. A background or border is sliced like a [wrapper's](#wrapper-backgrounds-and-borders).
@@ -130,6 +131,7 @@ Give a `pdf-view` that is a direct child of `pdf-page` the `fixed` input to draw
 - `fixed="top"` views stack at the top of the content area, and `fixed="bottom"` views at the bottom, in template order, with their margins. The flow gets the space between them on every sheet.
 - Bottom views sit above the `pdf-page-number`, which keeps the very bottom.
 - A fixed view is never a pagination unit: it is not split, moved or clipped, and page breaks on it or inside it (`breakBefore`, `breakAfter`, `break-before`, `break-after`) do nothing.
+- A fixed view can have a `transform`, such as a header turned along the page edge. It is drawn transformed on every sheet, and the flow keeps the space of its untransformed box.
 - Fixed views that leave no room for content fail the render with `ngpdf: fixed views leave no room for content on pdf-page`.
 - A `fixed` view nested deeper than a direct child of `pdf-page` is laid out as an ordinary view where it is, and logs `ngpdf: a fixed pdf-view must be a direct child of pdf-page` in development mode: inside the flow it stays in the flow, and inside a fixed view it repeats with that view.
 - The content of a fixed view is the same on every sheet, except a `pdf-page-number` inside it, which shows each sheet's number (see [Page numbers](#page-numbers)).

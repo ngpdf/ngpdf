@@ -128,8 +128,9 @@ function isPageNumber(node: PdfNode): boolean {
   return node.kind === 'element' && node.tag === 'pdf-page-number';
 }
 
+/** A transformed box is drawn as a whole, so it is never split. */
 function isWrapper(box: Box): boolean {
-  if (box.children.length === 0) return false;
+  if (box.children.length === 0 || box.style.transform.length > 0) return false;
   return (
     box.node.tag === 'pdf-table' ||
     (box.node.tag === 'pdf-view' && box.style.flexDirection === 'column')
@@ -138,7 +139,8 @@ function isWrapper(box: Box): boolean {
 
 /**
  * A text that may break between lines: long enough to leave `orphans` lines before a break and
- * `widows` after it, not kept whole with `break-inside: avoid`, and not of a fixed height.
+ * `widows` after it, not kept whole with `break-inside: avoid`, not of a fixed height, and not
+ * transformed.
  */
 function isSplittable(box: Box): boolean {
   const { style, text } = box;
@@ -147,7 +149,8 @@ function isSplittable(box: Box): boolean {
     text.lines.length >= style.orphans + style.widows &&
     style.breakInside !== 'avoid' &&
     style.height === 'auto' &&
-    style.maxHeight === 'auto'
+    style.maxHeight === 'auto' &&
+    style.transform.length === 0
   );
 }
 

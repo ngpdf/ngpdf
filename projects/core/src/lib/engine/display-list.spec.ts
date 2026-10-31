@@ -641,6 +641,116 @@ describe('displayList', () => {
     });
   });
 
+  describe('transform', () => {
+    const kinds = (ops: readonly DrawOp[]) => ops.map((op) => op.op);
+    type Matrix = Op<'transform'>['matrix'];
+
+    function expectMatrix(actual: Matrix, expected: readonly number[]): void {
+      expect(actual).toHaveLength(6);
+      actual.forEach((value, i) => {
+        expect(value).toBeCloseTo(expected[i]!, 9);
+      });
+    }
+
+    /** One 100x40 view at the content origin (36, 36), with the given style. */
+    function card(style: Record<string, string>, children: PdfNode[] = [text('Hi')]): DrawOp[] {
+      const view = el('pdf-view', { width: '100', height: '40', ...style }, children);
+      return list(layout(page([view]))[0]!, 0, 1);
+    }
+
+    it('wraps the whole box, background, border and text, in transform and untransform', () => {
+      const ops = card({
+        transform: 'rotate(90deg)',
+        'background-color': '#eee',
+        'border-bottom': '1 solid #000',
+      });
+      expect(kinds(ops)).toEqual(['transform', 'rect', 'line', 'text', 'untransform']);
+    });
+
+    it('rotates clockwise around the center of the border box by default', () => {
+      const [op] = only(card({ transform: 'rotate(90deg)' }), 'transform');
+      // Center (86, 56): x' = -(y - 56) + 86, y' = (x - 86) + 56.
+      expectMatrix(op!.matrix, [0, 1, -1, 0, 142, -30]);
+    });
+
+    it('applies the functions left to right, as CSS does', () => {
+      const origin = { 'transform-origin': 'left top' };
+      const [moved] = only(
+        card({ ...origin, transform: 'translate(10pt) rotate(90deg)' }),
+        'transform',
+      );
+      // T(36,36) · T(10,0) · R(90) · T(-36,-36)
+      expectMatrix(moved!.matrix, [0, 1, -1, 0, 82, 0]);
+      const [turned] = only(
+        card({ ...origin, transform: 'rotate(90deg) translate(10pt)' }),
+        'transform',
+      );
+      // T(36,36) · R(90) · T(10,0) · T(-36,-36): the translation turns with the box.
+      expectMatrix(turned!.matrix, [0, 1, -1, 0, 72, 10]);
+    });
+
+    it('resolves translate percentages and the origin against the border box', () => {
+      const [op] = only(
+        card({ transform: 'translate(50%, -25%) scale(2, 3)', 'transform-origin': '10% 1in' }),
+        'transform',
+      );
+      // Origin (36 + 10, 36 + 72); translate (50, -10); then scale about the origin.
+      expectMatrix(op!.matrix, [2, 0, 0, 3, -46 + 50, -216 - 10]);
+    });
+
+    it('leaves the layout as it is: the text sits where it would untransformed', () => {
+      const plain = only(card({}), 'text')[0]!;
+      const turned = only(card({ transform: 'rotate(30deg) scale(2)' }), 'text')[0]!;
+      expect(turned).toEqual(plain);
+    });
+
+    it('nests transforms, draws an image inside one and adds none without a transform', () => {
+      const asset: ImageAsset = { data: new Uint8Array([1]), width: 10, height: 10 };
+      const image = el('pdf-image', { width: '10', height: '10', transform: 'scale(2)' });
+      const inner = el('pdf-view', { transform: 'rotate(1rad)' }, [text('Hello')]);
+      const outer = el('pdf-view', { transform: 'translateY(5pt)' }, [inner, image]);
+      const plain = el('pdf-view', {}, [text('Plain')]);
+      const empty = el('pdf-view', { transform: 'rotate(10deg)', height: '10' });
+      const laid = layout(page([outer, plain, empty]), new Map([[image, asset]]))[0]!;
+      expect(kinds(list(laid, 0, 1))).toEqual([
+        'transform',
+        'transform',
+        'text',
+        'untransform',
+        'transform',
+        'image',
+        'untransform',
+        'untransform',
+        'text',
+      ]);
+    });
+
+    it('transforms a fixed view on every sheet', () => {
+      const header = el('pdf-view', { height: '20', transform: 'rotate(-5deg)' }, [text('Top')], {
+        fixed: 'top',
+      });
+      const blocks = Array.from({ length: 3 }, () => el('pdf-view', { height: '500' }));
+      const pages = layout(page([header, ...blocks]));
+      expect(pages).toHaveLength(3);
+      for (const [index, laid] of pages.entries()) {
+        expect(kinds(list(laid, index, pages.length))).toEqual([
+          'transform',
+          'text',
+          'untransform',
+        ]);
+      }
+    });
+
+    it('transforms a page number', () => {
+      const number = el('pdf-page-number', { transform: 'rotate(90deg)' }, [], { format: 'n' });
+      expect(kinds(list(layout(page([number]))[0]!, 0, 1))).toEqual([
+        'transform',
+        'text',
+        'untransform',
+      ]);
+    });
+  });
+
   describe('images', () => {
     const asset: ImageAsset = { data: new Uint8Array([1]), width: 100, height: 50 };
 

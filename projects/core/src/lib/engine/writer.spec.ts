@@ -617,6 +617,33 @@ describe('createPdfkitWriter', () => {
       expect(count(square, /\sc\n/g)).toBe(0);
     });
 
+    it('draws the ops between transform and untransform in the transformed space', async () => {
+      const rect = {
+        op: 'rect',
+        x: 0,
+        y: 0,
+        w: 20,
+        h: 10,
+        radii: SQUARE,
+        fill: '#ff0000',
+        opacity: 1,
+      } as const;
+      const content = contentOf(
+        await pdfText([
+          { op: 'transform', matrix: [0, 1, -1, 0, 100, 50] },
+          { op: 'transform', matrix: [2, 0, 0, 2, 0, 0] },
+          rect,
+          { op: 'untransform' },
+          { op: 'untransform' },
+          rect,
+        ]),
+      );
+      expect(content).toMatch(/\nq\n0 1 -1 0 100 50 cm\nq\n2 0 0 2 0 0 cm\nq\n/);
+      // Both transforms are restored after the first rect, so the second one is untransformed.
+      expect(content).toMatch(/0 0 20 10 re\nf\nQ\nQ\nQ\nq\n/);
+      expect(count(content, /\scm\n/g)).toBe(3);
+    });
+
     it('strokes a path op with its lines and curves', async () => {
       const content = contentOf(
         await pdfText([

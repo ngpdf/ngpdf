@@ -50,6 +50,9 @@ export type PathSegment =
   /** A cubic Bézier curve through control points `c1` and `c2`. */
   | { readonly kind: 'curve'; readonly c1: Point; readonly c2: Point; readonly to: Point };
 
+/** A PDF/CSS affine matrix `[a, b, c, d, e, f]`: x' = ax + cy + e, y' = bx + dy + f. */
+export type Matrix = readonly [number, number, number, number, number, number];
+
 export type DrawOp =
   | {
       readonly op: 'rect';
@@ -106,7 +109,10 @@ export type DrawOp =
       readonly clip: Clip;
       readonly data: Uint8Array;
       readonly opacity: number;
-    };
+    }
+  /** Transforms every op up to the matching `untransform`; transforms nest. */
+  | { readonly op: 'transform'; readonly matrix: Matrix }
+  | { readonly op: 'untransform' };
 
 export interface FontMetrics {
   /** With `ligatures` false, the optional ligatures (liga, clig, dlig) are left out. */
@@ -637,6 +643,14 @@ function drawOp(doc: Doc, op: DrawOp, dataUrls: WeakMap<Uint8Array, string>): vo
       doc.restore();
       return;
     }
+    case 'transform':
+      // Restored by the matching untransform, so the ops between are drawn in this space.
+      doc.save();
+      doc.transform(...op.matrix);
+      return;
+    case 'untransform':
+      doc.restore();
+      return;
     default:
       return assertNever(op);
   }
