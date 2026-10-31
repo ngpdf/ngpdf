@@ -110,7 +110,7 @@ Anything else, such as `hsl()`, `currentColor` or `var(--brand)`, throws `ngpdf:
 - `border-radius` takes one to four lengths, from the top-left corner clockwise, as in CSS. `border-top-left-radius`, `border-top-right-radius`, `border-bottom-right-radius` and `border-bottom-left-radius` set one corner. The background and the borders both follow the rounded corners. When the radii on a side add up to more than its length, all four are scaled down together.
 - Where two border sides of different widths or colors meet at a rounded corner, each keeps its own up to the middle of the arc.
 - A view split across pages keeps square corners where the page cuts it.
-- Children and images of a rounded view are not clipped to its corners unless it has [`overflow: hidden`](#overflow).
+- Children and images of a rounded view are not clipped to its corners unless it has an [`overflow`](#overflow) other than `visible`.
 
 ## Overflow
 
@@ -151,9 +151,9 @@ By default, content that does not fit its box is drawn outside it. `overflow: hi
 - Angles take `deg`, `rad` or `turn`. A positive angle turns clockwise.
 - `scale(2)` scales both axes and `scale(2, 0.5)` each one. Translations take lengths, or a percentage of the element's own border box.
 - `transform-origin` takes one or two values: `left`, `center`, `right`, `top`, `bottom`, lengths or percentages of the border box. It defaults to `center`.
-- The whole element is transformed: its background, border, children, text and image. Its [`overflow: hidden`](#overflow) clip turns with it.
+- The whole element is transformed: its background, border, children, text and image. Its [`overflow`](#overflow) clip turns with it.
 - The layout does not change: sizes and positions are the same with or without a transform, and nothing around the element moves.
-- A transformed element can be drawn outside its box, past the page margins or off the sheet. Only an ancestor with `overflow: hidden` clips it.
+- A transformed element can be drawn outside its box, past the page margins or off the sheet. Only an ancestor with an `overflow` other than `visible` clips it.
 - A column `pdf-view` with a transform is one [pagination unit](/docs/pagination#units), and a transformed `pdf-text` stays whole on one sheet, so a rotated box is never cut across sheets.
 - Neither property is inherited. `transform` is ignored on a `pdf-page` and on a `pdf-table`, which keeps breaking between its rows; its value is still checked.
 - `skew()`, `matrix()` and the 3D functions throw, like any unknown function.
