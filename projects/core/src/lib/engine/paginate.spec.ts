@@ -445,6 +445,23 @@ describe('paginatePage: break-after: avoid', () => {
     expect(pages[0]!.placed.map((p) => p.box.node).slice(0, 2)).toEqual([roomy, stays]);
   });
 
+  it('counts the repeated header when joined rows would move to the next page', () => {
+    const header = row(20, true);
+    const first = row();
+    // Joined, the two rows fit a page only without the header that repeats above them.
+    const joinedRow = el('pdf-row', { height: String(AREA - 50), 'break-after': 'avoid' }, [
+      el('pdf-cell'),
+    ]);
+    const last = row(40);
+    const root = page([
+      el('pdf-table', {}, [header, first, joinedRow, last], { columns: ['1fr'] }),
+    ]);
+    expect(nodesOn(paginate(root))).toEqual([
+      [header, first, joinedRow],
+      [header, last],
+    ]);
+  });
+
   it('moves a chain of units joined by avoid with the first unit after them', () => {
     const first = filler(45);
     const [h1, h2, body] = [block(20, avoid), block(20, avoid), block()];

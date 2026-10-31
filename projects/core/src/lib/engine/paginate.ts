@@ -739,8 +739,10 @@ export function paginatePage(
         );
       }
       const chainTop = opensAt.get(index) ?? unit.top;
+      // On the next page, rows of a table get its header repeated above them.
+      const repeated = unit.header ? unit.header.height + unit.header.gap : 0;
       if (
-        chainBottom - chainTop <= contentHeight + EPSILON &&
+        chainBottom - chainTop + repeated <= contentHeight + EPSILON &&
         next.top - unit.top + chainBottom > frame.bottom + EPSILON
       ) {
         startPage();
