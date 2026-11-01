@@ -992,6 +992,11 @@ describe('resolveStyles property coverage', () => {
     );
   });
 
+  it('matches the line-height normal keyword in any case', () => {
+    expect(styleOf({ 'line-height': 'NORMAL' }).lineHeight).toBe(ROOT_TEXT_STYLE.lineHeight);
+    expect(styleOf({ 'line-height': 'Normal' }).lineHeight).toBe(ROOT_TEXT_STYLE.lineHeight);
+  });
+
   it('rejects percent where points are required', () => {
     expect(() => styleOf({ gap: '10%' })).toThrow('ngpdf: expected a length in "10%" on pdf-view');
     expect(() => styleOf({ 'font-size': 'auto' })).toThrow(/^ngpdf: expected a length/);
