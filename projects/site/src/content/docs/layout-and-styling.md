@@ -152,13 +152,23 @@ By default, content that does not fit its box is drawn outside it. `overflow: hi
 </pdf-view>
 ```
 
-A stop's alpha and the element's `opacity` multiply into the stop's opacity. A transparent stop takes the color of its neighbours, so `linear-gradient(red, transparent)` fades the red out instead of darkening it. A view split across pages keeps one gradient for its whole height: each sheet shows its part, like `box-decoration-break: slice`.
+A stop's alpha is its opacity; the element's `opacity` fades the whole box on top of it (see [Opacity](#opacity)). A transparent stop takes the color of its neighbours, so `linear-gradient(red, transparent)` fades the red out instead of darkening it. A view split across pages keeps one gradient for its whole height: each sheet shows its part, like `box-decoration-break: slice`.
 
 These throw an `ngpdf:` error: `repeating-linear-gradient()`, `repeating-radial-gradient()`, `conic-gradient()`, `url()`, several comma-separated backgrounds, explicit radial sizes such as `circle 40px`, color hints (`red, 30%, blue`) and stops with two positions.
 
 ## Opacity
 
-`opacity` is a number from 0 to 1 (values outside are clamped). It multiplies down the tree: a child of a view with `opacity: 0.5` is drawn at half its own opacity. Each child is faded on its own, not composited as one group, so overlapping children show through each other.
+`opacity` is a number from 0 to 1 (values outside are clamped). It fades an element and everything inside it as one picture, as in CSS: the content is drawn first, then the whole is made see-through. Overlapping children of a faded view don't show through each other, and text over a background in a faded card stays solid over that background. A faded view inside another faded view composes, so `0.5` inside `0.5` ends up at `0.25` over the page.
+
+```html
+<pdf-view style="opacity: 0.5; padding: 12; background-color: #1f2a44">
+  <pdf-text style="color: white">Draft</pdf-text>
+</pdf-view>
+```
+
+A faded element split across sheets is faded on each sheet, and so is a `fixed` view or a repeated table header. `opacity: 0` draws nothing, but links and anchors inside still work. A color's own alpha, such as `rgba(0, 0, 0, 0.5)`, still applies to what it paints, inside the faded element.
+
+Each faded element adds a small object to the file (a PDF transparency group). Fonts and images inside it are shared with the page, so nothing is embedded twice.
 
 ## Transforms
 

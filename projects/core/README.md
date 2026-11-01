@@ -102,8 +102,6 @@ The header row repeats on every page, rows are never split, and the text stays s
   for the document component you render: style its `pdf-document` or `pdf-page`, not its host.
 - Colors are hex (3, 4, 6 or 8 digits), `rgb()`/`rgba()`, the CSS named colors and
   `transparent`. Other forms, such as `hsl()`, throw.
-- `opacity` multiplies down the tree; a faded view's children are each faded, not composited as
-  one group, so overlapping children show through each other.
 - A table header row is not repeated on a page whose first row fits only without it.
 - Images fetched from a URL have no size limit; a very large image is downloaded in full.
 

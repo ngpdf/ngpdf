@@ -10,9 +10,6 @@ it does not affect a correct document. Items that change behaviour need a design
 - **Fill the remaining page height.** Pages lay out with an unbounded height, so a box cannot
   take "the rest of this page". The demo's capture report uses a fixed, computed image height
   instead (`projects/demo/src/app/documents/capture-report.ts`).
-- **Group opacity.** `opacity` multiplies down the tree, so overlapping children of a faded view
-  show through each other. True group compositing needs a transparency group (a PDF form
-  XObject) per faded box.
 - **Half-leading.** Text sits at the top of its line box; CSS splits the extra line height above
   and below the text.
 - **A clipped border line** of a unit taller than a page can overshoot the cut by half its width.

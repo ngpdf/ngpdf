@@ -318,7 +318,6 @@ describe('createPdfkitWriter', () => {
         h: 20,
         clip: { x: 5, y: 5, w: 20, h: 20 },
         data: png,
-        opacity: 0.8,
       },
     ];
     const blob = await writer.write(
@@ -459,7 +458,7 @@ describe('createPdfkitWriter', () => {
       const jpeg = orientedJpeg(40, 20, orientation);
       const { width: w, height: h } = writer.imageSize(jpeg);
       const clip = { x: 0, y: 0, w: 100, h: 100 };
-      const ops: DrawOp[] = [{ op: 'image', x: 10, y: 20, w, h, clip, data: jpeg, opacity: 1 }];
+      const ops: DrawOp[] = [{ op: 'image', x: 10, y: 20, w, h, clip, data: jpeg }];
       const blob = await writer.write([{ width: 100, height: 100, ops }], info);
       const place = imagePlacement(new TextDecoder('latin1').decode(await blob.arrayBuffer()));
       // PDF space has y up; the box is x 10..30 and y 20..60 from the top of a 100pt page.
@@ -499,7 +498,7 @@ describe('createPdfkitWriter', () => {
     for (const [i, jpeg] of jpegs.entries()) {
       const { width: w, height: h } = writer.imageSize(jpeg);
       const clip = { x: 0, y: 0, w: 100, h: 100 };
-      const ops: DrawOp[] = [{ op: 'image', x: 10, y: 20, w, h, clip, data: jpeg, opacity: 1 }];
+      const ops: DrawOp[] = [{ op: 'image', x: 10, y: 20, w, h, clip, data: jpeg }];
       const blob = await writer.write([{ width: 100, height: 100, ops }], info);
       const place = imagePlacement(new TextDecoder('latin1').decode(await blob.arrayBuffer()));
       const [x0, y0] = place(0, 0);
@@ -785,6 +784,195 @@ describe('createPdfkitWriter', () => {
       });
     });
 
+    describe('groups', () => {
+      const RED: DrawOp = {
+        op: 'rect',
+        x: 10,
+        y: 10,
+        w: 50,
+        h: 50,
+        radii: SQUARE,
+        fill: '#ff0000',
+        opacity: 1,
+      };
+      const BLUE: DrawOp = { ...RED, x: 30, y: 30, fill: '#0000ff' };
+
+      /** The dictionary and stream of each Form XObject, by object number. */
+      function forms(pdf: string): { id: string; dict: string; body: string }[] {
+        const pattern =
+          /(\d+) 0 obj\n(<<\n\/Type \/XObject\n\/Subtype \/Form\n[\s\S]*?>>)\nstream\n([\s\S]*?)\nendstream/g;
+        return [...pdf.matchAll(pattern)]
+          .map((match) => ({ id: match[1] ?? '', dict: match[2] ?? '', body: match[3] ?? '' }))
+          .filter((form) => form.dict.includes('/S /Transparency'));
+      }
+
+      /** The page's content stream: the one the page dictionary names. */
+      function pageContent(pdf: string): string {
+        const id = /\/Contents (\d+) 0 R/.exec(pdf)?.[1] ?? '';
+        const match = new RegExp(
+          `\\n${id} 0 obj\\n<<[\\s\\S]*?>>\\nstream\\n([\\s\\S]*?)\\nendstream`,
+        ).exec(pdf);
+        return match?.[1] ?? '';
+      }
+
+      it('draws the ops of a group in a transparency group XObject, painted at its opacity', async () => {
+        const pdf = await pdfText([{ op: 'group', opacity: 0.5 }, RED, BLUE, { op: 'ungroup' }]);
+        const [form, ...others] = forms(pdf);
+        expect(others).toEqual([]);
+        expect(form!.dict).toMatch(/\/Type \/XObject/);
+        expect(form!.dict).toMatch(/\/Group <<\n\/Type \/Group\n\/S \/Transparency\n>>/);
+        expect(form!.dict).toContain('/BBox [0 0 200 200]');
+        // The page's own resources, so a font or an image is never embedded twice.
+        const resources = /\/Resources (\d+ 0 R)/.exec(form!.dict)?.[1];
+        const pageResources = /\/Type \/Page\n[\s\S]*?\/Resources (\d+ 0 R)/.exec(pdf)?.[1];
+        expect(resources).toBeDefined();
+        expect(resources).toBe(pageResources);
+        // The rects are drawn at full opacity in the group, and only there.
+        expect(count(form!.body, / re\n/g)).toBe(2);
+        const page = pageContent(pdf);
+        expect(page).not.toMatch(/ re\n/);
+        const gs = /\/(Gs\d+) gs\n\/(Fm\d+) Do\n/.exec(page);
+        expect(gs).not.toBeNull();
+        expect(pdf).toMatch(new RegExp(`/${gs![2]!} ${form!.id} 0 R`));
+        expect(pdf).toMatch(/<<\n\/Type \/ExtGState\n\/ca 0\.5\n\/CA 0\.5\n>>/);
+        expect(count(page, /^q$/gm)).toBe(count(page, /^Q$/gm));
+        expect(count(form!.body, /^q$/gm)).toBe(count(form!.body, /^Q$/gm));
+      });
+
+      it('nests groups, each drawn in the group around it', async () => {
+        const pdf = await pdfText([
+          { op: 'group', opacity: 0.5 },
+          RED,
+          { op: 'group', opacity: 0.4 },
+          BLUE,
+          { op: 'ungroup' },
+          { op: 'ungroup' },
+        ]);
+        const all = forms(pdf);
+        expect(all).toHaveLength(2);
+        // The inner one ends first.
+        const [inner, outer] = all;
+        expect(inner!.body).toContain('0 0 1 scn');
+        expect(outer!.body).toContain('1 0 0 scn');
+        expect(outer!.body).toMatch(/\/Gs\d+ gs\n\/Fm\d+ Do\n/);
+        expect(pdf).toMatch(/\/ca 0\.4\n/);
+        expect(count(pageContent(pdf), / Do\n/g)).toBe(1);
+      });
+
+      it('shares fonts and images with the page, embedding each once', async () => {
+        const png = tinyPng();
+        const image: DrawOp = {
+          op: 'image',
+          x: 0,
+          y: 0,
+          w: 3,
+          h: 2,
+          clip: { x: 0, y: 0, w: 3, h: 2 },
+          data: png,
+        };
+        const words: DrawOp = { ...TEXT_OP, opacity: 1, underline: false, strike: false };
+        const pdf = await pdfText([
+          words,
+          image,
+          { op: 'group', opacity: 0.5 },
+          words,
+          image,
+          { op: 'ungroup' },
+        ]);
+        expect(count(pdf, /\/Type \/Font\n/g)).toBe(1);
+        expect(count(pdf, /\/Subtype \/Image\n/g)).toBe(1);
+        const [form] = forms(pdf);
+        expect(form!.body).toMatch(/\/F\d+ 12 Tf/);
+        expect(form!.body).toMatch(/\/I\d+ Do/);
+      });
+
+      it('maps a gradient in a group to the space the group is drawn in', async () => {
+        const stops = [
+          { offset: 0, color: '#ff0000', opacity: 1 },
+          { offset: 1, color: '#0000ff', opacity: 0.5 },
+        ];
+        const pdf = await pdfText([
+          { op: 'group', opacity: 0.5 },
+          { ...RED, gradient: { kind: 'linear', x1: 10, y1: 10, x2: 60, y2: 10, stops } },
+          { op: 'ungroup' },
+        ]);
+        // Without pdfkit's flip of y, which the page applies before the group is drawn.
+        expect(pdf).toContain('/PatternType 2');
+        expect(pdf).toMatch(/\/Matrix \[1 0 0 1 0 0\]/);
+        expect(pdf).not.toContain('/Matrix [1 0 0 -1 0 200]');
+        expect(forms(pdf)[0]!.body).toMatch(/\/Sh\d+ scn/);
+      });
+
+      it('maps a gradient after a group through the page transform again', async () => {
+        const stops = [
+          { offset: 0, color: '#ff0000', opacity: 1 },
+          { offset: 1, color: '#0000ff', opacity: 1 },
+        ];
+        const pdf = await pdfText([
+          { op: 'group', opacity: 0.5 },
+          RED,
+          { op: 'ungroup' },
+          { ...RED, gradient: { kind: 'linear', x1: 10, y1: 10, x2: 60, y2: 10, stops } },
+        ]);
+        expect(pdf).toContain('/Matrix [1 0 0 -1 0 200]');
+      });
+
+      it('bounds a group under a transform by the page, in the space it is drawn in', async () => {
+        const pdf = await pdfText([
+          { op: 'transform', matrix: [2, 0, 0, 2, 50, 0] },
+          { op: 'group', opacity: 0.5 },
+          RED,
+          { op: 'ungroup' },
+          { op: 'untransform' },
+        ]);
+        expect(forms(pdf)[0]!.dict).toContain('/BBox [-25 0 75 100]');
+      });
+
+      it('gives a group under a transform that flattens the page an empty box', async () => {
+        const pdf = await pdfText([
+          { op: 'transform', matrix: [0, 0, 0, 0, 0, 0] },
+          { op: 'group', opacity: 0.5 },
+          RED,
+          { op: 'ungroup' },
+          { op: 'untransform' },
+        ]);
+        expect(forms(pdf)[0]!.dict).toContain('/BBox [0 0 0 0]');
+      });
+
+      it('rejects a group that is not closed, and an ungroup without a group', async () => {
+        await expect(pdfText([{ op: 'group', opacity: 0.5 }, RED])).rejects.toThrow(
+          'ngpdf: group without an ungroup',
+        );
+        await expect(pdfText([{ op: 'ungroup' }])).rejects.toThrow(
+          'ngpdf: ungroup without a group',
+        );
+      });
+
+      it('writes the links of a group where they would be without it', async () => {
+        const link: DrawOp = {
+          op: 'link',
+          x: 10,
+          y: 20,
+          w: 30,
+          h: 40,
+          kind: 'uri',
+          url: 'https://example.com/',
+        };
+        const rectOf = (pdf: string) => /\/Rect \[([^\]]*)\]/.exec(pdf)?.[1];
+        const plain = await pdfText([link]);
+        const grouped = await pdfText([
+          { op: 'transform', matrix: [1, 0, 0, 1, 5, 5] },
+          { op: 'group', opacity: 0.5 },
+          link,
+          RED,
+          { op: 'ungroup' },
+          { op: 'untransform' },
+        ]);
+        expect(rectOf(grouped)).toBeDefined();
+        expect(rectOf(grouped)).toBe(rectOf(plain));
+      });
+    });
+
     it('strokes a path op with its lines and curves', async () => {
       const content = contentOf(
         await pdfText([
@@ -832,7 +1020,6 @@ describe('createPdfkitWriter', () => {
             h: 20,
             clip: { x: 5, y: 5, w: 20, h: 20 },
             data: tinyPng(),
-            opacity: 0.8,
           },
         ]),
       );
@@ -862,7 +1049,6 @@ describe('createPdfkitWriter', () => {
           h: 2,
           clip: { x: 0, y: 0, w: 3, h: 2 },
           data: tinyPng(),
-          opacity: 0.8,
         },
       ]);
       const content = contentOf(pdf);
@@ -1038,7 +1224,6 @@ describe('createPdfkitWriter', () => {
         h: 2,
         clip: { x: 0, y: 0, w: 3, h: 2 },
         data,
-        opacity: 1,
       });
       await pdfText([image(shared), image(shared), image(shared)]);
       expect(btoaSpy).toHaveBeenCalledTimes(1);

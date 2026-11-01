@@ -78,6 +78,7 @@ const DOCUMENTS = [
     pages: 3,
     contains: ['Inspection log', 'Note 01:', 'Note 48:', 'Follow up next week', 'Page 3 of 3'],
   },
+  { name: 'opacity-sample', pages: 1, contains: ['Faded content', 'Not approved yet.'] },
 ];
 
 const update = process.argv.includes('--update');

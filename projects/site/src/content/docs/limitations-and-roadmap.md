@@ -23,7 +23,6 @@ ngpdf v0.1 covers documents built from text, tables, boxes and images. This page
 - Colors are hex (3, 4, 6 or 8 digits), `rgb()`/`rgba()`, the CSS named colors and `transparent`. Other forms, such as `hsl()`, throw.
 - Children and images of a rounded view are clipped to its corners only with an `overflow` other than `visible`.
 - Backgrounds are a color and one `linear-gradient()` or `radial-gradient()`. No background images, no `repeating-*` or `conic-gradient()`, no explicit radial sizes and no color hints.
-- `opacity` multiplies down the tree: a faded view's children are each faded, not composited as one group, so overlapping children show through each other.
 - A box cannot fill the remaining height of a page. Use a fixed height.
 - `transform` takes 2D rotations, scales and translations only: no `skew()`, `matrix()` or 3D functions.
 - `position` is `static`, `relative` or `absolute`: no `fixed`, `sticky` or `z-index`. An absolute element is never split across sheets, and against the page its `bottom` is measured on the whole content, not on one sheet.
@@ -68,7 +67,6 @@ These items are in the [v0.2 roadmap](https://github.com/ngpdf/ngpdf/blob/main/d
 ### Layout
 
 - Fill the remaining page height.
-- Group opacity, so a faded view is composited as one.
 - Half-leading: extra line height split above and below the text, as in CSS.
 - Table headers: a warning or a fix when a header is dropped or too tall to repeat, and `breakBefore` kept on header rows.
 

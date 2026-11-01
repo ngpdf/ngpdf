@@ -147,9 +147,9 @@ invalidation would buy nothing here.
 
 ### `DrawOp` handling: a discriminated union and an exhaustive `switch`, no Visitor
 
-- **Context.** The writer and the tests act on eleven draw operation kinds: `rect`, `line`,
+- **Context.** The writer and the tests act on thirteen draw operation kinds: `rect`, `line`,
   `path`, `text`, `image`, `transform` with its closing `untransform`, `clip` with its closing
-  `unclip`, `link` and `anchor`.
+  `unclip`, `group` with its closing `ungroup`, `link` and `anchor`.
 - **Decision.** `DrawOp` is a TypeScript discriminated union. Code that handles it uses a
   `switch (op.op)` with an `assertNever` default, so adding a kind fails to compile wherever it is
   not handled.

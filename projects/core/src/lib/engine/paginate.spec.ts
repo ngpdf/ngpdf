@@ -1374,14 +1374,19 @@ describe('paginatePage: position', () => {
     expect(placedOf(pages, stamp).y).toBeCloseTo(CONTENT_TOP, 6);
   });
 
-  it('fades an absolute box taken out of a unit with the static views it leaves', () => {
+  it('groups an absolute box taken out of a unit with the faded views it leaves', () => {
     const stamp = badge({ top: '0', left: '0' });
-    const faded = el('pdf-view', { opacity: '0.5', 'flex-direction': 'row' }, [
-      el('pdf-view', { opacity: '0.4' }, [block(), stamp]),
-    ]);
+    const inner = el('pdf-view', { opacity: '0.4' }, [block(), stamp]);
+    const faded = el('pdf-view', { opacity: '0.5', 'flex-direction': 'row' }, [inner]);
     const pages = paginate(page([faded]));
     expect(nodesOn(pages)).toEqual([[faded, stamp]]);
-    expect(placedOf(pages, stamp).opacity).toBeCloseTo(0.2, 6);
+    expect(placedOf(pages, stamp).groups).toEqual([
+      { node: faded, opacity: 0.5 },
+      { node: inner, opacity: 0.4 },
+    ]);
+    // The unit's own opacity moves to its group, so it is not applied twice.
+    expect(placedOf(pages, faded).groups).toEqual([{ node: faded, opacity: 0.5 }]);
+    expect(placedOf(pages, faded).box.style.opacity).toBe(1);
   });
 
   it('cuts an absolute box taller than what is left of its sheet, with a warning', () => {
@@ -1452,10 +1457,29 @@ describe('paginatePage: position', () => {
     expect(pages[0]!.decorations[0]!.box.shift).toEqual({ x: 0, y: 30 });
   });
 
-  it('fades an absolute box with the views above it', () => {
+  it('groups an absolute box with the faded views above it', () => {
     const stamp = badge({ top: '0' });
-    const pages = paginate(page([el('pdf-view', { opacity: '0.5' }, [block(), stamp])]));
-    expect(placedOf(pages, stamp).opacity).toBe(0.5);
+    const view = el('pdf-view', { opacity: '0.5' }, [block(), stamp]);
+    const pages = paginate(page([view]));
+    expect(placedOf(pages, stamp).groups).toEqual([{ node: view, opacity: 0.5 }]);
+  });
+
+  it('puts the pieces and units of a faded wrapper in its group, outer first', () => {
+    const unit = block();
+    const inner = el('pdf-view', { opacity: '0.4', 'background-color': '#eee' }, [unit]);
+    const view = el('pdf-view', { opacity: '0.5' }, [inner]);
+    const pages = paginate(page([view], { padding: String(PADDING), opacity: '0.8' }));
+    const groups = [
+      { node: pages[0]!.placed[0]!.groups![0]!.node, opacity: 0.8 },
+      { node: view, opacity: 0.5 },
+      { node: inner, opacity: 0.4 },
+    ];
+    expect(groups[0]!.node.tag).toBe('pdf-page');
+    expect(placedOf(pages, unit).groups).toEqual(groups);
+    const [piece] = pages[0]!.decorations;
+    expect(piece!.box.node).toBe(inner);
+    expect(piece!.groups).toEqual(groups);
+    expect(piece!.box.style.opacity).toBe(1);
   });
 
   it('ignores page breaks asked for by absolute boxes', () => {

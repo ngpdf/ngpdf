@@ -1,10 +1,11 @@
+import type { PdfNode } from '../tree/node';
 import { toHex, type Color } from './color';
 import { fontChain, fontFor, shapeText, type FontRegistry } from './fonts';
 import { graphemeCount } from './graphemes';
 import { gradientFill } from './gradient';
 import { fitImage } from './images';
 import { pageNumberFormat, type Box } from './layout';
-import type { PageLayout, PlacedBox } from './paginate';
+import type { OpacityGroup, PageLayout, PlacedBox } from './paginate';
 import type { Corners, Offset, ResolvedStyle, TransformFunction } from './style';
 import { wordGaps, type TextLine } from './text';
 import type { DrawOp, FontMetrics, Matrix, PathSegment, Point } from './writer';
@@ -23,9 +24,30 @@ export interface DisplayListOptions {
 }
 
 /** The op color and opacity for `color`; null when its alpha leaves nothing to paint. */
-function paint(color: Color, opacity: number): { color: string; opacity: number } | null {
+function paint(color: Color): { color: string; opacity: number } | null {
   if (color.a <= 0) return null;
-  return { color: toHex(color), opacity: opacity * color.a };
+  return { color: toHex(color), opacity: color.a };
+}
+
+/** Ops that draw nothing: a faded box at opacity 0 keeps them, and needs no group for them. */
+function isMark(op: DrawOp): boolean {
+  return op.op === 'link' || op.op === 'anchor';
+}
+
+/**
+ * Makes the ops from `from` on one group at `opacity`. At 1 they stay as they are. At 0, or when
+ * they draw nothing, only their links and anchors are kept, without a group.
+ */
+function fade(out: DrawOp[], from: number, opacity: number): void {
+  if (opacity >= 1) return;
+  const drawn = out.slice(from);
+  if (opacity > 0 && !drawn.every(isMark)) {
+    out.splice(from, 0, { op: 'group', opacity });
+    out.push({ op: 'ungroup' });
+    return;
+  }
+  out.length = from;
+  for (const op of drawn) if (isMark(op)) out.push(op);
 }
 
 interface Cuts {
@@ -91,7 +113,6 @@ interface Deferred {
   readonly box: Box;
   readonly x: number;
   readonly y: number;
-  readonly opacity: number;
   /** The page-space matrix around the box, for link areas. */
   readonly matrix: Matrix;
 }
@@ -102,7 +123,6 @@ function drawBox(
   boxY: number,
   limit: number,
   cuts: Cuts,
-  inherited: number,
   /** The page-space matrix of the transforms around the box, for link areas. */
   outer: Matrix,
   numbering: Numbering,
@@ -114,12 +134,15 @@ function drawBox(
   const { style } = box;
   const x = boxX + (box.shift?.x ?? 0);
   const y = boxY + (box.shift?.y ?? 0);
-  // Opacity multiplies down the tree, so a faded view fades what it holds.
-  const opacity = inherited * style.opacity;
   const transformed = style.transform.length > 0;
+  const contains = style.position !== 'static' || transformed;
+  // A faded box is one group with all it holds, so the boxes it holds are not drawn at full
+  // opacity elsewhere.
+  const faded = style.opacity < 1;
   // A containing block draws its absolute descendants last, inside its own clip and transform;
-  // a static box hands them up, so its clip does not cut them, as in CSS.
-  const absolutes = style.position !== 'static' || transformed ? [] : deferred;
+  // a static box hands them up, so its clip does not cut them, as in CSS. A faded static box
+  // draws them last too, in its group but outside its clip.
+  const absolutes = contains || faded ? [] : deferred;
   const own = transformed ? transformMatrix(style, x, y, box.w, box.h) : undefined;
   const matrix = own ? multiply(outer, own) : outer;
   // The top left of the piece, outside its transform so an otherwise empty box stays untransformed.
@@ -130,6 +153,8 @@ function drawBox(
   }
   const firstOp = out.length;
   if (own) out.push({ op: 'transform', matrix: own });
+  // The group sits in the box's transform and holds its background, borders and clip.
+  const groupStart = out.length;
 
   const bottomEdge = Math.min(y + box.h, limit);
   // The edges cut by a page break or by the limit keep square corners.
@@ -137,7 +162,7 @@ function drawBox(
     top: cuts.top,
     bottom: cuts.bottom || y + box.h > limit,
   });
-  const background = style.backgroundColor && paint(style.backgroundColor, opacity);
+  const background = style.backgroundColor && paint(style.backgroundColor);
   // A gradient spans the whole box, so a slice or a clipped box shows its part of it.
   const gradient =
     style.backgroundImage &&
@@ -146,7 +171,6 @@ function drawBox(
       cuts.slice
         ? { x, y: y - cuts.slice.offset, w: box.w, h: cuts.slice.height }
         : { x, y, w: box.w, h: box.h },
-      opacity,
     );
   if ((background || gradient) && bottomEdge > y) {
     out.push({
@@ -166,7 +190,7 @@ function drawBox(
   const line = (x1: number, y1: number, x2: number, y2: number, width: number, c: Color): void => {
     const cutY1 = Math.min(y1, limit);
     const cutY2 = Math.min(y2, limit);
-    const stroke = paint(c, opacity);
+    const stroke = paint(c);
     // A line wholly below the limit is gone; a vertical one is shortened.
     if (!stroke || (y1 >= limit && y2 >= limit)) return;
     out.push({ op: 'line', x1, y1: cutY1, x2, y2: cutY2, width, ...stroke });
@@ -175,7 +199,7 @@ function drawBox(
   const rounded = (side: BorderSide, width: number, c: Color): boolean => {
     const path = roundedSide(side, { x, y, w: box.w, h: box.h }, radii, width / 2);
     if (!path) return false;
-    const stroke = paint(c, opacity);
+    const stroke = paint(c);
     const points = [path.from, ...path.segments.map((segment) => segment.to)];
     if (stroke && points.some((point) => point.y < limit)) {
       out.push({ op: 'path', ...clampPath(path, limit), width, ...stroke });
@@ -236,31 +260,21 @@ function drawBox(
 
   // In-flow children first. Positioned ones go over them in tree order, in the containing
   // block's queue, which positioned boxes deeper down join as their static parents are drawn. A
-  // relative box under a static clip stays in place instead, so the clip still cuts it.
+  // relative box under a static clip stays in place instead, so the clip still cuts it. A faded
+  // static box draws its queue outside its own clip.
   const ownQueue = absolutes !== deferred;
-  const inClip = !ownQueue && (clipped || clips);
+  const inClip = !contains && ((!ownQueue && clipped) || clips);
   const draw = (child: Box): void => {
     const [childX, childY] = [x + child.x, y + child.y];
-    drawBox(
-      child,
-      childX,
-      childY,
-      limit,
-      child.cut ?? NOT_CUT,
-      opacity,
-      matrix,
-      numbering,
-      out,
-      absolutes,
-      inClip,
-    );
+    const cut = child.cut ?? NOT_CUT;
+    drawBox(child, childX, childY, limit, cut, matrix, numbering, out, absolutes, inClip);
   };
   const relatives: Box[] = [];
   for (const child of box.children) {
     const { position } = child.style;
     if (position === 'static') draw(child);
     else if (position === 'absolute' || !inClip) {
-      absolutes.push({ box: child, x: x + child.x, y: y + child.y, opacity, matrix });
+      absolutes.push({ box: child, x: x + child.x, y: y + child.y, matrix });
     } else relatives.push(child);
   }
   for (const child of relatives) draw(child);
@@ -296,7 +310,7 @@ function drawBox(
           closeLink();
           if (run.link !== undefined) linked = { url: run.link, left: x, right };
         }
-        const ink = paint(run.color, opacity);
+        const ink = paint(run.color);
         if (!ink) continue;
         out.push({
           op: 'text',
@@ -320,7 +334,7 @@ function drawBox(
   if (box.node.tag === 'pdf-page-number') {
     const lineBottom = contentTop + style.fontSize * style.lineHeight;
     if (lineBottom <= limit + 1e-6) {
-      drawPageNumber(box, contentLeft, contentTop, contentWidth, opacity, numbering, out);
+      drawPageNumber(box, contentLeft, contentTop, contentWidth, numbering, out);
     }
   }
 
@@ -336,14 +350,17 @@ function drawBox(
         h: fitted.h,
         clip: { x: contentLeft, y: contentTop, w: contentWidth, h: clipHeight },
         data: box.image.data,
-        opacity,
       });
     }
   }
 
-  if (ownQueue) drawDeferred(absolutes, limit, numbering, out);
+  if (contains) drawDeferred(absolutes, limit, numbering, out);
 
   if (clips) out.push({ op: 'unclip' });
+
+  if (ownQueue && !contains) drawDeferred(absolutes, limit, numbering, out);
+
+  fade(out, groupStart, style.opacity);
 
   if (transformed) {
     // A box that drew nothing needs no transform.
@@ -577,12 +594,13 @@ function drawDeferred(
   out: DrawOp[],
 ): void {
   const cuts = { top: false, bottom: false };
-  for (const { box, x, y, opacity, matrix } of boxes) {
-    drawBox(box, x, y, limit, cuts, opacity, matrix, numbering, out, []);
+  for (const { box, x, y, matrix } of boxes) {
+    drawBox(box, x, y, limit, cuts, matrix, numbering, out, []);
   }
 }
 
-function drawPlaced(placed: PlacedBox, numbering: Numbering, out: DrawOp[]): void {
+function drawPlaced(placed: PlacedBox, numbering: Numbering): DrawOp[] {
+  const out: DrawOp[] = [];
   const limit = placed.clipBottom ?? Infinity;
   const absolutes: Deferred[] = [];
   drawBox(
@@ -591,7 +609,6 @@ function drawPlaced(placed: PlacedBox, numbering: Numbering, out: DrawOp[]): voi
     placed.y,
     limit,
     { top: placed.sliceTop === true, bottom: placed.sliceBottom === true, slice: placed.slice },
-    placed.opacity ?? 1,
     IDENTITY,
     numbering,
     out,
@@ -599,6 +616,49 @@ function drawPlaced(placed: PlacedBox, numbering: Numbering, out: DrawOp[]): voi
   );
   // Those of a static unit, such as a fixed view: over the unit, outside its clip.
   drawDeferred(absolutes, limit, numbering, out);
+  return out;
+}
+
+/**
+ * The ops of a sheet, gathered by the faded boxes their pieces belong to. A group takes the place
+ * of its first piece in paint order, so the pieces of one faded box, which pagination puts apart
+ * (a wrapper's background with the decorations, its units after them), become one picture.
+ */
+interface Layer {
+  readonly opacity: number;
+  readonly parts: (Layer | { readonly ops: readonly DrawOp[] })[];
+  readonly inner: Map<PdfNode, Layer>;
+}
+
+function newLayer(opacity: number): Layer {
+  return { opacity, parts: [], inner: new Map() };
+}
+
+function addTo(
+  root: Layer,
+  groups: readonly OpacityGroup[] | undefined,
+  ops: readonly DrawOp[],
+): void {
+  let layer = root;
+  for (const group of groups ?? []) {
+    let next = layer.inner.get(group.node);
+    if (!next) {
+      next = newLayer(group.opacity);
+      layer.inner.set(group.node, next);
+      layer.parts.push(next);
+    }
+    layer = next;
+  }
+  layer.parts.push({ ops });
+}
+
+function flatten(layer: Layer, out: DrawOp[]): void {
+  const from = out.length;
+  for (const part of layer.parts) {
+    if ('ops' in part) for (const op of part.ops) out.push(op);
+    else flatten(part, out);
+  }
+  fade(out, from, layer.opacity);
 }
 
 /** A page number's text, filled in for the sheet and aligned in its content box on one line. */
@@ -607,13 +667,12 @@ function drawPageNumber(
   left: number,
   top: number,
   contentWidth: number,
-  opacity: number,
   numbering: Numbering,
   out: DrawOp[],
 ): void {
   const { style } = box;
   const { options } = numbering;
-  const ink = paint(style.color, opacity);
+  const ink = paint(style.color);
   if (!ink) return;
   const format = numbering.format ?? pageNumberFormat(box.node);
   const filled = format
@@ -661,8 +720,9 @@ function drawPageNumber(
  * The draw operations of one page, in paint order: decorations, then the placed units, then the
  * page number. Within a box: background, borders, then in-flow children, relative children and
  * its own text and image, then the absolute boxes it is the containing block of, clipped to the
- * padding box with `overflow: hidden`, all between a `transform` and an `untransform` op when the
- * box has a `transform`.
+ * padding box with `overflow: hidden`, all between a `group` and an `ungroup` op when the box has
+ * an `opacity` below 1, and between a `transform` and an `untransform` op when it has a
+ * `transform`. The pieces of a faded box that pagination placed apart share one group per sheet.
  */
 export function displayList(
   page: PageLayout,
@@ -671,7 +731,6 @@ export function displayList(
   formatOverride: string | undefined,
   options: DisplayListOptions,
 ): DrawOp[] {
-  const out: DrawOp[] = [];
   const outlines = options.debug
     ? [outlinePath(page.content, DEBUG_COLORS.page, OUTLINE_WIDTH, DASH)]
     : undefined;
@@ -682,15 +741,20 @@ export function displayList(
     options,
     outlines,
   };
-  for (const decoration of page.decorations) drawPlaced(decoration, numbering, out);
-  for (const placed of page.placed) drawPlaced(placed, numbering, out);
-  if (page.pageNumber) {
-    const { box, x, y } = page.pageNumber;
-    const cuts = { top: false, bottom: false };
-    drawBox(box, x, y, Infinity, cuts, page.pageNumber.opacity ?? 1, IDENTITY, numbering, out, []);
+  const sheet = newLayer(1);
+  for (const placed of [...page.decorations, ...page.placed]) {
+    addTo(sheet, placed.groups, drawPlaced(placed, numbering));
   }
-  // On top of everything, outside every clip, so nothing hides them.
-  if (outlines) out.push(...outlines);
+  if (page.pageNumber) {
+    const { box, x, y, groups } = page.pageNumber;
+    const ops: DrawOp[] = [];
+    drawBox(box, x, y, Infinity, { top: false, bottom: false }, IDENTITY, numbering, ops, []);
+    addTo(sheet, groups, ops);
+  }
+  const out: DrawOp[] = [];
+  flatten(sheet, out);
+  // On top of everything, outside every clip and group, so nothing hides or fades them.
+  if (outlines) for (const op of outlines) out.push(op);
   return out;
 }
 

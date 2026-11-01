@@ -1,0 +1,11 @@
+Faded content
+Two overlapping squares in a view at 50%:
+
+
+
+
+A card at 60%, with a gradient band:
+
+
+   Draft
+   Not approved yet. Ask Rosa Example before sharing.

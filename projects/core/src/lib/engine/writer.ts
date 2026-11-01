@@ -141,7 +141,6 @@ export type DrawOp =
       readonly h: number;
       readonly clip: Clip;
       readonly data: Uint8Array;
-      readonly opacity: number;
     }
   /** Transforms every op up to the matching `untransform`; transforms nest. */
   | { readonly op: 'transform'; readonly matrix: Matrix }
@@ -156,6 +155,12 @@ export type DrawOp =
       readonly radii: Corners<number>;
     }
   | { readonly op: 'unclip' }
+  /**
+   * Draws every op up to the matching `ungroup` as one picture, then paints it at `opacity`, so
+   * the ops inside do not show through each other. Groups nest.
+   */
+  | { readonly op: 'group'; readonly opacity: number }
+  | { readonly op: 'ungroup' }
   /**
    * A clickable rectangle. It opens `url`, an http, https or mailto URL the engine checked, or
    * jumps to the anchor `name`. In page space: the transforms and clips around it do not apply.
@@ -423,6 +428,26 @@ interface PdfKitInternals {
   /** Typed here because `@types/pdfkit` takes numbers only, and an XYZ zoom of null keeps it. */
   addNamedDestination(name: string, fit: 'XYZ', x: number, y: number, zoom: null): void;
   outline: OutlineInternals;
+  page: PageInternals;
+  /** The current transform, which pdfkit maps gradients and annotations through. */
+  _ctm: number[];
+  _ctmStack: number[][];
+  ref(data: Record<string, unknown>): StreamInternals;
+}
+
+/** pdfkit 0.20's page: ops go to `content`, and fonts, images and states to `resources`. */
+interface PageInternals {
+  readonly width: number;
+  readonly height: number;
+  content: StreamInternals;
+  readonly resources: unknown;
+  readonly xobjects: Record<string, unknown>;
+}
+
+/** pdfkit 0.20's indirect object; a stream once something is written to it. */
+interface StreamInternals {
+  write(chunk: string): void;
+  end(): void;
 }
 
 /** pdfkit 0.20's name tree: keys in a plain object, sorted with `localeCompare` when written. */
@@ -627,14 +652,16 @@ export async function createPdfkitWriter(options: { compress?: boolean } = {}): 
       });
       // One data URL per source array in this write, so a repeated image is encoded once.
       const dataUrls = new WeakMap<Uint8Array, string>();
+      const forms = { count: 0 };
       try {
         for (const [index, page] of pages.entries()) {
           doc.addPage({ size: [page.width, page.height], margin: 0 });
-          const links: LinkOp[] = [];
-          for (const op of page.ops) drawOp(doc, op, dataUrls, links);
+          const state: PageState = { links: [], groups: [], forms };
+          for (const op of page.ops) drawOp(doc, op, dataUrls, state);
+          if (state.groups.length > 0) throw new Error('ngpdf: group without an ungroup');
           // After the drawing, when every transform is restored: pdfkit maps an annotation's
           // rect through the current transform.
-          for (const link of links) {
+          for (const link of state.links) {
             if (link.kind === 'uri') doc.link(link.x, link.y, link.w, link.h, link.url);
             else if (destinations.has(link.name)) {
               doc.goTo(link.x, link.y, link.w, link.h, link.name);
@@ -902,11 +929,94 @@ function pathTo(doc: Doc, segment: PathSegment): void {
 
 type LinkOp = Extract<DrawOp, { op: 'link' }>;
 
+/** A group being drawn: its form, and what the page had before the form took its place. */
+interface OpenGroup {
+  readonly form: StreamInternals;
+  readonly opacity: number;
+  readonly content: StreamInternals;
+  readonly ctm: number[];
+  readonly ctmStack: number[][];
+}
+
+/** What `drawOp` keeps across the ops of one page. */
+interface PageState {
+  readonly links: LinkOp[];
+  readonly groups: OpenGroup[];
+  /** Counts the forms of the whole document, so each has its own name. */
+  readonly forms: { count: number };
+}
+
+/**
+ * The page in the current space, as the bounding box of a form drawn there: nothing outside it
+ * would show. A transform that flattens the page leaves an empty box.
+ */
+function pageBox(ctm: readonly number[], width: number, height: number): number[] {
+  const [a = 1, b = 0, c = 0, d = 1, e = 0, f = 0] = ctm;
+  const det = a * d - b * c;
+  if (det === 0) return [0, 0, 0, 0];
+  // The inverse of the current transform, applied to the page's corners.
+  const toUser = (x: number, y: number): [number, number] => [
+    (d * (x - e) - c * (y - f)) / det,
+    (a * (y - f) - b * (x - e)) / det,
+  ];
+  const corners = [toUser(0, 0), toUser(width, 0), toUser(0, height), toUser(width, height)];
+  const xs = corners.map(([x]) => x);
+  const ys = corners.map(([, y]) => y);
+  return [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
+}
+
+/**
+ * Starts a transparency group: a form XObject that takes the page's place as the target of every
+ * op until `endGroup`. It shares the page's resources, so the fonts, images and patterns used in
+ * it are the page's own. pdfkit maps gradients through its current transform, which starts again
+ * from the identity in the form, as the form is drawn in the space it is called from.
+ */
+function beginGroup(doc: Doc, opacity: number, state: PageState): void {
+  const internals = doc as unknown as PdfKitInternals;
+  const { page } = internals;
+  const form = internals.ref({
+    Type: 'XObject',
+    Subtype: 'Form',
+    FormType: 1,
+    BBox: pageBox(internals._ctm, page.width, page.height),
+    Group: { Type: 'Group', S: 'Transparency' },
+    Resources: page.resources,
+  });
+  state.groups.push({
+    form,
+    opacity,
+    content: page.content,
+    ctm: internals._ctm,
+    ctmStack: internals._ctmStack,
+  });
+  page.content = form;
+  internals._ctm = [1, 0, 0, 1, 0, 0];
+  internals._ctmStack = [];
+}
+
+/** Ends the open group and paints it where it started, at its opacity for fills and strokes. */
+function endGroup(doc: Doc, state: PageState): void {
+  const internals = doc as unknown as PdfKitInternals;
+  const group = state.groups.pop();
+  if (!group) throw new Error('ngpdf: ungroup without a group');
+  const { page } = internals;
+  page.content = group.content;
+  internals._ctm = group.ctm;
+  internals._ctmStack = group.ctmStack;
+  group.form.end();
+  const name = `Fm${String(++state.forms.count)}`;
+  page.xobjects[name] = group.form;
+  doc.save();
+  doc.opacity(group.opacity);
+  doc.addContent(`/${name} Do`);
+  doc.restore();
+}
+
 function drawOp(
   doc: Doc,
   op: DrawOp,
   dataUrls: WeakMap<Uint8Array, string>,
-  links: LinkOp[],
+  state: PageState,
 ): void {
   switch (op.op) {
     case 'rect':
@@ -951,7 +1061,6 @@ function drawOp(
     case 'image': {
       doc.save();
       doc.rect(op.clip.x, op.clip.y, op.clip.w, op.clip.h).clip();
-      doc.fillOpacity(op.opacity);
       let url = dataUrls.get(op.data);
       if (url === undefined) {
         url = toDataUrl(op.data);
@@ -979,8 +1088,14 @@ function drawOp(
     case 'unclip':
       doc.restore();
       return;
+    case 'group':
+      beginGroup(doc, op.opacity, state);
+      return;
+    case 'ungroup':
+      endGroup(doc, state);
+      return;
     case 'link':
-      links.push(op);
+      state.links.push(op);
       return;
     case 'anchor':
       // Placed before the pages are written; see `placesOf`.
