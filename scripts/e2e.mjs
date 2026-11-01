@@ -13,6 +13,7 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { extname, join, normalize, resolve, sep } from 'node:path';
+import { inflateSync } from 'node:zlib';
 import puppeteer from 'puppeteer-core';
 
 const ROOT = resolve(import.meta.dirname, '..');
@@ -112,6 +113,17 @@ const DOCUMENTS = [
     name: 'canvas-sample',
     pages: 1,
     contains: ['Orders by month', 'Jan', 'Jun', 'Approved by', 'Field manager'],
+    // Painted paths on the page, by their operators (see `pathsOf`), and how many of each.
+    paths: {
+      // The six rounded bars of the chart, filled.
+      'm l c l c l c l c h f': 6,
+      // The four dashed grid lines.
+      'm l S dashed': 4,
+      // The chart's four borders, its baseline and the signature line.
+      'm l S': 6,
+      // The cross on the signature line: two strokes in one path.
+      'm l m l S': 1,
+    },
   },
 ];
 
@@ -381,6 +393,47 @@ function notesOf(pdf) {
   return notes;
 }
 
+/**
+ * Each painted path in the page content streams, as its path operators, then its paint operator,
+ * then `dashed` when a dash pattern is set; the result counts each such key. Clipping paths (`n`)
+ * are left out. pdfkit compresses the content, so each FlateDecode stream is inflated first.
+ */
+function pathsOf(pdf) {
+  const text = pdf.toString('latin1');
+  const counts = {};
+  for (const match of text.matchAll(/<<([^>]*(?:>(?!>)[^>]*)*)>>\s*stream\r?\n/g)) {
+    const length = Number(match[1].match(/\/Length (\d+)/)?.[1]);
+    if (!match[1].includes('/FlateDecode') || !(length > 0)) continue;
+    const start = match.index + match[0].length;
+    let content;
+    try {
+      content = inflateSync(pdf.subarray(start, start + length)).toString('latin1');
+    } catch {
+      continue;
+    }
+    // Only page content: a font or image stream does not open a graphics state.
+    if (!/^q$/m.test(content)) continue;
+    const dashes = [false];
+    let path = [];
+    let operands = [];
+    for (const [token] of content.matchAll(/\[[^\]]*\]|\S+/g)) {
+      if (token === 'q') dashes.push(dashes.at(-1));
+      else if (token === 'Q') dashes.pop();
+      else if (token === 'd') dashes[dashes.length - 1] = /\d/.test(operands.at(-2) ?? '');
+      else if (['m', 'l', 'c', 'v', 'y', 'h', 're'].includes(token)) path.push(token);
+      else if (['f', 'f*', 'S', 's', 'B', 'B*', 'b', 'b*', 'n'].includes(token)) {
+        if (token !== 'n' && path.length > 0) {
+          const key = `${path.join(' ')} ${token}${dashes.at(-1) ? ' dashed' : ''}`;
+          counts[key] = (counts[key] ?? 0) + 1;
+        }
+        path = [];
+      }
+      operands = /^[\d.\-[]/.test(token) ? [...operands, token] : [];
+    }
+  }
+  return counts;
+}
+
 function diff(expected, actual) {
   const a = expected.split('\n');
   const b = actual.split('\n');
@@ -516,6 +569,13 @@ try {
       const want = JSON.stringify(document.notes);
       const got = JSON.stringify(notesOf(readFileSync(join(OUT, `${document.name}.pdf`))));
       if (want !== got) problems.push(`notes: expected ${want}, got ${got}`);
+    }
+    if (document.paths) {
+      const found = pathsOf(readFileSync(join(OUT, `${document.name}.pdf`)));
+      for (const [key, count] of Object.entries(document.paths)) {
+        if ((found[key] ?? 0) !== count)
+          problems.push(`expected ${count} paths "${key}", got ${found[key] ?? 0}`);
+      }
     }
     if (update) {
       writeFileSync(expectedPath, text);
