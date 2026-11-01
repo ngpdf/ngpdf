@@ -131,7 +131,7 @@ How it behaves:
 - The file is encrypted with AES-256 (PDF 1.7, extension level 3) when `security` sets a password or turns a permission off. pdfkit does the encryption in JavaScript, so there is no extra dependency.
 - Every permission is allowed by default. Turn one off with `false`, or printing with `'none'`. A document with only a `userPassword` behaves as an unprotected one once it is open.
 - With a permission turned off and no `ownerPassword`, a random 32-byte owner password is used, so the permissions cannot be lifted by someone who knows only the user password.
-- A `security` with no password and no permission turned off writes an unencrypted file. So does an empty string as the password.
+- A `security` with no password and no permission turned off writes an unencrypted file. An empty string counts as no password: with no permission turned off it writes an unencrypted file, and with one turned off the file is still encrypted, with a random owner password unless `ownerPassword` is set.
 - A password that is not a string, a permission value not in the table, or an unknown field fails with `ngpdf: invalid security <field>`, for example `ngpdf: invalid security permissions.printing`.
 - A password longer than 127 bytes in UTF-8 fails too, whether it is that long as typed or after Unicode NFKC normalization (which can make it longer): AES-256 PDF passwords stop there, and a password cut short without a word would be a trap. A password with a character that SASLprep refuses, such as a tab or another control character, makes the render fail with `ngpdf: invalid security password` when the file is written. Error messages never contain the password.
 
