@@ -1,7 +1,8 @@
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import type { Yoga } from 'yoga-layout/load';
 import { createNode, type PdfNode } from '../tree/node';
-import type { LayoutContext } from './layout';
+import { collectAnchors } from './anchors';
+import type { Box, LayoutContext } from './layout';
 import { pageSize, paginatePage, type PageLayout, type PlacedBox } from './paginate';
 import { resolveStyles } from './style';
 import { createPdfkitWriter, type PdfWriter } from './writer';
@@ -1464,5 +1465,319 @@ describe('paginatePage: position', () => {
     ]);
     const pages = paginate(page([block(), badge({ 'break-before': 'page' }), inside, block()]));
     expect(pages).toHaveLength(1);
+  });
+});
+
+describe('paginatePage: table rows taller than a page', () => {
+  // No page number: 769.89pt of content, 76 lines of 10pt.
+  const AREA = A4_HEIGHT - 2 * PADDING;
+  const BOTTOM = CONTENT_TOP + AREA;
+
+  /** A text of `count` lines, one word per line, each `size` points high. */
+  function lines(count: number, size = 10, prefix = 'a'): PdfNode {
+    const words = Array.from({ length: count }, (_, i) => `${prefix}${String(i)}`).join(' ');
+    const style = { width: String(2.5 * size), 'font-size': String(size), 'line-height': '1' };
+    const node = el('pdf-text', style);
+    const run = createNode('text', '', words);
+    run.parent = node;
+    node.children.push(run);
+    return node;
+  }
+  const cell = (children: PdfNode[], style: Record<string, string> = {}): PdfNode =>
+    el('pdf-cell', style, children);
+  const tableOf = (rows: PdfNode[], style: Record<string, string> = {}): PdfNode =>
+    el('pdf-table', style, rows, { columns: ['1fr', '1fr'] });
+  const filler = (room: number): PdfNode => el('pdf-view', { height: String(AREA - room) });
+
+  /** The boxes of `node` drawn on a sheet, in the trees of its placed boxes. */
+  function boxesOf(laid: PageLayout, node: PdfNode): Box[] {
+    const found: Box[] = [];
+    const walk = (box: Box): void => {
+      if (box.node === node) found.push(box);
+      box.children.forEach(walk);
+    };
+    for (const placed of laid.placed) walk(placed.box);
+    return found;
+  }
+  const linesOf = (laid: PageLayout, node: PdfNode): string[] =>
+    boxesOf(laid, node).flatMap((box) => box.text?.lines.map((line) => line.text) ?? []);
+  const words = (prefix: string, from: number, to: number): string[] =>
+    Array.from({ length: to - from }, (_, i) => `${prefix}${String(from + i)}`);
+  const piecesOf = (laid: PageLayout, row: PdfNode): PlacedBox[] =>
+    laid.placed.filter((placed) => placed.box.node === row);
+
+  it('splits a row with one long cell across sheets, its short neighbour on the first', () => {
+    const long = lines(100);
+    const short = lines(3, 10, 'b');
+    const row = el('pdf-row', {}, [cell([long]), cell([short])]);
+    const warn = vi.fn<(message: string) => void>();
+    const pages = paginate(page([tableOf([row])]), warn);
+    expect(pages).toHaveLength(2);
+    expect(linesOf(pages[0]!, long)).toEqual(words('a', 0, 76));
+    expect(linesOf(pages[1]!, long)).toEqual(words('a', 76, 100));
+    expect(linesOf(pages[0]!, short)).toEqual(words('b', 0, 3));
+    expect(linesOf(pages[1]!, short)).toEqual([]);
+    const [first, second] = pages.map((laid) => piecesOf(laid, row));
+    expect(first).toHaveLength(1);
+    expect(second).toHaveLength(1);
+    expect(first![0]!.y).toBeCloseTo(CONTENT_TOP, 6);
+    expect(first![0]!.box.h).toBeCloseTo(760, 6);
+    expect(second![0]!.y).toBeCloseTo(CONTENT_TOP, 6);
+    expect(second![0]!.box.h).toBeCloseTo(240, 6);
+    // Both cells are drawn on both sheets, as tall as the piece, so the row's borders line up.
+    for (const piece of [first![0]!, second![0]!]) {
+      expect(piece.box.children.map((c) => c.h)).toEqual([piece.box.h, piece.box.h]);
+      expect(piece.box.children.map((c) => c.y)).toEqual([0, 0]);
+    }
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it('breaks each cell on its own, every piece as tall as its tallest cell piece', () => {
+    const small = lines(100);
+    const large = lines(60, 15, 'b');
+    const row = el('pdf-row', {}, [cell([small]), cell([large])]);
+    const pages = paginate(page([tableOf([row])]));
+    expect(pages).toHaveLength(2);
+    expect(linesOf(pages[0]!, small)).toHaveLength(76);
+    expect(linesOf(pages[0]!, large)).toHaveLength(51);
+    expect(linesOf(pages[1]!, small)).toHaveLength(24);
+    expect(linesOf(pages[1]!, large)).toHaveLength(9);
+    expect(piecesOf(pages[0]!, row)[0]!.box.h).toBeCloseTo(765, 6);
+    expect(piecesOf(pages[1]!, row)[0]!.box.h).toBeCloseTo(240, 6);
+    // Each cell's content starts at the top of the piece on the next sheet.
+    for (const node of [small, large]) expect(boxesOf(pages[1]!, node)[0]!.y).toBeCloseTo(0, 6);
+  });
+
+  it('repeats the header above every piece', () => {
+    const header = el('pdf-row', { height: '20' }, [cell([]), cell([])], { header: true });
+    const long = lines(100);
+    const row = el('pdf-row', {}, [cell([long]), cell([lines(3, 10, 'b')])]);
+    const pages = paginate(page([tableOf([header, row])]));
+    expect(pages).toHaveLength(2);
+    for (const laid of pages) {
+      expect(laid.placed.map((placed) => placed.box.node)).toEqual([header, row]);
+      expect(laid.placed[1]!.y).toBeCloseTo(CONTENT_TOP + 20, 6);
+    }
+    // 749.89pt below the header: 74 lines.
+    expect(linesOf(pages[0]!, long)).toEqual(words('a', 0, 74));
+    expect(linesOf(pages[1]!, long)).toEqual(words('a', 74, 100));
+  });
+
+  it('splits a row that fits a page only without its header, keeping the header', () => {
+    const header = el('pdf-row', { height: '20' }, [cell([]), cell([])], { header: true });
+    const long = lines(75);
+    const row = el('pdf-row', {}, [cell([long]), cell([])]);
+    const pages = paginate(page([tableOf([header, row])]));
+    expect(pages.map((laid) => laid.placed.map((placed) => placed.box.node))).toEqual([
+      [header, row],
+      [header, row],
+    ]);
+    expect(linesOf(pages[1]!, long)).toEqual(['a74']);
+  });
+
+  it('moves a row that fits on a page below its header whole, as before', () => {
+    const header = el('pdf-row', { height: '20' }, [cell([]), cell([])], { header: true });
+    const before = el('pdf-row', {}, [cell([lines(10)]), cell([])]);
+    const long = lines(74);
+    const row = el('pdf-row', {}, [cell([long]), cell([])]);
+    const pages = paginate(page([tableOf([header, before, row])]));
+    expect(pages).toHaveLength(2);
+    expect(linesOf(pages[0]!, long)).toEqual([]);
+    expect(linesOf(pages[1]!, long)).toHaveLength(74);
+    expect(piecesOf(pages[1]!, row)[0]!.box).toBe(pages[1]!.placed[1]!.box);
+    expect(pages[1]!.placed[1]!.box.children[0]!.children[0]!.node).toBe(long);
+  });
+
+  it('starts a row on this sheet only when a line of each non-empty cell fits', () => {
+    const layoutWith = (room: number, other: PdfNode[]): PageLayout[] => {
+      const row = el('pdf-row', {}, [cell([lines(100)]), cell(other)]);
+      return paginate(page([filler(room), tableOf([row])]));
+    };
+    const short = lines(3, 10, 'b');
+    const starts = layoutWith(35, [short]);
+    expect(linesOf(starts[0]!, short)).toEqual(words('b', 0, 3));
+    const heights = starts[0]!.placed.map((p) => p.box.h);
+    expect(heights[0]).toBeCloseTo(AREA - 35, 3);
+    expect(heights[1]).toBeCloseTo(30, 6);
+    // One line is enough: orphans and widows don't apply inside a cell.
+    const one = layoutWith(15, []);
+    expect(one[0]!.placed.map((p) => p.box.h)[1]).toBeCloseTo(10, 6);
+    const empty = layoutWith(35, []);
+    expect(empty[0]!.placed).toHaveLength(2);
+    // Less than a line left: the row starts on the next sheet.
+    const none = layoutWith(5, [lines(3, 10, 'b')]);
+    expect(none[0]!.placed).toHaveLength(1);
+    expect(none[1]!.placed[0]!.y).toBeCloseTo(CONTENT_TOP, 6);
+    // The neighbour opens with a box that cannot break and does not fit here.
+    const block = el('pdf-view', { height: '50' });
+    const blocked = layoutWith(35, [block]);
+    expect(blocked[0]!.placed).toHaveLength(1);
+    expect(boxesOf(blocked[1]!, block)).toHaveLength(1);
+  });
+
+  it('keeps a row with break-inside: avoid one unit, clipped, with the warning', () => {
+    const row = el('pdf-row', { 'break-inside': 'avoid' }, [cell([lines(100)]), cell([])]);
+    const warn = vi.fn<(message: string) => void>();
+    const pages = paginate(page([tableOf([row])]), warn);
+    expect(pages).toHaveLength(1);
+    expect(pages[0]!.placed[0]!.clipBottom).toBeCloseTo(BOTTOM, 6);
+    expect(warn).toHaveBeenCalledWith(
+      'ngpdf: pdf-row is taller than a page and is cut at the bottom',
+    );
+  });
+
+  it('never splits a header row', () => {
+    const header = el('pdf-row', {}, [cell([lines(100)]), cell([])], { header: true });
+    const row = el('pdf-row', { height: '20' }, [cell([]), cell([])]);
+    const warn = vi.fn<(message: string) => void>();
+    const pages = paginate(page([tableOf([header, row])]), warn);
+    expect(pages[0]!.placed).toHaveLength(1);
+    expect(pages[0]!.placed[0]!.box.node).toBe(header);
+    expect(pages[0]!.placed[0]!.clipBottom).toBeCloseTo(BOTTOM, 6);
+    expect(warn).toHaveBeenCalledWith(
+      'ngpdf: pdf-row header is taller than a page and is cut at the bottom',
+    );
+  });
+
+  it('keeps a row of cells that cannot break one unit, clipped, with the warning', () => {
+    const block = el('pdf-view', { height: '2000' });
+    const row = el('pdf-row', {}, [cell([block]), cell([])]);
+    const warn = vi.fn<(message: string) => void>();
+    const pages = paginate(page([tableOf([row])]), warn);
+    expect(pages).toHaveLength(1);
+    expect(pages[0]!.placed[0]!.box.node).toBe(row);
+    expect(pages[0]!.placed[0]!.clipBottom).toBeCloseTo(BOTTOM, 6);
+    expect(warn).toHaveBeenCalledTimes(1);
+  });
+
+  it('moves a box that cannot break to the next piece, and clips one taller than a page', () => {
+    const moved = el('pdf-view', { height: '300' });
+    const before = lines(70);
+    const after = lines(5, 10, 'cc');
+    const row = el('pdf-row', {}, [cell([before, moved, after]), cell([])]);
+    const pages = paginate(page([tableOf([row])]));
+    expect(pages).toHaveLength(2);
+    expect(linesOf(pages[0]!, before)).toHaveLength(70);
+    expect(boxesOf(pages[0]!, moved)).toEqual([]);
+    expect(boxesOf(pages[1]!, moved)[0]!.y).toBeCloseTo(0, 6);
+    expect(linesOf(pages[1]!, after)).toEqual(words('cc', 0, 5));
+
+    const huge = el('pdf-view', { height: '2000' });
+    const tail = lines(10, 10, 'cc');
+    const tall = el('pdf-row', {}, [cell([lines(10), huge, tail]), cell([])]);
+    const warn = vi.fn<(message: string) => void>();
+    const cut = paginate(page([tableOf([tall])]), warn);
+    expect(cut).toHaveLength(3);
+    expect(boxesOf(cut[1]!, huge)).toHaveLength(1);
+    expect(cut[1]!.placed[0]!.clipBottom).toBeCloseTo(BOTTOM, 6);
+    expect(linesOf(cut[2]!, tail)).toEqual(words('cc', 0, 10));
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn).toHaveBeenCalledWith(
+      'ngpdf: pdf-row is taller than a page and is cut at the bottom',
+    );
+  });
+
+  it('breaks between the children of a column view inside a cell, slicing the view', () => {
+    const texts = Array.from({ length: 10 }, (_, i) => lines(10, 10, `t${String(i)}-`));
+    const view = el('pdf-view', { border: '1 solid #000' }, texts);
+    const row = el('pdf-row', {}, [cell([view]), cell([])]);
+    const pages = paginate(page([tableOf([row])]));
+    expect(pages).toHaveLength(2);
+    const [top, rest] = pages.map((laid) => boxesOf(laid, view)[0]!);
+    expect(top!.cut).toEqual({ top: false, bottom: true });
+    expect(rest!.cut).toEqual({ top: true, bottom: false });
+    const all = pages.flatMap((laid) => texts.flatMap((t) => linesOf(laid, t)));
+    expect(all).toHaveLength(100);
+    expect(new Set(all).size).toBe(100);
+  });
+
+  it('breaks only between the children of a view when they cannot break', () => {
+    const blocks = Array.from({ length: 20 }, () => el('pdf-view', { height: '50' }));
+    const row = el('pdf-row', {}, [cell([el('pdf-view', {}, blocks)]), cell([])]);
+    const pages = paginate(page([tableOf([row])]));
+    expect(pages.map((laid) => blocks.filter((b) => boxesOf(laid, b).length > 0).length)).toEqual([
+      15, 5,
+    ]);
+  });
+
+  it('keeps room on the last sheet for the bottom of the table closing with the row', () => {
+    const long = lines(151);
+    const row = el('pdf-row', {}, [cell([long]), cell([])]);
+    const pages = paginate(page([tableOf([row], { 'padding-bottom': '20' })]));
+    expect(pages.map((laid) => linesOf(laid, long).length)).toEqual([76, 74, 1]);
+  });
+
+  it('slices cell and row borders and backgrounds per piece, with no border across a cut', () => {
+    const style = { border: '1 solid #000', 'background-color': '#eee' };
+    const row = el('pdf-row', { 'background-color': '#ddd' }, [
+      cell([lines(100)], style),
+      cell([lines(3)], style),
+    ]);
+    const table = tableOf([row], { border: '2 solid #000' });
+    const pages = paginate(page([table]));
+    expect(pages).toHaveLength(2);
+    const [first, second] = pages.map((laid) => piecesOf(laid, row)[0]!);
+    expect(first!.sliceTop).toBe(false);
+    expect(first!.sliceBottom).toBe(true);
+    expect(second!.sliceTop).toBe(true);
+    expect(second!.sliceBottom).toBe(false);
+    for (const c of first!.box.children) expect(c.cut).toEqual({ top: false, bottom: true });
+    for (const c of second!.box.children) expect(c.cut).toEqual({ top: true, bottom: false });
+    // The table's border runs down to the bottom of the row's piece on each sheet.
+    for (const [index, laid] of pages.entries()) {
+      const deco = laid.decorations.find((d) => d.box.node === table)!;
+      const piece = index === 0 ? first! : second!;
+      expect(deco.y + deco.box.h).toBeCloseTo(piece.y + piece.box.h + (index === 1 ? 2 : 0), 6);
+    }
+  });
+
+  it('draws the content of a split row from the top of each cell piece', () => {
+    const short = lines(3, 10, 'b');
+    const centred = el('pdf-row', { 'align-items': 'center' }, [cell([lines(100)]), cell([short])]);
+    const pages = paginate(page([tableOf([centred])]));
+    const piece = piecesOf(pages[0]!, centred)[0]!;
+    expect(piece.box.children.map((c) => [c.y, c.h])).toEqual([
+      [0, piece.box.h],
+      [0, piece.box.h],
+    ]);
+    expect(boxesOf(pages[0]!, short)[0]!.y).toBeCloseTo(0, 6);
+    // A stretched cell centres its content in the whole row; split, it starts at the top.
+    const middle = lines(3, 10, 'b');
+    const row = el('pdf-row', {}, [
+      cell([lines(100)]),
+      cell([middle], { 'justify-content': 'center' }),
+    ]);
+    const split = paginate(page([tableOf([row])]));
+    expect(boxesOf(split[0]!, middle)[0]!.y).toBeCloseTo(0, 6);
+    expect(linesOf(split[0]!, middle)).toEqual(words('b', 0, 3));
+  });
+
+  it('draws an absolute box in a split row on the sheet where its top lands', () => {
+    const inner = el('pdf-view', { position: 'absolute', top: '900', height: '10', width: '10' });
+    const relative = el('pdf-view', { position: 'relative' }, [lines(100), inner]);
+    const outer = el('pdf-view', { position: 'absolute', top: '850', height: '10', width: '10' });
+    const row = el('pdf-row', {}, [cell([relative]), cell([outer])]);
+    const pages = paginate(page([tableOf([row])]));
+    expect(pages).toHaveLength(2);
+    expect(boxesOf(pages[0]!, inner)).toEqual([]);
+    const piece = piecesOf(pages[1]!, row)[0]!;
+    expect(piece.clipBottom).toBeCloseTo(BOTTOM, 6);
+    // 900 - 760 points into the second piece.
+    expect(boxesOf(pages[1]!, inner)[0]!.y).toBeCloseTo(140, 6);
+    // Its containing block is the page: it moves like the piece its top lands in.
+    const placed = pages[1]!.placed.find((p) => p.box.node === outer)!;
+    expect(placed.y).toBeCloseTo(CONTENT_TOP + 850 - 760, 6);
+  });
+
+  it('keeps the anchor of a split cell on its first piece only', () => {
+    const long = el('pdf-cell', {}, [lines(100)], { anchor: 'here' });
+    const row = el('pdf-row', {}, [long, cell([])]);
+    const root = page([tableOf([row])]);
+    const anchors = collectAnchors(root);
+    const ctx: LayoutContext = { yoga, metrics: writer, images: new Map(), anchors };
+    const pages = paginatePage(root, resolveStyles(root), ctx);
+    expect(pages).toHaveLength(2);
+    expect(boxesOf(pages[0]!, long)[0]!.anchor).toBeDefined();
+    expect(boxesOf(pages[1]!, long)[0]!.anchor).toBeUndefined();
   });
 });

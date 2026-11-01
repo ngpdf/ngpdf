@@ -22,6 +22,7 @@ import { LicencesList } from './documents/licences-list';
 import { SecureSample } from './documents/secure-sample';
 import { SpanSample } from './documents/span-sample';
 import { Preview } from './preview';
+import { SplitRowSample } from './documents/split-row-sample';
 
 const DOCUMENT_NAMES = [
   'capture-report',
@@ -35,6 +36,7 @@ const DOCUMENT_NAMES = [
   'contents-sample',
   'secure-sample',
   'hyphens-sample',
+  'split-row-sample',
 ] as const;
 export type DemoDocument = (typeof DOCUMENT_NAMES)[number];
 
@@ -139,6 +141,8 @@ export class App {
         return this.pdf.toBlob(SecureSample, { inputs: { password: DEMO_PASSWORD } });
       case 'hyphens-sample':
         return renderToBlob(HyphensSample, { injector: this.hyphenation });
+      case 'split-row-sample':
+        return this.pdf.toBlob(SplitRowSample);
     }
   }
 
