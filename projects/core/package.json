@@ -38,5 +38,9 @@
     "tslib": "^2.3.0",
     "yoga-layout": "^3.2.1"
   },
-  "sideEffects": false
+  "sideEffects": false,
+  "schematics": "./schematics/collection.json",
+  "ng-add": {
+    "save": "dependencies"
+  }
 }

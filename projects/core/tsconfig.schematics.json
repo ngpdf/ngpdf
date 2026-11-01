@@ -1,0 +1,17 @@
+/* The ng add schematic. The Angular CLI loads it with require(), so it compiles to CommonJS.
+   scripts/build-schematics.mjs builds it into dist/core/schematics. */
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "outDir": "../../out-tsc/schematics",
+    "rootDir": "./schematics",
+    "module": "node20",
+    "moduleResolution": "node16",
+    "importHelpers": false,
+    "experimentalDecorators": false,
+    "paths": {},
+    "types": ["node"]
+  },
+  "include": ["schematics/**/*.ts"],
+  "exclude": ["schematics/*/files/**", "schematics/**/*.spec.ts"]
+}

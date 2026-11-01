@@ -38,6 +38,12 @@
       "path": "./projects/core/tsconfig.spec.json"
     },
     {
+      "path": "./projects/core/tsconfig.schematics.json"
+    },
+    {
+      "path": "./projects/core/tsconfig.schematics.spec.json"
+    },
+    {
       "path": "./projects/demo/tsconfig.app.json"
     },
     {

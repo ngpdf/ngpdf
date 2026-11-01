@@ -1,6 +1,6 @@
 ---
 title: Getting started
-description: Install @ngpdf/core, write a PDF document as an Angular component and download it or get a Blob from the browser with PdfRenderer.
+description: Install @ngpdf/core with ng add, write a PDF document as an Angular component and download it or get a Blob from the browser with PdfRenderer.
 section: Guide
 order: 1
 ---
@@ -8,6 +8,27 @@ order: 1
 ngpdf renders Angular components to PDF, in the browser. A document is a normal standalone component whose template uses the `pdf-*` elements. ngpdf lays it out with flexbox, breaks it into pages and writes a PDF with selectable text.
 
 ## Install
+
+```sh
+ng add @ngpdf/core
+```
+
+`ng add` installs the package with npm (or your package manager) and adds an example document to your application: `src/app/documents/example-document.ts`, a standalone component with a heading, a short table and a page number. It takes these options:
+
+| Option | What it does |
+| --- | --- |
+| `--project <name>` | The application to add the example to. Without it, `ng add` uses the workspace's only project or the project of the folder you run it in, and otherwise asks. Without a terminal to ask in, it takes the only application, or stops and asks for `--project`. A library is refused. |
+| `--path <folder>` | The folder for the example files, from the workspace root. The default is `src/app/documents` in the project. |
+| `--demo-route` | Also adds `pdf-demo.ts`, a page with a Download PDF button that uses [`PdfDownload`](/docs/rendering-api#pdfdownload), and a lazy `pdf-demo` route in `app.routes.ts`. |
+
+Then run `ng serve` and open `/pdf-demo` if you added the demo route.
+
+- `ng add` never overwrites a file. If `example-document.ts` or `pdf-demo.ts` is already there, it is skipped, and the command says so.
+- It does not change `main.ts` or your providers: ngpdf needs no setup, because `PdfRenderer` is provided in the root injector.
+- If there is no `app.routes.ts`, or no `routes` array in it, `--demo-route` adds no route. It prints the route to add by hand instead.
+- The package goes in `dependencies`, and nothing else is installed.
+
+To install the package without the example, use npm:
 
 ```sh
 npm install @ngpdf/core
