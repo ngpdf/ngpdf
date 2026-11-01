@@ -110,12 +110,18 @@ NGPDF_APT=poppler-utils ./scripts/dev node scripts/server-check.mjs   # packed d
     (`ɵINJECTOR_SCOPE`), zoneless change detection, the call's `providers`, and an empty object as
     `DOCUMENT`, which Angular reads once when it creates a component. With `injector`,
     `providers` go in a child of it. The injectors it creates are destroyed in `finally`.
-  - On the server, an absolute image or font URL is read only through the app's `fetchImage`, and
-    refused without it: `ngpdf: remote image "<url>" refused on the server; pass fetchImage`
-    (`remote font` for fonts). A relative URL throws `ngpdf: relative image URL "<url>" on the
-    server`. Data URLs and bytes always work.
-  - `downloadPdf`, `PdfDownload`, `pdfResource` and `pdf-viewer` throw `ngpdf: <name> needs a
-    browser; …` when there is no global `document` or the platform is `server`, before any render.
+  - `ɵINJECTOR_SCOPE` is private: it is read from the `@angular/core` namespace when a render
+    needs it, and a missing one throws `ngpdf: this @angular/core has no ɵINJECTOR_SCOPE, …`. CI
+    runs the server check against the lowest `@angular/core` of the peer range too.
+  - With `renderToBuffer`, an absolute image or font URL is read only through the app's
+    `fetchImage`, and refused without it: `ngpdf: remote image "<url>" refused on the server;
+    pass fetchImage` (`remote font` for fonts). A relative URL throws `ngpdf: relative image URL
+    "<url>" on the server`. Data URLs and bytes always work. Font URLs are cached per render, never
+    in the injector's font set, so one render never gets bytes another's `fetchImage` read.
+  - On the server (no global `document`, or the `server` platform), `downloadPdf` and
+    `pdfResource` given an `injector` throw `ngpdf: <name> needs a browser; …` before any render.
+    `pdfResource` made in an injection context stays `idle`, and `pdf-viewer` shows its loading
+    content and renders nothing, so an SSR page that contains them still renders.
 - **Units:**
   - a bare number and `pt` are points;
   - 1in = 72pt, 1cm = 72/2.54pt, 1mm = 72/25.4pt;

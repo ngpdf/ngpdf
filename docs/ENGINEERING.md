@@ -120,7 +120,9 @@ These invariants are checked for any input:
    file list of `npm pack --dry-run` and fails on a spec, bench or test helper, or a missing
    LICENSE or README.
 9. **Dependency scans:** OSV-Scanner and `npm audit` (see "Dependency vulnerabilities").
-10. **Server:** on Node 22 and 24, `npm run build:core`, then `node scripts/server-check.mjs`. It
+10. **Server:** on Node 22 and 24, and on Node 22 with `--angular 22.0.0` (the lowest
+    `@angular/core` of the peer range, as `renderToBuffer` reads a private Angular export),
+    `npm run build:core`, then `node scripts/server-check.mjs`. It
     packs `dist/core`, installs the tarball in an empty directory, renders a JIT-compiled document
     with `@ngpdf/core/server` under plain `node` (no DOM), checks that a remote image is refused,
     and checks the PDF's text with `pdftotext`.

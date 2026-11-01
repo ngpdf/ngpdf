@@ -40,8 +40,9 @@ interface RenderToBufferOptions {
 | `fetchImage` | Reads an absolute image or font URL. Without it, the server refuses them. |
 
 - The result is a `Uint8Array`, which is what Node's `Buffer` extends. Pass it to `res.end(pdf)`, `fs.writeFile` or an email attachment as it is.
-- Every call is isolated like `renderToBlob`: its own injector, tree and writer, and the document is destroyed when the render settles. Two renders at once share nothing.
-- Without `injector`, the document gets an injector of its own with only `providers`, running zoneless. Services with `providedIn: 'root'` resolve in it, and are destroyed with it after the render.
+- Every call is isolated like `renderToBlob`: its own child injector, tree and writer, and the document is destroyed when the render settles.
+- Without `injector`, the document gets a root injector of its own with only `providers`, running zoneless. Services with `providedIn: 'root'` resolve in it, and are destroyed with it after the render, so two renders at once share nothing.
+- With `injector`, renders that pass the same one share what it holds: its services and their state. Keep state that belongs to one render in `inputs` or `providers`. Fonts are the exception: each render reads font URLs with its own `fetchImage` and keeps them for that render only.
 - A failed render rejects with the same `ngpdf:` errors as in the browser.
 
 ## In a plain Node script
@@ -103,15 +104,25 @@ app.get('/invoices/:id.pdf', async (req, res, next) => {
 });
 ```
 
-That route renders with an injector of its own. To have the document resolve your app's services, its `LOCALE_ID` and its `providePdfFonts`, pass an `EnvironmentInjector` of the app instead, for example from a service that runs during server rendering:
+That route renders with an injector of its own. To have the document resolve your app's services, its `LOCALE_ID` and its `providePdfFonts`, pass an `EnvironmentInjector` of the app instead. `inject()` works only in an injection context, so take it in a field of a service and use the field later:
 
 ```ts
-const pdf = await renderToBuffer(Invoice, { injector: inject(EnvironmentInjector) });
+import { EnvironmentInjector, Service, inject } from '@angular/core';
+import { renderToBuffer } from '@ngpdf/core/server';
+
+@Service()
+export class InvoicePdf {
+  private readonly injector = inject(EnvironmentInjector);
+
+  render(invoice: Invoice): Promise<Uint8Array> {
+    return renderToBuffer(InvoiceDocument, { inputs: { invoice }, injector: this.injector });
+  }
+}
 ```
 
 ## Images and fonts on the server
 
-A server that fetched any URL found in a document could be made to fetch internal addresses, such as a cloud metadata service or an admin port. Image URLs often come from user data, so this is a server-side request forgery (SSRF) risk. On the server, ngpdf therefore fetches nothing on its own:
+A server that fetched any URL found in a document could be made to fetch internal addresses, such as a cloud metadata service or an admin port. Image URLs often come from user data, so this is a server-side request forgery (SSRF) risk. `renderToBuffer` therefore fetches nothing on its own:
 
 - `data:` URLs, `Blob` and `ArrayBuffer` images, and font bytes (`ArrayBuffer`, `Uint8Array`, `Blob`) always work.
 - An absolute URL, such as `https://…`, is read only through `fetchImage`. Without it, the render rejects with `ngpdf: remote image "<url>" refused on the server; pass fetchImage`.
@@ -132,9 +143,24 @@ async function fetchImage(url: string): Promise<Uint8Array> {
     throw new Error('not on the allow-list');
   }
   const response = await fetch(url, { redirect: 'error', signal: AbortSignal.timeout(5000) });
-  if (!response.ok) throw new Error(`HTTP ${response.status}`);
-  const bytes = new Uint8Array(await response.arrayBuffer());
-  if (bytes.length > MAX_BYTES) throw new Error('too large');
+  if (!response.ok || !response.body) throw new Error(`HTTP ${response.status}`);
+  // Count while reading, so a huge response is cut off instead of held in memory.
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  for await (const chunk of response.body) {
+    size += chunk.length;
+    if (size > MAX_BYTES) {
+      await response.body.cancel();
+      throw new Error('too large');
+    }
+    chunks.push(chunk);
+  }
+  const bytes = new Uint8Array(size);
+  let at = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, at);
+    at += chunk.length;
+  }
   return bytes;
 }
 
@@ -145,14 +171,16 @@ const pdf = await renderToBuffer(Invoice, { inputs: { invoice }, fetchImage });
 
 ## What needs a browser
 
-`downloadPdf`, `PdfRenderer.download`, `PdfDownload`, `pdfResource` and `pdf-viewer` save a file or show a PDF in the page, so they need a browser. On the server (no global `document`, or Angular's server platform) they throw `ngpdf: <name> needs a browser; on the server, use renderToBuffer from @ngpdf/core/server` before rendering anything. `PdfDownload` throws only when clicked, which never happens on the server.
+`downloadPdf`, `PdfRenderer.download`, `PdfDownload`, `pdfResource` and `pdf-viewer` save a file or show a PDF in the page, so they need a browser. "On the server" means no global `document`, or Angular's server platform. There:
 
-In an SSR app, a component that creates a `pdfResource` or shows a `pdf-viewer` would throw while the page renders on the server. Put it in a `@defer` block: the server renders the placeholder, and the browser loads the block.
+- `downloadPdf` and `PdfRenderer.download` throw `ngpdf: downloadPdf needs a browser; on the server, use renderToBuffer from @ngpdf/core/server` before rendering anything. `PdfDownload` calls it only when clicked, which never happens on the server.
+- `pdfResource` made in an injection context, such as a component field in an SSR page, stays `idle` and renders nothing, so the page still renders. In the browser it renders as usual. Called with an `injector` option, it throws `ngpdf: pdfResource needs a browser; …` instead.
+- `pdf-viewer` in an SSR page renders its `pdfViewerLoading` content and starts no render. The browser renders the PDF once the app is running.
 
 `renderToBlob` and `PdfRenderer.toBlob` are not blocked on the server, but they read image and font URLs with `fetch`, as in a browser, without the policy above. On the server, use `renderToBuffer`.
 
 ## Limits
 
-- Node versions: those Angular 22 supports (`^22.22.3`, `^24.15.0` or `>=26.0.0`). The check in CI runs Node 22 and 24.
+- Node versions: those Angular 22 supports (`^22.22.3`, `^24.15.0` or `>=26.0.0`). The check in CI runs Node 22 and 24, with `@angular/core` 22.0.0 as well as the version this repository builds with.
 - Nothing that needs a DOM: the APIs in "What needs a browser", and anything in your document that uses `DOCUMENT`, `window` or browser APIs. A document's injector without `injector` has a placeholder `DOCUMENT` with nothing in it.
 - The engine uses pdfkit's Node build, which Node picks through pdfkit's package exports, with its own standard font metrics. Yoga's WebAssembly is compiled once per process.
