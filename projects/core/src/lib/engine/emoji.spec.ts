@@ -1,6 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createNode, type PdfNode } from '../tree/node';
-import { MAX_EMOJI, emojiCodepoints, isEmoji, loadEmoji, type EmojiSource } from './emoji';
+import {
+  EMOJI_TIMEOUT_MS,
+  MAX_EMOJI,
+  emojiCodepoints,
+  isEmoji,
+  loadEmoji,
+  type EmojiSource,
+} from './emoji';
 
 // A 1×1 opaque PNG.
 const PNG =
@@ -9,6 +16,7 @@ const PNG =
 const writer = { imageSize: () => ({ width: 1, height: 1 }) };
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
@@ -167,6 +175,45 @@ describe('loadEmoji', () => {
     );
     expect(images.size).toBe(0);
     expect(seen).toEqual(['ngpdf: emoji without an image, drawn as text: 😀']);
+  });
+
+  it(`gives each emoji ${String(EMOJI_TIMEOUT_MS)} ms, then draws it as text`, async () => {
+    vi.useFakeTimers();
+    const source = (emoji: string) => (emoji === '😀' ? new Promise<null>(() => undefined) : PNG);
+    const { loading, warnings } = load(doc('😀 😃'), source);
+    let images: ReadonlyMap<string, unknown> | undefined;
+    void loading.then((loaded) => (images = loaded));
+    await vi.advanceTimersByTimeAsync(EMOJI_TIMEOUT_MS - 1);
+    expect(images).toBeUndefined();
+    await vi.advanceTimersByTimeAsync(1);
+    expect(EMOJI_TIMEOUT_MS).toBe(10_000);
+    expect([...(images?.keys() ?? [])]).toEqual(['😃']);
+    expect(warnings).toEqual(['ngpdf: emoji without an image, drawn as text: 😀']);
+  });
+
+  it('aborts the fetch of an emoji that runs out of time', async () => {
+    vi.useFakeTimers();
+    const signals: AbortSignal[] = [];
+    const fetchFn = vi.fn((_url: string, init?: RequestInit) => {
+      if (init?.signal) signals.push(init.signal);
+      return new Promise<Response>(() => undefined);
+    });
+    const { loading, warnings } = load(
+      doc('🎉'),
+      '/emoji/{codepoints}.png',
+      fetchFn as unknown as typeof fetch,
+    );
+    await vi.advanceTimersByTimeAsync(EMOJI_TIMEOUT_MS);
+    expect((await loading).size).toBe(0);
+    expect(fetchFn.mock.calls[0]?.[1]).toMatchObject({ credentials: 'same-origin' });
+    expect(signals.map((signal) => signal.aborted)).toEqual([true]);
+    expect(warnings).toEqual(['ngpdf: emoji without an image, drawn as text: 🎉']);
+  });
+
+  it('leaves no timer behind once every emoji has loaded', async () => {
+    vi.useFakeTimers();
+    await load(doc('😀 😃'), () => PNG).loading;
+    expect(vi.getTimerCount()).toBe(0);
   });
 
   it(`loads at most ${String(MAX_EMOJI)} distinct emoji, with one warning`, async () => {

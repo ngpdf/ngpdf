@@ -974,6 +974,19 @@ describe('layoutRanges with emoji images', () => {
     expect(one(emoji).lines[0]?.runs[1]?.emoji).toBe(thumbs);
   });
 
+  it('draws the hyphen of a soft-hyphen break after an emoji as text, in its own run', () => {
+    const copyright = asset(3);
+    const images = new Map([...emoji, ['©️', copyright]]);
+    // The emoji is 9 and the hyphen-minus 10: only the break at the soft hyphen fits in 20.
+    const [line] = lay('©️\u00adfoobar', 20, {}, images).lines;
+    expect(line?.runs.map((run) => [run.text, run.x, run.width, run.emoji])).toEqual([
+      ['©️', 0, 9, copyright],
+      ['-', 9, 10, undefined],
+    ]);
+    expect(line?.runs[1]?.font).toBe('Helvetica');
+    expect(line?.width).toBe(19);
+  });
+
   it('keeps the link of the range on its emoji', () => {
     const link = 'https://example.com/';
     const [line] = layoutRanges([{ text: 'a👍', style, emoji, link }], style, Infinity, tens).lines;

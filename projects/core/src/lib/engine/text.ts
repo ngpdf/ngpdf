@@ -736,13 +736,20 @@ function breakLines(
     return runs;
   };
 
-  /** The runs of `[start, end)`, then the hyphen of the face of its last character. */
+  /**
+   * The runs of `[start, end)`, then the hyphen of the face of its last character. After an emoji,
+   * whose run is drawn as images, the hyphen is a run of its own in the text face around it.
+   */
   const runsWithHyphen = (start: number, end: number): TextRun[] => {
     const runs = runsOf(start, end);
     const last = runs.at(-1);
-    const index = fontAt[end - 1] ?? 0;
-    if (last) {
-      const text = last.text + (hyphenation.glyphs[index] ?? HYPHEN_MINUS);
+    const index = textFaceOf(fontAt[end - 1] ?? 0);
+    const hyphen = hyphenation.glyphs[index] ?? HYPHEN_MINUS;
+    const face = faces[index];
+    if (last?.emoji && face) {
+      runs.push({ ...face, text: hyphen, x: last.x + last.width, width: widthIn(index, hyphen) });
+    } else if (last) {
+      const text = last.text + hyphen;
       runs[runs.length - 1] = { ...last, text, width: widthIn(index, text) };
     }
     return runs;

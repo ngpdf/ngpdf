@@ -29,13 +29,16 @@ this project calls for it. Where the simplest correct answer is no pattern, this
 **Architecture pattern: pipes and filters, with a functional core and an imperative shell.**
 
 - Each stage is a function from the previous stage's output to a new value.
-- A stage does not mutate its input, keeps no state between calls, and does no I/O.
+- A stage does not mutate its input and keeps no state between calls. Every stage but the three
+  loaders does no I/O.
 - `paintCanvases` is the one stage that runs user code: each pdf-canvas's `paint`, once per
   render, against a recorder (`canvas-recorder.ts`) that turns its calls into `shape` ops. The
   display list only places and clips those ops, so it stays a function of its input.
 - The I/O sits at the edges, in the imperative shell:
   - Angular's change detection at the start;
-  - fetching images;
+  - the loaders, `loadImages`, `registerUsedFonts` and `loadEmoji`: the boundary where the
+    shell fetches images, fonts and emoji images, in parallel and before layout, so every stage
+    after them is pure and synchronous;
   - pdfkit writing bytes at the end.
 
 **Why this fits:**

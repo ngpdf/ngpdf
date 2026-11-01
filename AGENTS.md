@@ -122,8 +122,8 @@ The site (`projects/site`) is a prerendered Angular app. Its docs are the Markdo
     character with `Emoji_Presentation` not followed by U+FE0E) is drawn as a PNG or JPEG image,
     1 em square, taking `letter-spacing` and the decoration but not the color. Its bottom sits on
     the font's descent, or on the baseline when the metrics give no descent (`FontMetrics.descent`
-    is optional; the pdfkit writer gives it). Each distinct emoji loads once per render, at most 500. One whose image is `null` or
-    fails is drawn as text, with one dev-mode warning per render naming them; past 500, the rest
+    is optional; the pdfkit writer gives it). Each distinct emoji loads once per render, at most 500. One whose image is `null`,
+    fails or takes more than 10 s is drawn as text, with one dev-mode warning per render naming them; past 500, the rest
     are text, with one warning.
 - **Tables:**
   - Columns are declared on the table: `[columns]` with points, `'Nfr'`, `'N%'` or `'auto'`.

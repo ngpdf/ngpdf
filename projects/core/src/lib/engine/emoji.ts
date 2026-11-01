@@ -16,6 +16,9 @@ export type EmojiSource =
 /** The most distinct emoji one render loads; the rest stay text. */
 export const MAX_EMOJI = 500;
 
+/** How long one emoji's image may take, from asking the source to reading the bytes. */
+export const EMOJI_TIMEOUT_MS = 10_000;
+
 const VS15 = 0xfe0e;
 const VS16 = 0xfe0f;
 const ZWJ = 0x200d;
@@ -78,6 +81,7 @@ async function loadOne(
   source: EmojiSource,
   writer: Pick<PdfWriter, 'imageSize'>,
   fetchFn: typeof fetch | undefined,
+  signal: AbortSignal,
 ): Promise<ImageAsset | null> {
   const codepoints = emojiCodepoints(emoji);
   const image =
@@ -85,16 +89,45 @@ async function loadOne(
       ? source.replaceAll('{codepoints}', codepoints)
       : await source(emoji, codepoints);
   if (image === null) return null;
-  const read = readSource(image, fetchFn);
+  // The fetch is aborted when the emoji runs out of time.
+  const base = fetchFn ?? ((...args: Parameters<typeof fetch>) => fetch(...args));
+  const read = readSource(image, (input, init) => base(input, { ...init, signal }));
   if (!read) throw new Error('not a string, Blob, ArrayBuffer or Uint8Array');
   const data = await read.read();
   return { data, ...writer.imageSize(data) };
 }
 
 /**
+ * `loadOne` cut off after `EMOJI_TIMEOUT_MS`: a source or a fetch that never settles must not hold
+ * the render. The timer is cleared as soon as the load settles.
+ */
+function loadInTime(
+  emoji: string,
+  source: EmojiSource,
+  writer: Pick<PdfWriter, 'imageSize'>,
+  fetchFn: typeof fetch | undefined,
+): Promise<ImageAsset | null> {
+  const controller = new AbortController();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      controller.abort();
+      reject(new Error('timed out'));
+    }, EMOJI_TIMEOUT_MS);
+  });
+  return Promise.race([
+    loadOne(emoji, source, writer, fetchFn, controller.signal),
+    deadline,
+  ]).finally(() => {
+    clearTimeout(timer);
+  });
+}
+
+/**
  * Loads one image per distinct emoji in the document's text, at most `MAX_EMOJI`, keyed by the
- * emoji. An emoji whose image is null or fails to load is left out, so it is drawn as text, and
- * one warning names them all: emoji usually come from user data, so one should not fail a render.
+ * emoji. An emoji whose image is null, fails to load or takes longer than `EMOJI_TIMEOUT_MS` is
+ * left out, so it is drawn as text, and one warning names them all: emoji usually come from user
+ * data, so one should not fail a render.
  */
 export async function loadEmoji(
   root: PdfNode,
@@ -111,7 +144,7 @@ export async function loadEmoji(
   const loaded = await Promise.all(
     found.slice(0, MAX_EMOJI).map(async (emoji) => {
       try {
-        return [emoji, await loadOne(emoji, source, writer, fetchFn)] as const;
+        return [emoji, await loadInTime(emoji, source, writer, fetchFn)] as const;
       } catch {
         return [emoji, null] as const;
       }
