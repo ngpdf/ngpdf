@@ -124,7 +124,7 @@ export class InvoicePdf {
 
 A server that fetched any URL found in a document could be made to fetch internal addresses, such as a cloud metadata service or an admin port. Image URLs often come from user data, so this is a server-side request forgery (SSRF) risk. `renderToBuffer` therefore fetches nothing on its own:
 
-- `data:` URLs, `Blob` and `ArrayBuffer` images, and font bytes (`ArrayBuffer`, `Uint8Array`, `Blob`) always work.
+- `data:` URLs and bytes (`Blob`, `ArrayBuffer`, or a `Uint8Array` such as a Node `Buffer`) always work, for images and fonts.
 - An absolute URL, such as `https://…`, is read only through `fetchImage`. Without it, the render rejects with `ngpdf: remote image "<url>" refused on the server; pass fetchImage`.
 - A relative URL, such as `/assets/logo.png`, has no page to resolve against. It rejects with `ngpdf: relative image URL "<url>" on the server`, with or without `fetchImage`.
 - Font URLs in `providePdfFonts` follow the same rules through the same `fetchImage`, with `remote font` and `relative font URL` in the messages.
@@ -145,15 +145,16 @@ async function fetchImage(url: string): Promise<Uint8Array> {
   const response = await fetch(url, { redirect: 'error', signal: AbortSignal.timeout(5000) });
   if (!response.ok || !response.body) throw new Error(`HTTP ${response.status}`);
   // Count while reading, so a huge response is cut off instead of held in memory.
+  const reader = response.body.getReader();
   const chunks: Uint8Array[] = [];
   let size = 0;
-  for await (const chunk of response.body) {
-    size += chunk.length;
+  for (let read = await reader.read(); !read.done; read = await reader.read()) {
+    size += read.value.length;
     if (size > MAX_BYTES) {
-      await response.body.cancel();
+      await reader.cancel();
       throw new Error('too large');
     }
-    chunks.push(chunk);
+    chunks.push(read.value);
   }
   const bytes = new Uint8Array(size);
   let at = 0;
@@ -167,7 +168,7 @@ async function fetchImage(url: string): Promise<Uint8Array> {
 const pdf = await renderToBuffer(Invoice, { inputs: { invoice }, fetchImage });
 ```
 
-`redirect: 'error'` stops an allowed host from redirecting the request to an internal one. For files on disk, read them yourself and pass the bytes: `pdf-image` takes an `ArrayBuffer`, such as `new Uint8Array(await readFile(path)).buffer`.
+`redirect: 'error'` stops an allowed host from redirecting the request to an internal one. For files on disk, read them yourself and pass the bytes: `pdf-image` takes the `Buffer` that `readFile(path)` returns, as it takes any `Uint8Array`.
 
 ## What needs a browser
 
