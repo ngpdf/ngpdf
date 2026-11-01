@@ -997,8 +997,15 @@ describe('resolveStyles property coverage', () => {
     expect(() => styleOf({ 'font-size': 'auto' })).toThrow(/^ngpdf: expected a length/);
   });
 
+  it('parses finite exponent values from numeric style bindings (#237)', () => {
+    expect(parseLength('1.2246467991473533e-15pt')).toBeCloseTo(1.2246467991473533e-15, 18);
+    expect(styleOf({ opacity: '1e-7' }).opacity).toBeCloseTo(1e-7, 10);
+    expect(styleOf({ left: '1.2246467991473533e-15pt' }).inset.left).toBeCloseTo(1.2246467991473533e-15, 18);
+    expect(() => parseLength('1e999')).toThrow('ngpdf: invalid length');
+  });
+
   it('rejects non-finite numbers and truncates long values in errors', () => {
-    expect(() => parseLength('1e999')).toThrow(/^ngpdf: unknown unit/);
+    expect(() => parseLength('1e999')).toThrow(/^ngpdf: invalid length/);
     expect(() => parseLength('9'.repeat(400))).toThrow(/^ngpdf: invalid length "9{60}\.\.\."/);
     expect(() => styleOf({ opacity: '9'.repeat(400) })).toThrow(/^ngpdf: invalid value/);
   });

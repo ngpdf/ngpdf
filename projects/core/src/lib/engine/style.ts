@@ -226,7 +226,17 @@ function scanNumber(text: string): number {
       digits++;
     }
   }
-  return digits === 0 ? 0 : i;
+  if (digits === 0) return 0;
+  // JavaScript stringifies sufficiently small and large numeric bindings in
+  // exponent notation; CSS numeric values accept that notation as well.
+  if (text.charCodeAt(i) === 101 || text.charCodeAt(i) === 69) {
+    let j = i + 1;
+    if (text.charCodeAt(j) === 43 || text.charCodeAt(j) === 45) j++;
+    const exponentStart = j;
+    while (isDigit(text.charCodeAt(j))) j++;
+    if (j > exponentStart) i = j;
+  }
+  return i;
 }
 
 /** A unitless number, or null when the whole token is not one. */
@@ -268,7 +278,9 @@ export function parseLength(value: string, tag?: string): Length {
   if (unit === '%') return { percent: amount };
   const factor = UNIT_FACTORS.get(unit);
   if (factor === undefined) return fail(`unknown unit in "${show(value)}"`, tag);
-  return amount * factor;
+  const points = amount * factor;
+  if (!Number.isFinite(points)) return fail(`invalid length "${show(value)}"`, tag);
+  return points;
 }
 
 /** A length that must resolve to points (no percent, no auto). */
