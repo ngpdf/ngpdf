@@ -2,6 +2,7 @@ import { PdfCell } from './cell';
 import { PdfDocument } from './document';
 import { PdfImage } from './image';
 import { PdfLink } from './link';
+import { PdfNote } from './note';
 import { PdfPage } from './page';
 import { PdfPageNumber } from './page-number';
 import { PdfRow } from './row';
@@ -15,6 +16,7 @@ export {
   PdfDocument,
   PdfImage,
   PdfLink,
+  PdfNote,
   PdfPage,
   PdfPageNumber,
   PdfRow,
@@ -23,6 +25,7 @@ export {
   PdfText,
   PdfView,
 };
+export type { NoteIcon } from './note';
 export type { TableColumn } from './table';
 
 /** Every pdf-* element, for `imports: [PDF_ELEMENTS]`. */
@@ -33,6 +36,7 @@ export const PDF_ELEMENTS = [
   PdfText,
   PdfSpan,
   PdfLink,
+  PdfNote,
   PdfImage,
   PdfTable,
   PdfRow,

@@ -1271,3 +1271,82 @@ describe('position', () => {
     expect(warn).toHaveBeenCalledWith('ngpdf: top has no effect on pdf-span');
   });
 });
+
+describe('resolveStyles: pdf-note', () => {
+  const YELLOW = rgb(255, 212, 0);
+  const note = (style: Record<string, string> = {}, children: PdfNode[] = []): PdfNode =>
+    el('pdf-note', style, children);
+
+  it('colors a note sticky-note yellow, not with the color around it', () => {
+    const plain = note();
+    const inRed = el('pdf-view', { color: 'red' }, [plain]);
+    expect(resolveStyles(el('pdf-document', {}, [inRed])).get(plain)?.color).toEqual(YELLOW);
+    expect(styleOf({ color: 'blue' }, 'pdf-note').color).toEqual(BLUE);
+  });
+
+  it('takes text only', () => {
+    const bold = note({}, [el('pdf-span')]);
+    expect(() => resolveStyles(el('pdf-document', {}, [bold]))).toThrow(
+      'ngpdf: pdf-note takes text only',
+    );
+    const text = note({}, [createNode('text', '', 'fine')]);
+    expect(() => resolveStyles(el('pdf-document', {}, [text]))).not.toThrow();
+  });
+
+  it('throws inside a pdf-text, also through a span or a link', () => {
+    const inText = (inner: PdfNode): PdfNode =>
+      el('pdf-document', {}, [el('pdf-text', {}, [inner])]);
+    expect(() => resolveStyles(inText(note()))).toThrow('ngpdf: pdf-note inside a pdf-text');
+    expect(() => resolveStyles(inText(el('pdf-span', {}, [note()])))).toThrow(
+      'ngpdf: pdf-note inside a pdf-text',
+    );
+    expect(() => resolveStyles(inText(el('pdf-link', {}, [note()])))).toThrow(
+      'ngpdf: pdf-note inside a pdf-text',
+    );
+    expect(() =>
+      resolveStyles(el('pdf-document', {}, [el('pdf-link', {}, [note()])])),
+    ).not.toThrow();
+  });
+
+  it('throws under a pdf-text at any depth, also inside a view in it', () => {
+    const deep = el('pdf-text', {}, [el('pdf-view', {}, [el('pdf-view', {}, [note()])])]);
+    expect(() => resolveStyles(el('pdf-document', {}, [deep]))).toThrow(
+      'ngpdf: pdf-note inside a pdf-text',
+    );
+    const beside = el('pdf-view', {}, [el('pdf-text'), el('pdf-view', {}, [note()])]);
+    expect(() => resolveStyles(el('pdf-document', {}, [beside]))).not.toThrow();
+  });
+
+  it('drops the properties that do not apply before parsing them, with a warning', () => {
+    const warn = vi.fn();
+    const style = styleOf(
+      { transform: 'rotate(45deg)', padding: 'not a length', margin: '10', color: 'blue' },
+      'pdf-note',
+      warn,
+    );
+    expect(style.transform).toEqual([]);
+    expect(style.padding).toEqual({ top: 0, right: 0, bottom: 0, left: 0 });
+    expect(style.margin).toEqual({ top: 0, right: 0, bottom: 0, left: 0 });
+    expect(style.color).toEqual(BLUE);
+    expect(warn.mock.calls).toEqual([
+      ['ngpdf: transform has no effect on pdf-note'],
+      ['ngpdf: padding has no effect on pdf-note'],
+      ['ngpdf: margin has no effect on pdf-note'],
+    ]);
+  });
+
+  it('warns about properties other than color and position', () => {
+    const warn = vi.fn();
+    styleOf(
+      { color: 'red', position: 'absolute', top: '0', right: '0', bottom: '0', left: '0' },
+      'pdf-note',
+      warn,
+    );
+    expect(warn).not.toHaveBeenCalled();
+    styleOf({ padding: '4', 'font-size': '20' }, 'pdf-note', warn);
+    expect(warn.mock.calls).toEqual([
+      ['ngpdf: padding has no effect on pdf-note'],
+      ['ngpdf: font-size has no effect on pdf-note'],
+    ]);
+  });
+});

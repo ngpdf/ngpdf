@@ -852,3 +852,59 @@ describe('position', () => {
     expect(box.children[0]!.shift).toBeUndefined();
   });
 });
+
+describe('layoutBox: pdf-note', () => {
+  const note = (style: Record<string, string> = {}, props: Record<string, unknown> = {}) =>
+    el('pdf-note', style, [textNode('  Check   this ')], props);
+  const block = (height: number) => el('pdf-view', { height: String(height) });
+
+  it('takes no space, even between gaps, and sits where the next sibling starts', () => {
+    const marked = note();
+    const root = el('pdf-view', { padding: '5', 'border-width': '2', gap: '10' }, [
+      block(20),
+      marked,
+      block(30),
+    ]);
+    const laid = lay(root, 200);
+    expect(laid.h).toBe(5 * 2 + 2 * 2 + 20 + 10 + 30);
+    const [first, box, second] = laid.children;
+    expect(second!.y).toBe(first!.y + 20 + 10);
+    expect(box).toMatchObject({ x: 7, y: second!.y, w: 0, h: 0 });
+    expect(box!.note).toEqual({ text: 'Check this', icon: 'comment', open: false });
+    expect(box!.children).toEqual([]);
+  });
+
+  it('sits at the left of the content box in a row, at the top of the next sibling', () => {
+    const marked = note();
+    const root = el('pdf-view', { 'flex-direction': 'row', 'padding-left': '4' }, [
+      block(20),
+      marked,
+      el('pdf-view', { width: '10', height: '10', 'margin-top': '6' }),
+    ]);
+    const box = lay(root, 200).children[1]!;
+    expect(box).toMatchObject({ x: 4, y: 6 });
+  });
+
+  it('sits at the bottom of the content before it when it is the last child', () => {
+    const marked = note();
+    const laid = lay(el('pdf-view', { padding: '3' }, [block(20), marked, note()]), 200);
+    expect(laid.children[1]).toMatchObject({ x: 3, y: 23 });
+    expect(laid.children[2]).toMatchObject({ x: 3, y: 23 });
+    const alone = lay(el('pdf-view', { padding: '3' }, [note()]), 200);
+    expect(alone.children[0]).toMatchObject({ x: 3, y: 3, h: 0 });
+    expect(alone.h).toBe(6);
+  });
+
+  it('skips absolute siblings when it finds where the next sibling starts', () => {
+    const stamp = el('pdf-view', { position: 'absolute', top: '50', width: '5', height: '5' });
+    const laid = lay(el('pdf-view', {}, [block(20), note(), stamp, block(10)]), 200);
+    expect(laid.children[1]).toMatchObject({ x: 0, y: 20 });
+  });
+
+  it('places an absolute note against its containing block, at zero size', () => {
+    const marked = note({ position: 'absolute', top: '4', right: '0' });
+    const card = el('pdf-view', { position: 'relative', width: '100', height: '40' }, [marked]);
+    const laid = lay(el('pdf-view', {}, [card]), 200).children[0]!;
+    expect(laid.children[0]).toMatchObject({ x: 100, y: 4, w: 0, h: 0 });
+  });
+});

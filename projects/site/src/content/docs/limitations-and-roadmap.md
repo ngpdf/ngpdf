@@ -34,6 +34,12 @@ ngpdf v0.1 covers documents built from text, tables, boxes and images. This page
 - A link or bookmark jumps to the top left of the element's first piece, at the zoom the reader has. An anchor on an element that is not drawn as a box of its own, such as a `pdf-text` inside a `pdf-text`, is never placed, so links and bookmarks to it are left out.
 - A link's clickable area is an upright rectangle: inside a `transform` it covers the transformed area's bounding box, and an `overflow` clip does not cut it.
 
+### Notes
+
+- A `pdf-note` holds plain text only and can't go inside a `pdf-text`: notes anchored to a run of text, such as a highlight with a comment, are not supported yet.
+- The viewer decides how the icon and popup look; ngpdf sets only the icon name, its color and whether the popup starts open.
+- A note's icon is not moved away from a link it overlaps. ngpdf writes notes before links, and viewers draw later annotations on top, so the link takes the click in the overlap.
+
 ### Tables
 
 - Inside a `pdf-table`, horizontal padding, borders and margins on a row are ignored. Put horizontal padding on the `pdf-cell`s.

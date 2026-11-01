@@ -17,6 +17,7 @@ import {
   type PdfDocument,
   type PdfImage,
   type PdfLink,
+  type PdfNote,
   type PdfRow,
   type PdfTable,
   type PdfText,
@@ -149,6 +150,22 @@ class SecureDocument {
   readonly security = SECURITY;
 }
 
+@Component({
+  selector: 'pdf-test-notes',
+  imports: [PDF_ELEMENTS],
+  template: `
+    <pdf-document>
+      <pdf-note>Check this total</pdf-note>
+      <pdf-note author="Ana" icon="help" open style="color: #0a7">Is this {{ total }}?</pdf-note>
+      <pdf-note [author]="reviewer" [open]="false">Fine</pdf-note>
+    </pdf-document>
+  `,
+})
+class NotesDocument {
+  readonly total = 42;
+  readonly reviewer: string | null = null;
+}
+
 function at<T>(items: readonly T[], index: number): T {
   const item = items[index];
   if (item === undefined) throw new Error(`no item at ${String(index)}`);
@@ -174,7 +191,8 @@ describe('pdf-* elements', () => {
       | typeof SpansDocument
       | typeof LinksDocument
       | typeof AnchorsDocument
-      | typeof SecureDocument,
+      | typeof SecureDocument
+      | typeof NotesDocument,
   ): PdfNode {
     const environmentInjector = createEnvironmentInjector(
       [{ provide: RendererFactory2, useFactory: () => new PdfRendererFactory() }],
@@ -284,6 +302,18 @@ describe('pdf-* elements', () => {
     expect(propsOf(link!)).toEqual({ href: '#v' });
   });
 
+  it('renders pdf-note with its text, exposing author, icon and open through pdfProps', () => {
+    const [plain, full, bound] = elementChildren(render(NotesDocument));
+    expect(plain!.tag).toBe('pdf-note');
+    expect(plain!.owner).not.toBeNull();
+    expect(propsOf(plain!)).toEqual({ author: undefined, icon: 'comment', open: false });
+    expect(textContent(plain!)).toBe('Check this total');
+    expect(propsOf(full!)).toEqual({ author: 'Ana', icon: 'help', open: true });
+    expect(full!.rawStyle).toEqual({ color: '#0a7' });
+    expect(textContent(full!)).toBe('Is this 42?');
+    expect(propsOf(bound!)).toEqual({ author: null, icon: 'comment', open: false });
+  });
+
   it('passes a missing data-bound href through, for the engine to refuse', () => {
     const link = at(elementChildren(render(MissingLinkDocument)), 0);
     expect(propsOf(link)).toEqual({ href: undefined });
@@ -305,5 +335,8 @@ describe('element input types', () => {
     expectTypeOf<string | null | undefined>().toExtend<ReturnType<PdfTable['bookmark']>>();
     expectTypeOf<string | null | undefined>().toExtend<ReturnType<PdfRow['anchor']>>();
     expectTypeOf<string | null | undefined>().toExtend<ReturnType<PdfCell['bookmark']>>();
+    // A data-bound author may be missing too: the note then has no title.
+    expectTypeOf<string | null | undefined>().toExtend<ReturnType<PdfNote['author']>>();
+    expectTypeOf<'comment' | 'new-paragraph'>().toExtend<ReturnType<PdfNote['icon']>>();
   });
 });

@@ -21,6 +21,7 @@ import { HyphensSample, demoHyphenate } from './documents/hyphens-sample';
 import { LicencesList } from './documents/licences-list';
 import { OpacitySample } from './documents/opacity-sample';
 import { SecureSample } from './documents/secure-sample';
+import { NotesSample } from './documents/notes-sample';
 import { SpanSample } from './documents/span-sample';
 import { Preview } from './preview';
 import { SplitRowSample } from './documents/split-row-sample';
@@ -39,6 +40,7 @@ const DOCUMENT_NAMES = [
   'hyphens-sample',
   'split-row-sample',
   'opacity-sample',
+  'notes-sample',
 ] as const;
 export type DemoDocument = (typeof DOCUMENT_NAMES)[number];
 
@@ -147,6 +149,8 @@ export class App {
         return this.pdf.toBlob(SplitRowSample);
       case 'opacity-sample':
         return this.pdf.toBlob(OpacitySample);
+      case 'notes-sample':
+        return this.pdf.toBlob(NotesSample);
     }
   }
 
