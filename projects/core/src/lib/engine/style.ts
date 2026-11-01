@@ -339,6 +339,9 @@ export function parseBorder(value: string, tag?: string): BorderParts {
   let color: Color | null = null;
   let none = false;
   let unsupportedStyle: string | null = null;
+  let widthSeen = false;
+  let styleSeen = false;
+  let colorSeen = false;
   const tokens = tokenize(value);
   if (tokens.length > 3) return fail(`too many values in "${show(value)}"`, tag);
   for (const token of tokens) {
@@ -350,12 +353,18 @@ export function parseBorder(value: string, tag?: string): BorderParts {
       code === 45 ||
       BORDER_WIDTHS.has(token.toLowerCase())
     ) {
+      if (widthSeen) return fail(`invalid border in "${show(value)}"`, tag);
+      widthSeen = true;
       width = parseBorderWidth(token, tag);
     } else if (BORDER_STYLES.has(token.toLowerCase())) {
+      if (styleSeen) return fail(`invalid border in "${show(value)}"`, tag);
+      styleSeen = true;
       const style = token.toLowerCase();
       if (style === 'none' || style === 'hidden') none = true;
       else if (style !== 'solid') unsupportedStyle = style;
     } else {
+      if (colorSeen) return fail(`invalid border in "${show(value)}"`, tag);
+      colorSeen = true;
       color = parseColor(token, tag);
     }
   }

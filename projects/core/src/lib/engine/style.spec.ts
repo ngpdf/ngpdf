@@ -905,6 +905,13 @@ describe('resolveStyles property coverage', () => {
     expect(() => styleOf({ border: '1 solid red blue' })).toThrow(/^ngpdf: too many values/);
   });
 
+  it('rejects duplicate border width, style and color tokens (#235)', () => {
+    for (const value of ['red blue', '1 2 red', 'solid dashed']) {
+      expect(() => styleOf({ border: value })).toThrow('ngpdf: invalid border in');
+      expect(() => styleOf({ 'border-top': value })).toThrow('ngpdf: invalid border in');
+    }
+  });
+
   it('supports CSS border width keywords', () => {
     expect(styleOf({ border: 'thin solid red' }).borderWidth.top).toBe(1);
     expect(styleOf({ 'border-top': 'medium solid red' }).borderWidth.top).toBe(3);
