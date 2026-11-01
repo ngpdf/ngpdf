@@ -1,9 +1,10 @@
+import * as angularCore from '@angular/core';
 import {
   DOCUMENT,
+  InjectionToken,
   Injector,
   createEnvironmentInjector,
   provideZonelessChangeDetection,
-  ɵINJECTOR_SCOPE as INJECTOR_SCOPE,
   type EnvironmentInjector,
   type EnvironmentProviders,
   type Provider,
@@ -29,16 +30,33 @@ export interface RenderToBufferOptions {
 }
 
 /**
- * What a root injector needs to create a component in Node. The root scope is what an app's
- * bootstrap gives its root injector, so `providedIn: 'root'` services resolve; Angular has no
- * public provider for it. Creating any component reads `DOCUMENT` once to find where styles go,
- * and a PDF's elements have no styles, so an empty object stands in for it.
+ * The token that gives an injector root scope, as an app's bootstrap does for its root injector,
+ * so `providedIn: 'root'` services resolve. Angular has no public provider for it, and a private
+ * export may go in a minor release. It is read from the namespace when a render needs it, so a
+ * missing one fails that render with this message instead of failing the import.
  */
-const STANDALONE_ROOT: (Provider | EnvironmentProviders)[] = [
-  { provide: INJECTOR_SCOPE, useValue: 'root' },
-  { provide: DOCUMENT, useValue: {} },
-  provideZonelessChangeDetection(),
-];
+function rootScopeToken(): InjectionToken<string> {
+  const token = (angularCore as Record<string, unknown>)['ɵINJECTOR_SCOPE'];
+  if (!(token instanceof InjectionToken)) {
+    throw new Error(
+      'ngpdf: this @angular/core has no ɵINJECTOR_SCOPE, which renderToBuffer needs without an injector; pass one',
+    );
+  }
+  return token as InjectionToken<string>;
+}
+
+/**
+ * What a root injector needs to create a component in Node: root scope, zoneless change
+ * detection, and a `DOCUMENT`. Creating any component reads `DOCUMENT` once to find where styles
+ * go, and a PDF's elements have no styles, so an empty object stands in for it.
+ */
+function standaloneRoot(): (Provider | EnvironmentProviders)[] {
+  return [
+    { provide: rootScopeToken(), useValue: 'root' },
+    { provide: DOCUMENT, useValue: {} },
+    provideZonelessChangeDetection(),
+  ];
+}
 
 /** The injector a render runs under, and whether it is ours to destroy. */
 function injectorFor(options: RenderToBufferOptions): {
@@ -53,7 +71,7 @@ function injectorFor(options: RenderToBufferOptions): {
   // createEnvironmentInjector only reads its parent, which has nothing for a root to find.
   const parent = Injector.NULL as EnvironmentInjector;
   return {
-    injector: createEnvironmentInjector([...STANDALONE_ROOT, ...providers], parent),
+    injector: createEnvironmentInjector([...standaloneRoot(), ...providers], parent),
     owned: true,
   };
 }

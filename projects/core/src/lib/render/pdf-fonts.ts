@@ -27,38 +27,46 @@ export type FontLoader = (
   src: PdfFont['src'],
 ) => Promise<{ readonly label: string; readonly data: Uint8Array }>;
 
+/** Font loads by URL. */
+export type FontCache = Map<string, ReturnType<FontLoader>>;
+
 /** The fonts of one environment injector and its ancestors, with each URL fetched once. */
 export class PdfFontSet {
   readonly #fonts: readonly PdfFont[];
   readonly #parent: PdfFontSet | null;
-  readonly #fetched = new Map<string, ReturnType<FontLoader>>();
+  readonly #fetched: FontCache = new Map();
 
   constructor(fonts: readonly PdfFont[], parent: PdfFontSet | null) {
     this.#fonts = fonts;
     this.#parent = parent;
   }
 
-  /** The faces in order, the ancestors' first. A failed fetch is forgotten, so it is retried. */
-  sources(loader: FontLoader): PdfFontSource[] {
+  /**
+   * The faces in order, the ancestors' first. A failed fetch is forgotten, so it is retried.
+   * `cache` replaces the injector's URL cache for this call: a server render passes its own, so it
+   * never reuses bytes that another render's `fetchImage` read.
+   */
+  sources(loader: FontLoader, cache?: FontCache): PdfFontSource[] {
+    const fetched = cache ?? this.#fetched;
     const own = this.#fonts.map((font) => ({
       family: font.family,
       ...(font.weight && { weight: font.weight }),
       ...(font.style && { style: font.style }),
-      load: () => this.#read(font.src, loader),
+      load: () => read(font.src, loader, fetched),
     }));
-    return [...(this.#parent?.sources(loader) ?? []), ...own];
+    return [...(this.#parent?.sources(loader, cache) ?? []), ...own];
   }
+}
 
-  #read(src: PdfFont['src'], loader: FontLoader): ReturnType<FontLoader> {
-    if (typeof src !== 'string') return loader(src);
-    let pending = this.#fetched.get(src);
-    if (!pending) {
-      pending = loader(src);
-      this.#fetched.set(src, pending);
-      pending.catch(() => this.#fetched.delete(src));
-    }
-    return pending;
+function read(src: PdfFont['src'], loader: FontLoader, fetched: FontCache): ReturnType<FontLoader> {
+  if (typeof src !== 'string') return loader(src);
+  let pending = fetched.get(src);
+  if (!pending) {
+    pending = loader(src);
+    fetched.set(src, pending);
+    pending.catch(() => fetched.delete(src));
   }
+  return pending;
 }
 
 const PDF_FONT_LISTS = new InjectionToken<readonly (readonly PdfFont[])[]>('ngpdf font lists');

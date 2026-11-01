@@ -52,7 +52,8 @@ export async function renderPdf<T>(
     const loaded = await loadEngine();
     const fonts = injector
       .get(PDF_FONT_SET, null)
-      ?.sources((src) => loaded.loadFont(src, undefined, server));
+      // A server render reads URLs with its own fetchImage, so it gets its own cache too.
+      ?.sources((src) => loaded.loadFont(src, undefined, server), server && new Map());
     const hyphenate = injector.get(PDF_HYPHENATE, null);
     return await loaded.renderDocument(tree.root, {
       fonts: fonts ?? [],

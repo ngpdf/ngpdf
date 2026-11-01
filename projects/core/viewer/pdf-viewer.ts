@@ -11,7 +11,7 @@ import {
   type Type,
 } from '@angular/core';
 import { DomSanitizer, type SafeResourceUrl } from '@angular/platform-browser';
-import { pdfResource, ɵassertBrowser as assertBrowser, type PdfResourceRef } from '@ngpdf/core';
+import { pdfResource, ɵisBrowser as isBrowser, type PdfResourceRef } from '@ngpdf/core';
 
 type ViewerState = 'loading' | 'error' | 'shown';
 
@@ -61,6 +61,8 @@ export class PdfViewer {
 
   private readonly injector = inject(Injector);
   private readonly sanitizer = inject(DomSanitizer);
+  /** On the server, as in an SSR page, the viewer shows its loading content and renders nothing. */
+  private readonly browser = isBrowser(this.injector);
   private readonly pdf = signal<PdfResourceRef | undefined>(undefined);
   /**
    * The resource replaced by `pdf`, kept on screen until `pdf` has its first PDF. Both are made
@@ -86,10 +88,10 @@ export class PdfViewer {
   });
 
   constructor() {
-    assertBrowser('pdf-viewer', this.injector);
     // A new document or debounce needs a new resource; new inputs reach the current one. The old
     // one stays on screen until the new one has a PDF, unless it never had one itself.
     effect(() => {
+      if (!this.browser) return;
       const document = this.document();
       const debounce = this.debounce();
       untracked(() => {

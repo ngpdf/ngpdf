@@ -148,6 +148,19 @@ const PNG = Uint8Array.from(
   (char) => char.charCodeAt(0),
 );
 
+/** A stand-in for an app's root injector: root scope, a DOCUMENT and the app's services. */
+function appInjector(): EnvironmentInjector {
+  return createEnvironmentInjector(
+    [
+      { provide: INJECTOR_SCOPE, useValue: 'root' },
+      { provide: DOCUMENT, useValue: {} },
+      provideZonelessChangeDetection(),
+      { provide: GREETING, useValue: 'From the app' },
+    ],
+    Injector.NULL as EnvironmentInjector,
+  );
+}
+
 afterEach(() => {
   destroyed.length = 0;
   vi.unstubAllGlobals();
@@ -203,19 +216,6 @@ describe('renderToBuffer', () => {
   });
 
   describe('with an injector, as in an Angular SSR route', () => {
-    /** A stand-in for an app's root injector: root scope, a DOCUMENT and the app's services. */
-    function appInjector(): EnvironmentInjector {
-      return createEnvironmentInjector(
-        [
-          { provide: INJECTOR_SCOPE, useValue: 'root' },
-          { provide: DOCUMENT, useValue: {} },
-          provideZonelessChangeDetection(),
-          { provide: GREETING, useValue: 'From the app' },
-        ],
-        Injector.NULL as EnvironmentInjector,
-      );
-    }
-
     it('resolves the app’s services from it and leaves it alive', async () => {
       const injector = createEnvironmentInjector([], appInjector());
       const pdf = await renderToBuffer(ServerDocument, { injector, inputs: { name: 'Grace' } });
@@ -288,6 +288,30 @@ describe('renderToBuffer', () => {
       const pdf = await renderToBuffer(FontDocument, { providers: [fonts], fetchImage });
       expect(fetchImage).toHaveBeenCalledWith('https://fonts.example.com/noto.ttf');
       expect(latin1(pdf)).toContain('/FontFile2');
+    });
+
+    it('reads a font URL with each render’s own fetchImage when they share an injector', async () => {
+      // One app injector, so one providePdfFonts for every tenant's render.
+      const injector = createEnvironmentInjector([fonts], appInjector());
+      const first = vi.fn(() => Promise.resolve(testFont('noto-sans-regular.ttf')));
+      const second = vi.fn(() => Promise.reject(new Error('not for this tenant')));
+      await renderToBuffer(FontDocument, { injector, fetchImage: first });
+      await expect(renderToBuffer(FontDocument, { injector, fetchImage: second })).rejects.toThrow(
+        'ngpdf: could not load font "https://fonts.example.com/noto.ttf": not for this tenant',
+      );
+      expect(second).toHaveBeenCalledWith('https://fonts.example.com/noto.ttf');
+    });
+
+    it('does so for fonts of a parent injector too, as an app’s under a route’s', async () => {
+      const app = createEnvironmentInjector([fonts], appInjector());
+      const routeFonts = providePdfFonts([{ family: 'Route Sans', src: 'data:font/ttf,' }]);
+      const injector = createEnvironmentInjector([routeFonts], app);
+      const first = vi.fn(() => Promise.resolve(testFont('noto-sans-regular.ttf')));
+      const second = vi.fn(() => Promise.reject(new Error('not for this tenant')));
+      await renderToBuffer(FontDocument, { injector, fetchImage: first });
+      await expect(renderToBuffer(FontDocument, { injector, fetchImage: second })).rejects.toThrow(
+        'not for this tenant',
+      );
     });
 
     it('embeds font bytes without fetchImage', async () => {
