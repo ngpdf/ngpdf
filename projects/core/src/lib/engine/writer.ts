@@ -1,4 +1,5 @@
 import type { PdfSecurity } from '../tree/security';
+import type { NoteIcon } from '../tree/note-icon';
 import type { PageLayout, PageMode } from '../tree/viewer-preferences';
 import { graphemeStarts } from './graphemes';
 import type { Corners } from './style';
@@ -188,7 +189,24 @@ export type DrawOp =
       readonly name?: string;
       readonly x: number;
       readonly y: number;
+    }
+  /**
+   * A note: a Text annotation `NOTE_SIZE` square with its top left at (x, y), in page space as a
+   * link is. It holds plain text, draws nothing and is not printed.
+   */
+  | {
+      readonly op: 'note';
+      readonly x: number;
+      readonly y: number;
+      readonly text: string;
+      readonly author?: string;
+      readonly icon: NoteIcon;
+      readonly color: string;
+      readonly open: boolean;
     };
+
+/** The side of a note's annotation rectangle; viewers draw the icon at their own size. */
+export const NOTE_SIZE = 20;
 
 /** One bookmark of the document outline, pointing at the place of anchor op `anchor`. */
 export interface OutlineItem {
@@ -656,7 +674,7 @@ export async function createPdfkitWriter(options: { compress?: boolean } = {}): 
       try {
         for (const [index, page] of pages.entries()) {
           doc.addPage({ size: [page.width, page.height], margin: 0 });
-          const state: PageState = { links: [], groups: [], forms };
+          const state: PageState = { links: [], notes: [], groups: [], forms };
           for (const op of page.ops) drawOp(doc, op, dataUrls, state);
           if (state.groups.length > 0) throw new Error('ngpdf: group without an ungroup');
           // After the drawing, when every transform is restored: pdfkit maps an annotation's
@@ -667,6 +685,7 @@ export async function createPdfkitWriter(options: { compress?: boolean } = {}): 
               doc.goTo(link.x, link.y, link.w, link.h, link.name);
             }
           }
+          for (const note of state.notes) writeNote(doc, note);
           // pdfkit puts a destination on the current page and flips its y.
           for (const [name, place] of destinations) {
             if (place.page === index)
@@ -928,6 +947,31 @@ function pathTo(doc: Doc, segment: PathSegment): void {
 }
 
 type LinkOp = Extract<DrawOp, { op: 'link' }>;
+type NoteOp = Extract<DrawOp, { op: 'note' }>;
+
+const ICON_NAMES = new Map<NoteIcon, string>([
+  ['comment', 'Comment'],
+  ['note', 'Note'],
+  ['help', 'Help'],
+  ['key', 'Key'],
+  ['insert', 'Insert'],
+  ['paragraph', 'Paragraph'],
+  ['new-paragraph', 'NewParagraph'],
+]);
+
+/**
+ * A Text annotation. pdfkit writes `Contents` as a PDF text string, UTF-16BE after FE FF when it
+ * is not ASCII; `T` needs a String object for the same, as a primitive would become a PDF name.
+ * It sets no `F` on a Text annotation, so the Print flag stays off.
+ */
+function writeNote(doc: Doc, note: NoteOp): void {
+  doc.note(note.x, note.y, NOTE_SIZE, NOTE_SIZE, note.text, {
+    ...(note.author !== undefined && { T: new String(note.author) }),
+    Name: ICON_NAMES.get(note.icon) ?? 'Comment',
+    Open: note.open,
+    color: note.color,
+  } as PDFKit.Mixins.AnnotationOption);
+}
 
 /** A group being drawn: its form, and what the page had before the form took its place. */
 interface OpenGroup {
@@ -959,6 +1003,8 @@ function then(m: readonly number[], n: readonly number[]): number[] {
 /** What `drawOp` keeps across the ops of one page. */
 interface PageState {
   readonly links: LinkOp[];
+  /** Written after the drawing like links, outside every group and transform. */
+  readonly notes: NoteOp[];
   readonly groups: OpenGroup[];
   /** Counts the forms of the whole document, so each has its own name. */
   readonly forms: { count: number };
@@ -1117,6 +1163,9 @@ function drawOp(
       return;
     case 'link':
       state.links.push(op);
+      return;
+    case 'note':
+      state.notes.push(op);
       return;
     case 'anchor':
       // Placed before the pages are written; see `placesOf`.

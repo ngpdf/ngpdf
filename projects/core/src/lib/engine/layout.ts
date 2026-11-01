@@ -4,6 +4,7 @@ import type { TableColumn } from '../tree/table-column';
 import type { ImageAsset } from './images';
 import type { AnchorMark, Anchors } from './anchors';
 import { linkUrl } from './link';
+import { noteOf, type NoteContent } from './note';
 import { anonymousTextStyle, type Edges, type Length, type ResolvedStyle } from './style';
 import { fontChain, type FontRegistry } from './fonts';
 import {
@@ -33,6 +34,8 @@ export interface Box {
   readonly link?: string;
   /** Set on an element with an `anchor` or a `bookmark`: the display list marks its place. */
   readonly anchor?: AnchorMark;
+  /** A pdf-note's text and inputs; its box has no size. */
+  readonly note?: NoteContent;
   /**
    * A relative box's offsets in points. It is drawn moved by them, with what it holds, while `x`
    * and `y` stay where the flow put it.
@@ -527,6 +530,12 @@ export function layoutBox(
     const style = styleFor(current);
     const yogaNode = yoga.Node.create(config);
     created.push(yogaNode);
+    if (current.tag === 'pdf-note') {
+      // No size, children or other style: only an absolute one is laid out, against its
+      // containing block. One in the flow is left out of Yoga and placed by its siblings in `read`.
+      applyPosition(yoga, yogaNode, style);
+      return { node: current, yoga: yogaNode, children: [], isText: false };
+    }
     applyStyle(yoga, yogaNode, style);
     // Yoga's default, relative, gives the same layout when no box is absolute, for fewer calls.
     // The root stays relative: it is laid out where it is asked to be.
@@ -594,7 +603,7 @@ export function layoutBox(
         current.tag === 'pdf-table' || current.tag === 'pdf-row' ? childColumns : null;
       const builtChild = build(child, tableWidths, nodeColumns, isTableRow ? { next: 0 } : counter);
       built.children.push(builtChild);
-      yogaNode.insertChild(builtChild.yoga, index++);
+      if (!isFlowNote(child, styleFor(child))) yogaNode.insertChild(builtChild.yoga, index++);
     }
     return built;
   };
@@ -674,15 +683,22 @@ export function layoutBox(
           }
         : undefined;
     const content = { w: contentWidthOf(yogaNode), h: contentHeightOf(yogaNode) };
+    // A note has no size; one in the flow was never laid out, and `placeNotes` puts it once its
+    // siblings are read.
+    const isNote = current.tag === 'pdf-note';
+    const flowNote = isNote && style.position !== 'absolute';
+    const padding = isNote ? NO_EDGES : edgesOf((edge) => yogaNode.getComputedPadding(edge));
+    const border = isNote ? NO_EDGES : edgesOf((edge) => yogaNode.getComputedBorder(edge));
+    const children = built.children.map((child) => read(child, content));
     return {
       node: current,
       style,
-      x: yogaNode.getComputedLeft(),
-      y: yogaNode.getComputedTop(),
-      w: yogaNode.getComputedWidth(),
-      h: yogaNode.getComputedHeight(),
-      padding: edgesOf((edge) => yogaNode.getComputedPadding(edge)),
-      border: edgesOf((edge) => yogaNode.getComputedBorder(edge)),
+      x: flowNote ? 0 : yogaNode.getComputedLeft(),
+      y: flowNote ? 0 : yogaNode.getComputedTop(),
+      w: isNote ? 0 : yogaNode.getComputedWidth(),
+      h: isNote ? 0 : yogaNode.getComputedHeight(),
+      padding,
+      border,
       ...(built.isText
         ? {
             text: layoutRanges(
@@ -698,8 +714,9 @@ export function layoutBox(
       ...(image ? { image } : {}),
       ...(link !== undefined && { link }),
       ...(anchor && { anchor }),
+      ...(isNote && { note: noteOf(current) }),
       ...(shift && (shift.x !== 0 || shift.y !== 0) ? { shift } : {}),
-      children: built.children.map((child) => read(child, content)),
+      children: placeNotes(children, padding.left + border.left, padding.top + border.top),
     };
   };
 
@@ -727,6 +744,37 @@ export function layoutBox(
     freeAll(created);
     config.free();
   }
+}
+
+const NO_EDGES: Edges<number> = { top: 0, right: 0, bottom: 0, left: 0 };
+
+function isFlowNote(node: PdfNode, style: ResolvedStyle): boolean {
+  return node.tag === 'pdf-note' && style.position !== 'absolute';
+}
+
+/**
+ * The boxes with each note in the flow put at the left of the content box, where the next
+ * in-flow sibling starts, or at the bottom of the one before when none follows. Absolute boxes and
+ * other notes don't count as siblings here. Flow notes are read with no size and no place.
+ */
+function placeNotes(boxes: readonly Box[], left: number, top: number): Box[] {
+  const isSibling = (box: Box): boolean =>
+    box.style.position !== 'absolute' && box.node.tag !== 'pdf-note';
+  if (!boxes.some((box) => isFlowNote(box.node, box.style))) return [...boxes];
+  // Where the next sibling starts, from the end; then the bottom of the one before, from the start.
+  const nextTop = new Array<number | undefined>(boxes.length);
+  let next: number | undefined;
+  for (let i = boxes.length - 1; i >= 0; i--) {
+    nextTop[i] = next;
+    const box = boxes[i];
+    if (box && isSibling(box)) next = box.y;
+  }
+  let previousBottom = top;
+  return boxes.map((box, i) => {
+    if (isSibling(box)) previousBottom = box.y + box.h;
+    if (!isFlowNote(box.node, box.style)) return box;
+    return { ...box, x: left, y: nextTop[i] ?? previousBottom };
+  });
 }
 
 /** Frees every node created so far, also those a failed build never attached. */

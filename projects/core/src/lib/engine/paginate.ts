@@ -132,11 +132,21 @@ interface Float extends Flowed {
   readonly groups: readonly OpacityGroup[];
 }
 
+/**
+ * A pdf-note in the flow of a wrapper or the page: never a unit, it goes on the sheet of unit
+ * `unit`, the first of the content after it or, when it is the last child, the last of the content
+ * before it. -1 when the page has no units.
+ */
+interface NoteAt extends Flowed {
+  readonly unit: number;
+}
+
 interface Collected {
   readonly units: Unit[];
   readonly wrappers: Wrapper[];
   readonly texts: TextRun[];
   readonly floats: Float[];
+  readonly notes: NoteAt[];
 }
 
 const ZERO_EDGES: Edges<Length> = { top: 0, right: 0, bottom: 0, left: 0 };
@@ -183,6 +193,20 @@ function isAbsolute(box: Box): boolean {
   return box.style.position === 'absolute';
 }
 
+/** A note in the flow takes no space, so it is never a unit, nor part of one it is not in. */
+function isFlowNote(box: Box): boolean {
+  return box.node.tag === 'pdf-note' && !isAbsolute(box);
+}
+
+/** The index of the last child that is a unit or holds units, or -1. */
+function lastInFlow(children: readonly Box[]): number {
+  for (let i = children.length - 1; i >= 0; i--) {
+    const child = children[i];
+    if (child && !isAbsolute(child) && !isFlowNote(child)) return i;
+  }
+  return -1;
+}
+
 /** Whether the box is the containing block of its absolute descendants. */
 function contains(box: Box): boolean {
   return box.style.position !== 'static' || box.style.transform.length > 0;
@@ -193,7 +217,8 @@ function contains(box: Box): boolean {
  * no flow to split.
  */
 function isWrapper(box: Box): boolean {
-  if (box.style.transform.length > 0 || box.children.every(isAbsolute)) return false;
+  const empty = box.children.every((child) => isAbsolute(child) || isFlowNote(child));
+  if (box.style.transform.length > 0 || empty) return false;
   return (
     box.node.tag === 'pdf-table' ||
     // A clipping view is one unit, like a row view: its clip can't be cut across sheets.
@@ -255,6 +280,12 @@ function collectUnits(
   const wrappers: Wrapper[] = [];
   const texts: TextRun[] = [];
   const floats: Float[] = [];
+  const notes: NoteAt[] = [];
+
+  // Called in place of visiting the note, so `units.length` is the index of the next unit.
+  const noteAt = (note: Flowed, before: boolean): void => {
+    notes.push({ ...note, unit: before ? units.length : units.length - 1 });
+  };
 
   /**
    * The unit's box without the absolute boxes whose containing block is outside it, which go to
@@ -357,9 +388,12 @@ function collectUnits(
         }
       }
     }
-    for (const child of children) {
+    const last = lastInFlow(children);
+    for (const [i, child] of children.entries()) {
       const [childX, childTop] = [x + child.x, top + child.y];
-      if (isAbsolute(child)) {
+      if (isFlowNote(child)) {
+        noteAt({ box: child, x: childX, top: childTop, dx: innerDx, dy: innerDy }, i < last);
+      } else if (isAbsolute(child)) {
         floats.push({
           box: child,
           x: childX,
@@ -479,15 +513,18 @@ function collectUnits(
       groups: pageGroups,
     });
   } else {
-    for (const child of content.children) {
-      if (isAbsolute(child)) {
+    const last = lastInFlow(content.children);
+    for (const [i, child] of content.children.entries()) {
+      if (isFlowNote(child)) {
+        noteAt({ box: child, x: child.x, top: child.y, dx: 0, dy: 0 }, i < last);
+      } else if (isAbsolute(child)) {
         floats.push({ box: child, x: child.x, top: child.y, groups: pageGroups, dx: 0, dy: 0 });
       } else {
         visit(child, child.x, child.y, null, pageGroups, 0, 0);
       }
     }
   }
-  return { units, wrappers, texts, floats };
+  return { units, wrappers, texts, floats, notes };
 }
 
 interface PageFrame {
@@ -949,7 +986,7 @@ export function paginatePage(
   const contentStyles = new Map(styles).set(content, contentStyle);
   const laid = layoutBox(content, contentStyles, frame.contentWidth, ctx);
   const contentHeight = frame.bottom - frame.top;
-  const { units, wrappers, texts, floats } = collectUnits(laid, contentHeight, pageGroups);
+  const { units, wrappers, texts, floats, notes } = collectUnits(laid, contentHeight, pageGroups);
 
   // Per unit: the outermost wrapper top opening at it, the outermost wrapper bottom closing at
   // it, whether any of them asks for a page break before or after it or to stay with the next
@@ -1367,6 +1404,18 @@ export function paginatePage(
     }
     // Never above the content top, as a unit moved to a new sheet.
     place(float, frame.left + float.x, Math.max(frame.top, y), float.groups, at(pages, page));
+  }
+
+  // A note goes on the sheet of the unit it is attached to, moved as that unit was. Rows in a
+  // table have no margins, so a table's first row moves as its repeated header does.
+  for (const note of notes) {
+    const placement = placements[note.unit];
+    const shift = placement ? placement.unitShift : frame.top;
+    at(pages, placement?.page ?? 0).placed.push({
+      box: note.box,
+      x: frame.left + note.x + note.dx,
+      y: note.top + shift + note.dy,
+    });
   }
 
   if (draws(pageStyle)) {

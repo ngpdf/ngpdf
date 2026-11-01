@@ -8,6 +8,7 @@ const PDF_ELEMENTS = new Set([
   'pdf-text',
   'pdf-span',
   'pdf-link',
+  'pdf-note',
   'pdf-image',
   'pdf-table',
   'pdf-row',

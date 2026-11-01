@@ -1271,3 +1271,55 @@ describe('position', () => {
     expect(warn).toHaveBeenCalledWith('ngpdf: top has no effect on pdf-span');
   });
 });
+
+describe('resolveStyles: pdf-note', () => {
+  const YELLOW = rgb(255, 212, 0);
+  const note = (style: Record<string, string> = {}, children: PdfNode[] = []): PdfNode =>
+    el('pdf-note', style, children);
+
+  it('colors a note sticky-note yellow, not with the color around it', () => {
+    const plain = note();
+    const inRed = el('pdf-view', { color: 'red' }, [plain]);
+    expect(resolveStyles(el('pdf-document', {}, [inRed])).get(plain)?.color).toEqual(YELLOW);
+    expect(styleOf({ color: 'blue' }, 'pdf-note').color).toEqual(BLUE);
+  });
+
+  it('takes text only', () => {
+    const bold = note({}, [el('pdf-span')]);
+    expect(() => resolveStyles(el('pdf-document', {}, [bold]))).toThrow(
+      'ngpdf: pdf-note takes text only',
+    );
+    const text = note({}, [createNode('text', '', 'fine')]);
+    expect(() => resolveStyles(el('pdf-document', {}, [text]))).not.toThrow();
+  });
+
+  it('throws inside a pdf-text, also through a span or a link', () => {
+    const inText = (inner: PdfNode): PdfNode =>
+      el('pdf-document', {}, [el('pdf-text', {}, [inner])]);
+    expect(() => resolveStyles(inText(note()))).toThrow('ngpdf: pdf-note inside a pdf-text');
+    expect(() => resolveStyles(inText(el('pdf-span', {}, [note()])))).toThrow(
+      'ngpdf: pdf-note inside a pdf-text',
+    );
+    expect(() => resolveStyles(inText(el('pdf-link', {}, [note()])))).toThrow(
+      'ngpdf: pdf-note inside a pdf-text',
+    );
+    expect(() =>
+      resolveStyles(el('pdf-document', {}, [el('pdf-link', {}, [note()])])),
+    ).not.toThrow();
+  });
+
+  it('warns about properties other than color and position', () => {
+    const warn = vi.fn();
+    styleOf(
+      { color: 'red', position: 'absolute', top: '0', right: '0', bottom: '0', left: '0' },
+      'pdf-note',
+      warn,
+    );
+    expect(warn).not.toHaveBeenCalled();
+    styleOf({ padding: '4', 'font-size': '20' }, 'pdf-note', warn);
+    expect(warn.mock.calls).toEqual([
+      ['ngpdf: padding has no effect on pdf-note'],
+      ['ngpdf: font-size has no effect on pdf-note'],
+    ]);
+  });
+});

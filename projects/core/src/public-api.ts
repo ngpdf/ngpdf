@@ -5,6 +5,7 @@ export {
   PdfDocument,
   PdfImage,
   PdfLink,
+  PdfNote,
   PdfPage,
   PdfPageNumber,
   PdfRow,
@@ -13,7 +14,7 @@ export {
   PdfText,
   PdfView,
 } from './lib/elements';
-export type { TableColumn } from './lib/elements';
+export type { NoteIcon, TableColumn } from './lib/elements';
 export type { PageOrientation, PageSize } from './lib/elements/page';
 export type { PageLayout, PageMode, PdfSecurity } from './lib/elements/document';
 export { PdfRenderer, downloadPdf, renderToBlob } from './lib/render/pdf-renderer';

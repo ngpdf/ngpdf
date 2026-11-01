@@ -241,7 +241,7 @@ export class TextMeasureCache {
  * become one space, also across pieces (the space stays in the piece where the run starts), and the
  * ends of the whole paragraph are trimmed. Returns one string per piece.
  */
-function collapseWhitespace(pieces: readonly string[]): string[] {
+export function collapseWhitespace(pieces: readonly string[]): string[] {
   let spaceBefore = false;
   const collapsed = pieces.map((piece) => {
     let out = piece.replace(/[ \t\r\n]+/g, ' ');

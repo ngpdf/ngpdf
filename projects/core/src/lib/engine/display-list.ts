@@ -8,7 +8,14 @@ import { pageNumberFormat, type Box } from './layout';
 import type { OpacityGroup, PageLayout, PlacedBox } from './paginate';
 import type { Corners, Offset, ResolvedStyle, TransformFunction } from './style';
 import { wordGaps, type TextLine } from './text';
-import type { DrawOp, FontMetrics, Matrix, PathSegment, Point } from './writer';
+import {
+  NOTE_SIZE,
+  type DrawOp,
+  type FontMetrics,
+  type Matrix,
+  type PathSegment,
+  type Point,
+} from './writer';
 
 export interface DisplayListOptions {
   /** Measures the page number text. */
@@ -222,6 +229,12 @@ function drawBox(
   // The border box, cut at the limit like the background; an overflow clip doesn't cut it.
   if (box.link !== undefined && bottomEdge > y) {
     pushLink(out, matrix, { x, y, w: box.w, h: bottomEdge - y }, box.link);
+  }
+
+  // A point in page space, like a link's area: the writer adds the annotation after the drawing.
+  if (box.note) {
+    const point = bounds(matrix, { x, y, w: 0, h: 0 });
+    out.push({ op: 'note', x: point.x, y: point.y, ...box.note, color: toHex(style.color) });
   }
 
   // Padding plus border, as laid out.
@@ -755,7 +768,12 @@ export function displayList(
   flatten(sheet, out);
   // On top of everything, outside every clip and group, so nothing hides or fades them.
   if (outlines) for (const op of outlines) out.push(op);
-  return out;
+  // A note's icon stays on the page, wherever its point fell.
+  const clamp = (value: number, size: number): number =>
+    Math.min(Math.max(0, value), Math.max(0, size - NOTE_SIZE));
+  return out.map((op) =>
+    op.op === 'note' ? { ...op, x: clamp(op.x, page.width), y: clamp(op.y, page.height) } : op,
+  );
 }
 
 const DEBUG_COLORS = {

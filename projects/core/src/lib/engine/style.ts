@@ -1180,8 +1180,12 @@ function lineHeightOf(value: string, fontSize: number, tag: string): number {
   return fontSize > 0 ? length / fontSize : ROOT_TEXT_STYLE.lineHeight;
 }
 
+// A note's icon is sticky-note yellow unless the note sets its own color.
+const NOTE_YELLOW: Color = Object.freeze({ r: 255, g: 212, b: 0, a: 1 });
+
 function resolveOne(node: PdfNode, inherited: TextStyle, warn: Warn): ResolvedStyle {
-  const style = defaultStyle(node, inherited);
+  const isNote = node.tag === 'pdf-note';
+  const style = defaultStyle(node, isNote ? { ...inherited, color: NOTE_YELLOW } : inherited);
   let lineHeight: string | null = null;
   for (const [property, value] of Object.entries(node.rawStyle)) {
     if (property === 'line-height') lineHeight = value.trim();
@@ -1260,6 +1264,19 @@ function inText(node: PdfNode): boolean {
   return INLINE.has(parent.tag) || (parent.tag === 'pdf-link' && inText(parent));
 }
 
+// A note takes no space: only its icon color and where it sits apply to it.
+const NOTE_PROPERTIES = new Set(['color', 'position', 'top', 'right', 'bottom', 'left']);
+
+/** A note holds plain text, and is not yet anchored to a run of text. */
+function checkNote(node: PdfNode, warn: Warn): void {
+  if (node.tag !== 'pdf-note') return;
+  if (inText(node)) fail('pdf-note inside a pdf-text');
+  if (node.children.some((child) => child.kind === 'element')) fail('pdf-note takes text only');
+  for (const property of Object.keys(node.rawStyle)) {
+    if (!NOTE_PROPERTIES.has(property)) warn(`ngpdf: ${property} has no effect on pdf-note`);
+  }
+}
+
 function checkInline(node: PdfNode, warn: Warn): void {
   const inline = inText(node);
   if (node.tag === 'pdf-span' || (node.tag === 'pdf-link' && inline)) {
@@ -1290,6 +1307,7 @@ export function resolveStyles(
     if (isLink && item.inLink) fail('pdf-link inside a pdf-link');
     checkImageChildren(item.node);
     checkInline(item.node, warn);
+    checkNote(item.node, warn);
     const style = resolveOne(item.node, item.inherited, warn);
     result.set(item.node, style);
     const inherited = textPartOf(style);

@@ -457,9 +457,18 @@ describe('renderDocument', () => {
       el('pdf-text', {}, [el('pdf-link', {}, [createNode('text', '', 'to')], { href })]),
     ]);
     const target = el('pdf-view', {}, [text('target')], { anchor: 'ok', bookmark: 'Target' });
-    const page = el('pdf-page', {}, [...blocks, el('pdf-text', {}, inline), ...internal, target], {
-      size: 'A4',
+    // A note holding script-like text stays a plain Text annotation with no action.
+    const note = el('pdf-note', {}, [createNode('text', '', 'javascript:app.alert(1)')], {
+      author: '/JavaScript',
+      icon: 'note',
+      open: true,
     });
+    const page = el(
+      'pdf-page',
+      {},
+      [...blocks, el('pdf-text', {}, inline), ...internal, target, note],
+      { size: 'A4' },
+    );
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     const linked = await bytesOf(
       await renderDocument(host({ creationDate: new Date(0) }, [page]), {
@@ -469,9 +478,14 @@ describe('renderDocument', () => {
     );
     for (const body of [plain, linked]) {
       for (const key of ['/JavaScript', '/JS', '/OpenAction', '/Launch', '/AA', '/EmbeddedFile']) {
-        expect(body).not.toContain(key);
+        // The note's author is a string, `(/JavaScript)`, never the key.
+        expect(body.replaceAll('(/JavaScript)', '')).not.toContain(key);
       }
     }
+    const notes = linked.split('endobj').filter((body) => body.includes('/Subtype /Text'));
+    expect(notes).toHaveLength(1);
+    expect(notes[0]).toContain(String.raw`/Contents (javascript:app.alert\(1\))`);
+    expect(notes[0]).not.toMatch(/\/(?:A|AA|F)\b/);
     const uris = [...linked.matchAll(/\/URI\s*\(((?:\\.|[^\\)])*)\)/g)].map((match) => match[1]);
     // The three allowed URLs, once as a block and once inline.
     expect(uris).toHaveLength(6);

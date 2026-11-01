@@ -1824,3 +1824,129 @@ describe('paginatePage: table rows taller than a page', () => {
     expect(boxesOf(pages[1]!, long)[0]!.anchor).toBeUndefined();
   });
 });
+
+describe('paginatePage: pdf-note', () => {
+  // No page number: the content runs down to the bottom padding.
+  const BOTTOM = A4_HEIGHT - PADDING;
+  const AREA = BOTTOM - CONTENT_TOP;
+  const filler = (room: number): PdfNode => el('pdf-view', { height: String(AREA - room) });
+  const block = (style: Record<string, string> = {}, props: Record<string, unknown> = {}) =>
+    el('pdf-view', { height: '20', ...style }, [], props);
+  const note = (style: Record<string, string> = {}): PdfNode => el('pdf-note', style);
+  const sheetOf = (pages: PageLayout[], node: PdfNode): number =>
+    pages.findIndex((laid) => laid.placed.some((p) => p.box.node === node));
+  const placedOf = (pages: PageLayout[], node: PdfNode): PlacedBox => {
+    const found = pages.flatMap((laid) => laid.placed).find((p) => p.box.node === node);
+    if (!found) throw new Error('not placed');
+    return found;
+  };
+
+  it('is never a unit: it takes no room and starts no sheet', () => {
+    const [a, b] = [block(), block()];
+    const marked = note();
+    const pages = paginate(page([filler(60), a, marked, b]));
+    expect(pages).toHaveLength(1);
+    expect(placedOf(pages, b).y).toBeCloseTo(placedOf(pages, a).y + 20, 6);
+    expect(placedOf(pages, marked)).toMatchObject({ x: PADDING });
+    expect(placedOf(pages, marked).y).toBeCloseTo(placedOf(pages, b).y, 6);
+  });
+
+  it('goes with the content after it when that moves to the next sheet', () => {
+    const next = block();
+    const marked = note();
+    const pages = paginate(page([filler(10), marked, next]));
+    expect(sheetOf(pages, next)).toBe(1);
+    expect(sheetOf(pages, marked)).toBe(1);
+    expect(placedOf(pages, marked).y).toBeCloseTo(CONTENT_TOP, 6);
+  });
+
+  it('goes with the content after it across a break before or after', () => {
+    const [before, after] = [block({}, { breakBefore: true }), block()];
+    const [first, second] = [note(), note()];
+    const pages = paginate(
+      page([
+        block(),
+        el('pdf-view', {}, [first, before]),
+        el('pdf-view', {}, [block({ 'break-after': 'page' }), second, after]),
+      ]),
+    );
+    expect(pages).toHaveLength(3);
+    expect(sheetOf(pages, first)).toBe(1);
+    expect(placedOf(pages, first).y).toBeCloseTo(CONTENT_TOP, 6);
+    expect(sheetOf(pages, second)).toBe(2);
+    expect(placedOf(pages, second).y).toBeCloseTo(CONTENT_TOP, 6);
+  });
+
+  it('starts where a wrapper after it starts, before its padding', () => {
+    const marked = note();
+    const card = el('pdf-view', { 'padding-top': '8' }, [block(), block()]);
+    const pages = paginate(page([filler(10), marked, card]));
+    expect(sheetOf(pages, marked)).toBe(1);
+    expect(placedOf(pages, marked).y).toBeCloseTo(CONTENT_TOP, 6);
+  });
+
+  it('stays with the content before it when it is the last child', () => {
+    const last = block();
+    const marked = note();
+    const next = block();
+    // An absolute box or another note after it does not count as content after it.
+    const stamp = el('pdf-view', { position: 'absolute', top: '0', width: '5', height: '5' });
+    const pages = paginate(
+      page([filler(30), el('pdf-view', {}, [last, marked, stamp, note()]), next]),
+    );
+    expect(sheetOf(pages, next)).toBe(1);
+    expect(sheetOf(pages, marked)).toBe(0);
+    expect(placedOf(pages, marked).y).toBeCloseTo(placedOf(pages, last).y + 20, 6);
+    const end = note();
+    const alone = paginate(page([filler(30), block(), end]));
+    expect(sheetOf(alone, end)).toBe(0);
+  });
+
+  it('goes on the first sheet of a page with nothing else', () => {
+    const marked = note();
+    const pages = paginate(page([marked]));
+    expect(pages).toHaveLength(1);
+    expect(placedOf(pages, marked)).toMatchObject({ x: PADDING, y: CONTENT_TOP });
+  });
+
+  it('is drawn with a unit that holds it', () => {
+    const marked = note();
+    const rowView = el('pdf-view', { 'flex-direction': 'row' }, [block(), marked]);
+    const only = el('pdf-view', {}, [note()]);
+    const pages = paginate(page([rowView, only]));
+    expect(pages[0]!.placed.map((p) => p.box.node)).toEqual([rowView, only]);
+    expect(placedOf(pages, rowView).box.children.map((c) => c.node)).toContain(marked);
+  });
+
+  it('is written on every sheet inside a fixed view', () => {
+    const marked = note();
+    const header = el('pdf-view', { height: '20' }, [marked], { fixed: 'top' });
+    const pages = paginate(page([header, ...Array.from({ length: 60 }, () => block())]));
+    expect(pages.length).toBeGreaterThan(1);
+    for (const laid of pages) {
+      expect(laid.placed[0]!.box.children[0]!.node).toBe(marked);
+    }
+  });
+
+  it('follows the absolute rules, not the neighbour rule, with position: absolute', () => {
+    const marked = note({ position: 'absolute', top: String(AREA + 2), left: '0' });
+    const first = filler(10);
+    const next = block({ 'margin-top': '20' });
+    const pages = paginate(page([first, marked, next]));
+    // On the neighbour rule it would sit on the first sheet, with `first`.
+    const early = note({ position: 'absolute', top: '0', left: '0' });
+    const moved = paginate(page([first, early, next]));
+    expect(sheetOf(pages, marked)).toBe(1);
+    expect(placedOf(pages, marked).y).toBeCloseTo(CONTENT_TOP, 6);
+    expect(sheetOf(moved, early)).toBe(0);
+    expect(sheetOf(moved, next)).toBe(1);
+  });
+
+  it('moves with a relative wrapper around it', () => {
+    const marked = note();
+    const pages = paginate(
+      page([el('pdf-view', { position: 'relative', top: '30' }, [block(), marked, block()])]),
+    );
+    expect(placedOf(pages, marked).y).toBeCloseTo(CONTENT_TOP + 20 + 30, 6);
+  });
+});

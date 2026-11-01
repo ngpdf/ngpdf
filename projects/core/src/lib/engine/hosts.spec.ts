@@ -46,6 +46,14 @@ describe('dissolveHosts', () => {
     expect(tags(outText.children[0]!)).toEqual(['#text']);
   });
 
+  it('keeps a pdf-note and dissolves a component around one', () => {
+    const note = el('pdf-note', [createNode('text', '', 'Check')]);
+    const page = el('pdf-page', [el('app-review', [note])]);
+    const outPage = dissolveHosts(el('pdf-document', [page]), vi.fn()).children[0]!;
+    expect(tags(outPage)).toEqual(['pdf-note']);
+    expect(tags(outPage.children[0]!)).toEqual(['#text']);
+  });
+
   it('leaves the input tree unchanged', () => {
     const page = el('pdf-page');
     const host = el('app-cover', [page]);
