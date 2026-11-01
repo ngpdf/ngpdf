@@ -46,6 +46,21 @@ const DOCUMENTS = [
     name: 'contents-sample',
     pages: 3,
     contains: ['Contents', '1. The route', '3. Next season', 'Back to the contents', 'Page 3 of 3'],
+    // Named destination -> 1-based page, the targets of the GoTo links, and the outline tree.
+    navigation: {
+      destinations: { contents: 1, markers: 2, next: 3, route: 1 },
+      links: ['contents', 'contents', 'contents', 'markers', 'next', 'route'],
+      outline: [
+        '1. The route',
+        '  Northern ridge',
+        '  Valley floor',
+        '2. Markers found',
+        '  Standing stones',
+        '  Sunken stones',
+        '3. Next season',
+        '  Equipment',
+      ],
+    },
   },
 ];
 
@@ -187,6 +202,49 @@ const normalizeText = (text) =>
     .trimEnd() + '\n';
 
 /** A short line diff for the failure message. */
+/**
+ * The named destinations (name -> 1-based page), the targets of the GoTo links (sorted) and the
+ * outline (titles indented two spaces per level) of a pdfkit file. pdfkit writes these
+ * dictionaries uncompressed, one object each, so plain matching is enough; names and titles in
+ * the demo are ASCII and need no unescaping.
+ */
+function navigationOf(pdf) {
+  const text = pdf.toString('latin1');
+  const objects = new Map();
+  for (const match of text.matchAll(/(\d+) 0 obj\s*(<<[\s\S]*?>>)\s*(?:stream|endobj)/g)) {
+    objects.set(match[1], match[2]);
+  }
+  const ref = (body, key) => body.match(new RegExp(`/${key} (\\d+) 0 R`))?.[1];
+  const catalog = [...objects.values()].find((body) => body.includes('/Type /Catalog'));
+  const kids = [...objects.values()].find((body) => /\/Type \/Pages\b/.test(body));
+  const pages = [...(kids?.match(/\/Kids \[([^\]]*)\]/)?.[1] ?? '').matchAll(/(\d+) 0 R/g)].map(
+    (match) => match[1],
+  );
+
+  const destinations = {};
+  for (const match of text.matchAll(/\(([^()]*)\) \[(\d+) 0 R \/XYZ/g)) {
+    destinations[match[1]] = pages.indexOf(match[2]) + 1;
+  }
+  const links = [...text.matchAll(/\/S \/GoTo\s*\/D \(([^()]*)\)/g)]
+    .map((match) => match[1])
+    .sort();
+
+  const outline = [];
+  const walk = (id, depth) => {
+    for (let item = id; item !== undefined; item = ref(objects.get(item) ?? '', 'Next')) {
+      const body = objects.get(item) ?? '';
+      outline.push(`${'  '.repeat(depth)}${body.match(/\/Title \(([^()]*)\)/)?.[1] ?? '?'}`);
+      walk(ref(body, 'First'), depth + 1);
+    }
+  };
+  const root = catalog && ref(catalog, 'Outlines');
+  if (root) walk(ref(objects.get(root) ?? '', 'First'), 0);
+  const sorted = Object.fromEntries(
+    Object.entries(destinations).sort(([a], [b]) => (a < b ? -1 : 1)),
+  );
+  return { destinations: sorted, links, outline };
+}
+
 function diff(expected, actual) {
   const a = expected.split('\n');
   const b = actual.split('\n');
@@ -250,6 +308,15 @@ try {
       problems.push(`expected ${document.images ?? 0} embedded images, got ${images}`);
     for (const needle of document.contains) {
       if (!text.includes(needle)) problems.push(`text does not contain "${needle}"`);
+    }
+    if (document.navigation) {
+      const pdf = readFileSync(join(OUT, `${document.name}.pdf`));
+      const found = navigationOf(pdf);
+      for (const key of ['destinations', 'links', 'outline']) {
+        const want = JSON.stringify(document.navigation[key]);
+        const got = JSON.stringify(found[key]);
+        if (want !== got) problems.push(`${key}: expected ${want}, got ${got}`);
+      }
     }
     if (update) {
       writeFileSync(expectedPath, text);
