@@ -158,7 +158,7 @@ function providePdfHyphenation(hyphenate: PdfHyphenate): EnvironmentProviders;
 ```
 
 - `language` is the `language` of the `pdf-document`, so one function can serve several languages.
-- The pieces must join back to the word: `'hyphenation'` gives `['hy', 'phen', 'ation']`. A function that throws, or returns anything else, leaves that word whole, with one warning in development mode.
+- The pieces must join back to the word: `'hyphenation'` gives `['hy', 'phen', 'ation']`. A function that throws, or returns anything else, means that word is not hyphenated automatically, with one warning in development mode. Like any word too long for its box, it can still break at the box edge.
 - Only words of 5 letters or more are hyphenated, with at least 2 letters on each side of the break, as browsers do by default. Punctuation around a word stays outside it.
 - `text-transform` applies first, so the function gets the transformed word.
 - A word that has soft hyphens breaks only at them.

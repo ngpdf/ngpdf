@@ -163,7 +163,8 @@ The site (`projects/site`) is a prerendered Angular app. Its docs are the Markdo
     `manual`, with one dev-mode warning per render.
   - Only words of 5 letters or more, keeping 2 letters on each side. A word with soft hyphens
     breaks only at them. The function is called at most once per word per render. Pieces that do
-    not join back to the word, or a throw, leave the word whole, with one dev-mode warning.
+    not join back to the word, or a throw, mean that word is not hyphenated automatically, with
+    one dev-mode warning; a word wider than its box still breaks at the box edge.
   - A word is hyphenated only when it does not fit on what is left of the line. The line ends
     with `‐` (U+2010) in the face of its last run, or `-` in a font without it (every standard
     font).
