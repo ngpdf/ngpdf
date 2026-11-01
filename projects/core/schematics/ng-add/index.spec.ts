@@ -2,6 +2,7 @@ import { SchematicTestRunner, type UnitTestTree } from '@angular-devkit/schemati
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { check } from 'prettier';
+import ts from 'typescript';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { buildSchematics } from '../../../../scripts/build-schematics.mjs';
 import type { Schema } from './schema';
@@ -276,6 +277,34 @@ export const routes: Routes = [
 ];
 `,
       );
+    });
+
+    it('writes an import that parses and resolves when --path has a quote in it', async () => {
+      const tree = await ngAdd(await application(await workspace(), 'app'), {
+        demoRoute: true,
+        path: "projects/app/src/app/client's-documents",
+      });
+
+      const routes = tree.readContent(routesPath);
+      expect(routes).toContain(
+        `loadComponent: () => import("./client's-documents/pdf-demo").then((m) => m.PdfDemo),`,
+      );
+      const { diagnostics } = ts.transpileModule(routes, { reportDiagnostics: true });
+      expect(diagnostics).toEqual([]);
+      expect(await formatted(tree, routesPath)).toEqual([true]);
+      expect(await compile(tree, 'projects/app')).toEqual([]);
+    }, 120_000);
+
+    it('escapes a control character in --path instead of breaking the import', async () => {
+      const tree = await ngAdd(await application(await workspace(), 'app'), {
+        demoRoute: true,
+        path: 'projects/app/src/app/odd\nname',
+      });
+
+      const routes = tree.readContent(routesPath);
+      expect(routes).toContain(`import("./odd\\nname/pdf-demo")`);
+      const { diagnostics } = ts.transpileModule(routes, { reportDiagnostics: true });
+      expect(diagnostics).toEqual([]);
     });
 
     it('finds a routes array behind satisfies', async () => {

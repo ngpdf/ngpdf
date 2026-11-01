@@ -10,7 +10,7 @@ export function addDemoRoute(routesFile: string, demoFile: string): Rule {
   return (tree, context) => {
     let specifier = posix.relative(posix.dirname(routesFile), demoFile).replace(/\.ts$/, '');
     if (!specifier.startsWith('.')) specifier = `./${specifier}`;
-    const load = `() => import('${specifier}').then((m) => m.PdfDemo)`;
+    const load = `() => import(${stringLiteral(specifier)}).then((m) => m.PdfDemo)`;
 
     const text = tree.exists(routesFile) ? tree.readText(routesFile) : undefined;
     const routes = text === undefined ? undefined : findRoutesArray(routesFile, text);
@@ -41,6 +41,15 @@ export function addDemoRoute(routesFile: string, demoFile: string): Rule {
     }
     tree.commitUpdate(recorder);
   };
+}
+
+/**
+ * `value` as a TypeScript string literal: single-quoted like the CLI's own code when nothing needs
+ * escaping, otherwise JSON's double-quoted form, which escapes quotes and control characters.
+ * `value` never holds a backslash: `--path` is normalized to forward slashes.
+ */
+function stringLiteral(value: string): string {
+  return /^[^'\p{Cc}]*$/u.test(value) ? `'${value}'` : JSON.stringify(value);
 }
 
 function route(indent: string, load: string): string {
