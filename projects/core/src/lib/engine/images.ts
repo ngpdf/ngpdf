@@ -112,10 +112,10 @@ async function loadOne(
   fetchFn: typeof fetch | undefined,
   server: ServerSources | undefined,
 ): Promise<ImageAsset> {
-  const source = src instanceof Uint8Array ? undefined : readSource(src, fetchFn, server);
+  const source = readSource(src, fetchFn, server);
   const label = source?.label ?? typeof src;
   try {
-    if (!source) throw new Error('src must be a string, Blob or ArrayBuffer');
+    if (!source) throw new Error('src must be a string, Blob, ArrayBuffer or Uint8Array');
     const data = await source.read();
     return { data, ...writer.imageSize(data) };
   } catch (error) {

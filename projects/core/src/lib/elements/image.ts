@@ -10,7 +10,7 @@ export class PdfImage {
   readonly anchor = input<string | null | undefined>();
   /** Adds an entry with this title to the document outline, pointing at this element. */
   readonly bookmark = input<string | null | undefined>();
-  readonly src = input.required<string | Blob | ArrayBuffer>();
+  readonly src = input.required<string | Blob | ArrayBuffer | Uint8Array>();
 
   constructor() {
     (inject(ElementRef).nativeElement as PdfNode).owner = this;
