@@ -15,7 +15,7 @@ Starting from the children of the `pdf-page`, ngpdf looks inside some elements a
 
 | Element | Treated as |
 | --- | --- |
-| `pdf-view` with `flex-direction: column` (the default) and children | a wrapper: its children are looked at in turn |
+| `pdf-view` or block `pdf-link` with `flex-direction: column` (the default) and children | a wrapper: its children are looked at in turn |
 | `pdf-view` with a `transform` | one unit, with everything inside it, so it is never cut across sheets |
 | `pdf-view` with `overflow: hidden`, `clip`, `scroll` or `auto` | one unit, with everything inside it, so its clip is never split |
 | `pdf-table` | a wrapper: each of its rows is a unit |
@@ -60,6 +60,8 @@ Text lines that would cross the cut are not drawn, and images, backgrounds and s
 ## Wrapper backgrounds and borders
 
 A column `pdf-view` or a `pdf-table` with a background or a border that runs across several sheets is sliced: each sheet draws the part that holds its units. The bottom border is not drawn at the cut, and the top border is not drawn on the continued part, so the box reads as one box across pages.
+
+A block `pdf-link` is sliced the same way: each sheet gets one clickable area over the part of the link on it.
 
 ## Repeated table headers
 

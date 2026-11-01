@@ -2,8 +2,8 @@ import { Component } from '@angular/core';
 import { PDF_ELEMENTS } from '@ngpdf/core';
 
 /**
- * Styled runs inside one paragraph, each in a pdf-span, a note cut to two lines, and a rotated
- * stamp.
+ * Styled runs inside one paragraph, each in a pdf-span, an inline link, a note cut to two lines,
+ * and a rotated stamp that links to the invoice.
  */
 @Component({
   selector: 'app-span-sample',
@@ -18,7 +18,10 @@ import { PDF_ELEMENTS } from '@ngpdf/core';
           Invoice <pdf-span style="font-weight: bold">#{{ invoice }}</pdf-span> totals
           <pdf-span style="font-size: 16; font-weight: bold">{{ total }}</pdf-span> and is
           <pdf-span style="color: #b00020; font-style: italic">{{ days }} days overdue</pdf-span>.
-          Pay it at <pdf-span style="text-decoration: underline">example.com/pay</pdf-span>.
+          Pay it at
+          <pdf-link [href]="payUrl" style="color: #1a56db; text-decoration: underline"
+            >example.com/pay</pdf-link
+          >.
         </pdf-text>
         <pdf-text style="width: 160; margin-bottom: 8">
           A narrow box wraps
@@ -33,19 +36,22 @@ import { PDF_ELEMENTS } from '@ngpdf/core';
           <pdf-span style="font-family: 'Noto Sans'">Łódź</pdf-span>
           from <pdf-span style="font-family: Courier">WAREHOUSE-7</pdf-span>.
         </pdf-text>
-        <pdf-view
+        <pdf-link
+          [href]="invoiceUrl"
           style="align-self: flex-end; margin-top: 24; padding: 4 10; border: 2 solid #b00020; border-radius: 4; transform: rotate(-12deg)"
         >
           <pdf-text style="color: #b00020; font-size: 16; font-weight: bold; letter-spacing: 2">
             OVERDUE
           </pdf-text>
-        </pdf-view>
+        </pdf-link>
       </pdf-page>
     </pdf-document>
   `,
 })
 export class SpanSample {
   readonly invoice = 1024;
+  readonly payUrl = 'https://example.com/pay';
+  readonly invoiceUrl = 'https://example.com/invoices/1024';
   readonly total = '€ 1,280.00';
   readonly days = 12;
   readonly note =

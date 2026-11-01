@@ -335,6 +335,35 @@ describe('resolveStyles', () => {
     ]);
   });
 
+  it('styles an inline pdf-link like a pdf-span, and lets a pdf-span sit inside one', () => {
+    const warn = vi.fn();
+    const span = el('pdf-span', { 'font-weight': 'bold' });
+    const link = el('pdf-link', { color: 'blue', padding: '4' }, [span]);
+    const styles = resolveStyles(el('pdf-document', {}, [el('pdf-text', {}, [link])]), warn);
+    expect(styles.get(span)).toMatchObject({ fontWeight: 'bold', color: BLUE });
+    expect(warn).toHaveBeenCalledExactlyOnceWith('ngpdf: padding has no effect on pdf-link');
+  });
+
+  it('styles a block pdf-link like a column pdf-view, without warnings', () => {
+    const warn = vi.fn();
+    const style = styleOf({ padding: '4', 'background-color': 'red' }, 'pdf-link', warn);
+    expect(style).toMatchObject({ flexDirection: 'column', backgroundColor: RED });
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it('throws for a pdf-link inside a pdf-link, at any depth', () => {
+    const nested = (inner: PdfNode): PdfNode =>
+      el('pdf-document', {}, [el('pdf-link', {}, [inner])]);
+    expect(() => resolveStyles(nested(el('pdf-view', {}, [el('pdf-link')])))).toThrow(
+      'ngpdf: pdf-link inside a pdf-link',
+    );
+    expect(() =>
+      resolveStyles(nested(el('pdf-text', {}, [el('pdf-span', {}, [el('pdf-link')])]))),
+    ).toThrow('ngpdf: pdf-link inside a pdf-link');
+    const siblings = el('pdf-document', {}, [el('pdf-link'), el('pdf-view', {}, [el('pdf-link')])]);
+    expect(() => resolveStyles(siblings)).not.toThrow();
+  });
+
   it('warns that a pdf-text inside a pdf-text is flattened', () => {
     const warn = vi.fn();
     const inner = el('pdf-text', { 'font-weight': 'bold' });

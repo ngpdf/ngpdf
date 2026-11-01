@@ -140,7 +140,7 @@ function isWrapper(box: Box): boolean {
   return (
     box.node.tag === 'pdf-table' ||
     // A clipping view is one unit, like a row view: its clip can't be cut across sheets.
-    (box.node.tag === 'pdf-view' &&
+    ((box.node.tag === 'pdf-view' || box.node.tag === 'pdf-link') &&
       box.style.flexDirection === 'column' &&
       box.style.overflow === 'visible')
   );
@@ -806,7 +806,8 @@ export function paginatePage(
     for (const built of pages) built.decorations.push({ box, x: 0, y: 0 });
   }
   for (const wrapper of wrappers) {
-    if (!draws(wrapper.box.style)) continue;
+    // A link's area is drawn with its pieces, so a link wrapper always has them.
+    if (!draws(wrapper.box.style) && wrapper.box.link === undefined) continue;
     const first = at(placements, wrapper.first);
     const last = at(placements, wrapper.last);
     // `full` is the piece's height before the page bottom cuts it.

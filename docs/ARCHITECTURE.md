@@ -129,7 +129,7 @@ invalidation would buy nothing here.
   stage that collects children (pages, rows, cells, pagination units, layout) would otherwise
   have to look through hosts.
 - **Decision.** `dissolveHosts` copies the document's tree with every element that is not one of
-  the ten `pdf-*` elements replaced by its children, like CSS `display: contents`. A host's
+  the eleven `pdf-*` elements replaced by its children, like CSS `display: contents`. A host's
   own style is ignored, with one dev-mode warning per tag. The stages after it never see a host.
 - **Alternative.** Teaching each stage to skip hosts. It loses because five places would each
   need the same rule, and missing one gives a silent wrong layout.
@@ -146,9 +146,9 @@ invalidation would buy nothing here.
 
 ### `DrawOp` handling: a discriminated union and an exhaustive `switch`, no Visitor
 
-- **Context.** The writer and the tests act on nine draw operation kinds: `rect`, `line`, `path`,
-  `text`, `image`, `transform` with its closing `untransform`, and `clip` with its closing
-  `unclip`.
+- **Context.** The writer and the tests act on ten draw operation kinds: `rect`, `line`, `path`,
+  `text`, `image`, `transform` with its closing `untransform`, `clip` with its closing `unclip`,
+  and `link`.
 - **Decision.** `DrawOp` is a TypeScript discriminated union. Code that handles it uses a
   `switch (op.op)` with an `assertNever` default, so adding a kind fails to compile wherever it is
   not handled.

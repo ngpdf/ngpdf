@@ -39,7 +39,8 @@ runs in CI with secrets. In that case the table applies.
 
 ## What ngpdf does about security
 
-- ngpdf never writes PDF JavaScript, actions, forms or embedded files, and a test checks the output.
+- ngpdf never writes PDF JavaScript, forms or embedded files, and a test checks the output. The
+  only action it writes is a `pdf-link` to an `http:`, `https:` or `mailto:` URL.
 - Parsers run in linear time, and nesting and text size are limited.
 - Images are fetched with the browser's `fetch`, under the page's CORS and CSP.
 - CI runs `npm audit`, OSV-Scanner, CodeQL and OpenSSF Scorecard, and Dependabot keeps

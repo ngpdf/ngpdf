@@ -559,6 +559,53 @@ describe('layoutRanges', () => {
     expect(colored.lines[0]?.runs[0]?.color.r).toBe(255);
   });
 
+  it('keeps the link of a range on its runs, split where the link starts and ends', () => {
+    const url = 'https://example.com/';
+    const [line] = lay([
+      range('See '),
+      { text: 'the ', style, link: url },
+      { text: 'docs', style: bold, link: url },
+      { text: ' and ', style },
+      { text: 'more', style, link: 'mailto:a@example.com' },
+    ]).lines;
+    expect(line?.runs.map((run) => [run.text, run.link])).toEqual([
+      ['See ', undefined],
+      ['the ', url],
+      ['docs', url],
+      [' and ', undefined],
+      ['more', 'mailto:a@example.com'],
+    ]);
+    expect(line?.runs[0]).not.toHaveProperty('link');
+  });
+
+  it('splits a link across lines with the link on each piece', () => {
+    const url = 'https://example.com/';
+    const width = writer.widthOf('one two', 'Helvetica', 9) + 1;
+    const block = lay([range('one '), { text: 'two three', style, link: url }], width);
+    expect(block.lines.map((line) => line.runs.map((run) => [run.text, run.link]))).toEqual([
+      [
+        ['one ', undefined],
+        ['two', url],
+      ],
+      [['three', url]],
+    ]);
+  });
+
+  it('does not reuse a cached block for the same text with another link', () => {
+    const cache = new TextMeasureCache();
+    const plain = layoutRanges([range('same')], style, Infinity, writer, undefined, cache);
+    const linked = layoutRanges(
+      [{ text: 'same', style, link: 'https://example.com/' }],
+      style,
+      Infinity,
+      writer,
+      undefined,
+      cache,
+    );
+    expect(plain.lines[0]?.runs[0]?.link).toBeUndefined();
+    expect(linked.lines[0]?.runs[0]?.link).toBe('https://example.com/');
+  });
+
   it('rejects ranges over 1 MB in total', () => {
     const half = 'a'.repeat(524_289);
     expect(() => lay([range(half), range(half)])).toThrow('ngpdf: text longer than 1 MB');

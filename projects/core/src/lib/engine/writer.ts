@@ -152,7 +152,19 @@ export type DrawOp =
       readonly h: number;
       readonly radii: Corners<number>;
     }
-  | { readonly op: 'unclip' };
+  | { readonly op: 'unclip' }
+  /**
+   * A clickable rectangle that opens `url`, an http, https or mailto URL the engine checked. In
+   * page space: the transforms and clips around it do not apply. It draws nothing.
+   */
+  | {
+      readonly op: 'link';
+      readonly x: number;
+      readonly y: number;
+      readonly w: number;
+      readonly h: number;
+      readonly url: string;
+    };
 
 export interface FontMetrics {
   /** With `ligatures` false, the optional ligatures (liga, clig, dlig) are left out. */
@@ -448,7 +460,11 @@ export async function createPdfkitWriter(options: { compress?: boolean } = {}): 
       try {
         for (const page of pages) {
           doc.addPage({ size: [page.width, page.height], margin: 0 });
-          for (const op of page.ops) drawOp(doc, op, dataUrls);
+          const links: LinkOp[] = [];
+          for (const op of page.ops) drawOp(doc, op, dataUrls, links);
+          // After the drawing, when every transform is restored: pdfkit maps an annotation's
+          // rect through the current transform.
+          for (const link of links) doc.link(link.x, link.y, link.w, link.h, link.url);
         }
       } catch (error) {
         // Nobody awaits `done` on this path; keep a late stream error from going unhandled.
@@ -664,7 +680,14 @@ function pathTo(doc: Doc, segment: PathSegment): void {
   }
 }
 
-function drawOp(doc: Doc, op: DrawOp, dataUrls: WeakMap<Uint8Array, string>): void {
+type LinkOp = Extract<DrawOp, { op: 'link' }>;
+
+function drawOp(
+  doc: Doc,
+  op: DrawOp,
+  dataUrls: WeakMap<Uint8Array, string>,
+  links: LinkOp[],
+): void {
   switch (op.op) {
     case 'rect':
       // Each fill in its own state: a gradient sets no opacity, so it would keep the color's.
@@ -734,6 +757,9 @@ function drawOp(doc: Doc, op: DrawOp, dataUrls: WeakMap<Uint8Array, string>): vo
       return;
     case 'unclip':
       doc.restore();
+      return;
+    case 'link':
+      links.push(op);
       return;
     default:
       return assertNever(op);

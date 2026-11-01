@@ -1,11 +1,11 @@
 ---
 title: Elements
-description: Reference for the ten pdf-* elements of @ngpdf/core, with every input, its type, its default value and what it does in the rendered PDF.
+description: Reference for the eleven pdf-* elements of @ngpdf/core, with every input, its type, its default value and what it does in the rendered PDF.
 section: Reference
 order: 9
 ---
 
-All ten elements are standalone components exported from `@ngpdf/core`. Import them all at once with `PDF_ELEMENTS`, or one by one by class name.
+All eleven elements are standalone components exported from `@ngpdf/core`. Import them all at once with `PDF_ELEMENTS`, or one by one by class name.
 
 ```ts
 import { PDF_ELEMENTS } from '@ngpdf/core';
@@ -25,6 +25,7 @@ export class Report {}
 | `pdf-view` | `PdfView` |
 | `pdf-text` | `PdfText` |
 | `pdf-span` | `PdfSpan` |
+| `pdf-link` | `PdfLink` |
 | `pdf-image` | `PdfImage` |
 | `pdf-table` | `PdfTable` |
 | `pdf-row` | `PdfRow` |
@@ -95,6 +96,20 @@ Part of a `pdf-text` drawn in its own text styles, such as one bold word in a se
 ```
 
 It holds text and other `pdf-span` elements, and must be inside a `pdf-text`: anywhere else the render fails with `ngpdf: pdf-span must be inside a pdf-text`. Only `color`, `font-family`, `font-size`, `font-weight`, `font-style`, `text-decoration`, `letter-spacing` and `text-transform` apply to it. See [Styled runs](/docs/text-and-fonts#styled-runs-pdf-span).
+
+## pdf-link
+
+A link to a URL. Where a `pdf-view` can go it is a column `pdf-view` whose box is clickable; inside a `pdf-text` it is inline, like a `pdf-span`, and the text it covers is clickable.
+
+| Input | Type | Default | Description |
+| --- | --- | --- | --- |
+| `href` | `string` | required | An absolute `http:`, `https:` or `mailto:` URL. Any other URL writes no link, with a warning in development mode. |
+
+```html
+<pdf-text>Pay at <pdf-link [href]="payUrl" style="color: #1a56db; text-decoration: underline">example.com/pay</pdf-link>.</pdf-text>
+```
+
+A link has no default color or underline. Inline, only the text styles of a `pdf-span` apply to it. A `pdf-link` inside another `pdf-link` fails the render with `ngpdf: pdf-link inside a pdf-link`. See [Links](/docs/text-and-fonts#links-pdf-link).
 
 ## pdf-image
 

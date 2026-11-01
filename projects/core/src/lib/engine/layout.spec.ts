@@ -160,6 +160,57 @@ describe('layoutBox', () => {
     expect(leaf?.h).toBeCloseTo(18 * 1.2, 6);
   });
 
+  it('lays out an inline pdf-link like a pdf-span and puts its URL on its runs', () => {
+    const root = el('pdf-view', {}, [
+      el('pdf-text', {}, [
+        textNode('See '),
+        el(
+          'pdf-link',
+          { color: 'blue' },
+          [textNode('the '), el('pdf-span', { 'font-weight': 'bold' }, [textNode('docs')])],
+          {
+            href: 'HTTPS://Example.com',
+          },
+        ),
+        textNode('.'),
+      ]),
+    ]);
+    const runs = lay(root, 400).children[0]?.text?.lines[0]?.runs ?? [];
+    expect(runs.map(({ text, font, color, link }) => [text, font, color.b, link])).toEqual([
+      ['See ', 'Helvetica', 0, undefined],
+      ['the ', 'Helvetica', 255, 'https://example.com/'],
+      ['docs', 'Helvetica-Bold', 255, 'https://example.com/'],
+      ['.', 'Helvetica', 0, undefined],
+    ]);
+  });
+
+  it('lays out a block pdf-link like a column pdf-view and gives its box the URL', () => {
+    const link = el('pdf-link', { padding: '4' }, [textNode('Open')], {
+      href: 'https://example.com/a',
+    });
+    const box = lay(el('pdf-view', {}, [link, el('pdf-view', { height: '10' })]), 400);
+    const linked = box.children[0];
+    expect(linked?.link).toBe('https://example.com/a');
+    expect(linked?.w).toBe(400);
+    expect(linked?.children[0]?.text?.lines[0]?.text).toBe('Open');
+    expect(box.children[1]).not.toHaveProperty('link');
+  });
+
+  it('draws a link with a refused URL as plain content, with a warning', () => {
+    const warn = vi.fn();
+    const bad = 'javascript:alert(1)';
+    const root = el('pdf-view', {}, [
+      el('pdf-link', {}, [textNode('Block')], { href: bad }),
+      el('pdf-text', {}, [el('pdf-link', {}, [textNode('inline')], { href: bad })]),
+    ]);
+    const box = lay(root, 400, warn);
+    expect(box.children[0]).not.toHaveProperty('link');
+    expect(box.children[1]?.text?.lines[0]?.runs[0]).not.toHaveProperty('link');
+    expect(warn).toHaveBeenCalledWith(
+      `ngpdf: pdf-link href "${bad}" is not an absolute http, https or mailto URL; no link written`,
+    );
+  });
+
   it('keeps flattening a pdf-text inside a pdf-text into the outer style', () => {
     const root = el('pdf-view', {}, [
       el('pdf-text', {}, [

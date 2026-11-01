@@ -83,6 +83,20 @@ class SpansDocument {
   readonly tags = ['a', 'b'];
 }
 
+@Component({
+  selector: 'pdf-test-links',
+  imports: [PDF_ELEMENTS],
+  template: `
+    <pdf-document>
+      <pdf-link href="https://example.com/a"><pdf-text>Block</pdf-text></pdf-link>
+      <pdf-text>See <pdf-link [href]="url" style="color: blue">the docs</pdf-link>.</pdf-text>
+    </pdf-document>
+  `,
+})
+class LinksDocument {
+  readonly url = 'mailto:team@example.com';
+}
+
 function at<T>(items: readonly T[], index: number): T {
   const item = items[index];
   if (item === undefined) throw new Error(`no item at ${String(index)}`);
@@ -102,7 +116,8 @@ describe('pdf-* elements', () => {
   });
 
   function render(
-    component: typeof DefaultsDocument | typeof BoundDocument | typeof SpansDocument,
+    component:
+      typeof DefaultsDocument | typeof BoundDocument | typeof SpansDocument | typeof LinksDocument,
   ): PdfNode {
     const environmentInjector = createEnvironmentInjector(
       [{ provide: RendererFactory2, useFactory: () => new PdfRendererFactory() }],
@@ -175,6 +190,18 @@ describe('pdf-* elements', () => {
     }
     expect(at(spans, 0).rawStyle).toEqual({ 'font-weight': 'bold' });
     expect(textContent(text)).toBe('Total: 42, late #a #b');
+  });
+
+  it('renders pdf-link as a block and inside a pdf-text, exposing href through pdfProps', () => {
+    const children = elementChildren(render(LinksDocument));
+    const block = at(children, 0);
+    expect(block.tag).toBe('pdf-link');
+    expect(block.owner).not.toBeNull();
+    expect(propsOf(block)).toEqual({ href: 'https://example.com/a' });
+    const inline = at(elementChildren(at(children, 1)), 0);
+    expect(inline.tag).toBe('pdf-link');
+    expect(propsOf(inline)).toEqual({ href: 'mailto:team@example.com' });
+    expect(inline.rawStyle).toEqual({ color: 'blue' });
   });
 });
 

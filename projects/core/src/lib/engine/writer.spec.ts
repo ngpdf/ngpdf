@@ -617,6 +617,34 @@ describe('createPdfkitWriter', () => {
       expect(count(square, /\sc\n/g)).toBe(0);
     });
 
+    it('writes a link as a borderless Link annotation with a URI action', async () => {
+      const pdf = await pdfText([
+        { op: 'link', x: 10, y: 20, w: 30, h: 40, url: 'https://example.com/a?b=(c)' },
+      ]);
+      expect(pdf).toContain('/Subtype /Link');
+      expect(pdf).toContain('/Border [0 0 0]');
+      // y is flipped: the page is 200 tall.
+      expect(pdf).toContain('/Rect [10 140 40 180]');
+      expect(pdf).toContain('/S /URI');
+      expect(pdf).toContain(String.raw`/URI (https://example.com/a?b=\(c\))`);
+      expect(pdf).toMatch(/\/Annots \[\d+ 0 R\]/);
+      // A link draws nothing.
+      expect(contentOf(pdf)).not.toContain(' re\n');
+    });
+
+    it('writes a link in page space, whatever transform or clip it sits in', async () => {
+      const link = { op: 'link', x: 10, y: 20, w: 30, h: 40, url: 'https://example.com/' } as const;
+      const pdf = await pdfText([
+        { op: 'transform', matrix: [0, 1, -1, 0, 100, 50] },
+        { op: 'clip', x: 0, y: 0, w: 5, h: 5, radii: SQUARE },
+        link,
+        { op: 'unclip' },
+        { op: 'untransform' },
+        link,
+      ]);
+      expect(pdf.match(/\/Rect \[10 140 40 180\]/g)).toHaveLength(2);
+    });
+
     it('draws the ops between transform and untransform in the transformed space', async () => {
       const rect = {
         op: 'rect',

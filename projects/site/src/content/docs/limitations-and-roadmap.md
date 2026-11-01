@@ -28,6 +28,11 @@ ngpdf v0.1 covers documents built from text, tables, boxes and images. This page
 - `transform` takes 2D rotations, scales and translations only: no `skew()`, `matrix()` or 3D functions.
 - Your own components inside a document are transparent, like `display: contents`. Styles on a component's host element are ignored with a warning. Style a `pdf-*` element inside it instead. The same goes for the document component you render.
 
+### Links
+
+- Links open `http:`, `https:` and `mailto:` URLs only. There are no links to a place inside the document.
+- A link's clickable area is an upright rectangle: inside a `transform` it covers the transformed area's bounding box, and an `overflow` clip does not cut it.
+
 ### Tables
 
 - Inside a `pdf-table`, horizontal padding, borders and margins on a row are ignored. Put horizontal padding on the `pdf-cell`s.
@@ -45,7 +50,7 @@ ngpdf v0.1 covers documents built from text, tables, boxes and images. This page
 ### Not in v0.1
 
 - Server rendering. Render in the browser.
-- SVG, links and bookmarks.
+- SVG and bookmarks.
 - Forms and encryption.
 - A preview component.
 - Capturing the DOM of a page as a PDF.

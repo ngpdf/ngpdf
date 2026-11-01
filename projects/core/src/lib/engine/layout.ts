@@ -2,6 +2,7 @@ import type { Edge, Node as YogaNode, Yoga } from 'yoga-layout/load';
 import { createNode, propsOf, type PdfNode } from '../tree/node';
 import type { TableColumn } from '../tree/table-column';
 import type { ImageAsset } from './images';
+import { linkUrl } from './link';
 import { anonymousTextStyle, type Edges, type Length, type ResolvedStyle } from './style';
 import { fontChain, type FontRegistry } from './fonts';
 import {
@@ -27,6 +28,8 @@ export interface Box {
   readonly border: Edges<number>;
   readonly text?: TextBlock;
   readonly image?: ImageAsset;
+  /** The checked URL of a block pdf-link. */
+  readonly link?: string;
   readonly children: readonly Box[];
 }
 
@@ -402,8 +405,9 @@ export function layoutBox(
         }
       : undefined;
 
-  // A pdf-text's text as ranges: its own text in its style, a pdf-span's in the span's. Any other
-  // element inside it (a nested pdf-text) is flattened into the style around it.
+  // A pdf-text's text as ranges: its own text in its style, a pdf-span's or pdf-link's in its own,
+  // with the link's URL. Any other element inside it (a nested pdf-text) is flattened into the
+  // style around it.
   const ranges = new Map<PdfNode, readonly TextRange[]>();
   const rangesOf = (textNode: PdfNode): readonly TextRange[] => {
     let found = ranges.get(textNode);
@@ -417,19 +421,27 @@ export function layoutBox(
     }
     if (!found) {
       const out: TextRange[] = [];
-      const visit = (node: PdfNode, style: ResolvedStyle): void => {
+      const visit = (node: PdfNode, style: ResolvedStyle, link: string | undefined): void => {
         for (const child of node.children) {
-          if (child.kind === 'element') {
-            visit(child, child.tag === 'pdf-span' ? styleOf(styles, child) : style);
+          if (child.tag === 'pdf-link') {
+            visit(child, styleOf(styles, child), linkUrl(child, ctx.warn));
+          } else if (child.kind === 'element') {
+            visit(child, child.tag === 'pdf-span' ? styleOf(styles, child) : style, link);
           } else if (child.kind === 'text') {
             const last = out[out.length - 1];
-            if (last?.style === style)
+            if (last?.style === style && last.link === link)
               out[out.length - 1] = { ...last, text: last.text + child.text };
-            else out.push({ text: child.text, style, ...withFonts(fontsOf(style)) });
+            else
+              out.push({
+                text: child.text,
+                style,
+                ...withFonts(fontsOf(style)),
+                ...(link !== undefined && { link }),
+              });
           }
         }
       };
-      visit(textNode, styleFor(textNode));
+      visit(textNode, styleFor(textNode), undefined);
       found = out;
       ranges.set(textNode, found);
     }
@@ -585,6 +597,7 @@ export function layoutBox(
     const { node: current, yoga: yogaNode } = built;
     const style = styleFor(current);
     const image = ctx.images.get(current);
+    const link = current.tag === 'pdf-link' ? linkUrl(current, ctx.warn) : undefined;
     return {
       node: current,
       style,
@@ -607,6 +620,7 @@ export function layoutBox(
           }
         : {}),
       ...(image ? { image } : {}),
+      ...(link !== undefined && { link }),
       children: built.children.map(read),
     };
   };
