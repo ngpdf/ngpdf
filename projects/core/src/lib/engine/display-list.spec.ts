@@ -2379,6 +2379,20 @@ describe('emoji', () => {
     expect(only(ops, 'text')[1]!.x - 36).toBeCloseTo(a + 30, 6);
   });
 
+  it('fits a non-square image inside its 1 em square, centered, without stretching it', () => {
+    const wide: ImageAsset = { data: new Uint8Array([3]), width: 72, height: 36 };
+    const root = page([text('🎉', { 'font-size': '10' })]);
+    const ctx: LayoutContext = {
+      yoga,
+      metrics: writer,
+      images: new Map(),
+      emoji: new Map([['🎉', wide]]),
+    };
+    const square = only(list(paginatePage(root, resolveStyles(root), ctx)[0]!, 0, 1), 'image')[0]!;
+    expect(square).toMatchObject({ w: 10, h: 5 });
+    expect(square.clip).toEqual({ x: square.x, y: square.y - 2.5, w: 10, h: 10 });
+  });
+
   it('puts the bottom of the emoji on the descent of the line', () => {
     const ops = drawEmoji(text('a👍', { 'font-size': '20' }));
     const [word] = only(ops, 'text');

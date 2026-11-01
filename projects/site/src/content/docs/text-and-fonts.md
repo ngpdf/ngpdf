@@ -156,7 +156,7 @@ A character as you see it (a grapheme cluster) is an emoji when:
 
 ### Layout
 
-- Each emoji is a square 1 em on each side, at the `font-size` of its text. Its bottom sits on the font's descent and its top is 1 em above that, so it lines up with the text around it. A writer whose font metrics give no descent puts the bottom on the baseline instead; the default pdfkit writer always gives one.
+- Each emoji is a square 1 em on each side, at the `font-size` of its text. An image that is not square is fitted inside it, centered, without stretching. Its bottom sits on the font's descent and its top is 1 em above that, so it lines up with the text around it. A writer whose font metrics give no descent puts the bottom on the baseline instead; the default pdfkit writer always gives one.
 - It takes the text's `letter-spacing`, and lines break around it as around any character, never inside it.
 - An underline or a line-through runs under or through it like text. Its `color` does not apply to the image.
 - `max-lines`, `text-align: justify` and `text-transform` work as they do for text. An ellipsis after an emoji is drawn in the font of the text around it.

@@ -748,7 +748,7 @@ function flatten(layer: Layer, out: DrawOp[]): void {
 }
 
 /**
- * A run of emoji: each cluster an image 1 em square, `letter-spacing` after it, its top
+ * A run of emoji: each cluster an image in a 1 em square, `letter-spacing` after it, its top
  * `run.ascent` above the baseline. Its color is not used, except by its decoration: that is drawn
  * by the text op of one space in the run's font, letter-spaced to the run's width, so it lines
  * up with the decoration of the text around it.
@@ -763,9 +763,19 @@ function drawEmoji(
 ): void {
   const top = baseline - run.ascent;
   const count = graphemeCount(run.text);
+  // An image that is not square is fitted inside the square, as pdf-image does with `contain`.
+  const fitted = fitImage(image, { w: run.size, h: run.size }, 'contain');
   for (let k = 0; k < count; k++) {
     const rect = { x: x + k * (run.size + run.letterSpacing), y: top, w: run.size, h: run.size };
-    out.push({ op: 'image', ...rect, clip: rect, data: image.data });
+    out.push({
+      op: 'image',
+      x: rect.x + fitted.x,
+      y: rect.y + fitted.y,
+      w: fitted.w,
+      h: fitted.h,
+      clip: rect,
+      data: image.data,
+    });
   }
   const ink = paint(run.color);
   if (run.decoration === 'none' || !ink) return;
