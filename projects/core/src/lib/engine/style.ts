@@ -190,7 +190,7 @@ function fail(message: string, tag?: string): never {
 }
 
 /** Cuts long values so an error message stays readable. */
-function show(value: string): string {
+export function show(value: string): string {
   return value.length > 60 ? `${value.slice(0, 60)}...` : value;
 }
 
@@ -1190,6 +1190,8 @@ interface Pending {
   readonly node: PdfNode;
   readonly depth: number;
   readonly inherited: TextStyle;
+  /** Whether an ancestor is a pdf-link: links don't nest, as in HTML. */
+  readonly inLink: boolean;
 }
 
 /**
@@ -1215,14 +1217,22 @@ const SPAN_PROPERTIES = new Set([
   'text-transform',
 ]);
 
+/** Whether the node is part of a line: inside a pdf-text, or a span or link that is. */
+function inText(node: PdfNode): boolean {
+  const parent = node.parent;
+  if (!parent) return false;
+  // Links don't nest, so this goes up at most through one link.
+  return INLINE.has(parent.tag) || (parent.tag === 'pdf-link' && inText(parent));
+}
+
 function checkInline(node: PdfNode, warn: Warn): void {
-  const inText = INLINE.has(node.parent?.tag ?? '');
-  if (node.tag === 'pdf-span') {
-    if (!inText) fail('pdf-span must be inside a pdf-text');
+  const inline = inText(node);
+  if (node.tag === 'pdf-span' || (node.tag === 'pdf-link' && inline)) {
+    if (!inline) fail('pdf-span must be inside a pdf-text');
     for (const property of Object.keys(node.rawStyle)) {
-      if (!SPAN_PROPERTIES.has(property)) warn(`ngpdf: ${property} has no effect on pdf-span`);
+      if (!SPAN_PROPERTIES.has(property)) warn(`ngpdf: ${property} has no effect on ${node.tag}`);
     }
-  } else if (node.tag === 'pdf-text' && inText) {
+  } else if (node.tag === 'pdf-text' && inline) {
     warn('ngpdf: a pdf-text inside a pdf-text is drawn in the outer style; use pdf-span');
   }
 }
@@ -1238,9 +1248,11 @@ export function resolveStyles(
 ): Map<PdfNode, ResolvedStyle> {
   const result = new Map<PdfNode, ResolvedStyle>();
   if (root.kind !== 'element') return result;
-  const stack: Pending[] = [{ node: root, depth: 1, inherited: ROOT_TEXT_STYLE }];
+  const stack: Pending[] = [{ node: root, depth: 1, inherited: ROOT_TEXT_STYLE, inLink: false }];
   for (let item = stack.pop(); item; item = stack.pop()) {
     if (item.depth > MAX_NESTING) fail(`nesting deeper than ${String(MAX_NESTING)}`);
+    const isLink = item.node.tag === 'pdf-link';
+    if (isLink && item.inLink) fail('pdf-link inside a pdf-link');
     checkImageChildren(item.node);
     checkInline(item.node, warn);
     const style = resolveOne(item.node, item.inherited, warn);
@@ -1248,7 +1260,10 @@ export function resolveStyles(
     const inherited = textPartOf(style);
     for (let i = item.node.children.length - 1; i >= 0; i--) {
       const child = item.node.children[i];
-      if (child?.kind === 'element') stack.push({ node: child, depth: item.depth + 1, inherited });
+      if (child?.kind === 'element') {
+        const inLink = item.inLink || isLink;
+        stack.push({ node: child, depth: item.depth + 1, inherited, inLink });
+      }
     }
   }
   return result;

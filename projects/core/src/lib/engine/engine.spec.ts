@@ -239,17 +239,55 @@ describe('renderDocument', () => {
     expect(await bytesOf(blob)).toMatch(/^%PDF-/);
   });
 
-  it('writes none of the active-content keys', async () => {
+  it('writes none of the active-content keys, and no URI but http, https or mailto', async () => {
     // The real engine, uncompressed so the object dictionaries are readable.
-    const writer = await createPdfkitWriter({ compress: false });
-    const blob = await renderDocument(twoPages({ title: 'T', creationDate: new Date(0) }), {
-      writer,
-      dev: false,
-    });
-    const body = await bytesOf(blob);
-    for (const key of ['/JavaScript', '/JS', '/OpenAction', '/Launch', '/AA', '/EmbeddedFile']) {
-      expect(body).not.toContain(key);
+    const plain = await bytesOf(
+      await renderDocument(twoPages({ title: 'T', creationDate: new Date(0) }), {
+        writer: await createPdfkitWriter({ compress: false }),
+        dev: false,
+      }),
+    );
+    const hrefs = [
+      'https://example.com/ok',
+      'http://example.com/ok',
+      'mailto:team@example.com',
+      'javascript:app.alert(1)',
+      ' JAVASCRIPT:alert(1)',
+      'file:///etc/passwd',
+      'data:text/html,<script>alert(1)</script>',
+      'vbscript:msgbox(1)',
+      'launch:calc.exe',
+      '/relative',
+      'not a url',
+      '',
+    ];
+    const blocks = hrefs.map((href) => el('pdf-link', {}, [text('block')], { href }));
+    const inline = hrefs.map((href, i) =>
+      el('pdf-link', {}, [createNode('text', '', `inline ${String(i)} `)], { href }),
+    );
+    const page = el('pdf-page', {}, [...blocks, el('pdf-text', {}, inline)], { size: 'A4' });
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const linked = await bytesOf(
+      await renderDocument(host({ creationDate: new Date(0) }, [page]), {
+        writer: await createPdfkitWriter({ compress: false }),
+        dev: true,
+      }),
+    );
+    for (const body of [plain, linked]) {
+      for (const key of ['/JavaScript', '/JS', '/OpenAction', '/Launch', '/AA', '/EmbeddedFile']) {
+        expect(body).not.toContain(key);
+      }
     }
+    const uris = [...linked.matchAll(/\/URI\s*\(((?:\\.|[^\\)])*)\)/g)].map((match) => match[1]);
+    // The three allowed URLs, once as a block and once inline.
+    expect(uris).toHaveLength(6);
+    for (const uri of uris) expect(uri).toMatch(/^(?:https?:\/\/|mailto:)/);
+    // Every action is a URI action.
+    expect(linked.match(/\/S\s*\/URI/g)).toHaveLength(6);
+    expect(linked.match(/\/S\s*\//g)).toHaveLength(6);
+    // Each /URI is either an action type or one of the six strings above.
+    expect(linked.match(/\/URI\b/g)).toHaveLength(12);
+    expect(warn.mock.calls.flat().join('\n')).toContain('javascript:app.alert(1)');
   });
 
   it('writes each name of a table cell on one line, as laid out (licences list geometry)', async () => {

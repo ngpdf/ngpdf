@@ -179,7 +179,30 @@ Wrap part of a text in a `pdf-span` to draw it in other text styles:
 - A span is drawn in the fonts its own `font-family` names, with the same fallback as any text.
 - `@if`, `@for` and components work inside a `pdf-text` as anywhere else.
 
-A `pdf-text` inside a `pdf-text` is drawn in the outer text's style, with a warning in development mode: use `pdf-span` instead. Elements other than `pdf-span` and text inside a `pdf-text` are not laid out.
+A `pdf-text` inside a `pdf-text` is drawn in the outer text's style, with a warning in development mode: use `pdf-span` instead. Elements other than `pdf-span`, `pdf-link` and text inside a `pdf-text` are not laid out.
+
+## Links: pdf-link
+
+`pdf-link` makes text or a box open a URL when clicked in a PDF viewer:
+
+```html
+<pdf-text>
+  Pay it at
+  <pdf-link [href]="payUrl" style="color: #1a56db; text-decoration: underline">example.com/pay</pdf-link>.
+</pdf-text>
+
+<pdf-link href="https://example.com/invoices/1024" style="padding: 8; border: 1 solid #1a56db">
+  <pdf-text>Open the invoice</pdf-text>
+</pdf-link>
+```
+
+- Inside a `pdf-text`, a link is inline, like a `pdf-span`: it takes the same text styles, and each piece of a line it covers is clickable. A link that wraps over two lines is two clickable areas.
+- Anywhere a `pdf-view` can go, a link is a column `pdf-view`, and its border box is the clickable area.
+- A link changes nothing visually: it has no default color or underline. Style it with `color` and `text-decoration`.
+- Only absolute `http:`, `https:` and `mailto:` URLs are written, in the normalized form the browser's `URL` gives them (`HTTP://Example.COM` becomes `http://example.com/`). Any other scheme (`javascript:`, `file:`, `data:` and so on), a relative URL or one that does not parse writes no link: the content is still drawn, with a warning in development mode naming the URL. Links often come from data, so a bad one does not fail the render.
+- Links do not nest: a `pdf-link` inside a `pdf-link` fails the render with `ngpdf: pdf-link inside a pdf-link`, as nested links are invalid in HTML.
+- A clickable area is an upright rectangle. Inside a `transform`, it is the smallest rectangle around the transformed area. It is cut at the bottom of the page's content area, but not by an `overflow` clip: PDF viewers cannot clip a link area, so a link inside a clipped box stays clickable over its whole box.
+- A block link split across sheets is clickable on each sheet over its part. See [Pagination](/docs/pagination#wrapper-backgrounds-and-borders).
 
 ## Bare text
 

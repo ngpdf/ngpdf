@@ -86,9 +86,9 @@ The site (`projects/site`) is a prerendered Angular app. Its docs are the Markdo
 
 ## Product rules
 
-- **Selectors:** `pdf-document`, `pdf-page`, `pdf-view`, `pdf-text`, `pdf-span`, `pdf-image`,
-  `pdf-table`, `pdf-row`, `pdf-cell`, `pdf-page-number`. The `pdf-` prefix is mandatory: `table`,
-  `image` and `text` exist in HTML and SVG.
+- **Selectors:** `pdf-document`, `pdf-page`, `pdf-view`, `pdf-text`, `pdf-span`, `pdf-link`,
+  `pdf-image`, `pdf-table`, `pdf-row`, `pdf-cell`, `pdf-page-number`. The `pdf-` prefix is
+  mandatory: `table`, `image` and `text` exist in HTML and SVG.
 - **Units:**
   - a bare number and `pt` are points;
   - 1in = 72pt, 1cm = 72/2.54pt, 1mm = 72/25.4pt;
@@ -145,13 +145,21 @@ The site (`projects/site`) is a prerendered Angular app. Its docs are the Markdo
   `font-size`, `font-weight`, `font-style`, `text-decoration`, `letter-spacing` and
   `text-transform`. The paragraph breaks as one text, and runs of different sizes share a
   baseline. A `pdf-span` outside a `pdf-text` throws.
+- **Links:** `<pdf-link [href]>` is a column `pdf-view` where a view can go and an inline run like
+  a `pdf-span` inside a `pdf-text`. It changes nothing visually.
+  - Only absolute `http:`, `https:` and `mailto:` URLs are written, normalized by `URL`. Any other
+    href writes no link: the content is drawn, with a dev-mode warning naming the URL.
+  - A block link is one rectangle per sheet (its border box, or its piece when split); an inline
+    link is one per line fragment. Rectangles are cut at the content bottom but not by an
+    `overflow` clip, and under a `transform` they are the axis-aligned bounds of the area.
+  - A `pdf-link` inside a `pdf-link` throws `ngpdf: pdf-link inside a pdf-link`.
 - **Images:**
   - Formats are PNG and JPEG, from a data URL, an http(s) URL, a `Blob` or an `ArrayBuffer`.
   - `object-fit` is `contain` (default) or `cover`.
   - A failed load rejects the render with `ngpdf: could not load image "<src>": <reason>`.
 - **Out of v0.1:**
   - server rendering;
-  - SVG, links, bookmarks;
+  - SVG, bookmarks;
   - hyphenation, RTL;
   - forms, encryption;
   - a preview component;
@@ -175,7 +183,8 @@ The site (`projects/site`) is a prerendered Angular app. Its docs are the Markdo
 - **Dependencies:** runtime dependencies stay at pdfkit, yoga-layout and linebreak. A new one
   needs a reason in the PR and must pass `npm audit` and OSV-Scanner. Vulnerabilities are fixed
   within the CVSS deadlines in `docs/ENGINEERING.md`.
-- **Output safety:** never write PDF JavaScript, actions, forms or embedded files.
+- **Output safety:** never write PDF JavaScript, forms or embedded files, and no action other than
+  the URI action of a `pdf-link` to an http, https or mailto URL.
 - **Commits:** Conventional Commits (`feat(core): …`, `fix(core): …`, `chore: …`), with no AI
   attribution or co-author lines.
 - **Pull requests:** describe what changed and why, and how it was tested. The maintainer reviews

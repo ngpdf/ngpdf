@@ -48,6 +48,30 @@ interface Numbering {
   readonly options: DisplayListOptions;
 }
 
+const IDENTITY: Matrix = [1, 0, 0, 1, 0, 0];
+
+/**
+ * A link op over `rect` as `matrix` maps it to the page: the axis-aligned bounds of its corners,
+ * since a PDF link area is an upright rectangle.
+ */
+function pushLink(out: DrawOp[], matrix: Matrix, rect: Rect, url: string): void {
+  const [a, b, c, d, e, f] = matrix;
+  const xs: number[] = [];
+  const ys: number[] = [];
+  for (const [px, py] of [
+    [rect.x, rect.y],
+    [rect.x + rect.w, rect.y],
+    [rect.x, rect.y + rect.h],
+    [rect.x + rect.w, rect.y + rect.h],
+  ] as const) {
+    xs.push(a * px + c * py + e);
+    ys.push(b * px + d * py + f);
+  }
+  const x = Math.min(...xs);
+  const y = Math.min(...ys);
+  out.push({ op: 'link', x, y, w: Math.max(...xs) - x, h: Math.max(...ys) - y, url });
+}
+
 function drawBox(
   box: Box,
   x: number,
@@ -55,6 +79,8 @@ function drawBox(
   limit: number,
   cuts: Cuts,
   inherited: number,
+  /** The page-space matrix of the transforms around the box, for link areas. */
+  outer: Matrix,
   numbering: Numbering,
   out: DrawOp[],
 ): void {
@@ -63,8 +89,12 @@ function drawBox(
   const opacity = inherited * style.opacity;
   const transformed = style.transform.length > 0;
   const firstOp = out.length;
-  if (transformed)
-    out.push({ op: 'transform', matrix: transformMatrix(style, x, y, box.w, box.h) });
+  let matrix = outer;
+  if (transformed) {
+    const own = transformMatrix(style, x, y, box.w, box.h);
+    matrix = multiply(outer, own);
+    out.push({ op: 'transform', matrix: own });
+  }
 
   const bottomEdge = Math.min(y + box.h, limit);
   // The edges cut by a page break or by the limit keep square corners.
@@ -130,6 +160,11 @@ function drawBox(
     line(x + left / 2, y, x + left / 2, y + box.h, left, color.left);
   }
 
+  // The border box, cut at the limit like the background; an overflow clip doesn't cut it.
+  if (box.link !== undefined && bottomEdge > y) {
+    pushLink(out, matrix, { x, y, w: box.w, h: bottomEdge - y }, box.link);
+  }
+
   // Padding plus border, as laid out.
   const inset = {
     top: box.padding.top + box.border.top,
@@ -166,7 +201,7 @@ function drawBox(
 
   for (const child of box.children) {
     const nested = { top: false, bottom: false };
-    drawBox(child, x + child.x, y + child.y, limit, nested, opacity, numbering, out);
+    drawBox(child, x + child.x, y + child.y, limit, nested, opacity, matrix, numbering, out);
   }
 
   if (box.text) {
@@ -176,10 +211,30 @@ function drawBox(
       const lineLeft = alignedX(contentLeft, contentWidth, textLine.width, style.textAlign);
       const spacing = style.textAlign === 'justify' ? wordSpacing(textLine, contentWidth) : 0;
       let gapsBefore = 0;
+      // The link being followed along the line: one area per line fragment of a pdf-link.
+      let linked: { url: string; left: number; right: number } | undefined;
+      const closeLink = (): void => {
+        if (!linked) return;
+        const area = {
+          x: linked.left,
+          y: lineTop,
+          w: linked.right - linked.left,
+          h: textLine.height,
+        };
+        pushLink(out, matrix, area, linked.url);
+        linked = undefined;
+      };
       for (const run of textLine.runs) {
         const x = lineLeft + run.x + gapsBefore * spacing;
         const gaps = spacing > 0 ? wordGaps(run.text) : 0;
         gapsBefore += gaps;
+        const right = x + run.width + gaps * spacing;
+        if (run.link !== undefined && linked?.url === run.link) {
+          linked.right = right;
+        } else {
+          closeLink();
+          if (run.link !== undefined) linked = { url: run.link, left: x, right };
+        }
         const ink = paint(run.color, opacity);
         if (!ink) continue;
         out.push({
@@ -197,6 +252,7 @@ function drawBox(
           ...(run.letterSpacing !== 0 && { letterSpacing: run.letterSpacing }),
         });
       }
+      closeLink();
     }
   }
 
@@ -454,6 +510,7 @@ function drawPlaced(placed: PlacedBox, numbering: Numbering, out: DrawOp[]): voi
     placed.clipBottom ?? Infinity,
     { top: placed.sliceTop === true, bottom: placed.sliceBottom === true, slice: placed.slice },
     placed.opacity ?? 1,
+    IDENTITY,
     numbering,
     out,
   );
@@ -535,7 +592,7 @@ export function displayList(
   if (page.pageNumber) {
     const { box, x, y } = page.pageNumber;
     const cuts = { top: false, bottom: false };
-    drawBox(box, x, y, Infinity, cuts, page.pageNumber.opacity ?? 1, numbering, out);
+    drawBox(box, x, y, Infinity, cuts, page.pageNumber.opacity ?? 1, IDENTITY, numbering, out);
   }
   return out;
 }

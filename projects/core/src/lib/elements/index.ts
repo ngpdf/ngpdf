@@ -1,6 +1,7 @@
 import { PdfCell } from './cell';
 import { PdfDocument } from './document';
 import { PdfImage } from './image';
+import { PdfLink } from './link';
 import { PdfPage } from './page';
 import { PdfPageNumber } from './page-number';
 import { PdfRow } from './row';
@@ -13,6 +14,7 @@ export {
   PdfCell,
   PdfDocument,
   PdfImage,
+  PdfLink,
   PdfPage,
   PdfPageNumber,
   PdfRow,
@@ -30,6 +32,7 @@ export const PDF_ELEMENTS = [
   PdfView,
   PdfText,
   PdfSpan,
+  PdfLink,
   PdfImage,
   PdfTable,
   PdfRow,

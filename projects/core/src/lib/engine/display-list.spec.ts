@@ -918,6 +918,142 @@ describe('displayList', () => {
   });
 });
 
+describe('links', () => {
+  const URL_A = 'https://example.com/a';
+
+  function link(style: Record<string, string>, children: PdfNode[], href = URL_A): PdfNode {
+    return el('pdf-link', style, children, { href });
+  }
+
+  it('makes the border box of a block link clickable, after its background and border', () => {
+    const block = link({ width: '100', height: '40', 'background-color': '#eee', margin: '10' }, [
+      text('Open'),
+    ]);
+    const ops = list(layout(page([block]))[0]!, 0, 1);
+    expect(ops.map((op) => op.op)).toEqual(['rect', 'link', 'text']);
+    expect(ops[1]).toEqual({ op: 'link', x: 46, y: 46, w: 100, h: 40, url: URL_A });
+  });
+
+  it('adds no link for a refused URL but still draws the content', () => {
+    const block = link({}, [text('Open')], 'javascript:alert(1)');
+    const ops = list(layout(page([block]))[0]!, 0, 1);
+    expect(ops.map((op) => op.op)).toEqual(['text']);
+  });
+
+  it('makes each line fragment of an inline link clickable, across its runs', () => {
+    const width = writer.widthOf('See the', 'Helvetica', 12) + 1;
+    const paragraph = el('pdf-text', { width: String(width), 'font-size': '12' }, [
+      createNode('text', '', 'See '),
+      link({}, [
+        createNode('text', '', 'the '),
+        el('pdf-span', { 'font-weight': 'bold' }, [createNode('text', '', 'docs')]),
+      ]),
+      createNode('text', '', ' now'),
+    ]);
+    const laid = layout(page([paragraph]))[0]!;
+    const lines = laid.placed[0]!.box.text!.lines;
+    const links = only(list(laid, 0, 1), 'link');
+    expect(links).toHaveLength(2);
+    const see = writer.widthOf('See ', 'Helvetica', 12);
+    expect(links[0]!.x).toBeCloseTo(36 + see, 6);
+    expect(links[0]!.y).toBeCloseTo(36, 6);
+    expect(links[0]!.w).toBeCloseTo(writer.widthOf('the', 'Helvetica', 12), 6);
+    expect(links[0]!.h).toBeCloseTo(lines[0]!.height, 6);
+    expect(links[1]).toMatchObject({ x: 36, url: URL_A });
+    expect(links[1]!.y).toBeCloseTo(36 + lines[1]!.y, 6);
+    expect(links[1]!.w).toBeCloseTo(writer.widthOf('docs', 'Helvetica-Bold', 12), 6);
+  });
+
+  it('follows text-align and justified word gaps in an inline link', () => {
+    const words = 'aaa bbb ccc ddd eee fff ggg hhh';
+    const paragraph = el('pdf-text', { width: '100', 'text-align': 'justify' }, [
+      createNode('text', '', 'xx '),
+      link({}, [createNode('text', '', words)]),
+    ]);
+    const laid = layout(page([paragraph]))[0]!;
+    const links = only(list(laid, 0, 1), 'link');
+    const first = links[0]!;
+    // A justified line but the last reaches the right edge of the content box.
+    expect(first.x + first.w).toBeCloseTo(36 + 100, 6);
+    const centered = el('pdf-text', { 'text-align': 'center' }, [
+      link({}, [createNode('text', '', 'mid')]),
+    ]);
+    const [mid] = only(list(layout(page([centered]))[0]!, 0, 1), 'link');
+    const w = writer.widthOf('mid', 'Helvetica', 10);
+    expect(mid!.x).toBeCloseTo(36 + (595.28 - 72 - w) / 2, 3);
+  });
+
+  it('gives a block link split across sheets one rectangle per sheet, its piece', () => {
+    const rows = [0, 1, 2].map(() => el('pdf-view', { height: '300' }));
+    const pages = layout(page([link({}, rows)]));
+    expect(pages).toHaveLength(2);
+    const links = pages.map((laid, index) => only(list(laid, index, 2), 'link'));
+    expect(links.map((found) => found.length)).toEqual([1, 1]);
+    const [first, second] = [links[0]![0]!, links[1]![0]!];
+    expect(first.y).toBe(36);
+    expect(second.y).toBe(36);
+    expect(first.h + second.h).toBeCloseTo(900, 3);
+    expect(first.w).toBeCloseTo(595.28 - 72, 3);
+  });
+
+  it('cuts a link at the bottom of the content area, as a clipped box is', () => {
+    const tall = link({ 'flex-direction': 'row' }, [el('pdf-view', { height: '1000' })]);
+    const [rect] = only(list(layout(page([tall]))[0]!, 0, 1), 'link');
+    expect(rect!.y).toBe(36);
+    expect(rect!.h).toBeCloseTo(841.89 - 72, 6);
+    const spacer = el('pdf-view', { height: '780' });
+    const inner = el('pdf-text', {}, [link({}, [createNode('text', '', 'below')])]);
+    const unit = el('pdf-view', { 'flex-direction': 'row' }, [el('pdf-view', {}, [spacer, inner])]);
+    expect(only(list(layout(page([unit]))[0]!, 0, 1), 'link')).toEqual([]);
+  });
+
+  it('is not cut by an overflow clip, which annotations cannot follow', () => {
+    const clipped = el('pdf-view', { overflow: 'hidden', width: '50', height: '20' }, [
+      link({ width: '200', height: '100', 'flex-shrink': '0' }, []),
+    ]);
+    const [rect] = only(list(layout(page([clipped]))[0]!, 0, 1), 'link');
+    expect(rect).toMatchObject({ w: 200, h: 100 });
+  });
+
+  it('takes the axis-aligned bounds of a transformed link, through nested transforms', () => {
+    const turned = link({ width: '100', height: '40', transform: 'rotate(90deg)' }, []);
+    const [rect] = only(list(layout(page([turned]))[0]!, 0, 1), 'link');
+    // Turned about its center (86, 56): 40 wide and 100 tall.
+    expect(rect!.x).toBeCloseTo(66, 6);
+    expect(rect!.y).toBeCloseTo(6, 6);
+    expect(rect!.w).toBeCloseTo(40, 6);
+    expect(rect!.h).toBeCloseTo(100, 6);
+
+    const inner = link({ width: '20', height: '10' }, []);
+    const outer = el(
+      'pdf-view',
+      { width: '100', height: '100', transform: 'scale(2)', 'transform-origin': 'left top' },
+      [el('pdf-view', { transform: 'rotate(45deg)', 'transform-origin': 'left top' }, [inner])],
+    );
+    const [nested] = only(list(layout(page([outer]))[0]!, 0, 1), 'link');
+    const s = Math.SQRT1_2 * 2;
+    // Corners of the 20x10 rect turned 45 degrees about (36, 36), then doubled about (36, 36).
+    expect(nested!.x).toBeCloseTo(36 - 10 * s, 6);
+    expect(nested!.y).toBeCloseTo(36, 6);
+    expect(nested!.w).toBeCloseTo(30 * s, 6);
+    expect(nested!.h).toBeCloseTo(30 * s, 6);
+  });
+
+  it('makes an inline link inside a transformed view the bounds of its turned line', () => {
+    const paragraph = el('pdf-text', {}, [link({}, [createNode('text', '', 'go')])]);
+    const view = el('pdf-view', { transform: 'rotate(90deg)', 'transform-origin': 'left top' }, [
+      paragraph,
+    ]);
+    const laid = layout(page([view]))[0]!;
+    const height = laid.placed[0]!.box.children[0]!.text!.lines[0]!.height;
+    const [rect] = only(list(laid, 0, 1), 'link');
+    expect(rect!.x).toBeCloseTo(36 - height, 6);
+    expect(rect!.y).toBeCloseTo(36, 6);
+    expect(rect!.w).toBeCloseTo(height, 6);
+    expect(rect!.h).toBeCloseTo(writer.widthOf('go', 'Helvetica', 10), 6);
+  });
+});
+
 describe('gradient backgrounds', () => {
   const RED = { color: '#ff0000', opacity: 1 };
   const BLUE = { color: '#0000ff', opacity: 1 };

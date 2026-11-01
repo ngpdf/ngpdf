@@ -4,6 +4,7 @@ export {
   PdfCell,
   PdfDocument,
   PdfImage,
+  PdfLink,
   PdfPage,
   PdfPageNumber,
   PdfRow,

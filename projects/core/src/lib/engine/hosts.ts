@@ -7,6 +7,7 @@ const PDF_ELEMENTS = new Set([
   'pdf-view',
   'pdf-text',
   'pdf-span',
+  'pdf-link',
   'pdf-image',
   'pdf-table',
   'pdf-row',

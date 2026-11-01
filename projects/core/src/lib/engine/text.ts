@@ -19,6 +19,8 @@ export interface TextRun {
   readonly width: number;
   /** Height of the font above its baseline. */
   readonly ascent: number;
+  /** The URL of the pdf-link the run belongs to. */
+  readonly link?: string;
 }
 
 export interface TextLine {
@@ -47,6 +49,8 @@ export interface TextRange {
   readonly text: string;
   readonly style: TextStyle;
   readonly fonts?: TextFonts;
+  /** The checked URL of the pdf-link the range is in. */
+  readonly link?: string;
 }
 
 /** What applies to a paragraph as a whole: its line height and an optional line limit. */
@@ -254,7 +258,7 @@ export function layoutText(
   );
 }
 
-/** A font at one size, color and decoration: what a run is drawn in. */
+/** A font at one size, color and decoration, and the run's link: what a run is drawn in. */
 interface Face {
   readonly font: FontName;
   readonly size: number;
@@ -262,13 +266,14 @@ interface Face {
   readonly decoration: TextStyle['textDecoration'];
   readonly letterSpacing: number;
   readonly ascent: number;
+  readonly link?: string;
 }
 
 /** What a range contributes to the cache key: its length and everything its faces depend on. */
 function rangeKey(range: TextRange): string {
   const { fontSize, color, textDecoration, letterSpacing, textTransform } = range.style;
   const chain = range.fonts?.chain ?? [fontFor(range.style)];
-  return `${String(range.text.length)}:${chain.join(',')}:${String(fontSize)}:${String(color.r)},${String(color.g)},${String(color.b)},${String(color.a)}:${textDecoration}:${String(letterSpacing)}:${textTransform}`;
+  return `${String(range.text.length)}:${chain.join(',')}:${String(fontSize)}:${String(color.r)},${String(color.g)},${String(color.b)},${String(color.a)}:${textDecoration}:${String(letterSpacing)}:${textTransform}:${range.link ?? ''}`;
 }
 
 /** The text, faces and per-unit face index of a paragraph, each range shaped in its own chain. */
@@ -284,14 +289,22 @@ interface ShapedRanges {
 function shapeRanges(ranges: readonly TextRange[], metrics: FontMetrics): ShapedRanges {
   const faces: Face[] = [];
   const faceIndex = new Map<string, number>();
-  const faceOf = (font: FontName, style: TextStyle): number => {
+  const faceOf = (font: FontName, style: TextStyle, link: string | undefined): number => {
     const { fontSize: size, color, textDecoration: decoration, letterSpacing } = style;
-    const key = `${font}:${String(size)}:${String(color.r)},${String(color.g)},${String(color.b)},${String(color.a)}:${decoration}:${String(letterSpacing)}`;
+    const key = `${font}:${String(size)}:${String(color.r)},${String(color.g)},${String(color.b)},${String(color.a)}:${decoration}:${String(letterSpacing)}:${link ?? ''}`;
     let index = faceIndex.get(key);
     if (index === undefined) {
       index = faces.length;
       const ascent = metrics.ascent(font, size);
-      faces.push({ font, size, color, decoration, letterSpacing, ascent });
+      faces.push({
+        font,
+        size,
+        color,
+        decoration,
+        letterSpacing,
+        ascent,
+        ...(link !== undefined && { link }),
+      });
       faceIndex.set(key, index);
     }
     return index;
@@ -304,7 +317,7 @@ function shapeRanges(ranges: readonly TextRange[], metrics: FontMetrics): Shaped
   const shapedPieces = ranges.map((range, i) => {
     const chain = range.fonts?.chain ?? [fontFor(range.style)];
     // Registered in chain order, so for a single range a face index is its chain index.
-    const toFace = chain.map((font) => faceOf(font, range.style));
+    const toFace = chain.map((font) => faceOf(font, range.style, range.link));
     return { shaped: shapeText(pieces[i] ?? '', chain, metrics), toFace };
   });
 

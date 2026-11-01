@@ -104,7 +104,7 @@ Styles on a host are ignored, with a dev-mode warning:
 
 That covers `style` attributes, `[style.*]` bindings and host style bindings. Put the style on a `pdf-*` element inside the component instead. The same goes for the document component you render: style its `pdf-document` or `pdf-page`, not its host.
 
-Any element that is not one of the ten `pdf-*` elements is treated as a host. A plain HTML element such as `<div>` or `<span>` in a document template is dissolved the same way and draws nothing itself.
+Any element that is not one of the eleven `pdf-*` elements is treated as a host. A plain HTML element such as `<div>` or `<span>` in a document template is dissolved the same way and draws nothing itself.
 
 ## Pipes, signals and control flow
 
