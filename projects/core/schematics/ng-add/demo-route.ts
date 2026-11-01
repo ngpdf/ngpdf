@@ -10,7 +10,7 @@ export function addDemoRoute(routesFile: string, demoFile: string): Rule {
   return (tree, context) => {
     let specifier = posix.relative(posix.dirname(routesFile), demoFile).replace(/\.ts$/, '');
     if (!specifier.startsWith('.')) specifier = `./${specifier}`;
-    const load = `() => import(${stringLiteral(specifier)}).then((m) => m.PdfDemo)`;
+    const load = loadComponent(specifier);
 
     const text = tree.exists(routesFile) ? tree.readText(routesFile) : undefined;
     const routes = text === undefined ? undefined : findRoutesArray(routesFile, text);
@@ -44,12 +44,19 @@ export function addDemoRoute(routesFile: string, demoFile: string): Rule {
 }
 
 /**
- * `value` as a TypeScript string literal: single-quoted like the CLI's own code when nothing needs
- * escaping, otherwise JSON's double-quoted form, which escapes quotes and control characters.
- * `value` never holds a backslash: `--path` is normalized to forward slashes.
+ * `() => import(specifier).then((m) => m.PdfDemo)`. The `import()` call is built as a syntax tree
+ * and printed, so the specifier is always a well-formed string literal however odd `--path` is. It
+ * is single-quoted, as the CLI writes code, unless it holds a `'`.
  */
-function stringLiteral(value: string): string {
-  return /^[^'\p{Cc}]*$/u.test(value) ? `'${value}'` : JSON.stringify(value);
+function loadComponent(specifier: string): string {
+  const dynamicImport = ts.factory.createCallExpression(
+    ts.factory.createToken(ts.SyntaxKind.ImportKeyword) as ts.Expression,
+    undefined,
+    [ts.factory.createStringLiteral(specifier, !specifier.includes("'"))],
+  );
+  const file = ts.createSourceFile('routes.ts', '', ts.ScriptTarget.Latest);
+  const call = ts.createPrinter().printNode(ts.EmitHint.Expression, dynamicImport, file);
+  return `() => ${call}.then((m) => m.PdfDemo)`;
 }
 
 function route(indent: string, load: string): string {
