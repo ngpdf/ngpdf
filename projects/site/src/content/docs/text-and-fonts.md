@@ -127,7 +127,7 @@ function providePdfEmoji(source: PdfEmojiSource): EnvironmentProviders;
 
 - **URL template:** a string source is a URL in which `{codepoints}` is replaced by the emoji's code points in lower-case hex, joined by `-`, without U+FE0F. `👍🏽` becomes `1f44d-1f3fd` and `#️⃣` becomes `23-20e3`. This is the file naming that Twemoji and Noto Emoji use, so a copy of their PNG files works as is.
 - **Function:** a function source gets the emoji and the same code points, and returns a PNG or JPEG as a URL, a data URL or the bytes, or a promise of one. It returns `null` to draw that emoji as text.
-- **No images by default:** ngpdf ships no emoji images and fetches nothing unless you provide a source. Without one, an emoji is text like any other character: `?` in a standard font, the empty glyph in a custom one.
+- **No images by default:** ngpdf ships no emoji images and fetches nothing unless you provide a source. Without one, an emoji is text like any other character: a [custom font](#custom-fonts) in the `font-family` list that has the glyph draws it, and one that no font in the list has follows the [fallback](#the-family-list-and-fallback), `?` when the list starts with a standard font and the first font's empty glyph otherwise.
 - **Where it applies:** documents rendered with the injector that has the provider, or one below it, as with [custom fonts](#custom-fonts). A provider in a child injector replaces the parent's.
 
 ### What counts as an emoji
@@ -137,13 +137,14 @@ A character as you see it (a grapheme cluster) is an emoji when:
 - it contains U+FE0F (the emoji variation selector);
 - or it is a ZWJ sequence, such as 👨‍👩‍👧‍👦;
 - or it is a keycap, such as `#️⃣`;
+- or it is a modifier sequence, a character such as ✌ followed by a skin tone, as in ✌🏽;
 - or it starts with a character that shows as an emoji by default, which covers 😀, a skin tone such as 👍🏽, flags such as 🇧🇷 and tag sequences such as 🏴󠁧󠁢󠁳󠁣󠁴󠁿.
 
 `©`, `®`, `™`, the digits and other characters that show as text by default stay text unless U+FE0F follows them. An emoji followed by U+FE0E (the text variation selector) stays text.
 
 ### Layout
 
-- Each emoji is a square 1 em on each side, at the `font-size` of its text. Its bottom sits on the font's descent and its top is 1 em above that, so it lines up with the text around it.
+- Each emoji is a square 1 em on each side, at the `font-size` of its text. Its bottom sits on the font's descent and its top is 1 em above that, so it lines up with the text around it. A writer whose font metrics give no descent puts the bottom on the baseline instead; the default pdfkit writer always gives one.
 - It takes the text's `letter-spacing`, and lines break around it as around any character, never inside it.
 - An underline or a line-through runs under or through it like text. Its `color` does not apply to the image.
 - `max-lines`, `text-align: justify` and `text-transform` work as they do for text. An ellipsis after an emoji is drawn in the font of the text around it.

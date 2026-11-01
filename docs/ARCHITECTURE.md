@@ -16,8 +16,9 @@ this project calls for it. Where the simplest correct answer is no pattern, this
  dissolveHosts      → PdfNode tree of pdf-* elements only
  resolveStyles      → Map<PdfNode, ResolvedStyle>
  collectAnchors     → anchor names, marked elements, outline
- loadImages         → Map<PdfNode, ImageAsset>          (the only async I/O,
- loadEmoji          → Map<string, ImageAsset>            in parallel)
+ loadImages         → Map<PdfNode, ImageAsset>         ┐ the only async I/O, in
+ registerUsedFonts  → FontRegistry (named fonts only)  │ parallel: URLs fetched on
+ loadEmoji          → Map<string, ImageAsset>          ┘ demand
  layoutBox (Yoga)   → Box tree
  paginatePage       → PageLayout[]
  paintCanvases      → Map<Box, shape ops>                (runs each pdf-canvas paint once)

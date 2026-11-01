@@ -24,10 +24,11 @@ const isKeycapBase = (codePoint: number): boolean =>
   (codePoint >= 0x30 && codePoint <= 0x39) || codePoint === 0x23 || codePoint === 0x2a;
 
 /**
- * Whether a grapheme cluster has an emoji presentation: it has U+FE0F, is a ZWJ sequence or a
- * keycap, or starts with an `Emoji_Presentation` character not followed by U+FE0E. Flags (regional
- * indicator pairs) and tag sequences (🏴 and tags) start with one. `©`, `®`, `™` and the digits
- * stay text unless U+FE0F follows them.
+ * Whether a grapheme cluster has an emoji presentation: it has U+FE0F, is a ZWJ sequence, a keycap
+ * or a modifier sequence (a base such as ✌ with a skin tone), or starts with an
+ * `Emoji_Presentation` character not followed by U+FE0E. Flags (regional indicator pairs) and tag
+ * sequences (🏴 and tags) start with one. `©`, `®`, `™` and the digits stay text unless U+FE0F
+ * follows them.
  */
 export function isEmoji(cluster: string): boolean {
   const codePoints = Array.from(cluster, (char) => char.codePointAt(0) ?? 0);
@@ -36,6 +37,7 @@ export function isEmoji(cluster: string): boolean {
   if (codePoints.includes(VS16)) return true;
   if (codePoints.includes(ZWJ) && /^\p{Extended_Pictographic}/u.test(cluster)) return true;
   if (isKeycapBase(first) && codePoints.includes(KEYCAP)) return true;
+  if (/^\p{Emoji_Modifier_Base}\p{Emoji_Modifier}/u.test(cluster)) return true;
   return /^\p{Emoji_Presentation}/u.test(cluster);
 }
 

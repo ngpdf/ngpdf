@@ -44,6 +44,11 @@ describe('isEmoji', () => {
     ['an Emoji_Presentation character', '😀'],
     ['text-default with VS16', '©️'],
     ['a heart with VS16', '❤️'],
+    ['a victory hand with a skin tone', '✌🏽'],
+    ['an index pointing up with a skin tone', '☝🏽'],
+    ['a writing hand with a skin tone', '✍🏽'],
+    ['a weight lifter with a skin tone', '🏋🏽'],
+    ['a detective with a skin tone', '🕵🏽'],
   ])('takes %s', (_, cluster) => {
     expect(isEmoji(cluster)).toBe(true);
   });
@@ -55,6 +60,7 @@ describe('isEmoji', () => {
     ['an emoji with VS15', '😀︎'],
     ['a letter with an accent', 'é'],
     ['a letter followed by ZWJ', 'a‍'],
+    ['a text-default modifier base alone', '✌'],
   ])('leaves %s as text', (_, cluster) => {
     expect(isEmoji(cluster)).toBe(false);
   });
