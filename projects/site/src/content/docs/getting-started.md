@@ -25,6 +25,7 @@ Then run `ng serve` and open `/pdf-demo` if you added the demo route.
 
 - `ng add` never overwrites a file. If `example-document.ts` or `pdf-demo.ts` is already there, it is skipped, and the command says so.
 - With `--demo-route`, if `example-document.ts` is already there, `ng add` adds no demo page and no route either, and says why: `pdf-demo.ts` imports `ExampleDocument`, which your file may not export.
+- With `--demo-route`, if `pdf-demo.ts` is already there, `ng add` keeps it and adds no route, and says why: the route imports `PdfDemo` from it, which your file may not export.
 - It does not change `main.ts` or your providers: ngpdf needs no setup, because `PdfRenderer` is provided in the root injector.
 - If there is no `app.routes.ts`, or no `routes` array in it, `--demo-route` adds no route. It prints the route to add by hand instead.
 - The package goes in `dependencies`, and nothing else is installed.

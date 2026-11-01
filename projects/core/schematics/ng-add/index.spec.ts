@@ -174,15 +174,21 @@ describe('ng-add', () => {
     );
   });
 
-  it('never overwrites a file that is already there, and says so', async () => {
+  it('never overwrites a file that is already there, and adds no route to it', async () => {
     const tree = await application(await workspace(), 'app');
+    const routes = tree.readContent(routesPath);
     tree.create(demoPath, '// mine\n');
     const lines = logs();
 
     const result = await ngAdd(tree, { demoRoute: true });
 
     expect(result.readContent(demoPath)).toBe('// mine\n');
+    expect(result.readContent(routesPath)).toBe(routes);
     expect(lines).toContain(`ngpdf: ${demoPath.slice(1)} already exists, skipped.`);
+    expect(lines).toContain(
+      `ngpdf: no pdf-demo route added: it imports PdfDemo, and ` +
+        `${demoPath.slice(1)} was already there, so it may not export it.`,
+    );
     expect(result.exists(documentPath)).toBe(true);
   });
 
