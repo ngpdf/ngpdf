@@ -936,6 +936,24 @@ interface OpenGroup {
   readonly content: StreamInternals;
   readonly ctm: number[];
   readonly ctmStack: number[][];
+  /** From the form's space to the page's: pdfkit's `_ctm` restarts at the identity in it. */
+  readonly toPage: readonly number[];
+}
+
+const IDENTITY = [1, 0, 0, 1, 0, 0] as const;
+
+/** `m` then `n`, as PDF composes matrices. */
+function then(m: readonly number[], n: readonly number[]): number[] {
+  const [a1 = 1, b1 = 0, c1 = 0, d1 = 1, e1 = 0, f1 = 0] = m;
+  const [a2 = 1, b2 = 0, c2 = 0, d2 = 1, e2 = 0, f2 = 0] = n;
+  return [
+    a1 * a2 + b1 * c2,
+    a1 * b2 + b1 * d2,
+    c1 * a2 + d1 * c2,
+    c1 * b2 + d1 * d2,
+    e1 * a2 + f1 * c2 + e2,
+    e1 * b2 + f1 * d2 + f2,
+  ];
 }
 
 /** What `drawOp` keeps across the ops of one page. */
@@ -974,11 +992,13 @@ function pageBox(ctm: readonly number[], width: number, height: number): number[
 function beginGroup(doc: Doc, opacity: number, state: PageState): void {
   const internals = doc as unknown as PdfKitInternals;
   const { page } = internals;
+  // In a group, the current space reaches the page through the forms around it too.
+  const toPage = then(internals._ctm, state.groups.at(-1)?.toPage ?? IDENTITY);
   const form = internals.ref({
     Type: 'XObject',
     Subtype: 'Form',
     FormType: 1,
-    BBox: pageBox(internals._ctm, page.width, page.height),
+    BBox: pageBox(toPage, page.width, page.height),
     Group: { Type: 'Group', S: 'Transparency' },
     Resources: page.resources,
   });
@@ -988,6 +1008,7 @@ function beginGroup(doc: Doc, opacity: number, state: PageState): void {
     content: page.content,
     ctm: internals._ctm,
     ctmStack: internals._ctmStack,
+    toPage,
   });
   page.content = form;
   internals._ctm = [1, 0, 0, 1, 0, 0];

@@ -928,6 +928,46 @@ describe('createPdfkitWriter', () => {
         expect(forms(pdf)[0]!.dict).toContain('/BBox [-25 0 75 100]');
       });
 
+      it('bounds a group in a group by the page, through the transforms of both', async () => {
+        const pdf = await pdfText([
+          { op: 'transform', matrix: [1, 0, 0, 1, 150, 0] },
+          { op: 'group', opacity: 0.5 },
+          { op: 'group', opacity: 0.5 },
+          RED,
+          { op: 'ungroup' },
+          { op: 'ungroup' },
+          { op: 'untransform' },
+        ]);
+        // The inner form ends first; both are drawn in the space moved 150 to the right.
+        const [inner, outer] = forms(pdf);
+        expect(outer!.dict).toContain('/BBox [-150 0 50 200]');
+        expect(inner!.dict).toContain('/BBox [-150 0 50 200]');
+      });
+
+      it('carries the transforms of every group around it into a deeper group', async () => {
+        const pdf = await pdfText([
+          { op: 'transform', matrix: [1, 0, 0, 1, 150, 0] },
+          { op: 'group', opacity: 0.5 },
+          { op: 'transform', matrix: [2, 0, 0, 2, 0, 0] },
+          { op: 'group', opacity: 0.5 },
+          { op: 'group', opacity: 0.5 },
+          RED,
+          { op: 'ungroup' },
+          { op: 'ungroup' },
+          { op: 'untransform' },
+          { op: 'group', opacity: 0.5 },
+          RED,
+          { op: 'ungroup' },
+          { op: 'ungroup' },
+          { op: 'untransform' },
+        ]);
+        const [deepest, middle, sibling] = forms(pdf);
+        expect(deepest!.dict).toContain('/BBox [-75 0 25 100]');
+        expect(middle!.dict).toContain('/BBox [-75 0 25 100]');
+        // After the scaled groups end, a group beside them is back in the outer form's space.
+        expect(sibling!.dict).toContain('/BBox [-150 0 50 200]');
+      });
+
       it('gives a group under a transform that flattens the page an empty box', async () => {
         const pdf = await pdfText([
           { op: 'transform', matrix: [0, 0, 0, 0, 0, 0] },
