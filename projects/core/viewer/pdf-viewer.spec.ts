@@ -187,10 +187,49 @@ describe('PdfViewer', () => {
     await settle();
 
     fixture.componentInstance.document.set(Receipt);
+    fixture.detectChanges();
+    // The old PDF stays on screen until the new document's PDF is there.
+    expect(iframeOf(fixture)?.getAttribute('src')).toBe('blob:test/1');
+    expect(revoked).toEqual([]);
     await settle();
 
     expect(renders.calls.map((call) => call.component)).toEqual([Invoice, Receipt]);
     expect(iframeOf(fixture)?.getAttribute('src')).toBe('blob:test/2');
+    expect(revoked).toEqual(['blob:test/1']);
+  });
+
+  it('keeps the old PDF on screen when the debounce changes, until the new render is there', async () => {
+    const fixture = viewer({ debounce: 0 });
+    await settle();
+    expect(iframeOf(fixture)?.getAttribute('src')).toBe('blob:test/1');
+
+    fixture.componentRef.setInput('debounce', 20);
+    fixture.detectChanges();
+    expect(iframeOf(fixture)?.getAttribute('src')).toBe('blob:test/1');
+    expect(revoked).toEqual([]);
+
+    await settle();
+    expect(iframeOf(fixture)?.getAttribute('src')).toBe('blob:test/2');
+    expect(revoked).toEqual(['blob:test/1']);
+  });
+
+  it('revokes the old URL when it is destroyed while a replacement renders', async () => {
+    renders.manual = true;
+    const fixture = TestBed.createComponent(Host);
+    fixture.detectChanges();
+    renders.calls[0]!.resolve();
+    await settle();
+    expect(iframeOf(fixture)?.getAttribute('src')).toBe('blob:test/1');
+
+    fixture.componentInstance.document.set(Receipt);
+    fixture.detectChanges();
+    await vi.waitFor(() => {
+      expect(renders.calls).toHaveLength(2);
+    });
+    fixture.destroy();
+    renders.calls[1]!.resolve();
+    await Promise.resolve();
+
     expect(revoked).toEqual(['blob:test/1']);
   });
 

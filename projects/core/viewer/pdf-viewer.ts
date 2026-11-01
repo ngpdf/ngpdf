@@ -62,9 +62,14 @@ export class PdfViewer {
   private readonly injector = inject(Injector);
   private readonly sanitizer = inject(DomSanitizer);
   private readonly pdf = signal<PdfResourceRef | undefined>(undefined);
+  /**
+   * The resource replaced by `pdf`, kept on screen until `pdf` has its first PDF. Both are made
+   * with this component's injector, so destroying the viewer stops them and revokes their URLs.
+   */
+  private readonly previous = signal<PdfResourceRef | undefined>(undefined);
 
   protected readonly src = computed<SafeResourceUrl | undefined>(() => {
-    const url = this.pdf()?.url();
+    const url = this.pdf()?.url() ?? this.previous()?.url();
     // pdfResource makes blob: URLs only; nothing else is ever trusted as a frame source.
     return url?.startsWith('blob:')
       ? this.sanitizer.bypassSecurityTrustResourceUrl(url)
@@ -77,16 +82,25 @@ export class PdfViewer {
   });
 
   constructor() {
-    // A new document or debounce needs a new resource; new inputs reach the current one.
-    effect((onCleanup) => {
+    // A new document or debounce needs a new resource; new inputs reach the current one. The old
+    // one stays on screen until the new one has a PDF, unless it never had one itself.
+    effect(() => {
       const document = this.document();
       const debounce = this.debounce();
-      const pdf = untracked(() =>
-        pdfResource(document, { inputs: () => this.inputs(), debounce, injector: this.injector }),
-      );
-      this.pdf.set(pdf);
-      onCleanup(() => {
-        pdf.destroy();
+      untracked(() => {
+        const old = this.pdf();
+        if (old?.url()) this.replacePrevious(old);
+        else old?.destroy();
+        this.pdf.set(
+          pdfResource(document, { inputs: () => this.inputs(), debounce, injector: this.injector }),
+        );
+      });
+    });
+
+    effect(() => {
+      if (!this.pdf()?.url()) return;
+      untracked(() => {
+        this.replacePrevious(undefined);
       });
     });
 
@@ -107,5 +121,10 @@ export class PdfViewer {
         });
       }
     });
+  }
+
+  private replacePrevious(next: PdfResourceRef | undefined): void {
+    this.previous()?.destroy();
+    this.previous.set(next);
   }
 }
