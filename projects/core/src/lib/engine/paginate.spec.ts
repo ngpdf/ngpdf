@@ -1600,6 +1600,26 @@ describe('paginatePage: table rows taller than a page', () => {
     expect(pages[1]!.placed.filter((p) => p.box.node === other)).toHaveLength(1);
   });
 
+  it('puts a note after a split row on its last piece, at its bottom', () => {
+    const long = lines(100);
+    const row = el('pdf-row', {}, [cell([long]), cell([])]);
+    const after = el('pdf-note');
+    const before = el('pdf-note');
+    const pages = paginate(page([el('pdf-view', {}, [before, tableOf([row]), after])]));
+    expect(pages).toHaveLength(2);
+    const noteOn = (node: PdfNode): [number, PlacedBox] => {
+      const index = pages.findIndex((laid) => laid.placed.some((p) => p.box.node === node));
+      return [index, pages[index]!.placed.find((p) => p.box.node === node)!];
+    };
+    const [afterSheet, afterPlaced] = noteOn(after);
+    expect(afterSheet).toBe(1);
+    const last = piecesOf(pages[1]!, row)[0]!;
+    expect(afterPlaced.y).toBeCloseTo(last.y + last.box.h, 6);
+    const [beforeSheet, beforePlaced] = noteOn(before);
+    expect(beforeSheet).toBe(0);
+    expect(beforePlaced.y).toBeCloseTo(CONTENT_TOP, 6);
+  });
+
   it('repeats the header above every piece', () => {
     const header = el('pdf-row', { height: '20' }, [cell([]), cell([])], { header: true });
     const long = lines(100);

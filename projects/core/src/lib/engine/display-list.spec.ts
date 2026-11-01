@@ -2146,4 +2146,31 @@ describe('notes', () => {
     // In page space, as a link is, although it sits between the transform ops.
     expect(ops.map((o) => o.op)).toEqual(['transform', 'clip', 'note', 'unclip', 'untransform']);
   });
+
+  it('emits the note of a faded view outside its group, at its point', () => {
+    const faded = el('pdf-view', { opacity: '0.5' }, [text('Before'), note(), text('After')]);
+    const ops = list(layout(page([faded]))[0]!, 0, 1);
+    const kinds = ops.map((op) => op.op);
+    expect(kinds).toEqual(['group', 'text', 'text', 'ungroup', 'note']);
+    const after = only(ops, 'text')[1]!;
+    expect(only(ops, 'note')[0]).toMatchObject({ x: 36, text: 'Check this' });
+    expect(only(ops, 'note')[0]!.y).toBeCloseTo(after.y, 6);
+  });
+
+  it('keeps a note in a faded unit inside its group, where the writer still lifts it out', () => {
+    const faded = el('pdf-view', { opacity: '0.5', 'flex-direction': 'row' }, [
+      text('Total'),
+      note(),
+    ]);
+    const kinds = list(layout(page([faded]))[0]!, 0, 1).map((op) => op.op);
+    expect(kinds).toEqual(['group', 'text', 'note', 'ungroup']);
+  });
+
+  it('marks a note with a cross in debug outlines, and still emits it', () => {
+    const laid = layout(page([el('pdf-view', { height: '20' }), note()]))[0]!;
+    const ops = list(laid, 0, 1, undefined, { debug: true });
+    expect(only(ops, 'note')).toHaveLength(1);
+    const cross = only(ops, 'line').filter((line) => line.x1 === 34 && line.x2 === 38);
+    expect(cross).toHaveLength(2);
+  });
 });

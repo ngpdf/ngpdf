@@ -758,6 +758,15 @@ describe('createPdfkitWriter', () => {
         expect(refs.map(subtype)).toEqual(['Text', 'Link']);
       });
 
+      it('writes a note inside an opacity group as a page annotation, outside the group', async () => {
+        const pdf = await pdfText([{ op: 'group', opacity: 0.5 }, NOTE, { op: 'ungroup' }]);
+        const [note] = notesIn(pdf);
+        expect(note).toContain('/Rect [10 170 30 190]');
+        expect(pdf).toMatch(/\/Annots \[\d+ 0 R\]/);
+        // The group's form holds no annotation: only the page lists one.
+        expect(pdf.match(/\/Annots/g)).toHaveLength(1);
+      });
+
       it('writes a note in page space, whatever transform or clip it sits in', async () => {
         const pdf = await pdfText([
           { op: 'transform', matrix: [0, 1, -1, 0, 100, 50] },

@@ -1426,11 +1426,16 @@ export function paginatePage(
   }
 
   // A note goes on the sheet of the unit it is attached to, moved as that unit was. Rows in a
-  // table have no margins, so a table's first row moves as its repeated header does.
+  // table have no margins, so a table's first row moves as its repeated header does. For a split
+  // row, that is the piece where the note's point falls: the last one for a note after the row.
   for (const note of notes) {
     const placement = placements[note.unit];
-    const shift = placement ? placement.unitShift : frame.top;
-    at(pages, placement?.page ?? 0).placed.push({
+    let piece = placement?.pieces?.[0];
+    for (const candidate of placement?.pieces ?? []) {
+      if (candidate.flowTop <= note.top + EPSILON) piece = candidate;
+    }
+    const shift = piece?.shift ?? placement?.unitShift ?? frame.top;
+    at(pages, piece?.page ?? placement?.page ?? 0).placed.push({
       box: note.box,
       x: frame.left + note.x + note.dx,
       y: note.top + shift + note.dy,
