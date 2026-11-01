@@ -951,15 +951,15 @@ function pathTo(doc: Doc, segment: PathSegment): void {
 type LinkOp = Extract<DrawOp, { op: 'link' }>;
 type NoteOp = Extract<DrawOp, { op: 'note' }>;
 
-const ICON_NAMES = new Map<NoteIcon, string>([
-  ['comment', 'Comment'],
-  ['note', 'Note'],
-  ['help', 'Help'],
-  ['key', 'Key'],
-  ['insert', 'Insert'],
-  ['paragraph', 'Paragraph'],
-  ['new-paragraph', 'NewParagraph'],
-]);
+const ICON_NAMES: Readonly<Record<NoteIcon, string>> = Object.freeze({
+  comment: 'Comment',
+  note: 'Note',
+  help: 'Help',
+  key: 'Key',
+  insert: 'Insert',
+  paragraph: 'Paragraph',
+  'new-paragraph': 'NewParagraph',
+});
 
 /**
  * A Text annotation. pdfkit writes `Contents` as a PDF text string, UTF-16BE after FE FF when it
@@ -969,7 +969,9 @@ const ICON_NAMES = new Map<NoteIcon, string>([
 function writeNote(doc: Doc, note: NoteOp): void {
   doc.note(note.x, note.y, NOTE_SIZE, NOTE_SIZE, note.text, {
     ...(note.author !== undefined && { T: new String(note.author) }),
-    Name: ICON_NAMES.get(note.icon) ?? 'Comment',
+    Name: Object.prototype.hasOwnProperty.call(ICON_NAMES, note.icon)
+      ? ICON_NAMES[note.icon]
+      : 'Comment',
     Open: note.open,
     color: note.color,
   } as PDFKit.Mixins.AnnotationOption);
