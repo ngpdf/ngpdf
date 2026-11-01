@@ -1279,3 +1279,190 @@ describe('paginatePage: fixed views', () => {
     expect(warn).toHaveBeenCalledWith('ngpdf: a fixed pdf-view must be a direct child of pdf-page');
   });
 });
+
+describe('paginatePage: position', () => {
+  // No page number: the content runs down to the bottom padding.
+  const BOTTOM = A4_HEIGHT - PADDING;
+  const AREA = BOTTOM - CONTENT_TOP;
+  const RIGHT = 595.28 - PADDING;
+  const filler = (room: number): PdfNode => el('pdf-view', { height: String(AREA - room) });
+  const block = (style: Record<string, string> = {}): PdfNode =>
+    el('pdf-view', { height: '20', ...style });
+  const badge = (style: Record<string, string> = {}): PdfNode =>
+    el('pdf-view', { position: 'absolute', width: '40', height: '10', ...style });
+  const nodesOn = (pages: PageLayout[]): PdfNode[][] =>
+    pages.map((laid) => laid.placed.map((p) => p.box.node));
+  const placedOf = (pages: PageLayout[], node: PdfNode): PlacedBox => {
+    const found = pages.flatMap((laid) => laid.placed).find((p) => p.box.node === node);
+    if (!found) throw new Error('not placed');
+    return found;
+  };
+
+  it('never makes an absolute box a unit, and places it after the units of its sheet', () => {
+    const [a, b] = [block(), block()];
+    const stamp = badge({ top: '0', right: '0' });
+    const pages = paginate(page([a, stamp, b]));
+    expect(nodesOn(pages)).toEqual([[a, b, stamp]]);
+    expect(placedOf(pages, b).y).toBeCloseTo(CONTENT_TOP + 20, 6);
+    // Yoga computes in float32.
+    expect(placedOf(pages, stamp).x).toBeCloseTo(RIGHT - 40, 3);
+    expect(placedOf(pages, stamp).y).toBeCloseTo(CONTENT_TOP, 6);
+    expect(placedOf(pages, stamp).clipBottom).toBeUndefined();
+  });
+
+  it.each([
+    ['a row view', { position: 'relative', 'flex-direction': 'row' }],
+    ['a clipped view', { position: 'relative', overflow: 'hidden' }],
+    ['a transformed view', { transform: 'rotate(5deg)' }],
+  ])('draws an absolute box with its containing block when that is %s', (_, style) => {
+    const first = filler(15);
+    const stamp = badge({ top: '0', right: '0' });
+    const card = el('pdf-view', style, [block(), block(), stamp]);
+    const pages = paginate(page([first, card]));
+    expect(nodesOn(pages)).toEqual([[first], [card]]);
+    expect(placedOf(pages, card).box.children.map((child) => child.node)).toContain(stamp);
+  });
+
+  it('puts an absolute box of a split containing block on the sheet where its top lands', () => {
+    const blocks = Array.from({ length: 60 }, () => block());
+    const stamp = badge({ top: '900', left: '0' });
+    const pages = paginate(page([el('pdf-view', { position: 'relative' }, [...blocks, stamp])]));
+    const sheet = pages.findIndex((laid) => laid.placed.some((p) => p.box.node === stamp));
+    expect(sheet).toBe(1);
+    expect(nodesOn(pages)[1]!.at(-1)).toBe(stamp);
+    // Flow y 900 is the top of block 45: the badge moves with it.
+    expect(nodesOn(pages)[1]).toContain(blocks[45]);
+    expect(placedOf(pages, stamp)).toMatchObject({ x: PADDING, y: placedOf(pages, blocks[45]!).y });
+  });
+
+  it('takes an absolute box out of a unit when its containing block is outside it', () => {
+    const first = filler(10);
+    const stamp = badge({ top: '0', left: '0' });
+    const rowView = el('pdf-view', { 'flex-direction': 'row' }, [block(), stamp]);
+    const pages = paginate(page([first, rowView]));
+    expect(nodesOn(pages)).toEqual([[first, stamp], [rowView]]);
+    expect(placedOf(pages, stamp).y).toBeCloseTo(CONTENT_TOP, 6);
+    expect(placedOf(pages, rowView).box.children).toHaveLength(1);
+  });
+
+  it('takes an absolute box out of a static clipped view, as CSS does not clip it', () => {
+    const stamp = badge({ top: '0', left: '0' });
+    const clipped = el('pdf-view', { overflow: 'hidden', 'margin-top': '50' }, [
+      el('pdf-view', {}, [block(), stamp]),
+    ]);
+    const pages = paginate(page([clipped]));
+    expect(nodesOn(pages)).toEqual([[clipped, stamp]]);
+    expect(placedOf(pages, clipped).box.children[0]!.children).toHaveLength(1);
+    expect(placedOf(pages, stamp).y).toBeCloseTo(CONTENT_TOP, 6);
+  });
+
+  it('puts an absolute box whose top falls below a sheet on the next sheet', () => {
+    const first = filler(10);
+    const next = block({ 'margin-top': '20' });
+    const stamp = badge({ top: String(AREA + 2), left: '0' });
+    const pages = paginate(page([first, next, stamp]));
+    expect(nodesOn(pages)).toEqual([[first], [next, stamp]]);
+    expect(placedOf(pages, stamp).y).toBeCloseTo(CONTENT_TOP, 6);
+  });
+
+  it('starts a sheet for an absolute box whose top falls below the last unit', () => {
+    const last = block();
+    const stamp = badge({ top: String(AREA + 50), left: '0' });
+    const pages = paginate(page([last, stamp]));
+    expect(nodesOn(pages)).toEqual([[last], [stamp]]);
+    expect(placedOf(pages, stamp).y).toBeCloseTo(CONTENT_TOP, 6);
+  });
+
+  it('fades an absolute box taken out of a unit with the static views it leaves', () => {
+    const stamp = badge({ top: '0', left: '0' });
+    const faded = el('pdf-view', { opacity: '0.5', 'flex-direction': 'row' }, [
+      el('pdf-view', { opacity: '0.4' }, [block(), stamp]),
+    ]);
+    const pages = paginate(page([faded]));
+    expect(nodesOn(pages)).toEqual([[faded, stamp]]);
+    expect(placedOf(pages, stamp).opacity).toBeCloseTo(0.2, 6);
+  });
+
+  it('cuts an absolute box taller than what is left of its sheet, with a warning', () => {
+    const warn = vi.fn<(message: string) => void>();
+    const stamp = badge({ top: String(AREA - 10), height: '40' });
+    const pages = paginate(page([block(), stamp]), warn);
+    expect(pages).toHaveLength(1);
+    expect(placedOf(pages, stamp)).toMatchObject({ clipBottom: BOTTOM });
+    expect(placedOf(pages, stamp).y).toBeCloseTo(BOTTOM - 10, 3);
+    expect(warn).toHaveBeenCalledWith(
+      'ngpdf: pdf-view is taller than a page and is cut at the bottom',
+    );
+  });
+
+  it('places absolute boxes on the first sheet of a page with no units', () => {
+    const stamp = badge({ bottom: '0', right: '0' });
+    const pages = paginate(page([stamp]));
+    expect(nodesOn(pages)).toEqual([[stamp]]);
+    expect(placedOf(pages, stamp).x).toBeCloseTo(RIGHT - 40, 3);
+    expect(placedOf(pages, stamp).y).toBeCloseTo(CONTENT_TOP, 6);
+  });
+
+  it('makes a column view of absolute boxes only one unit', () => {
+    const inner = badge({ top: '0' });
+    const holder = el('pdf-view', { position: 'relative', height: '30' }, [inner]);
+    const pages = paginate(page([holder]));
+    expect(nodesOn(pages)).toEqual([[holder]]);
+    expect(placedOf(pages, holder).box.children[0]!.node).toBe(inner);
+  });
+
+  it('draws an absolute box in a fixed view with the view on every sheet', () => {
+    const stamp = badge({ top: '0', right: '0' });
+    const header = el('pdf-view', { height: '20' }, [stamp], { fixed: 'top' });
+    const pages = paginate(page([header, ...Array.from({ length: 60 }, () => block())]));
+    expect(pages.length).toBeGreaterThan(1);
+    for (const laid of pages) {
+      expect(laid.placed[0]!.box.node).toBe(header);
+      expect(laid.placed[0]!.box.children[0]!.node).toBe(stamp);
+      expect(laid.placed[0]!.box.children[0]!.x).toBeCloseTo(RIGHT - PADDING - 40, 3);
+      expect(laid.placed.some((p) => p.box.node === stamp)).toBe(false);
+    }
+  });
+
+  it('keeps a relative box where the flow puts it, even at the top of a sheet', () => {
+    const first = filler(10);
+    const moved = block({ position: 'relative', top: '30' });
+    const next = block();
+    const pages = paginate(page([first, moved, next]));
+    expect(nodesOn(pages)).toEqual([[first], [moved, next]]);
+    expect(placedOf(pages, moved).y).toBeCloseTo(CONTENT_TOP, 6);
+    expect(placedOf(pages, next).y).toBeCloseTo(CONTENT_TOP + 20, 6);
+  });
+
+  it('moves the units and absolute boxes inside a relative split view by its offsets', () => {
+    const [a, b] = [block(), block()];
+    const stamp = badge({ top: '5', left: '0' });
+    const view = el('pdf-view', { position: 'relative', top: '30', 'background-color': '#eee' }, [
+      a,
+      b,
+      stamp,
+    ]);
+    const pages = paginate(page([view]));
+    expect(placedOf(pages, a).y).toBeCloseTo(CONTENT_TOP + 30, 6);
+    expect(placedOf(pages, b).y).toBeCloseTo(CONTENT_TOP + 50, 6);
+    expect(placedOf(pages, stamp).y).toBeCloseTo(CONTENT_TOP + 35, 6);
+    // The view's own shift is applied when its background is drawn.
+    expect(pages[0]!.decorations[0]).toMatchObject({ y: CONTENT_TOP });
+    expect(pages[0]!.decorations[0]!.box.shift).toEqual({ x: 0, y: 30 });
+  });
+
+  it('fades an absolute box with the views above it', () => {
+    const stamp = badge({ top: '0' });
+    const pages = paginate(page([el('pdf-view', { opacity: '0.5' }, [block(), stamp])]));
+    expect(placedOf(pages, stamp).opacity).toBe(0.5);
+  });
+
+  it('ignores page breaks asked for by absolute boxes', () => {
+    const inside = el('pdf-view', { 'flex-direction': 'row', position: 'relative' }, [
+      block(),
+      badge({ 'break-before': 'page', 'break-after': 'page' }),
+    ]);
+    const pages = paginate(page([block(), badge({ 'break-before': 'page' }), inside, block()]));
+    expect(pages).toHaveLength(1);
+  });
+});

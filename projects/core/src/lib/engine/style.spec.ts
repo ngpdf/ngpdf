@@ -764,6 +764,7 @@ describe('resolveStyles property coverage', () => {
     ['object-fit', 'fill'],
     ['text-transform', 'full-width'],
     ['overflow', 'none'],
+    ['position', 'float'],
   ])('rejects an invalid %s value "%s"', (property, value) => {
     expect(() => styleOf({ [property]: value })).toThrow(
       `ngpdf: invalid value "${value}" for ${property} on pdf-view`,
@@ -798,6 +799,8 @@ describe('resolveStyles property coverage', () => {
     ['letter-spacing', 'Normal', 'letterSpacing', 0],
     ['overflow', 'HIDDEN', 'overflow', 'hidden'],
     ['overflow', 'Visible', 'overflow', 'visible'],
+    ['position', 'ABSOLUTE', 'position', 'absolute'],
+    ['position', ' Relative ', 'position', 'relative'],
   ])('reads %s "%s" case-insensitively', (property, value, key, expected) => {
     expect(styleOf({ [property]: value })).toMatchObject({ [key]: expected });
   });
@@ -1176,5 +1179,74 @@ describe('gradients', () => {
     const styles = resolveStyles(el('pdf-document', {}, [parent]));
     expect(styles.get(parent)?.backgroundImage).not.toBeNull();
     expect(styles.get(child)?.backgroundImage).toBeNull();
+  });
+});
+
+describe('position', () => {
+  const AUTO_INSET = { top: 'auto', right: 'auto', bottom: 'auto', left: 'auto' };
+
+  it('is static with auto offsets by default, and not inherited', () => {
+    expect(styleOf({})).toMatchObject({ position: 'static', inset: AUTO_INSET });
+    const text = el('pdf-text');
+    const view = el('pdf-view', { position: 'absolute', top: '4' }, [text]);
+    expect(resolveStyles(view).get(text)).toMatchObject({ position: 'static', inset: AUTO_INSET });
+  });
+
+  it('reads static, relative and absolute', () => {
+    for (const keyword of ['static', 'relative', 'absolute'] as const) {
+      expect(styleOf({ position: keyword }).position).toBe(keyword);
+    }
+  });
+
+  it('reads top, right, bottom and left as lengths, percentages or auto', () => {
+    const style = styleOf({ top: '1cm', right: '-5', bottom: '10%', left: 'AUTO' });
+    expect(style.inset.top).toBeCloseTo(28.346, 3);
+    expect(style.inset).toMatchObject({ right: -5, bottom: { percent: 10 }, left: 'auto' });
+  });
+
+  it('keeps the offsets of a static element, which layout then ignores', () => {
+    expect(styleOf({ top: '4' })).toMatchObject({ position: 'static', inset: { top: 4 } });
+  });
+
+  it.each(['fixed', 'Sticky'])('throws on position: %s', (keyword) => {
+    expect(() => styleOf({ position: keyword })).toThrow(
+      `ngpdf: position "${keyword.toLowerCase()}" is not supported`,
+    );
+  });
+
+  it('points position: fixed at the fixed input of pdf-view', () => {
+    expect(() => styleOf({ position: 'fixed' })).toThrow(
+      'ngpdf: position "fixed" is not supported (use <pdf-view fixed>) on pdf-view',
+    );
+  });
+
+  it.each([
+    ['top', '3em', 'ngpdf: unknown unit in "3em" on pdf-view'],
+    ['left', 'middle', 'ngpdf: invalid length "middle" on pdf-view'],
+    ['bottom', '', 'ngpdf: invalid length "" on pdf-view'],
+  ])('throws on an invalid %s "%s"', (property, value, message) => {
+    expect(() => styleOf({ [property]: value })).toThrow(message);
+  });
+
+  it.each(['pdf-page', 'pdf-row', 'pdf-cell'])(
+    'ignores position and offsets on a %s but still checks the values',
+    (tag) => {
+      expect(styleOf({ position: 'absolute', top: '4' }, tag)).toMatchObject({
+        position: 'static',
+        inset: AUTO_INSET,
+      });
+      expect(() => styleOf({ position: 'fixed' }, tag)).toThrow(/^ngpdf: position "fixed"/);
+      expect(() => styleOf({ right: '1em' }, tag)).toThrow(
+        `ngpdf: unknown unit in "1em" on ${tag}`,
+      );
+    },
+  );
+
+  it('warns that position and offsets have no effect on a pdf-span', () => {
+    const warn = vi.fn();
+    const span = el('pdf-span', { position: 'relative', top: '2' });
+    resolveStyles(el('pdf-document', {}, [el('pdf-text', {}, [span])]), warn);
+    expect(warn).toHaveBeenCalledWith('ngpdf: position has no effect on pdf-span');
+    expect(warn).toHaveBeenCalledWith('ngpdf: top has no effect on pdf-span');
   });
 });

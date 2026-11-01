@@ -21,7 +21,8 @@ Starting from the children of the `pdf-page`, ngpdf looks inside some elements a
 | `pdf-table` | a wrapper: each of its rows is a unit |
 | `pdf-view` with `flex-direction: row` | one unit, with everything inside it |
 | `pdf-text` | its lines, grouped by `orphans` and `widows`; one unit if it is short, has `break-inside: avoid`, a fixed height, a `transform` or an `overflow` other than `visible` |
-| `pdf-row`, `pdf-image`, an empty `pdf-view` | one unit |
+| `pdf-row`, `pdf-image`, an empty `pdf-view` or one that holds only absolute elements | one unit |
+| an element with `position: absolute` | never a unit; see [Positioned elements](#positioned-elements) |
 
 Wrappers can nest to any depth, so a table inside a column `pdf-view` inside another column `pdf-view` still yields its rows as units. A table inside a cell or inside a row `pdf-view` is part of that unit.
 
@@ -130,6 +131,17 @@ On a wrapper, the break happens before its first unit. A break on a sheet that h
 - The last lines of a `pdf-text` that began on an earlier sheet stay where the text's own breaks put them, so `orphans` and `widows` still hold. What follows moves alone.
 - A view or table with `break-inside: avoid` after it counts with its whole height.
 - It is a style only; there is no input for it, and it is not inherited.
+
+## Positioned elements
+
+An element with [`position: absolute`](/docs/layout-and-styling#positioning) is never a unit. It never moves, splits or pushes other units, and page breaks asked for on it or inside it do nothing.
+
+- When its containing block is one unit (a row `pdf-view`, or a view with a `transform` or an `overflow` other than `visible`), it is drawn with that unit, on the same sheet.
+- When its containing block is split across sheets (a column `pdf-view`, a `pdf-table` or the page itself), it goes on the sheet where its own top lands, moved like the units around it. One whose top falls in the space a page break skips goes to the top of the next sheet, and one below all the units gets a sheet of its own. It is never drawn above the top of the content area.
+- It is never split: one taller than what is left of its sheet is cut at the bottom, with a dev-mode warning.
+- Against the page, `bottom` and percentages of the height are measured on the page's whole content, all sheets together, not on one sheet.
+- Inside a [fixed view](#fixed-headers-and-footers) it is drawn with the view on every sheet, and the view is its containing block.
+- A `position: relative` element is placed like any other: pagination ignores its offsets, which only move it when it is drawn. A relative column `pdf-view` that is split moves each of its pieces by its offsets.
 
 ## Fixed headers and footers
 

@@ -9,7 +9,10 @@ const SENTENCES = [
   'Back at the hut the numbers were checked against the previous year and the differences marked.',
 ];
 
-/** Justified paragraphs long enough to break across pages, with orphans and widows kept. */
+/**
+ * Justified paragraphs long enough to break across pages, with orphans and widows kept, and an
+ * absolutely positioned badge.
+ */
 @Component({
   selector: 'app-article-sample',
   imports: [PDF_ELEMENTS],
@@ -21,6 +24,12 @@ const SENTENCES = [
         >
           Field notes
         </pdf-text>
+        <!-- Placed against the page's content area: it leaves the flow and sits over the title. -->
+        <pdf-view
+          style="position: absolute; top: 9; right: 10; padding: 2 6; border: 1 solid #ffffff; border-radius: 3; transform: rotate(-8deg)"
+        >
+          <pdf-text style="font-size: 8; font-weight: bold; color: #ffffff">DRAFT</pdf-text>
+        </pdf-view>
         <pdf-text
           style="font-size: 8; letter-spacing: 0.5; text-transform: uppercase; color: #666666; margin-bottom: 10"
         >

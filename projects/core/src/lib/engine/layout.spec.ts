@@ -746,3 +746,109 @@ describe('anonymous text', () => {
     expect(box.children.map((child) => child.children.length)).toEqual([0, 0]);
   });
 });
+
+describe('position', () => {
+  const block = (height = 20): PdfNode => el('pdf-view', { height: String(height) });
+  const badge = (): PdfNode =>
+    el('pdf-view', { position: 'absolute', top: '0', right: '10%', width: '20', height: '10' });
+  const strip = (): PdfNode =>
+    el('pdf-view', { position: 'absolute', left: '5', right: '5', bottom: '0', height: '4' });
+
+  // A root with border 2 and padding 10, a 30pt block, then a view 50pt lower holding a badge, a
+  // static view with a strip, and a 20pt block.
+  function scene(view: Record<string, string>): { root: Box; view: Box } {
+    const root = el('pdf-view', { padding: '10', border: '2 solid #000' }, [
+      block(30),
+      el('pdf-view', { 'margin-top': '50', padding: '5', ...view }, [
+        badge(),
+        el('pdf-view', {}, [strip()]),
+        block(),
+      ]),
+    ]);
+    const box = lay(root, 200);
+    return { root: box, view: box.children[1]! };
+  }
+
+  it('takes an absolute box out of the flow: no space, no sibling moved, no parent growth', () => {
+    const { root, view } = scene({});
+    expect(view.h).toBe(30);
+    expect(root.h).toBe(134);
+    expect(view.children[1]).toMatchObject({ x: 5, y: 5, h: 0 });
+    expect(view.children[2]).toMatchObject({ x: 5, y: 5 });
+  });
+
+  it('places an absolute box against the root padding box through static ancestors', () => {
+    const { view } = scene({});
+    // The root's padding box runs from (2, 2) to (198, 132); the view sits at (12, 92).
+    const placed = view.children[0]!;
+    expect(placed.x).toBeCloseTo(198 - 19.6 - 20 - 12, 3);
+    expect(placed.y).toBeCloseTo(2 - 92, 3);
+    expect(placed).toMatchObject({ w: 20, h: 10 });
+    const stretched = view.children[1]!.children[0]!;
+    expect(stretched).toMatchObject({ x: 7 - 17, w: 186, h: 4 });
+    expect(stretched.y).toBeCloseTo(132 - 4 - 97, 3);
+  });
+
+  it.each([
+    ['relative', { position: 'relative' }],
+    ['transformed', { transform: 'rotate(10deg)' }],
+    ['absolute', { position: 'absolute', top: '92', left: '12', width: '176' }],
+  ])('makes a %s view the containing block', (_, style) => {
+    const { view } = scene(style);
+    // Its padding box is its border box: 176 by 30, from (0, 0).
+    expect(view.children[0]!.x).toBeCloseTo(176 - 17.6 - 20, 3);
+    expect(view.children[0]!.y).toBe(0);
+    expect(view.children[1]!.children[0]).toMatchObject({ x: 0, y: 30 - 4 - 5, w: 166 });
+  });
+
+  it('stretches an absolute box between top and bottom when its height is auto', () => {
+    const box = lay(
+      el('pdf-view', { position: 'relative', height: '100' }, [
+        el('pdf-view', { position: 'absolute', top: '10', bottom: '15%' }),
+      ]),
+      200,
+    );
+    expect(box.children[0]).toMatchObject({ y: 10, h: 75 });
+  });
+
+  it('sizes an absolute box with auto width to its content', () => {
+    const word = (style: Record<string, string>): PdfNode =>
+      el('pdf-text', style, [textNode('Stamp')]);
+    const box = lay(el('pdf-view', {}, [word({ position: 'absolute', left: '0' }), word({})]), 200);
+    const [absolute, inFlow] = box.children;
+    expect(inFlow!.w).toBe(200);
+    expect(absolute!.w).toBeGreaterThan(0);
+    expect(absolute!.w).toBeLessThan(50);
+    expect(absolute!.text?.lines).toHaveLength(1);
+  });
+
+  it('keeps a relative box where the flow puts it and records its offsets as a shift', () => {
+    const moved = el('pdf-view', { position: 'relative', top: '10', left: '5', height: '20' });
+    const after = block();
+    const box = lay(el('pdf-view', {}, [block(), moved, after]), 200);
+    expect(box.children[1]).toMatchObject({ x: 0, y: 20, shift: { x: 5, y: 10 } });
+    expect(box.children[2]).toMatchObject({ y: 40 });
+    expect(box.h).toBe(60);
+  });
+
+  it('shifts by bottom and right when top and left are auto, and top and left win', () => {
+    const shiftOf = (style: Record<string, string>): Box['shift'] =>
+      lay(el('pdf-view', {}, [el('pdf-view', { position: 'relative', ...style })]), 200)
+        .children[0]!.shift;
+    expect(shiftOf({ bottom: '4', right: '3' })).toEqual({ x: -3, y: -4 });
+    expect(shiftOf({ top: '1', bottom: '4', left: '2', right: '3' })).toEqual({ x: 2, y: 1 });
+  });
+
+  it("resolves a relative box's percentages against its parent's content box", () => {
+    const parent = el('pdf-view', { padding: '10', height: '100' }, [
+      el('pdf-view', { position: 'relative', top: '25%', left: '10%' }),
+    ]);
+    expect(lay(parent, 200).children[0]!.shift).toEqual({ x: 18, y: 20 });
+  });
+
+  it('ignores the offsets of a static box', () => {
+    const box = lay(el('pdf-view', {}, [el('pdf-view', { top: '10', left: '5' })]), 200);
+    expect(box.children[0]).toMatchObject({ x: 0, y: 0 });
+    expect(box.children[0]!.shift).toBeUndefined();
+  });
+});

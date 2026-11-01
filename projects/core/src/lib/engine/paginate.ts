@@ -66,6 +66,9 @@ interface Flowed {
   /** Relative to the content box's left edge. */
   readonly x: number;
   readonly top: number;
+  /** The offsets of the relative boxes above it, which the flow ignores and drawing applies. */
+  readonly dx: number;
+  readonly dy: number;
 }
 
 interface Header {
@@ -102,10 +105,16 @@ interface TextRun {
   readonly widows: number;
 }
 
+/** An absolute box placed apart from the units: its containing block is split across sheets. */
+interface Float extends Flowed {
+  readonly opacity: number;
+}
+
 interface Collected {
   readonly units: Unit[];
   readonly wrappers: Wrapper[];
   readonly texts: TextRun[];
+  readonly floats: Float[];
 }
 
 const ZERO_EDGES: Edges<Length> = { top: 0, right: 0, bottom: 0, left: 0 };
@@ -134,9 +143,21 @@ function isPageNumber(node: PdfNode): boolean {
   return node.kind === 'element' && node.tag === 'pdf-page-number';
 }
 
-/** A transformed box is drawn as a whole, so it is never split. */
+function isAbsolute(box: Box): boolean {
+  return box.style.position === 'absolute';
+}
+
+/** Whether the box is the containing block of its absolute descendants. */
+function contains(box: Box): boolean {
+  return box.style.position !== 'static' || box.style.transform.length > 0;
+}
+
+/**
+ * A transformed box is drawn as a whole, so it is never split. A view of absolute boxes only has
+ * no flow to split.
+ */
 function isWrapper(box: Box): boolean {
-  if (box.children.length === 0 || box.style.transform.length > 0) return false;
+  if (box.style.transform.length > 0 || box.children.every(isAbsolute)) return false;
   return (
     box.node.tag === 'pdf-table' ||
     // A clipping view is one unit, like a row view: its clip can't be cut across sheets.
@@ -188,6 +209,31 @@ function collectUnits(content: Box, maxHeader: number, pageOpacity: number): Col
   const units: Unit[] = [];
   const wrappers: Wrapper[] = [];
   const texts: TextRun[] = [];
+  const floats: Float[] = [];
+
+  /**
+   * The unit's box without the absolute boxes whose containing block is outside it, which go to
+   * `floats`: they are placed with the flow, not with the unit. Walks each unit once.
+   */
+  const detach = (box: Box, at: Float, contained: boolean): Box => {
+    if (contained || box.children.length === 0) return box;
+    // A box with a shift is relative and contains its absolute boxes, so none adds to dx or dy.
+    const inside: Float = { ...at, box, opacity: at.opacity * box.style.opacity };
+    let changed = false;
+    const kept: Box[] = [];
+    for (const child of box.children) {
+      const childAt = { ...inside, box: child, x: at.x + child.x, top: at.top + child.y };
+      if (isAbsolute(child)) {
+        floats.push(childAt);
+        changed = true;
+        continue;
+      }
+      const next = detach(child, childAt, contains(child));
+      changed ||= next !== child;
+      kept.push(next);
+    }
+    return changed ? { ...box, children: kept } : box;
+  };
 
   const visit = (
     box: Box,
@@ -195,25 +241,32 @@ function collectUnits(content: Box, maxHeader: number, pageOpacity: number): Col
     top: number,
     header: Header | null,
     opacity: number,
+    dx: number,
+    dy: number,
   ): void => {
     if (box.text && isSplittable(box)) {
-      visitText(box, box.text, x, top, header, opacity);
+      visitText(box, box.text, x, top, header, opacity, dx, dy);
       return;
     }
     if (!isWrapper(box)) {
-      units.push({ box, x, top, bottom: top + box.h, header, opacity });
+      const own = detach(box, { box, x, top, opacity, dx, dy }, contains(box));
+      units.push({ box: own, x, top, bottom: top + box.h, header, opacity, dx, dy });
       return;
     }
     const wrapper: Wrapper = {
       box,
       x,
       top,
+      dx,
+      dy,
       opacity,
       bottom: top + box.h,
       first: units.length,
       last: 0,
     };
     const inside = opacity * box.style.opacity;
+    const innerDx = dx + (box.shift?.x ?? 0);
+    const innerDy = dy + (box.shift?.y ?? 0);
     wrappers.push(wrapper);
     let children = box.children;
     let childHeader = header;
@@ -222,9 +275,13 @@ function collectUnits(content: Box, maxHeader: number, pageOpacity: number): Col
       const body = children.filter((child) => !isHeader(child));
       // A table of header rows only has nothing to repeat over: its rows are plain units.
       if (body.length > 0 && body.length < children.length) {
-        const rows = children
-          .filter(isHeader)
-          .map((child) => ({ box: child, x: x + child.x, top: top + child.y }));
+        const rows = children.filter(isHeader).map((child) => ({
+          box: child,
+          x: x + child.x,
+          top: top + child.y,
+          dx: innerDx,
+          dy: innerDy,
+        }));
         const headerTop = Math.min(...rows.map((r) => r.top));
         const headerBottom = Math.max(...rows.map((r) => r.top + r.box.h));
         if (headerBottom - headerTop <= maxHeader + EPSILON) {
@@ -239,7 +296,21 @@ function collectUnits(content: Box, maxHeader: number, pageOpacity: number): Col
         }
       }
     }
-    for (const child of children) visit(child, x + child.x, top + child.y, childHeader, inside);
+    for (const child of children) {
+      const [childX, childTop] = [x + child.x, top + child.y];
+      if (isAbsolute(child)) {
+        floats.push({
+          box: child,
+          x: childX,
+          top: childTop,
+          opacity: inside,
+          dx: innerDx,
+          dy: innerDy,
+        });
+      } else {
+        visit(child, childX, childTop, childHeader, inside, innerDx, innerDy);
+      }
+    }
     wrapper.last = units.length - 1;
   };
 
@@ -252,6 +323,8 @@ function collectUnits(content: Box, maxHeader: number, pageOpacity: number): Col
     top: number,
     header: Header | null,
     opacity: number,
+    dx: number,
+    dy: number,
   ): void => {
     const { node, style: boxStyle, w, h, padding, border } = box;
     const decoration: Box = {
@@ -263,12 +336,15 @@ function collectUnits(content: Box, maxHeader: number, pageOpacity: number): Col
       h,
       padding,
       border,
+      ...(box.shift && { shift: box.shift }),
       children: [],
     };
     const wrapper: Wrapper = {
       box: decoration,
       x,
       top,
+      dx,
+      dy,
       opacity,
       bottom: top + box.h,
       first: units.length,
@@ -312,6 +388,8 @@ function collectUnits(content: Box, maxHeader: number, pageOpacity: number): Col
         bottom: inner + start + h,
         header,
         opacity,
+        dx,
+        dy,
       });
     }
     wrapper.last = units.length - 1;
@@ -326,11 +404,26 @@ function collectUnits(content: Box, maxHeader: number, pageOpacity: number): Col
   if (content.style.flexDirection === 'row') {
     // The unit is the content box itself, whose style already carries the page's opacity; the
     // display list applies it, so passing pageOpacity here would fade the page twice.
-    units.push({ box: content, x: 0, top: 0, bottom: content.h, header: null, opacity: 1 });
+    units.push({
+      box: content,
+      x: 0,
+      top: 0,
+      dx: 0,
+      dy: 0,
+      bottom: content.h,
+      header: null,
+      opacity: 1,
+    });
   } else {
-    for (const child of content.children) visit(child, child.x, child.y, null, pageOpacity);
+    for (const child of content.children) {
+      if (isAbsolute(child)) {
+        floats.push({ box: child, x: child.x, top: child.y, opacity: pageOpacity, dx: 0, dy: 0 });
+      } else {
+        visit(child, child.x, child.y, null, pageOpacity, 0, 0);
+      }
+    }
   }
-  return { units, wrappers, texts };
+  return { units, wrappers, texts, floats };
 }
 
 interface PageFrame {
@@ -422,22 +515,27 @@ interface Placement {
   readonly leadShift: number;
 }
 
+/** An absolute box asks for no break: it is never a unit. */
+function inFlow(box: Box): readonly Box[] {
+  return box.children.some(isAbsolute) ? box.children.filter((c) => !isAbsolute(c)) : box.children;
+}
+
 /**
  * A unit is never split, so a break asked for anywhere inside it (a cell of a table row, a
  * text in a row view) breaks before the whole unit.
  */
 function asksForBreak(box: Box): boolean {
-  return box.style.breakBefore || box.children.some(asksForBreak);
+  return box.style.breakBefore || inFlow(box).some(asksForBreak);
 }
 
 /** Like `asksForBreak`, for a break after the whole unit. */
 function asksForBreakAfter(box: Box): boolean {
-  return box.style.breakAfter || box.children.some(asksForBreakAfter);
+  return box.style.breakAfter || inFlow(box).some(asksForBreakAfter);
 }
 
 /** Like `asksForBreakAfter`, for `break-after: avoid`. */
 function asksToKeepWithNext(box: Box): boolean {
-  return box.style.keepWithNext || box.children.some(asksToKeepWithNext);
+  return box.style.keepWithNext || inFlow(box).some(asksToKeepWithNext);
 }
 
 function at<T>(list: readonly T[], index: number): T {
@@ -531,7 +629,7 @@ export function paginatePage(
   const contentStyles = new Map(styles).set(content, contentStyle);
   const laid = layoutBox(content, contentStyles, frame.contentWidth, ctx);
   const contentHeight = frame.bottom - frame.top;
-  const { units, wrappers, texts } = collectUnits(laid, contentHeight, pageStyle.opacity);
+  const { units, wrappers, texts, floats } = collectUnits(laid, contentHeight, pageStyle.opacity);
 
   // Per unit: the outermost wrapper top opening at it, the outermost wrapper bottom closing at
   // it, whether any of them asks for a page break before or after it or to stay with the next
@@ -657,13 +755,16 @@ export function paginatePage(
   let textFirst = -1;
   let textLast = -1;
 
-  const place = (box: Box, x: number, y: number, opacity: number): void => {
+  // `at` is in flow coordinates on the sheet; the offsets of relative boxes above are added after.
+  const place = (at: Flowed, x: number, y: number, opacity: number, on = current): void => {
+    const { box } = at;
+    const drawn = { box, x: x + at.dx, y: y + at.dy, ...fade(opacity) };
     if (y + box.h > frame.bottom + EPSILON) {
       const what = isHeaderRow(box.node) ? `${box.node.tag} header` : box.node.tag;
       warn(`ngpdf: ${what} is taller than a page and is cut at the bottom`);
-      current.placed.push({ box, x, y, clipBottom: frame.bottom, ...fade(opacity) });
+      on.placed.push({ ...drawn, clipBottom: frame.bottom });
     } else {
-      current.placed.push({ box, x, y, ...fade(opacity) });
+      on.placed.push(drawn);
     }
   };
 
@@ -774,11 +875,11 @@ export function paginatePage(
     const { header, leadFlow, leadTop, top } = next;
     if (header) {
       for (const row of header.rows) {
-        place(row.box, frame.left + row.x, leadTop + row.top - header.top, header.opacity);
+        place(row, frame.left + row.x, leadTop + row.top - header.top, header.opacity);
       }
       current.headers.add(header);
     }
-    place(unit.box, frame.left + unit.x, top, unit.opacity);
+    place(unit, frame.left + unit.x, top, unit.opacity);
     current.units++;
     current.lastUnit = index;
     cursor = top + unit.box.h;
@@ -790,6 +891,36 @@ export function paginatePage(
       leadShift: leadTop - leadFlow,
     });
   });
+
+  // An absolute box goes on the sheet where its top lands, moved like the unit at or above that
+  // flow y. One whose top falls below that sheet goes to the top of the next unit's sheet.
+  // Placements are in flow order, so each box is a binary search.
+  for (const float of floats) {
+    let lo = 0;
+    let hi = placements.length - 1;
+    let found = -1;
+    while (lo <= hi) {
+      const mid = (lo + hi) >> 1;
+      if (at(placements, mid).unit.top <= float.top + EPSILON) [found, lo] = [mid, mid + 1];
+      else hi = mid - 1;
+    }
+    const above = placements[Math.max(0, found)];
+    let page = above?.page ?? 0;
+    let y = float.top + (above?.unitShift ?? frame.top);
+    if (y >= frame.bottom - EPSILON) {
+      const below = placements[found + 1];
+      if (below) {
+        page = below.page;
+        y = float.top + below.unitShift;
+      } else {
+        startPage();
+        page = pages.length - 1;
+        y = frame.top;
+      }
+    }
+    // Never above the content top, as a unit moved to a new sheet.
+    place(float, frame.left + float.x, Math.max(frame.top, y), float.opacity, at(pages, page));
+  }
 
   if (draws(pageStyle)) {
     const box: Box = {
@@ -830,8 +961,8 @@ export function paginatePage(
     for (const piece of pieces) {
       at(pages, piece.page).decorations.push({
         box: { ...wrapper.box, h: piece.h, children: [] },
-        x: frame.left + wrapper.x,
-        y: piece.top,
+        x: frame.left + wrapper.x + wrapper.dx,
+        y: piece.top + wrapper.dy,
         sliceTop: piece.page !== first.page,
         sliceBottom: piece.page !== last.page,
         ...(sliced && { slice: { offset, height } }),

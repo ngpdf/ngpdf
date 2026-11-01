@@ -113,6 +113,9 @@ export interface ResolvedStyle extends TextStyle {
   readonly transformOrigin: { readonly x: Offset; readonly y: Offset };
   /** `hidden` clips the content to the padding box; `clip`, `scroll` and `auto` read as hidden. */
   readonly overflow: 'visible' | 'hidden';
+  readonly position: 'static' | 'relative' | 'absolute';
+  /** `top`, `right`, `bottom` and `left`; layout ignores them on a static element. */
+  readonly inset: Edges<Length>;
   readonly breakBefore: boolean;
   readonly breakAfter: boolean;
   /** `break-after: avoid`: keep this element on a page with what follows it. */
@@ -883,6 +886,8 @@ function defaultStyle(node: PdfNode, inherited: TextStyle): Mutable<ResolvedStyl
     transform: [],
     transformOrigin: CENTER_ORIGIN,
     overflow: 'visible',
+    position: 'static',
+    inset: allSides<Length>('auto'),
     breakBefore: propsOf(node)['breakBefore'] === true,
     breakAfter: propsOf(node)['breakAfter'] === true,
     keepWithNext: false,
@@ -892,6 +897,9 @@ function defaultStyle(node: PdfNode, inherited: TextStyle): Mutable<ResolvedStyl
 }
 
 type Warn = (message: string) => void;
+
+// A page is not a box to move, and a table owns the places of its rows and cells.
+const UNPOSITIONED = new Set(['pdf-page', 'pdf-row', 'pdf-cell']);
 
 /** Applies one declaration; a property this engine does not know is ignored. */
 function apply(
@@ -1093,6 +1101,24 @@ function apply(
       if (tag !== 'pdf-page' && tag !== 'pdf-table') {
         style.overflow = keyword === 'visible' ? 'visible' : 'hidden';
       }
+      break;
+    }
+    case 'position': {
+      const keyword = keywordOf(value);
+      if (keyword === 'fixed' || keyword === 'sticky') {
+        const hint = keyword === 'fixed' ? ' (use <pdf-view fixed>)' : '';
+        fail(`position "${keyword}" is not supported${hint}`, tag);
+      }
+      const position = oneOf(value, ['static', 'relative', 'absolute'], property, tag);
+      if (!UNPOSITIONED.has(tag)) style.position = position;
+      break;
+    }
+    case 'top':
+    case 'right':
+    case 'bottom':
+    case 'left': {
+      const offset = parseLength(value, tag);
+      if (!UNPOSITIONED.has(tag)) style.inset = withSide(style.inset, property, offset);
       break;
     }
     case 'break-before':
