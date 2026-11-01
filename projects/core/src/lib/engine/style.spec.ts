@@ -213,6 +213,15 @@ describe('resolveStyles', () => {
     expect(styleOf({ 'line-height': '20px', 'font-size': '10' }).lineHeight).toBe(2);
   });
 
+  it('inherits line-height with either case of the normal keyword', () => {
+    const upper = el('pdf-text', { 'line-height': 'NORMAL' });
+    const title = el('pdf-text', { 'line-height': 'Normal' });
+    const parent = el('pdf-view', { 'line-height': '1.5' }, [upper, title]);
+    const styles = resolveStyles(el('pdf-document', {}, [parent]));
+    expect(styles.get(upper)?.lineHeight).toBe(1.5);
+    expect(styles.get(title)?.lineHeight).toBe(1.5);
+  });
+
   it('does not divide by a zero font size', () => {
     const style = styleOf({ 'line-height': '14pt', 'font-size': '0' });
     expect(style.lineHeight).toBe(1.2);
