@@ -71,6 +71,7 @@ describe('resolveStyles', () => {
       textDecoration: 'none',
       letterSpacing: 0,
       textTransform: 'none',
+      hyphens: 'manual',
       orphans: 2,
       widows: 2,
     });
@@ -599,6 +600,24 @@ describe('resolveStyles property coverage', () => {
     }
   });
 
+  it('reads hyphens keywords, manual by default', () => {
+    expect(styleOf({}).hyphens).toBe('manual');
+    for (const keyword of ['none', 'manual', 'auto'] as const) {
+      expect(styleOf({ hyphens: keyword }).hyphens).toBe(keyword);
+    }
+  });
+
+  it('inherits hyphens and lets a pdf-span set it', () => {
+    const warn = vi.fn();
+    const span = el('pdf-span', { hyphens: 'none' });
+    const text = el('pdf-text', {}, [span]);
+    const view = el('pdf-view', { hyphens: 'auto' }, [text]);
+    const styles = resolveStyles(el('pdf-document', {}, [view]), warn);
+    expect(styles.get(text)?.hyphens).toBe('auto');
+    expect(styles.get(span)?.hyphens).toBe('none');
+    expect(warn).not.toHaveBeenCalled();
+  });
+
   it('inherits letter-spacing and text-transform, and lets a pdf-span set them', () => {
     const warn = vi.fn();
     const span = el('pdf-span', { 'letter-spacing': '1', 'text-transform': 'lowercase' });
@@ -763,6 +782,7 @@ describe('resolveStyles property coverage', () => {
     ['align-self', 'baseline'],
     ['object-fit', 'fill'],
     ['text-transform', 'full-width'],
+    ['hyphens', 'all'],
     ['overflow', 'none'],
     ['position', 'float'],
   ])('rejects an invalid %s value "%s"', (property, value) => {
@@ -796,6 +816,7 @@ describe('resolveStyles property coverage', () => {
     ['break-inside', 'Avoid', 'breakInside', 'avoid'],
     ['break-after', 'AVOID', 'keepWithNext', true],
     ['text-transform', 'UPPERCASE', 'textTransform', 'uppercase'],
+    ['hyphens', ' AUTO ', 'hyphens', 'auto'],
     ['letter-spacing', 'Normal', 'letterSpacing', 0],
     ['overflow', 'HIDDEN', 'overflow', 'hidden'],
     ['overflow', 'Visible', 'overflow', 'visible'],

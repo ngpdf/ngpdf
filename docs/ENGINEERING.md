@@ -23,7 +23,7 @@ Tests are written first and must fail without the change they cover (see `AGENTS
 These invariants are checked for any input:
 
 - **Text:** every line of `layoutText` is no wider than `maxWidth`, and joining the lines gives
-  the collapsed input text.
+  the collapsed input text, less the hyphens that end hyphenated lines.
 - **Pagination:**
   - no placed unit ends below the content bottom, unless it is clipped and was warned about;
   - every unit is placed exactly once, in order;

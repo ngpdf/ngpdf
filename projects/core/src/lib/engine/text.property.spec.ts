@@ -2,7 +2,7 @@ import fc from 'fast-check';
 import { beforeAll, describe, it } from 'vitest';
 import { toWinAnsi } from './fonts';
 import { ROOT_TEXT_STYLE } from './style';
-import { layoutText } from './text';
+import { layoutText, TextMeasureCache } from './text';
 import { createPdfkitWriter, type FontMetrics, type PdfWriter } from './writer';
 
 const noWhitespace = (text: string): string => text.replace(/\s/g, '');
@@ -76,6 +76,43 @@ describe('layoutText properties', () => {
         );
       }),
       { numRuns: 500 },
+    );
+  });
+
+  it('keeps hyphenated lines within maxWidth and loses no letter', () => {
+    const parts = fc.array(fc.constantFrom('ab', 'WW', 'ij', 'x', ' ', '\u00ad'), {
+      maxLength: 60,
+    });
+    const hyphens = fc.constantFrom('manual' as const, 'auto' as const, 'none' as const);
+    fc.assert(
+      fc.property(
+        parts,
+        fc.double({ min: 12, max: 200, noNaN: true }),
+        hyphens,
+        (chars, maxWidth, mode) => {
+          const text = chars.join('');
+          // Lets every word break between any two letters.
+          const cache = new TextMeasureCache({ hyphenate: (word) => Array.from(word) });
+          const style = { ...ROOT_TEXT_STYLE, fontSize: 10, hyphens: mode };
+          const block = layoutText(text, style, maxWidth, writer, undefined, cache);
+          const fits = block.lines.every(
+            (line) =>
+              line.width <= maxWidth && writer.widthOf(line.text, 'Helvetica', 10) <= maxWidth,
+          );
+          // The input has no hyphen-minus, so each one ends a hyphenated line.
+          const hyphenOnlyAtEnds = block.lines.every(
+            (line) =>
+              !line.text.slice(0, -1).includes('-') && !(line.last && line.text.endsWith('-')),
+          );
+          const joined = block.lines.map((line) => line.text.replace(/-$/, '')).join('');
+          return (
+            fits &&
+            hyphenOnlyAtEnds &&
+            noWhitespace(joined) === noWhitespace(text.replaceAll('\u00ad', ''))
+          );
+        },
+      ),
+      { numRuns: 300 },
     );
   });
 });

@@ -152,12 +152,25 @@ The site (`projects/site`) is a prerendered Angular app. Its docs are the Markdo
   - Wrapper backgrounds and borders are sliced per page; a gradient runs over the whole wrapper,
     so each sheet shows its part.
 - **Text wrapping:** text wraps at Unicode line-break opportunities. A word wider than its box breaks
-  at the box edge. `max-lines` keeps at most N lines of a `pdf-text`; when text was cut, the last
-  line ends with `…` in the face of its last run, or `...` in a font without `…`.
+  at the box edge, unless it can be hyphenated. `max-lines` keeps at most N lines of a `pdf-text`;
+  when text was cut, the last line ends with `…` in the face of its last run, or `...` in a font
+  without `…`.
+- **Hyphenation:** `hyphens` is `manual` (default), `none` or `auto`, inherited, and a `pdf-span`
+  can set it.
+  - A soft hyphen (U+00AD) is never drawn. Under `manual` and `auto` it is a break point.
+  - `auto` also breaks where the app's function from `providePdfHyphenation` allows, called with
+    the document's `language`. ngpdf bundles no patterns. Without the function, `auto` acts as
+    `manual`, with one dev-mode warning per render.
+  - Only words of 5 letters or more, keeping 2 letters on each side. A word with soft hyphens
+    breaks only at them. The function is called at most once per word per render. Pieces that do
+    not join back to the word, or a throw, leave the word whole, with one dev-mode warning.
+  - A word is hyphenated only when it does not fit on what is left of the line. The line ends
+    with `‐` (U+2010) in the face of its last run, or `-` in a font without it (every standard
+    font).
 - **Styled runs:** a `pdf-span` inside a `pdf-text` changes only `color`, `font-family`,
-  `font-size`, `font-weight`, `font-style`, `text-decoration`, `letter-spacing` and
-  `text-transform`. The paragraph breaks as one text, and runs of different sizes share a
-  baseline. A `pdf-span` outside a `pdf-text` throws.
+  `font-size`, `font-weight`, `font-style`, `text-decoration`, `letter-spacing`,
+  `text-transform` and `hyphens`. The paragraph breaks as one text, and runs of different sizes
+  share a baseline. A `pdf-span` outside a `pdf-text` throws.
 - **Links:** `<pdf-link [href]>` is a column `pdf-view` where a view can go and an inline run like
   a `pdf-span` inside a `pdf-text`. It changes nothing visually.
   - Only absolute `http:`, `https:` and `mailto:` URLs are written, normalized by `URL`. Any other
@@ -195,7 +208,7 @@ The site (`projects/site`) is a prerendered Angular app. Its docs are the Markdo
 - **Out of v0.1:**
   - server rendering;
   - SVG;
-  - hyphenation, RTL;
+  - RTL;
   - forms;
   - capturing the DOM.
 

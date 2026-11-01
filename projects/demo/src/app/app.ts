@@ -1,5 +1,14 @@
-import { Component, ElementRef, inject, isDevMode, signal, viewChild } from '@angular/core';
-import { PdfRenderer } from '@ngpdf/core';
+import {
+  Component,
+  ElementRef,
+  EnvironmentInjector,
+  createEnvironmentInjector,
+  inject,
+  isDevMode,
+  signal,
+  viewChild,
+} from '@angular/core';
+import { PdfRenderer, providePdfHyphenation, renderToBlob } from '@ngpdf/core';
 import { captureChart } from './capture-chart';
 import { CHART_BARS, makeCommunicators, makeLicences } from './data';
 import { ArticleSample } from './documents/article-sample';
@@ -8,6 +17,7 @@ import { CommunicatorsList } from './documents/communicators-list';
 import { ContentsSample } from './documents/contents-sample';
 import { FixedSample } from './documents/fixed-sample';
 import { FontsSample } from './documents/fonts-sample';
+import { HyphensSample, demoHyphenate } from './documents/hyphens-sample';
 import { LicencesList } from './documents/licences-list';
 import { SecureSample } from './documents/secure-sample';
 import { SpanSample } from './documents/span-sample';
@@ -24,6 +34,7 @@ const DOCUMENT_NAMES = [
   'fixed-debug',
   'contents-sample',
   'secure-sample',
+  'hyphens-sample',
 ] as const;
 export type DemoDocument = (typeof DOCUMENT_NAMES)[number];
 
@@ -60,6 +71,11 @@ function toBase64(bytes: ArrayBuffer): string {
 })
 export class App {
   private readonly pdf = inject(PdfRenderer);
+  // Only the hyphens sample gets the hyphenation function: a child injector scopes it.
+  private readonly hyphenation = createEnvironmentInjector(
+    [providePdfHyphenation(demoHyphenate)],
+    inject(EnvironmentInjector),
+  );
   private readonly chart = viewChild.required<ElementRef<HTMLElement>>('chart');
 
   protected readonly bars = CHART_BARS;
@@ -121,6 +137,8 @@ export class App {
         return this.pdf.toBlob(ContentsSample);
       case 'secure-sample':
         return this.pdf.toBlob(SecureSample, { inputs: { password: DEMO_PASSWORD } });
+      case 'hyphens-sample':
+        return renderToBlob(HyphensSample, { injector: this.hyphenation });
     }
   }
 

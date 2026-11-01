@@ -1,6 +1,6 @@
 import LineBreaker from 'linebreak';
 import type { Color } from './color';
-import { covers, fontFor, normalizeText, shapeText } from './fonts';
+import { covers, fontFor, normalizeText, shapeText, SOFT_HYPHEN } from './fonts';
 import { graphemeCount } from './graphemes';
 import type { TextStyle } from './style';
 import type { FontMetrics, FontName } from './writer';
@@ -78,6 +78,27 @@ const KERNING_SLACK = 1.25;
 const ELLIPSIS = '…';
 // For a font without U+2026.
 const ELLIPSIS_DOTS = '...';
+// U+2010 HYPHEN, or the hyphen-minus in a font without it (every standard font: it is not WinAnsi).
+const HYPHEN = '\u2010';
+const HYPHEN_MINUS = '-';
+// As browsers do by default: words of 5 letters or more, at least 2 letters on each side.
+const HYPHENATE_MIN_WORD = 5;
+const HYPHENATE_MIN_SIDE = 2;
+
+/**
+ * The app's hyphenation function: the word cut into pieces that join back to it, such as
+ * `['hy', 'phen', 'ation']`. `language` is the document's `language`.
+ */
+export type Hyphenate = (word: string, language: string | undefined) => readonly string[];
+
+/** What `hyphens: auto` needs from the render. */
+export interface TextHyphenation {
+  readonly hyphenate?: Hyphenate;
+  /** The document's language, passed to `hyphenate`. */
+  readonly language?: string;
+  /** Dev-mode warnings: a missing or failing hyphenation function. */
+  readonly warn?: (message: string) => void;
+}
 
 function assertTextSize(ranges: readonly TextRange[]): void {
   let length = 0;
@@ -103,6 +124,72 @@ export class TextMeasureCache {
   readonly #blocks = new Map<string, Map<string, CachedBlock>>();
   /** Drawn widths, by font and size, then by string. */
   readonly #widths = new Map<string, Map<string, number>>();
+  readonly #hyphenation: TextHyphenation;
+  /** Where each word asked about may break, as offsets in it; empty when it may not. */
+  readonly #hyphenPoints = new Map<string, readonly number[]>();
+  #warnedBadWord = false;
+
+  /** `hyphenation` holds the render's hyphenation function, called through `hyphenPoints`. */
+  constructor(hyphenation: TextHyphenation = {}) {
+    this.#hyphenation = hyphenation;
+  }
+
+  /** Whether `hyphens: auto` can ask a function; warns (once per message) when it cannot. */
+  canHyphenate(): boolean {
+    if (this.#hyphenation.hyphenate) return true;
+    this.#hyphenation.warn?.(
+      'ngpdf: hyphens: auto needs providePdfHyphenation; words break only at soft hyphens',
+    );
+    return false;
+  }
+
+  /**
+   * The offsets in `word` where the hyphenation function allows a break, asked once per word. A
+   * throw, or pieces that do not join back to the word, give none, with one warning per render.
+   */
+  hyphenPoints(word: string): readonly number[] {
+    let points = this.#hyphenPoints.get(word);
+    if (!points) {
+      points = this.#askHyphenate(word);
+      this.#hyphenPoints.set(word, points);
+    }
+    return points;
+  }
+
+  #askHyphenate(word: string): readonly number[] {
+    const { hyphenate, language } = this.#hyphenation;
+    if (!hyphenate) return [];
+    let pieces: unknown;
+    try {
+      pieces = hyphenate(word, language);
+    } catch {
+      pieces = undefined;
+    }
+    const points: number[] = [];
+    let joined = '';
+    if (Array.isArray(pieces)) {
+      for (const piece of pieces as unknown[]) {
+        if (typeof piece !== 'string') {
+          joined = '';
+          break;
+        }
+        joined += piece;
+        points.push(joined.length);
+      }
+    }
+    if (joined !== word) {
+      if (!this.#warnedBadWord) {
+        this.#warnedBadWord = true;
+        this.#hyphenation.warn?.(
+          `ngpdf: the hyphenation function failed or returned pieces that are not the word, for "${word}"; words it fails on are not hyphenated`,
+        );
+      }
+      return [];
+    }
+    // The end of the word is not a break inside it.
+    points.pop();
+    return points.filter((point) => point > 0);
+  }
 
   /** The block for `text` under `key`, made with `make` the first time. */
   block(text: string, key: string, make: () => CachedBlock): CachedBlock {
@@ -271,9 +358,9 @@ interface Face {
 
 /** What a range contributes to the cache key: its length and everything its faces depend on. */
 function rangeKey(range: TextRange): string {
-  const { fontSize, color, textDecoration, letterSpacing, textTransform } = range.style;
+  const { fontSize, color, textDecoration, letterSpacing, textTransform, hyphens } = range.style;
   const chain = range.fonts?.chain ?? [fontFor(range.style)];
-  return `${String(range.text.length)}:${chain.join(',')}:${String(fontSize)}:${String(color.r)},${String(color.g)},${String(color.b)},${String(color.a)}:${textDecoration}:${String(letterSpacing)}:${textTransform}:${range.link ?? ''}`;
+  return `${String(range.text.length)}:${chain.join(',')}:${String(fontSize)}:${String(color.r)},${String(color.g)},${String(color.b)},${String(color.a)}:${textDecoration}:${String(letterSpacing)}:${textTransform}:${hyphens}:${range.link ?? ''}`;
 }
 
 /** The text, faces and per-unit face index of a paragraph, each range shaped in its own chain. */
@@ -284,6 +371,44 @@ interface ShapedRanges {
   readonly clusterStarts?: readonly number[];
   readonly replaced: readonly string[];
   readonly missing: readonly string[];
+  /** Where a word may break at a soft hyphen: offsets in `text`, in order, inside the text. */
+  readonly softBreaks: readonly number[];
+  /** 1 for each unit of `text` in a range with `hyphens: auto`; undefined when there is none. */
+  readonly autoAt?: Uint8Array;
+}
+
+/**
+ * Drops each soft hyphen next to whitespace (across pieces too) or at the paragraph's ends, so
+ * none sits between spaces that collapse, or at an end where it could never break.
+ */
+function dropLooseSoftHyphens(pieces: readonly string[]): string[] {
+  const whole = pieces.join('');
+  if (!whole.includes(SOFT_HYPHEN)) return [...pieces];
+  const loose = (char: string | undefined): boolean =>
+    char === undefined || char === ' ' || char === '\t' || char === '\r' || char === '\n';
+  // A soft hyphen and a space are one UTF-16 unit each, so units are enough here.
+  const keep = new Uint8Array(whole.length).fill(1);
+  // The nearest unit before each soft hyphen that is not one, then the nearest after it.
+  const before: (string | undefined)[] = [];
+  let last: string | undefined;
+  for (let i = 0; i < whole.length; i++) {
+    const unit = whole.charAt(i);
+    before.push(last);
+    if (unit !== SOFT_HYPHEN) last = unit;
+  }
+  let next: string | undefined;
+  for (let i = whole.length - 1; i >= 0; i--) {
+    const unit = whole.charAt(i);
+    if (unit !== SOFT_HYPHEN) next = unit;
+    else if (loose(before[i]) || loose(next)) keep[i] = 0;
+  }
+  let offset = 0;
+  return pieces.map((piece) => {
+    let out = '';
+    for (let i = 0; i < piece.length; i++) if (keep[offset + i]) out += piece.charAt(i);
+    offset += piece.length;
+    return out;
+  });
 }
 
 function shapeRanges(ranges: readonly TextRange[], metrics: FontMetrics): ShapedRanges {
@@ -310,21 +435,32 @@ function shapeRanges(ranges: readonly TextRange[], metrics: FontMetrics): Shaped
     return index;
   };
 
+  // Soft hyphens are kept through collapsing and transforming, and shaping takes them out.
   const pieces = transformText(
-    collapseWhitespace(ranges.map((range) => normalizeText(range.text))),
+    collapseWhitespace(
+      dropLooseSoftHyphens(ranges.map((range) => normalizeText(range.text, true))),
+    ),
     ranges.map((range) => range.style.textTransform),
   );
   const shapedPieces = ranges.map((range, i) => {
     const chain = range.fonts?.chain ?? [fontFor(range.style)];
     // Registered in chain order, so for a single range a face index is its chain index.
     const toFace = chain.map((font) => faceOf(font, range.style, range.link));
-    return { shaped: shapeText(pieces[i] ?? '', chain, metrics), toFace };
+    return { range, shaped: shapeText(pieces[i] ?? '', chain, metrics), toFace };
   });
 
   const nonEmpty = shapedPieces.filter(({ shaped }) => shaped.text !== '');
   const [only] = nonEmpty;
   if (nonEmpty.length === 1 && only?.toFace.every((face, i) => face === i)) {
-    return { ...only.shaped, faces, faceAt: only.shaped.fontAt };
+    const { hyphens } = only.range.style;
+    return {
+      ...only.shaped,
+      faces,
+      faceAt: only.shaped.fontAt,
+      softBreaks:
+        hyphens === 'none' ? [] : softBreaksIn(only.shaped.softHyphens, 0, only.shaped.text.length),
+      ...(hyphens === 'auto' && { autoAt: new Uint8Array(only.shaped.text.length).fill(1) }),
+    };
   }
 
   let text = '';
@@ -333,8 +469,15 @@ function shapeRanges(ranges: readonly TextRange[], metrics: FontMetrics): Shaped
   const missing = new Set<string>();
   const anyClusters = nonEmpty.some(({ shaped }) => shaped.clusterStarts);
   const clusterStarts: number[] = [];
-  for (const { shaped, toFace } of nonEmpty) {
+  const softHyphens: number[] = [];
+  const anyAuto = nonEmpty.some(({ range }) => range.style.hyphens === 'auto');
+  const autoSpans: [number, number][] = [];
+  for (const { range, shaped, toFace } of nonEmpty) {
     const offset = text.length;
+    if (range.style.hyphens !== 'none') {
+      for (const at of shaped.softHyphens) softHyphens.push(offset + at);
+    }
+    if (range.style.hyphens === 'auto') autoSpans.push([offset, offset + shaped.text.length]);
     if (anyClusters) {
       const starts = shaped.clusterStarts;
       const count = starts ? starts.length - 1 : shaped.text.length;
@@ -353,7 +496,23 @@ function shapeRanges(ranges: readonly TextRange[], metrics: FontMetrics): Shaped
     ...(anyClusters && { clusterStarts }),
     replaced: [...replaced],
     missing: [...missing],
+    softBreaks: softBreaksIn(softHyphens, 0, text.length),
+    ...(anyAuto && {
+      autoAt: autoSpans.reduce(
+        (at, [from, to]) => at.fill(1, from, to),
+        new Uint8Array(text.length),
+      ),
+    }),
   };
+}
+
+/** The soft hyphen offsets strictly inside `(from, to)`, each once. */
+function softBreaksIn(offsets: readonly number[], from: number, to: number): number[] {
+  const breaks: number[] = [];
+  for (const at of offsets) {
+    if (at > from && at < to && breaks.at(-1) !== at) breaks.push(at);
+  }
+  return breaks;
 }
 
 /**
@@ -384,8 +543,18 @@ export function layoutRanges(
     const ellipses = shaped.faces.map((face) =>
       covers(face.font, ELLIPSIS, metrics) ? ELLIPSIS : ELLIPSIS_DOTS,
     );
+    const hyphens = shaped.faces.map((face) =>
+      covers(face.font, HYPHEN, metrics) ? HYPHEN : HYPHEN_MINUS,
+    );
+    const hyphenPoints =
+      shaped.autoAt && cache.canHyphenate()
+        ? (word: string) => cache.hyphenPoints(word)
+        : undefined;
     return {
-      block: breakLines(shaped, paragraph.lineHeight, maxWidth, widthOfs, maxLines, ellipses),
+      block: breakLines(shaped, paragraph.lineHeight, maxWidth, widthOfs, maxLines, ellipses, {
+        glyphs: hyphens,
+        ...(hyphenPoints && { points: hyphenPoints }),
+      }),
       replaced: shaped.replaced,
       missing: shaped.missing,
     };
@@ -394,6 +563,14 @@ export function layoutRanges(
   if (missing.length > 0)
     ranges.find((range) => range.fonts?.missing)?.fonts?.missing?.([...missing]);
   return block;
+}
+
+/** How a line may end inside a word. */
+interface LineHyphenation {
+  /** The hyphen each face draws at the end of a hyphenated line. */
+  readonly glyphs: readonly string[];
+  /** The hyphenation function's break offsets in a word, for `hyphens: auto` text. */
+  readonly points?: (word: string) => readonly number[];
 }
 
 /**
@@ -407,8 +584,9 @@ function breakLines(
   widthOfs: readonly ((chunk: string) => number)[],
   maxLines: number,
   ellipses: readonly string[],
+  hyphenation: LineHyphenation,
 ): TextBlock {
-  const { text: collapsed, faces, faceAt: fontAt, clusterStarts } = shaped;
+  const { text: collapsed, faces, faceAt: fontAt, clusterStarts, softBreaks, autoAt } = shaped;
   const length = collapsed.length;
   const widthIn = (font: number, chunk: string): number => (widthOfs[font] ?? (() => 0))(chunk);
 
@@ -478,6 +656,56 @@ function breakLines(
     return runs;
   };
 
+  /** The runs of `[start, end)`, then the hyphen of the face of its last character. */
+  const runsWithHyphen = (start: number, end: number): TextRun[] => {
+    const runs = runsOf(start, end);
+    const last = runs.at(-1);
+    const index = fontAt[end - 1] ?? 0;
+    if (last) {
+      const text = last.text + (hyphenation.glyphs[index] ?? HYPHEN_MINUS);
+      runs[runs.length - 1] = { ...last, text, width: widthIn(index, text) };
+    }
+    return runs;
+  };
+
+  // Where each word (`[from, to)` between break opportunities) may end a line with a hyphen.
+  const pointsByWord = new Map<number, readonly number[]>();
+  const autoPoints = (from: number, to: number): number[] => {
+    const points: number[] = [];
+    const ask = hyphenation.points;
+    if (!ask || !autoAt) return points;
+    for (const match of collapsed.slice(from, to).matchAll(/[\p{L}\p{M}]+/gu)) {
+      const word = match[0];
+      const at = from + match.index;
+      const letters = graphemeCount(word);
+      if (letters < HYPHENATE_MIN_WORD) continue;
+      for (const point of ask(word)) {
+        const lettersBefore = graphemeCount(word.slice(0, point));
+        if (lettersBefore < HYPHENATE_MIN_SIDE || letters - lettersBefore < HYPHENATE_MIN_SIDE)
+          continue;
+        // Never inside a grapheme cluster: before a combining mark or a surrogate pair's second half.
+        if (graphemeCount(word.slice(point - 1, point + 1)) < 2) continue;
+        if (autoAt[at + point - 1] && autoAt[at + point]) points.push(at + point);
+      }
+    }
+    return points;
+  };
+  const hyphenPointsOf = (from: number, to: number): readonly number[] => {
+    let points = pointsByWord.get(from);
+    if (!points) {
+      const first =
+        lastWhere(0, softBreaks.length - 1, (i) => (softBreaks[i] ?? length) <= from) + 1;
+      const manual: number[] = [];
+      for (let i = first; i < softBreaks.length && (softBreaks[i] ?? length) < to; i++) {
+        manual.push(softBreaks[i] ?? length);
+      }
+      // A word with soft hyphens breaks only at them, as in CSS.
+      points = manual.length > 0 ? manual : autoPoints(from, to);
+      pointsByWord.set(from, points);
+    }
+    return points;
+  };
+
   /** The end of the text to draw for a line `[start, end)`: a trailing space is not drawn. */
   const drawnEnd = (end: number): number => (collapsed.charCodeAt(end - 1) === 32 ? end - 1 : end);
   const guess = (start: number, end: number): number =>
@@ -519,6 +747,29 @@ function breakLines(
         end = narrow(nextBreak, lastGuess, (i) => breaks[i] ?? length, start);
     }
 
+    // The word that does not fit: the line ends inside it, with a hyphen, if a piece fits.
+    let hyphenated = false;
+    if (end < length && (softBreaks.length > 0 || autoAt)) {
+      const from = end < 0 ? start : end;
+      let next = nextBreak;
+      while ((breaks[next] ?? length) <= from) next++;
+      const wordStart = next > 0 ? (breaks[next - 1] ?? 0) : 0;
+      const wordEnd = breaks[next] ?? length;
+      const points = hyphenPointsOf(wordStart, wordEnd);
+      const lastFitting = lastWhere(0, points.length - 1, (i) => {
+        const point = points[i] ?? length;
+        return (
+          point <= from ||
+          runsWithHyphen(start, point).reduce((sum, run) => sum + run.width, 0) <= maxWidth
+        );
+      });
+      const point = points[lastFitting];
+      if (point !== undefined && point > from) {
+        end = point;
+        hyphenated = true;
+      }
+    }
+
     if (end < 0) {
       // The first word is wider than the box: split it after the last cluster that fits.
       const first = cutIndex(start);
@@ -534,7 +785,7 @@ function breakLines(
       else end = cut(first + 1);
     }
 
-    let runs = runsOf(start, drawnEnd(end));
+    let runs = hyphenated ? runsWithHyphen(start, end) : runsOf(start, drawnEnd(end));
     // The paragraph's ends are trimmed, so anything after `end` is text that gets cut.
     const clamped = lines.length + 1 >= maxLines && end < length;
     if (clamped) {

@@ -300,6 +300,38 @@ describe('renderDocument', () => {
     ]);
   });
 
+  it('hyphenates with the hyphenation function and the document language', async () => {
+    const writer = recordingWriter();
+    const hyphenate = vi.fn((word: string) =>
+      word === 'hyphenation' ? ['hy', 'phen', 'ation'] : [word],
+    );
+    const column = el('pdf-view', { width: '40', hyphens: 'auto' }, [text('hyphenation')]);
+    await renderDocument(
+      host({ language: 'en-us' }, [el('pdf-page', {}, [column], { size: 'A4' })]),
+      { writer, dev: false, hyphenate },
+    );
+    const drawn = writer.recorded[0]!.pages[0]!.ops.flatMap((op) =>
+      op.op === 'text' ? [op.text] : [],
+    );
+    expect(drawn).toEqual(['hyphen-', 'ation']);
+    expect(hyphenate).toHaveBeenCalledExactlyOnceWith('hyphenation', 'en-US');
+  });
+
+  it('warns once that hyphens: auto has no hyphenation function', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const column = el('pdf-view', { width: '40', hyphens: 'auto' }, [
+      text('hyphenation'),
+      text('extraordinary'),
+    ]);
+    await renderDocument(host({}, [el('pdf-page', {}, [column], { size: 'A4' })]), {
+      writer: recordingWriter(),
+      dev: true,
+    });
+    expect(warn).toHaveBeenCalledExactlyOnceWith(
+      'ngpdf: hyphens: auto needs providePdfHyphenation; words break only at soft hyphens',
+    );
+  });
+
   it('draws a fixed header on every sheet of its page', async () => {
     const writer = recordingWriter();
     const header = el('pdf-view', {}, [text('Header')], { fixed: 'top' });

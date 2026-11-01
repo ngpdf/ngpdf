@@ -1,6 +1,6 @@
 ---
 title: Text and fonts
-description: Write text with pdf-text, use the standard PDF fonts or your own with providePdfFonts, and learn how ngpdf falls back between fonts, wraps lines, cuts text with max-lines and handles line height.
+description: Write text with pdf-text, use the standard PDF fonts or your own with providePdfFonts, and learn how ngpdf falls back between fonts, wraps lines, hyphenates words, cuts text with max-lines and handles line height.
 section: Guide
 order: 4
 ---
@@ -113,7 +113,8 @@ Some characters are handled first, in every font, so they are never drawn as `?`
 - The Unicode spaces that locale data puts in pipe output, such as the thin space (U+2009) and the narrow no-break space (U+202F), and the other spaces from U+2000 to U+200A and U+205F, are drawn as a normal space. The narrow no-break space and the figure space (U+2007) become a no-break space (U+00A0), so `3:00 PM` from `date: 'short'` still does not break between the time and `PM`.
 - Vertical tab, form feed, next line (U+0085), and the line and paragraph separators (U+2028, U+2029) are drawn as a normal space, so they collapse and trim like any other whitespace.
 - The ideographic space (U+3000) and the Ogham space mark (U+1680) are kept for a custom font that has them, and drawn as a normal space when no font in the list has them and the list starts with a standard font. They are trimmed at the ends of the text but never collapsed.
-- A soft hyphen (U+00AD), a zero-width space (U+200B) and U+FEFF (a byte order mark or zero-width no-break space) are removed. v0.1 does not break lines at them, so they are never drawn.
+- A zero-width space (U+200B) and U+FEFF (a byte order mark or zero-width no-break space) are removed. ngpdf does not break lines at them, so they are never drawn.
+- A soft hyphen (U+00AD) is never drawn itself. It marks a place where a word may break, with a hyphen drawn at the end of the line; see [Hyphenation](#hyphenation).
 
 The same applies to the text of `pdf-page-number`.
 
@@ -123,9 +124,73 @@ The same applies to the text of `pdf-page-number`.
 - Lines wrap at Unicode line-break opportunities (UAX #14), so they break after spaces and hyphens, and not inside words.
 - A word wider than its box is broken at the box edge, between characters as you see them (grapheme clusters), so an accent stays with its letter.
 - Widths include the font's kerning, and the ligatures of a custom font.
-- There is no hyphenation and no right-to-left text.
+- Words break with a hyphen at soft hyphens, and with `hyphens: auto` where your hyphenation function allows. See [Hyphenation](#hyphenation).
+- There is no right-to-left text.
 
 A long `pdf-text` breaks between lines at a page break, keeping `orphans` lines (default 2) before the break and `widows` lines (default 2) after it. `break-inside: avoid` keeps it whole. See [Text across pages](/docs/pagination#text-across-pages).
+
+## Hyphenation
+
+`hyphens` sets where a word may break with a hyphen at the end of the line. It is inherited, and a `pdf-span` can set it for its own text.
+
+| Value | Where words break |
+| --- | --- |
+| `manual` (default) | at soft hyphens (U+00AD, `&shy;` in a template) |
+| `none` | nowhere: soft hyphens are ignored, and still not drawn |
+| `auto` | at soft hyphens, and where the function from `providePdfHyphenation` allows |
+
+```html
+<pdf-text style="width: 90pt">Pay the extra&shy;ordinary invoice today.</pdf-text>
+```
+
+- A word is hyphenated only when it does not fit on what is left of the line. The line then takes as many pieces of it as fit, plus the hyphen. A word that does not fit even an empty line is cut at the box edge only when no piece fits.
+- The hyphen is drawn in the font of the text it ends: `‐` (U+2010) when the font has it, `-` otherwise. The standard fonts have no U+2010, so they draw `-`. It counts in the line's width, is underlined or struck through with the text, and is copied with it.
+- A soft hyphen where the line does not break draws nothing and takes no width.
+- Justified text, `max-lines`, `letter-spacing` and `text-transform` work on hyphenated lines. A line cut by `max-lines` ends with `…`, not a hyphen.
+
+### Automatic hyphenation
+
+ngpdf ships no hyphenation patterns, because they are large and differ by language. For `hyphens: auto`, give it a function that cuts a word into the pieces it may break between:
+
+```ts
+type PdfHyphenate = (word: string, language: string | undefined) => readonly string[];
+function providePdfHyphenation(hyphenate: PdfHyphenate): EnvironmentProviders;
+```
+
+- `language` is the `language` of the `pdf-document`, so one function can serve several languages.
+- The pieces must join back to the word: `'hyphenation'` gives `['hy', 'phen', 'ation']`. A function that throws, or returns anything else, leaves that word whole, with one warning in development mode.
+- Only words of 5 letters or more are hyphenated, with at least 2 letters on each side of the break, as browsers do by default. Punctuation around a word stays outside it.
+- `text-transform` applies first, so the function gets the transformed word.
+- A word that has soft hyphens breaks only at them.
+- The function is called only for words that do not fit their line, at most once per word and render.
+- Without the provider, `auto` breaks at soft hyphens only, and warns once per render in development mode.
+- Like `providePdfFonts`, it applies to documents rendered with its injector or one below it, so a route or a child injector can have its own.
+
+A pattern library, such as the `hyphen` package from npm, can back the function. Load it lazily, so its patterns stay out of your initial bundle and load only when a document needs them:
+
+```ts
+// pdf-hyphenation.ts
+import { providePdfHyphenation } from '@ngpdf/core';
+
+let hyphenateEn: ((text: string) => string) | undefined;
+
+/** Loads the English patterns once; await it before rendering a hyphenated document. */
+export async function loadHyphenation(): Promise<void> {
+  hyphenateEn ??= (await import('hyphen/en')).hyphenateSync;
+}
+
+// hyphenateSync puts a soft hyphen at each break, so splitting on it gives the pieces.
+export const pdfHyphenation = providePdfHyphenation((word) =>
+  hyphenateEn ? hyphenateEn(word).split('\u00ad') : [word],
+);
+```
+
+```ts
+// app.config.ts: providers: [pdfHyphenation]
+// in the component that renders:
+await loadHyphenation();
+await this.pdf.download(ReportDocument, { fileName: 'report.pdf' });
+```
 
 ## Cutting text to a number of lines
 
@@ -172,7 +237,7 @@ Wrap part of a text in a `pdf-span` to draw it in other text styles:
 </pdf-text>
 ```
 
-- A span inherits the text styles around it and can change `color`, `font-family`, `font-size`, `font-weight`, `font-style`, `text-decoration`, `letter-spacing` and `text-transform`. Spans nest.
+- A span inherits the text styles around it and can change `color`, `font-family`, `font-size`, `font-weight`, `font-style`, `text-decoration`, `letter-spacing`, `text-transform` and `hyphens`. Spans nest.
 - The paragraph wraps as one text: a span boundary is not a place to break, and a span wraps over lines like the rest of the text. Kerning is not applied across two spans.
 - Runs of different sizes share a baseline, and a line is as tall as its largest font size times the paragraph's `line-height`.
 - `line-height` and `text-align` belong to the `pdf-text`. Other properties on a span, such as padding or a background, have no effect and get a warning in development mode.
