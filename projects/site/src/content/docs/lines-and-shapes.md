@@ -8,6 +8,7 @@ order: 7.5
 `pdf-canvas` is a box that you draw in with a function. Its one input, `paint`, is required. Use it for charts, signature lines, rules and marks that text and borders cannot draw.
 
 ```ts
+import { Component } from '@angular/core';
 import { PDF_ELEMENTS, type PdfCanvasPaint } from '@ngpdf/core';
 
 @Component({
@@ -46,7 +47,7 @@ type PdfCanvasPaint = (ctx: PdfCanvasContext, size: { width: number; height: num
 - Coordinates are in points, from the top left of the content box, with y going down.
 - The drawing is clipped to the content box, so padding and borders frame it.
 - A canvas in a [fixed view](/docs/pagination#fixed-headers-and-footers) or a repeated table header is painted once and drawn on every sheet.
-- `paint` must draw synchronously. Using the context after `paint` returns throws.
+- `paint` must draw synchronously. An `async` function, or any `paint` that returns a promise, rejects the render with `ngpdf: pdf-canvas paint must be synchronous`, and using the context after `paint` returns throws.
 
 Every method returns the context, so calls chain.
 
@@ -69,6 +70,7 @@ Every method returns the context, so calls chain.
 ## A bar chart
 
 ```ts
+import { Component } from '@angular/core';
 import { PDF_ELEMENTS, type PdfCanvasPaint } from '@ngpdf/core';
 
 @Component({
@@ -124,4 +126,5 @@ These reject the render:
 - a color the `color` style would refuse: `ngpdf: invalid color "…" on pdf-canvas`;
 - a negative line width or radius, a dash length of 0, an opacity outside 0 to 1, or a `restore()` without a `save()`;
 - more than 100,000 calls on one canvas, where each polygon point and dash length counts as one: `ngpdf: pdf-canvas made more than 100000 calls`;
-- an error thrown by `paint`: `ngpdf: pdf-canvas paint failed: <message>`.
+- an error thrown by `paint`: `ngpdf: pdf-canvas paint failed: <message>`, with the original error as its `cause`;
+- a `paint` that returns a promise: `ngpdf: pdf-canvas paint must be synchronous; it returned a promise`.
