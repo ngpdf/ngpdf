@@ -12,7 +12,7 @@ Documents often contain data that came from users or a server. ngpdf is built so
 - **Untrusted data in a document.** Text, URLs and style values bound from data are parsed by ngpdf. The parsers are linear: no regular expression with nested quantifiers or overlapping alternatives, so a crafted value cannot cause catastrophic backtracking.
 - **Deep or huge trees.** Limits stop runaway work before it can overflow the stack or the memory (see below).
 - **The PDF as an attack surface.** ngpdf never writes PDF JavaScript, forms or embedded files, and a test checks the output for them. The only actions it writes are the links of `pdf-link`: to an absolute `http:`, `https:` or `mailto:` URL, or to a named destination in the same file for a link to an anchor. A `pdf-note` is a plain Text annotation with no action. A test renders hostile URLs and a note with script-like text and checks that no other action is written. See [Links](/docs/text-and-fonts#links-pdf-link).
-- **Network access.** Images and fonts are the only things ngpdf fetches, with the browser's own `fetch`. On the server it fetches nothing itself: see [On the server](#on-the-server).
+- **Network access.** Images and fonts are the only things ngpdf fetches, with the global `fetch`. `renderToBuffer` from `@ngpdf/core/server` fetches nothing itself: see [On the server](#on-the-server). `renderToBlob` and `PdfRenderer.toBlob` fetch as in a browser wherever they run, also on a server.
 - **Encrypted files.** `security` on `pdf-document` encrypts the PDF with AES-256. The user password protects the content; permissions are only a request to the viewer, and a password in your app's code is visible to every user. See [Passwords and permissions](/docs/documents-and-pages#passwords-and-permissions).
 - **Supply chain.** Runtime dependencies are kept to pdfkit, yoga-layout and linebreak, plus the `tslib` helpers. A new one needs a reason and must pass `npm audit` and OSV-Scanner.
 
@@ -43,7 +43,7 @@ Values interpolated into a document are drawn as text. They are not parsed as HT
 
 ## On the server
 
-A server that fetched every URL found in a document could be pointed at internal addresses (server-side request forgery). `renderToBuffer` from `@ngpdf/core/server` therefore refuses absolute image and font URLs unless you pass `fetchImage`, which reads them for it, and it refuses relative URLs. In `fetchImage`, allow only the hosts you expect, refuse redirects, and set a timeout and a size limit. See [Images and fonts on the server](/docs/server-rendering#images-and-fonts-on-the-server).
+A server that fetched every URL found in a document could be pointed at internal addresses (server-side request forgery). `renderToBuffer` from `@ngpdf/core/server` therefore refuses absolute image and font URLs unless you pass `fetchImage`, which reads them for it, and it refuses relative URLs. This holds for `renderToBuffer` only: on a server, render with it rather than with `renderToBlob` or `PdfRenderer.toBlob`. In `fetchImage`, allow only the hosts you expect, refuse redirects, and set a timeout and a size limit. See [Images and fonts on the server](/docs/server-rendering#images-and-fonts-on-the-server).
 
 The layout engine, Yoga, is WebAssembly that ngpdf compiles in the browser. If your site sets a Content-Security-Policy with a `script-src` directive, it needs `'wasm-unsafe-eval'` for WebAssembly to compile in browsers that enforce that rule.
 

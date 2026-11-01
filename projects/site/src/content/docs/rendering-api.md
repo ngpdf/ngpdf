@@ -87,6 +87,7 @@ protected readonly pdf = pdfResource(InvoiceDocument, {
 - `inputs` returning `undefined` holds off rendering, and the resource stays `idle`. Use it while the data is still loading.
 - `debounce` is how many milliseconds to wait after the last change before rendering. A slider or a text field otherwise starts a render per keystroke, and only the last one is kept.
 - `injector` is needed outside an injection context. The resource is destroyed with it, and the document resolves its services from its `EnvironmentInjector`.
+- On the server, as in an SSR page, a resource made in an injection context stays `idle` and renders nothing; one given an `injector` throws. See [What needs a browser](/docs/server-rendering#what-needs-a-browser).
 
 ## PdfDownload
 
@@ -150,6 +151,7 @@ A live preview: the PDF in an `<iframe>`, shown by the browser's own PDF viewer 
 - Content with the `pdfViewerLoading` attribute shows until the first PDF is there, and content with `pdfViewerError` shows when a render fails, in place of the PDF. Without them the viewer shows nothing in those states.
 - The host is `display: block` and the iframe fills it at 100% width and height. Set the size on `pdf-viewer`.
 - The iframe's only source is the `blob:` URL of the PDF ngpdf wrote; it is the only resource URL the viewer ever trusts. The iframe has no `sandbox` attribute: Chrome blocks its PDF viewer in a sandboxed frame whatever the `allow-*` tokens. If your Content-Security-Policy sets `frame-src` (or `child-src` or `default-src` without them), add `blob:` to it.
+- On the server, as in an SSR page, it shows its `pdfViewerLoading` content and renders nothing; the browser renders the PDF.
 - It needs `@angular/platform-browser`, which every browser app already has. `@ngpdf/core` lists it as an optional peer dependency.
 
 ### Where the preview works
@@ -263,7 +265,7 @@ The returned promise rejects with an `Error`. Errors from ngpdf start with `ngpd
 | `ngpdf: text longer than 1 MB` | One text longer than 1,048,576 characters. |
 | `ngpdf: could not load font "<src>": <reason>` | A font from `providePdfFonts` could not be fetched or read. The URL is shown without its query string. |
 | `ngpdf: invalid font "<src>"` | The bytes are not a TrueType, OpenType, WOFF or WOFF2 font. |
-| `ngpdf: <name> needs a browser; on the server, use renderToBuffer from @ngpdf/core/server` | `downloadPdf`, `PdfRenderer.download`, `PdfDownload`, `pdfResource` or `pdf-viewer` used on the server. See [Server rendering](/docs/server-rendering#what-needs-a-browser). |
+| `ngpdf: <name> needs a browser; on the server, use renderToBuffer from @ngpdf/core/server` | `downloadPdf`, `PdfRenderer.download` or `PdfDownload` used on the server, or `pdfResource` given an `injector` there. See [Server rendering](/docs/server-rendering#what-needs-a-browser). |
 
 Errors from your own template, such as a missing required input or an exception in a binding, reject the render with Angular's own error.
 
