@@ -12,9 +12,9 @@ Tests are written first and must fail without the change they cover (see `AGENTS
 | --- | --- | --- | --- |
 | Unit | One stage, from its input data to its output data | Vitest (node) | `engine/*.spec.ts`, `tree/*.spec.ts` |
 | Property | Invariants hold for any input, not only the examples | Vitest + `fast-check` | `engine/*.property.spec.ts` |
-| Component | Real templates (control flow, pipes, DI) build the right tree | Vitest (jsdom) + Angular compiler (`@analogjs/vite-plugin-angular`) | `render/*.spec.ts` |
+| Component | Real templates (control flow, pipes, DI) build the right tree; the preview component | Vitest (jsdom) + Angular compiler (`@analogjs/vite-plugin-angular`) | `render/*.spec.ts`, `viewer/*.spec.ts` |
 | Integration | The whole engine, with a recording fake `PdfWriter` | Vitest | `engine/engine.spec.ts` |
-| End to end | The demo's three PDFs in a real Chrome, compared as text with `pdftotext -layout` | `puppeteer-core` + poppler (Docker) | `scripts/e2e.mjs`, `e2e/expected/` |
+| End to end | The demo's PDFs in a real Chrome, compared as text with `pdftotext -layout`, and the demo's `pdf-viewer` showing its PDF in Chrome's PDF viewer | `puppeteer-core` + poppler (Docker) | `scripts/e2e.mjs`, `e2e/expected/` |
 | Performance | No regression on a 1,000-row table | `vitest bench` | `engine/*.bench.ts`, weekly CI job |
 | Mutation | The tests catch real faults in the engine | StrykerJS | weekly CI job |
 
@@ -36,7 +36,7 @@ These invariants are checked for any input:
 ### Coverage gates (Vitest `v8` provider)
 
 - `engine/`: 95% lines, 90% branches.
-- `tree/`, `elements/`, `render/`: 90% lines.
+- `tree/`, `elements/`, `render/`, `projects/core/viewer/`: 90% lines.
 - CI fails below these numbers. A drop needs a reason in the PR.
 
 ### Mutation testing (StrykerJS)
@@ -112,7 +112,8 @@ These invariants are checked for any input:
    README's usage sections differ from the repository README's.
 4. **Typecheck:** `tsc -p projects/core/tsconfig.lib.json --noEmit` and `ng build demo`.
 5. **Tests:** `npm test -- --coverage`, with the coverage gates above.
-6. **Bundle budget:** `node scripts/bundle-budget.mjs`.
+6. **Bundle budget:** `node scripts/bundle-budget.mjs`. It also fails when `@ngpdf/core/viewer`
+   reaches an initial chunk of the demo, which loads its preview in a deferred chunk.
 7. **End to end:** `node scripts/e2e.mjs`, using Chrome from `browser-actions/setup-chrome`.
 8. **Library build:** `npm run build:core`, then `node scripts/check-pack.mjs`, which reads the
    file list of `npm pack --dry-run` and fails on a spec, bench or test helper, or a missing

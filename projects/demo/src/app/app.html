@@ -20,4 +20,10 @@
     <button type="button" (click)="download('secure-sample')">Password sample (demo-1234)</button>
   </div>
   <p role="status">{{ status() }}</p>
+
+  <h2>Live preview</h2>
+  <!-- @ngpdf/core/viewer stays out of the initial bundle: scripts/bundle-budget.mjs checks it. -->
+  @defer (on idle) {
+    <app-preview />
+  }
 </main>
