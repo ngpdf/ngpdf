@@ -176,16 +176,42 @@ describe('ng-add', () => {
 
   it('never overwrites a file that is already there, and says so', async () => {
     const tree = await application(await workspace(), 'app');
+    tree.create(demoPath, '// mine\n');
+    const lines = logs();
+
+    const result = await ngAdd(tree, { demoRoute: true });
+
+    expect(result.readContent(demoPath)).toBe('// mine\n');
+    expect(lines).toContain(`ngpdf: ${demoPath.slice(1)} already exists, skipped.`);
+    expect(result.exists(documentPath)).toBe(true);
+  });
+
+  it('says only that the example document was skipped when there is no --demo-route', async () => {
+    const tree = await application(await workspace(), 'app');
     tree.create(documentPath, '// mine\n');
-    tree.create(demoPath, '// mine too\n');
+    const lines = logs();
+
+    await ngAdd(tree);
+
+    expect(lines).toEqual([`ngpdf: ${documentPath.slice(1)} already exists, skipped.`]);
+  });
+
+  it('adds no demo page or route when the example document is already there', async () => {
+    const tree = await application(await workspace(), 'app');
+    const routes = tree.readContent(routesPath);
+    tree.create(documentPath, '// mine\n');
     const lines = logs();
 
     const result = await ngAdd(tree, { demoRoute: true });
 
     expect(result.readContent(documentPath)).toBe('// mine\n');
-    expect(result.readContent(demoPath)).toBe('// mine too\n');
+    expect(result.exists(demoPath)).toBe(false);
+    expect(result.readContent(routesPath)).toBe(routes);
     expect(lines).toContain(`ngpdf: ${documentPath.slice(1)} already exists, skipped.`);
-    expect(lines).toContain(`ngpdf: ${demoPath.slice(1)} already exists, skipped.`);
+    expect(lines).toContain(
+      `ngpdf: no demo page or route added: pdf-demo.ts imports ExampleDocument, and ` +
+        `${documentPath.slice(1)} was already there, so it may not export it.`,
+    );
   });
 
   describe('--demo-route', () => {

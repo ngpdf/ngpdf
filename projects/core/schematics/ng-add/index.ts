@@ -23,14 +23,21 @@ import type { Schema } from './schema';
  * leaves `main.ts` and the app config alone, and it never overwrites a file.
  */
 export function ngAdd(options: Schema): Rule {
-  return async (tree) => {
+  return async (tree, context) => {
     const project = pickApplication(await readWorkspace(tree), options.project);
     const sourceRoot = project.sourceRoot ?? posix.join(project.root, 'src');
     const folder = normalize(options.path ?? posix.join(sourceRoot, 'app/documents'));
     const prefix = project.prefix ?? 'app';
+    const documentFile = posix.join(folder, 'example-document.ts');
 
     const rules = [template('document', folder, 'example-document.ts', prefix)];
-    if (options.demoRoute) {
+    if (options.demoRoute && tree.exists(documentFile)) {
+      // The demo page imports ExampleDocument, which a file of the user's may not export.
+      context.logger.warn(
+        `ngpdf: no demo page or route added: pdf-demo.ts imports ExampleDocument, and ` +
+          `${documentFile} was already there, so it may not export it.`,
+      );
+    } else if (options.demoRoute) {
       rules.push(
         template('demo', folder, 'pdf-demo.ts', prefix),
         addDemoRoute(
