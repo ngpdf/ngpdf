@@ -1,5 +1,10 @@
 import type { PdfSecurity } from '../tree/security';
 import type { NoteIcon } from '../tree/note-icon';
+import type {
+  PdfCanvasFillRule,
+  PdfCanvasLineCap,
+  PdfCanvasLineJoin,
+} from '../tree/canvas-context';
 import type { PageLayout, PageMode } from '../tree/viewer-preferences';
 import { graphemeStarts } from './graphemes';
 import type { Corners } from './style';
@@ -48,9 +53,16 @@ export interface Point {
 }
 
 export type PathSegment =
+  /** Starts a new subpath; only a `shape` op has these. */
+  | { readonly kind: 'move'; readonly to: Point }
   | { readonly kind: 'line'; readonly to: Point }
   /** A cubic Bézier curve through control points `c1` and `c2`. */
-  | { readonly kind: 'curve'; readonly c1: Point; readonly c2: Point; readonly to: Point };
+  | { readonly kind: 'curve'; readonly c1: Point; readonly c2: Point; readonly to: Point }
+  /** Joins the current point to the start of its subpath; only a `shape` op has these. */
+  | { readonly kind: 'close' };
+
+/** A segment that continues a subpath: what an open stroked `path` op is made of. */
+export type OpenSegment = Extract<PathSegment, { readonly kind: 'line' | 'curve' }>;
 
 /** A PDF/CSS affine matrix `[a, b, c, d, e, f]`: x' = ax + cy + e, y' = bx + dy + f. */
 export type Matrix = readonly [number, number, number, number, number, number];
@@ -111,12 +123,31 @@ export type DrawOp =
   | {
       readonly op: 'path';
       readonly from: Point;
-      readonly segments: readonly PathSegment[];
+      readonly segments: readonly OpenSegment[];
       readonly width: number;
       readonly color: string;
       readonly opacity: number;
       /** Dash and gap lengths, repeated along the path; solid without. Each one above 0. */
       readonly dash?: readonly number[];
+    }
+  /** A path drawn in a pdf-canvas, filled, stroked or both. */
+  | {
+      readonly op: 'shape';
+      /** Starts with a `move`. */
+      readonly segments: readonly PathSegment[];
+      readonly fill?: {
+        readonly color: string;
+        readonly opacity: number;
+        readonly rule: PdfCanvasFillRule;
+      };
+      readonly stroke?: {
+        readonly color: string;
+        readonly opacity: number;
+        readonly width: number;
+        readonly cap: PdfCanvasLineCap;
+        readonly join: PdfCanvasLineJoin;
+        readonly dash?: { readonly pattern: readonly number[]; readonly phase: number };
+      };
     }
   | {
       readonly op: 'text';
@@ -930,6 +961,9 @@ function shading(doc: Doc, fill: GradientFill): PDFKit.PDFGradient {
 
 function pathTo(doc: Doc, segment: PathSegment): void {
   switch (segment.kind) {
+    case 'move':
+      doc.moveTo(segment.to.x, segment.to.y);
+      return;
     case 'line':
       doc.lineTo(segment.to.x, segment.to.y);
       return;
@@ -942,6 +976,9 @@ function pathTo(doc: Doc, segment: PathSegment): void {
         segment.to.x,
         segment.to.y,
       );
+      return;
+    case 'close':
+      doc.closePath();
       return;
     default:
       return assertNever(segment);
@@ -1083,6 +1120,23 @@ function endGroup(doc: Doc, state: PageState): void {
   doc.restore();
 }
 
+/** A canvas shape in its own graphics state, so its colors, line settings and dash end with it. */
+function drawShape(doc: Doc, op: Extract<DrawOp, { op: 'shape' }>): void {
+  const { fill, stroke } = op;
+  doc.save();
+  if (fill) doc.fillColor(fill.color).fillOpacity(fill.opacity);
+  if (stroke) {
+    doc.lineWidth(stroke.width).lineCap(stroke.cap).lineJoin(stroke.join);
+    doc.strokeColor(stroke.color).strokeOpacity(stroke.opacity);
+    if (stroke.dash) doc.dash([...stroke.dash.pattern], { phase: stroke.dash.phase });
+  }
+  for (const segment of op.segments) pathTo(doc, segment);
+  if (fill && stroke) doc.fillAndStroke(undefined, undefined, fill.rule);
+  else if (fill) doc.fill(fill.rule);
+  else doc.stroke();
+  doc.restore();
+}
+
 function drawOp(
   doc: Doc,
   op: DrawOp,
@@ -1120,6 +1174,9 @@ function drawOp(
       for (const segment of op.segments) pathTo(doc, segment);
       doc.stroke();
       doc.restore();
+      return;
+    case 'shape':
+      drawShape(doc, op);
       return;
     case 'text':
       doc.save();

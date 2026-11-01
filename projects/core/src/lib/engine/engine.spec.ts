@@ -376,6 +376,41 @@ describe('renderDocument', () => {
     expect(headers).toEqual([1, 1]);
   });
 
+  it('paints a pdf-canvas once per render, also inside a component host', async () => {
+    const writer = recordingWriter();
+    const paint = vi.fn(
+      (ctx: {
+        moveTo(x: number, y: number): { lineTo(x: number, y: number): { stroke(): unknown } };
+      }) => ctx.moveTo(0, 10).lineTo(100, 10).stroke(),
+    );
+    const canvas = el('pdf-canvas', { height: '20' }, [], { paint });
+    const header = el('pdf-view', {}, [el('app-signature', {}, [canvas])], { fixed: 'top' });
+    const rows = [0, 1, 2, 3].map(() => el('pdf-view', { height: '400' }));
+    await renderDocument(host({}, [el('pdf-page', {}, [header, ...rows], { size: 'A4' })]), {
+      writer,
+      dev: false,
+    });
+    expect(paint).toHaveBeenCalledTimes(1);
+    const shapes = writer.recorded[0]!.pages.map((p) => p.ops.filter((op) => op.op === 'shape'));
+    expect(shapes.map((ops) => ops.length)).toEqual([1, 1]);
+    expect(shapes[0]![0]).toMatchObject({
+      segments: [
+        { kind: 'move', to: { x: 0, y: 10 } },
+        { kind: 'line', to: { x: 100, y: 10 } },
+      ],
+    });
+  });
+
+  it('rejects the render with the error a pdf-canvas paint throws', async () => {
+    const paint = () => {
+      throw new Error('no data');
+    };
+    const page = el('pdf-page', {}, [el('pdf-canvas', { height: '20' }, [], { paint })]);
+    await expect(
+      renderDocument(host({}, [page]), { writer: recordingWriter(), dev: false }),
+    ).rejects.toThrow('ngpdf: pdf-canvas paint failed: no data');
+  });
+
   it('rejects a pdf-image with children before fetching it, naming the element', async () => {
     const fetchFn = vi.fn(() => Promise.reject(new TypeError('Failed to fetch')));
     vi.stubGlobal('fetch', fetchFn);

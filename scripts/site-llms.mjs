@@ -39,7 +39,7 @@ export function llmsIndex(pages, origin, version) {
   const lines = [
     '# ngpdf',
     '',
-    `> ngpdf (\`@ngpdf/core\`, v${version}, MIT) renders Angular components to PDF in the browser. A document is a normal Angular component whose template uses the pdf-* elements (pdf-document, pdf-page, pdf-view, pdf-text, pdf-image, pdf-table, pdf-row, pdf-cell, pdf-page-number). ngpdf lays it out with flexbox (Yoga), breaks it into pages with repeating table headers and page numbers, and writes real, selectable text with pdfkit. It adds about 2 KB gzipped to the initial bundle; the engine loads on the first render. For Angular 22+, zoneless or zone.js.`,
+    `> ngpdf (\`@ngpdf/core\`, v${version}, MIT) renders Angular components to PDF in the browser. A document is a normal Angular component whose template uses the pdf-* elements (pdf-document, pdf-page, pdf-view, pdf-text, pdf-image, pdf-canvas, pdf-table, pdf-row, pdf-cell, pdf-page-number). ngpdf lays it out with flexbox (Yoga), breaks it into pages with repeating table headers and page numbers, and writes real, selectable text with pdfkit. It adds about 2 KB gzipped to the initial bundle; the engine loads on the first render. For Angular 22+, zoneless or zone.js.`,
     '',
     'Install with `npm install @ngpdf/core`. Render with `inject(PdfRenderer).download(MyDocument, { inputs, fileName })` or `.toBlob(...)`.',
     '',

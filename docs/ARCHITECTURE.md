@@ -19,6 +19,7 @@ this project calls for it. Where the simplest correct answer is no pattern, this
  loadImages         → Map<PdfNode, ImageAsset>          (the only async I/O)
  layoutBox (Yoga)   → Box tree
  paginatePage       → PageLayout[]
+ paintCanvases      → Map<Box, shape ops>                (runs each pdf-canvas paint once)
  displayList        → DrawOp[][]
  PdfWriter.write    → Blob
 ```
@@ -27,6 +28,9 @@ this project calls for it. Where the simplest correct answer is no pattern, this
 
 - Each stage is a function from the previous stage's output to a new value.
 - A stage does not mutate its input, keeps no state between calls, and does no I/O.
+- `paintCanvases` is the one stage that runs user code: each pdf-canvas's `paint`, once per
+  render, against a recorder (`canvas-recorder.ts`) that turns its calls into `shape` ops. The
+  display list only places and clips those ops, so it stays a function of its input.
 - The I/O sits at the edges, in the imperative shell:
   - Angular's change detection at the start;
   - fetching images;
@@ -130,7 +134,7 @@ invalidation would buy nothing here.
   stage that collects children (pages, rows, cells, pagination units, layout) would otherwise
   have to look through hosts.
 - **Decision.** `dissolveHosts` copies the document's tree with every element that is not one of
-  the twelve `pdf-*` elements replaced by its children, like CSS `display: contents`. A host's
+  the thirteen `pdf-*` elements replaced by its children, like CSS `display: contents`. A host's
   own style is ignored, with one dev-mode warning per tag. The stages after it never see a host.
 - **Alternative.** Teaching each stage to skip hosts. It loses because five places would each
   need the same rule, and missing one gives a silent wrong layout.
@@ -147,9 +151,10 @@ invalidation would buy nothing here.
 
 ### `DrawOp` handling: a discriminated union and an exhaustive `switch`, no Visitor
 
-- **Context.** The writer and the tests act on fourteen draw operation kinds: `rect`, `line`,
-  `path`, `text`, `image`, `transform` with its closing `untransform`, `clip` with its closing
-  `unclip`, `group` with its closing `ungroup`, `link`, `anchor` and `note`.
+- **Context.** The writer and the tests act on fifteen draw operation kinds: `rect`, `line`,
+  `path`, `shape`, `text`, `image`, `transform` with its closing `untransform`, `clip` with its
+  closing `unclip`, `group` with its closing `ungroup`, `link`, `anchor` and `note`. A `shape` is
+  a pdf-canvas path: its `PathSegment`s may `move` and `close`, which an open `path` op's never do.
 - **Decision.** `DrawOp` is a TypeScript discriminated union. Code that handles it uses a
   `switch (op.op)` with an `assertNever` default, so adding a kind fails to compile wherever it is
   not handled.
@@ -181,7 +186,8 @@ direct code. Strategy would add indirection with one implementation each.
   server, so the engine bounds its own work:
   - parsers are linear: no regex with nested quantifiers or overlapping alternatives;
   - nesting deeper than 64 elements throws `ngpdf: nesting deeper than 64`;
-  - a text node longer than 1 MB throws.
+  - a text node longer than 1 MB throws;
+  - a pdf-canvas that makes more than 100,000 calls, or passes a non-finite number, throws.
 
   These limits come from the ReDoS and stack-overflow bugs found in ng-native's style engine in
   October 2026.
@@ -195,7 +201,7 @@ projects/core/src/lib/tree/       PdfNode, PdfRendererFactory           (eager)
 projects/core/src/lib/elements/   pdf-* components, PDF_ELEMENTS        (eager)
 projects/core/src/lib/render/     render-tree, PdfRenderer facade       (eager)
 projects/core/src/lib/engine/     hosts, color, style, anchors, fonts, text, images, layout,
-                                  paginate, display-list, writer, index (lazy)
+                                  paginate, canvas-recorder, display-list, writer, index (lazy)
 projects/core/viewer/             pdf-viewer, entry point @ngpdf/core/viewer (own chunk)
 projects/demo/                    the three reference documents
 projects/site/                    ngpdf.dev: landing, docs (Markdown), examples
