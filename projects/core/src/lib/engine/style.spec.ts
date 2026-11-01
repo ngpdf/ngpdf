@@ -987,9 +987,20 @@ describe('resolveStyles property coverage', () => {
     expect(styleOf({ 'line-height': '150%' }).lineHeight).toBe(1.5);
     expect(styleOf({ 'font-size': '10', 'line-height': '20pt' }).lineHeight).toBe(2);
     expect(styleOf({ 'line-height': 'normal' }).lineHeight).toBe(ROOT_TEXT_STYLE.lineHeight);
+    expect(styleOf({ 'line-height': 'NORMAL' }).lineHeight).toBe(ROOT_TEXT_STYLE.lineHeight);
+    expect(styleOf({ 'line-height': ' Normal ' }).lineHeight).toBe(ROOT_TEXT_STYLE.lineHeight);
     expect(() => styleOf({ 'line-height': 'auto' })).toThrow(
       'ngpdf: invalid line-height "auto" on pdf-view',
     );
+  });
+
+  it('keeps the inherited line-height for normal in any case', () => {
+    const children = ['normal', 'NORMAL', 'Normal'].map((value) =>
+      el('pdf-text', { 'line-height': value }),
+    );
+    const root = el('pdf-view', { 'line-height': '1.5' }, children);
+    const styles = resolveStyles(root);
+    for (const child of children) expect(styles.get(child)?.lineHeight).toBe(1.5);
   });
 
   it('rejects percent where points are required', () => {
