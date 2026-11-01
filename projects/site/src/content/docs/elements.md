@@ -142,7 +142,7 @@ The icon color is the note's own `color`, sticky-note yellow (`#ffd400`) by defa
 
 The text is plain: text nodes only, with whitespace collapsed as in a `pdf-text`. Any character works, including those the standard fonts can't draw, because the viewer shows it, not ngpdf. An element inside a note fails the render with `ngpdf: pdf-note takes text only`, and a note inside a `pdf-text` with `ngpdf: pdf-note inside a pdf-text`.
 
-A note is never printed, as viewers expect from review comments, and it has no action. In pagination it goes on the sheet of the content after it, or of the content before it when it is the last child, so it never lands alone on a sheet. See [Notes](/docs/pagination#notes).
+A note is never printed, as viewers expect from review comments, and it has no action. Where its icon overlaps a link, for example a note just before a `pdf-link`, the link takes the click there: the note opens from the rest of its icon or from the viewer's comments panel. In pagination it goes on the sheet of the content after it, or of the content before it when it is the last child, so it never lands alone on a sheet. See [Notes](/docs/pagination#notes).
 
 `NoteIcon` is an exported type.
 

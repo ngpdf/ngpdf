@@ -678,14 +678,16 @@ export async function createPdfkitWriter(options: { compress?: boolean } = {}): 
           for (const op of page.ops) drawOp(doc, op, dataUrls, state);
           if (state.groups.length > 0) throw new Error('ngpdf: group without an ungroup');
           // After the drawing, when every transform is restored: pdfkit maps an annotation's
-          // rect through the current transform.
+          // rect through the current transform. Notes go first in /Annots: viewers put later
+          // annotations on top, so where a note's icon overlaps a link the link takes the click,
+          // and the note stays reachable from the rest of its icon and the comments panel.
+          for (const note of state.notes) writeNote(doc, note);
           for (const link of state.links) {
             if (link.kind === 'uri') doc.link(link.x, link.y, link.w, link.h, link.url);
             else if (destinations.has(link.name)) {
               doc.goTo(link.x, link.y, link.w, link.h, link.name);
             }
           }
-          for (const note of state.notes) writeNote(doc, note);
           // pdfkit puts a destination on the current page and flips its y.
           for (const [name, place] of destinations) {
             if (place.page === index)

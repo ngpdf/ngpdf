@@ -740,6 +740,24 @@ describe('createPdfkitWriter', () => {
         expect(note).not.toContain('/A ');
       });
 
+      it('writes the notes of a page before its links, so a link is on top where they overlap', async () => {
+        const link = {
+          op: 'link',
+          x: 10,
+          y: 10,
+          w: 100,
+          h: 12,
+          kind: 'uri',
+          url: 'https://example.com/',
+        } as const;
+        const pdf = await pdfText([link, NOTE]);
+        const annots = /\/Annots \[([^\]]*)\]/.exec(pdf)?.[1] ?? '';
+        const refs = [...annots.matchAll(/(\d+) 0 R/g)].map((match) => match[1]);
+        const subtype = (ref: string | undefined): string | undefined =>
+          new RegExp(`\\n${ref ?? ''} 0 obj\\n<<[^]*?/Subtype /(\\w+)`).exec(pdf)?.[1];
+        expect(refs.map(subtype)).toEqual(['Text', 'Link']);
+      });
+
       it('writes a note in page space, whatever transform or clip it sits in', async () => {
         const pdf = await pdfText([
           { op: 'transform', matrix: [0, 1, -1, 0, 100, 50] },

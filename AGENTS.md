@@ -205,6 +205,7 @@ The site (`projects/site`) is a prerendered Angular app. Its docs are the Markdo
   `open`. Text only, any character, no space in the layout, no action, never printed. It is never
   a unit: it goes on the sheet of the content after it, or before it when it is the last child;
   an absolute note follows the absolute rules. Its color is its own, `#ffd400` by default.
+  A page's notes are written before its links in `/Annots`, so a link is on top where they overlap.
 - **Images:**
   - Formats are PNG and JPEG, from a data URL, an http(s) URL, a `Blob` or an `ArrayBuffer`.
   - `object-fit` is `contain` (default) or `cover`.

@@ -38,6 +38,7 @@ ngpdf v0.1 covers documents built from text, tables, boxes and images. This page
 
 - A `pdf-note` holds plain text only and can't go inside a `pdf-text`: notes anchored to a run of text, such as a highlight with a comment, are not supported yet.
 - The viewer decides how the icon and popup look; ngpdf sets only the icon name, its color and whether the popup starts open.
+- A note's icon is not moved away from a link it overlaps. ngpdf writes notes before links, and viewers draw later annotations on top, so the link takes the click in the overlap.
 
 ### Tables
 
