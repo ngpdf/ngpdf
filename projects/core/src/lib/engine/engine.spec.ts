@@ -1,6 +1,7 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createNode, type PdfNode } from '../tree/node';
 import { testFont } from '../../testing/test-fonts';
+import { testPng } from '../../testing/test-png';
 import { renderDocument, type FontSource } from './index';
 import { createPdfkitWriter, type DocumentInfo, type PageOps, type PdfWriter } from './writer';
 
@@ -895,6 +896,33 @@ describe('renderDocument with emoji', () => {
     expect(warn.mock.calls.map(([message]: unknown[]) => message)).toContain(
       'ngpdf: emoji without an image, drawn as text: 👍 🎉',
     );
+  });
+
+  it('draws an emoji whose PNG pdfkit cannot read as text, and still writes the PDF', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const whole = testPng();
+    const cut = whole.slice(0, whole.length - 20);
+    const blob = await renderDocument(onePage('Done 👍'), {
+      writer: await createPdfkitWriter({ compress: false }),
+      dev: true,
+      emoji: () => cut,
+    });
+    const pdf = await bytesOf(blob);
+    expect(pdf).not.toContain('/Subtype /Image');
+    expect(warn.mock.calls.map(([message]: unknown[]) => message)).toContain(
+      'ngpdf: emoji without an image, drawn as text: 👍',
+    );
+  });
+
+  it('still rejects the render for a pdf-image pdfkit cannot read', async () => {
+    const whole = testPng();
+    const image = el('pdf-image', { width: '10', height: '10' }, [], {
+      src: whole.slice(0, whole.length - 20).buffer,
+    });
+    const doc = host({}, [el('pdf-page', {}, [image], { size: 'A4' })]);
+    await expect(
+      renderDocument(doc, { writer: await createPdfkitWriter({ compress: false }), dev: false }),
+    ).rejects.toThrow();
   });
 
   it('embeds an emoji image once in the PDF', async () => {

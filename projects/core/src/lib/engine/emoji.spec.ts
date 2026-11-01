@@ -165,6 +165,20 @@ describe('loadEmoji', () => {
     expect(seen).toEqual(['ngpdf: emoji without an image, drawn as text: 😀']);
   });
 
+  it('leaves out an image the writer cannot embed, and checks each sequence once', async () => {
+    const checkImage = vi.fn((data: Uint8Array) => Promise.resolve(data[0] !== 9));
+    const seen: string[] = [];
+    const images = await loadEmoji(
+      doc('😀 😃 😀'),
+      (emoji) => (emoji === '😀' ? new Uint8Array([9]) : new Uint8Array([1])),
+      { imageSize: () => ({ width: 1, height: 1 }), checkImage },
+      (message) => seen.push(message),
+    );
+    expect([...images.keys()]).toEqual(['😃']);
+    expect(checkImage).toHaveBeenCalledTimes(2);
+    expect(seen).toEqual(['ngpdf: emoji without an image, drawn as text: 😀']);
+  });
+
   it('leaves out an image of a type it cannot read', async () => {
     const seen: string[] = [];
     const images = await loadEmoji(

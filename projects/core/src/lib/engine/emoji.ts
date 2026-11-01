@@ -79,7 +79,7 @@ function emojiIn(root: PdfNode): string[] {
 async function loadOne(
   emoji: string,
   source: EmojiSource,
-  writer: Pick<PdfWriter, 'imageSize'>,
+  writer: Pick<PdfWriter, 'imageSize' | 'checkImage'>,
   fetchFn: typeof fetch | undefined,
   signal: AbortSignal,
 ): Promise<ImageAsset | null> {
@@ -94,7 +94,10 @@ async function loadOne(
   const read = readSource(image, (input, init) => base(input, { ...init, signal }));
   if (!read) throw new Error('not a string, Blob, ArrayBuffer or Uint8Array');
   const data = await read.read();
-  return { data, ...writer.imageSize(data) };
+  const size = writer.imageSize(data);
+  // A file cut off after its header still has a size; the writer would fail on it later.
+  if (writer.checkImage && !(await writer.checkImage(data))) throw new Error('unreadable image');
+  return { data, ...size };
 }
 
 /**
@@ -104,7 +107,7 @@ async function loadOne(
 function loadInTime(
   emoji: string,
   source: EmojiSource,
-  writer: Pick<PdfWriter, 'imageSize'>,
+  writer: Pick<PdfWriter, 'imageSize' | 'checkImage'>,
   fetchFn: typeof fetch | undefined,
 ): Promise<ImageAsset | null> {
   const controller = new AbortController();
@@ -132,7 +135,7 @@ function loadInTime(
 export async function loadEmoji(
   root: PdfNode,
   source: EmojiSource | undefined,
-  writer: Pick<PdfWriter, 'imageSize'>,
+  writer: Pick<PdfWriter, 'imageSize' | 'checkImage'>,
   warn: (message: string) => void,
   fetchFn?: typeof fetch,
 ): Promise<ReadonlyMap<string, ImageAsset>> {

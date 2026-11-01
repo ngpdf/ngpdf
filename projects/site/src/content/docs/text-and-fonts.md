@@ -167,7 +167,7 @@ A character as you see it (a grapheme cluster) is an emoji when:
 - Each distinct emoji is loaded once per render, together with the document's images and before layout. The PDF embeds each image once, however often the emoji appears.
 - URLs are fetched like [images](/docs/images), with same-origin credentials only.
 - A render loads at most 500 distinct emoji. The rest are drawn as text, with one warning in development mode: `ngpdf: more than 500 distinct emoji; the rest are drawn as text`.
-- An emoji whose image fails to load, is not a PNG or JPEG, is `null`, or takes more than 10 seconds is drawn as text. A fetch that runs out of time is aborted. Emoji often come from user data, so a missing one does not fail the render. In development mode ngpdf logs one warning per render listing them: `ngpdf: emoji without an image, drawn as text: 🦤`.
+- An emoji whose image fails to load, is not a whole PNG or JPEG (a file cut off after its header counts as broken), is `null`, or takes more than 10 seconds is drawn as text. A fetch that runs out of time is aborted. Emoji often come from user data, so a missing one does not fail the render. In development mode ngpdf logs one warning per render listing them: `ngpdf: emoji without an image, drawn as text: 🦤`.
 
 ### Limits
 

@@ -325,6 +325,11 @@ export interface PdfWriter extends FontMetrics {
    * JPEG.
    */
   imageSize(data: Uint8Array): { width: number; height: number };
+  /**
+   * Whether `write` can embed the image: false for bytes the writer would fail on. Emoji images,
+   * which fall back to text, are checked with it; a failed pdf-image still rejects the render.
+   */
+  checkImage?(data: Uint8Array): Promise<boolean>;
   write(pages: readonly PageOps[], info: DocumentInfo): Promise<Blob>;
 }
 
@@ -459,6 +464,73 @@ function toDataUrl(data: Uint8Array): string {
   }
   const mime = data[0] === 0xff ? 'image/jpeg' : 'image/png';
   return `data:${mime};base64,${btoa(binary)}`;
+}
+
+/** pdfkit's image parser, which `doc.image` runs; private in `@types/pdfkit`. */
+interface ImageOpener {
+  openImage(data: Uint8Array): ImageInternals;
+}
+
+/** What pdfkit's PNG parser (png-js) reads from a file; a JPEG has no `image`. */
+interface ImageInternals {
+  readonly image?: {
+    readonly width: number;
+    readonly height: number;
+    readonly pixelBitlength: number;
+    readonly interlaceMethod: number;
+    readonly imgData: Uint8Array;
+  };
+}
+
+/** Adam7: the first column and row of each pass, and its column and row steps. */
+const ADAM7 = [
+  [0, 0, 8, 8],
+  [4, 0, 8, 8],
+  [0, 4, 4, 8],
+  [2, 0, 4, 4],
+  [0, 2, 2, 4],
+  [1, 0, 2, 2],
+  [0, 1, 1, 2],
+] as const;
+
+/** The bytes a PNG's pixel data inflates to: each row of each pass, with its filter byte. */
+function pngDataLength(width: number, height: number, bitsPerPixel: number, interlaced: boolean) {
+  const rows = (w: number, h: number): number =>
+    w > 0 && h > 0 ? h * (1 + Math.ceil((w * bitsPerPixel) / 8)) : 0;
+  if (!interlaced) return rows(width, height);
+  return ADAM7.reduce(
+    (sum, [x0, y0, dx, dy]) =>
+      sum + rows(Math.ceil((width - x0) / dx), Math.ceil((height - y0) / dy)),
+    0,
+  );
+}
+
+/**
+ * Whether `data` inflates (zlib) to exactly `expected` bytes. It reads the stream to its end, so a
+ * corrupt or cut-off stream fails, and stops as soon as it has more than `expected`.
+ */
+async function inflatesTo(data: Uint8Array, expected: number): Promise<boolean> {
+  const source = new ReadableStream<BufferSource>({
+    start(controller) {
+      controller.enqueue(data as Uint8Array<ArrayBuffer>);
+      controller.close();
+    },
+  });
+  const reader = source.pipeThrough(new DecompressionStream('deflate')).getReader();
+  let length = 0;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) return length === expected;
+      length += value.length;
+      if (length > expected) {
+        await reader.cancel();
+        return false;
+      }
+    }
+  } catch {
+    return false;
+  }
 }
 
 /** The slice of a pdfkit document that the writer touches that `@types/pdfkit` leaves private. */
@@ -663,6 +735,22 @@ export async function createPdfkitWriter(options: { compress?: boolean } = {}): 
     },
 
     imageSize,
+
+    // pdfkit fails on a PNG its parser rejects, or whose pixel data does not inflate when it has
+    // to decode it (alpha, transparency, interlacing). It embeds a JPEG as is.
+    async checkImage(data) {
+      let opened: ImageInternals;
+      try {
+        opened = (measurer as unknown as ImageOpener).openImage(data);
+      } catch {
+        return false;
+      }
+      const png = opened.image;
+      if (!png) return true;
+      const { width, height, pixelBitlength, interlaceMethod, imgData } = png;
+      const expected = pngDataLength(width, height, pixelBitlength, interlaceMethod === 1);
+      return expected > 0 && (await inflatesTo(imgData, expected));
+    },
 
     async write(pages, info) {
       let doc: PDFKit.PDFDocument;
