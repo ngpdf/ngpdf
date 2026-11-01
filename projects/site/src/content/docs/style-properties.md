@@ -12,7 +12,7 @@ In the tables:
 - **length** is a number with an optional unit: none or `pt` (points), `px` (= 1pt), `in`, `cm` or `mm`. Any other unit throws.
 - **length/%** also accepts a percentage of the parent's content box.
 - **color** is hex (3, 4, 6 or 8 digits), `rgb()`/`rgba()`, a CSS named color or `transparent`.
-- Keywords are matched in any case, as in CSS: `CENTER` is `center`. That covers the keywords of `text-align`, `text-decoration`, `text-transform`, `normal` in `letter-spacing`, `flex-direction`, `justify-content`, `align-items`, `align-self`, `object-fit`, `overflow`, `position`, `font-weight`, `font-style`, `break-before`, `break-after` and `break-inside`, `none` in `max-lines`, `none` and the function names in `transform`, the keywords of `transform-origin`, `auto` in lengths, `auto` and `none` in `flex`, and the border styles, and the gradient function names and keywords in `background` and `background-image`.
+- Keywords are matched in any case, as in CSS: `CENTER` is `center`. That covers the keywords of `text-align`, `text-decoration`, `text-transform`, `hyphens`, `normal` in `letter-spacing`, `flex-direction`, `justify-content`, `align-items`, `align-self`, `object-fit`, `overflow`, `position`, `font-weight`, `font-style`, `break-before`, `break-after` and `break-inside`, `none` in `max-lines`, `none` and the function names in `transform`, the keywords of `transform-origin`, `auto` in lengths, `auto` and `none` in `flex`, and the border styles, and the gradient function names and keywords in `background` and `background-image`.
 
 ## Text
 
@@ -30,6 +30,7 @@ All text properties are inherited by child elements.
 | `text-decoration` | `none`, `underline`, `line-through` | `none` |
 | `letter-spacing` | length, negative allowed, or `normal` (0): space after each character | `0` |
 | `text-transform` | `none`, `uppercase`, `lowercase`, `capitalize` | `none` |
+| `hyphens` | `manual` (break at soft hyphens), `none`, `auto` (also where the [hyphenation function](/docs/text-and-fonts#automatic-hyphenation) allows) | `manual` |
 
 `max-lines` is not inherited:
 
@@ -37,7 +38,7 @@ All text properties are inherited by child elements.
 | --- | --- | --- |
 | `max-lines` | integer ≥ 1: the most lines a `pdf-text` keeps, the last ending in `…` when text was cut; `none` | `none` |
 
-A `pdf-span` takes `color`, `font-family`, `font-size`, `font-weight`, `font-style`, `text-decoration`, `letter-spacing` and `text-transform`; `line-height`, `text-align` and `max-lines` come from its `pdf-text`. See [Styled runs](/docs/text-and-fonts#styled-runs-pdf-span).
+A `pdf-span` takes `color`, `font-family`, `font-size`, `font-weight`, `font-style`, `text-decoration`, `letter-spacing`, `text-transform` and `hyphens`; `line-height`, `text-align` and `max-lines` come from its `pdf-text`. See [Styled runs](/docs/text-and-fonts#styled-runs-pdf-span).
 
 Without a registered family in the list: `font-family` contains `courier` or `mono`: Courier. Contains `times`, or `serif` without `sans`: Times. Otherwise Helvetica. With one, each character takes the first font in the list that has it. See [Text and fonts](/docs/text-and-fonts).
 

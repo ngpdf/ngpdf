@@ -14,7 +14,7 @@ import type { LayoutContext } from './layout';
 import { paginatePage } from './paginate';
 import { securityOf } from './security';
 import { resolveStyles } from './style';
-import { TextMeasureCache } from './text';
+import { TextMeasureCache, type Hyphenate } from './text';
 import {
   createPdfkitWriter,
   type CustomFont,
@@ -50,6 +50,8 @@ export interface RenderDocumentOptions {
   readonly writer?: PdfWriter;
   /** Font faces for `font-family`; only those of families the document names are loaded. */
   readonly fonts?: readonly FontSource[];
+  /** The app's hyphenation function, for `hyphens: auto`; called with the document's language. */
+  readonly hyphenate?: Hyphenate;
 }
 
 /** One face of a font family, with a way to get its bytes. */
@@ -223,7 +225,12 @@ export async function renderDocument(
       registerUsedFonts(options.fonts ?? [], styles, writer),
     ]);
     // One text cache per render, passed down like the metrics and images, so renders share nothing.
-    const textCache = new TextMeasureCache();
+    const language = languageOf(propsOf(document)['language']);
+    const textCache = new TextMeasureCache({
+      ...(options.hyphenate && { hyphenate: options.hyphenate }),
+      ...(language !== undefined && { language }),
+      warn,
+    });
     const ctx: LayoutContext = {
       yoga,
       metrics: writer,

@@ -71,6 +71,7 @@ const DOCUMENTS = [
   },
   // Encrypted: extracted with this user password, and it must not open without it.
   { name: 'secure-sample', pages: 1, password: 'demo-1234', contains: ['Net pay: € 2,480.75'] },
+  { name: 'hyphens-sample', pages: 1, contains: ['nar‐', 'com-', 'uncomfort-'] },
 ];
 
 const update = process.argv.includes('--update');

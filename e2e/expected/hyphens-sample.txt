@@ -1,0 +1,13 @@
+Hyphenation
+none                manual                   auto
+Hyphenation helps   Hyphenation helps        Hyphenation helps
+typesetters keep    typesetters keep         typesetters keep nar‐
+narrow columns      narrow columns com-      row columns com‐
+comfortable,        fortable, particularly   fortable, particularly
+particularly when   when paragraphs are      when       paragraphs
+paragraphs are      justified and the        are justified and the
+justified and the   spacing between          spacing      between
+spacing between     words would be extra-    words would be ex‐
+words would be      ordinarily uncomfort-    traordinarily uncom‐
+extraordinarily     able.                    fortable.
+uncomfortable.

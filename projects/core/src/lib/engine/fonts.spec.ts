@@ -205,6 +205,20 @@ describe('shapeText', () => {
     expect(shaped.missing).toEqual([]);
   });
 
+  it('reports soft hyphens in standard-font text, among replaced characters', () => {
+    const shaped = shapeText('a\u00ad☃\u00adb', ['Helvetica'], metrics);
+    expect(shaped.text).toBe('a?b');
+    expect(shaped.softHyphens).toEqual([1, 2]);
+    expect(shaped.replaced).toEqual(['☃']);
+  });
+
+  it('never reports a soft hyphen as missing from the fonts', () => {
+    const { shaped } = runsOf('日\u00ad本', ['font:2']);
+    expect(shaped.text).toBe('日本');
+    expect(shaped.softHyphens).toEqual([1]);
+    expect(shaped.missing).toEqual([]);
+  });
+
   it('draws each character in the first font of the chain that has it', () => {
     const { runs } = runsOf('Жук 日本 x', ['font:0', 'font:2', 'Helvetica']);
     expect(runs).toEqual([
@@ -268,5 +282,13 @@ describe('shapeText', () => {
   it('maps space separators and drops invisible characters for custom fonts too', () => {
     const { shaped } = runsOf('a\u2009b\u00adc', ['font:0']);
     expect(shaped.text).toBe('a bc');
+  });
+
+  it('reports where soft hyphens were, in the shaped text', () => {
+    const { shaped } = runsOf('\u00adco\u00ad\u00adop\u00ader', ['font:0']);
+    expect(shaped.text).toBe('cooper');
+    expect(shaped.softHyphens).toEqual([0, 2, 2, 4]);
+    expect(shaped.clusterStarts).toEqual([0, 1, 2, 3, 4, 5, 6]);
+    expect(shaped.missing).toEqual([]);
   });
 });

@@ -282,4 +282,6 @@ Some problems still produce a PDF. ngpdf collects them during the render and pri
 | `ngpdf: a fixed pdf-view must be a direct child of pdf-page` | A nested `fixed` view, laid out in the flow instead. |
 | `ngpdf: <property> has no effect on pdf-span` | A box property on a `pdf-span`. See [Styled runs](/docs/text-and-fonts#styled-runs-pdf-span). |
 | `ngpdf: a pdf-text inside a pdf-text is drawn in the outer style; use pdf-span` | A nested `pdf-text`. |
+| `ngpdf: hyphens: auto needs providePdfHyphenation; words break only at soft hyphens` | Text with `hyphens: auto` and no hyphenation function. See [Hyphenation](/docs/text-and-fonts#automatic-hyphenation). |
+| `ngpdf: the hyphenation function failed or returned pieces that are not the word, for "<word>"; words it fails on are not hyphenated` | The function threw or returned pieces that do not join back to the word. Named for the first such word. |
 | `ngpdf: table columns did not settle` | Nested tables whose widths did not converge; the last layout is used. |

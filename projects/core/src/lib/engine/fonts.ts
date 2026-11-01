@@ -168,22 +168,23 @@ const isOtherWhitespace = (codePoint: number): boolean =>
   codePoint === 0x2028 ||
   codePoint === 0x2029;
 
-// Soft hyphen, zero-width space and U+FEFF (a byte order mark, or the old zero-width no-break
-// space): invisible unless a line breaks there, and ngpdf never breaks at them, so they are dropped
-// rather than drawn as a hyphen (WinAnsi 0xAD) or as a missing glyph.
-const isInvisible = (codePoint: number): boolean =>
-  codePoint === 0xad || codePoint === 0x200b || codePoint === 0xfeff;
+export const SOFT_HYPHEN = '\u00ad';
+
+// Zero-width space and U+FEFF (a byte order mark, or the old zero-width no-break space): invisible,
+// and ngpdf never breaks at them, so they are dropped rather than drawn as a missing glyph. A soft
+// hyphen is invisible too; it is dropped as well unless the caller keeps it as a break point.
+const isInvisible = (codePoint: number): boolean => codePoint === 0x200b || codePoint === 0xfeff;
 
 /**
  * Maps Unicode space separators, vertical tab, form feed, next line and the line and paragraph
- * separators to U+0020 (or U+00A0 for the no-break spaces), and drops soft hyphens, zero-width spaces and U+FEFF.
- * Applies to every font.
+ * separators to U+0020 (or U+00A0 for the no-break spaces), and drops zero-width spaces, U+FEFF
+ * and, unless `keepSoftHyphens`, soft hyphens. Applies to every font.
  */
-export function normalizeText(text: string): string {
+export function normalizeText(text: string, keepSoftHyphens = false): string {
   let out = '';
   for (const char of text) {
     const codePoint = char.codePointAt(0) ?? 0;
-    if (isInvisible(codePoint)) continue;
+    if (isInvisible(codePoint) || (codePoint === 0xad && !keepSoftHyphens)) continue;
     if (isSpaceSeparator(codePoint)) out += isNoBreakSpace(codePoint) ? ' ' : ' ';
     else if (isOtherWhitespace(codePoint)) out += ' ';
     else out += char;
@@ -228,6 +229,8 @@ export interface ShapedText {
   readonly replaced: readonly string[];
   /** Characters no font in the chain has, kept in the first font (drawn as its empty glyph). */
   readonly missing: readonly string[];
+  /** Where `text` had soft hyphens, which are not in it: offsets in `text`, in order. */
+  readonly softHyphens: readonly number[];
 }
 
 const isSpace = (cluster: string): boolean => cluster === ' ' || cluster === ' ';
@@ -256,15 +259,26 @@ export function shapeText(
   chain: readonly FontName[],
   metrics: Pick<FontMetrics, 'hasGlyph'>,
 ): ShapedText {
-  const normalized = normalizeText(text);
+  const normalized = normalizeText(text, true);
+  const softHyphens: number[] = [];
   const [first] = chain;
   if (chain.length === 1 && first && isStandardFont(first)) {
     // One standard font: every unit is its own cluster once outside-WinAnsi characters are `?`.
-    let replaced: readonly string[] = [];
-    const winAnsi = toWinAnsi(normalized, (chars) => {
-      replaced = chars;
+    const replaced = new Set<string>();
+    let winAnsi = '';
+    normalized.split(SOFT_HYPHEN).forEach((part, i) => {
+      if (i > 0) softHyphens.push(winAnsi.length);
+      winAnsi += toWinAnsi(part, (chars) => {
+        for (const char of chars) replaced.add(char);
+      });
     });
-    return { text: winAnsi, fontAt: new Uint16Array(winAnsi.length), replaced, missing: [] };
+    return {
+      text: winAnsi,
+      fontAt: new Uint16Array(winAnsi.length),
+      replaced: [...replaced],
+      missing: [],
+      softHyphens,
+    };
   }
 
   const replaced = new Set<string>();
@@ -276,6 +290,10 @@ export function shapeText(
   let previousFont: FontName | undefined;
   const segmenter = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
   for (const { segment } of segmenter.segment(normalized)) {
+    if (segment === SOFT_HYPHEN) {
+      softHyphens.push(out.length);
+      continue;
+    }
     let index =
       previousFont && isSpace(segment) && covers(previousFont, segment, metrics)
         ? previous
@@ -308,5 +326,6 @@ export function shapeText(
     clusterStarts,
     replaced: [...replaced],
     missing: [...missing],
+    softHyphens,
   };
 }

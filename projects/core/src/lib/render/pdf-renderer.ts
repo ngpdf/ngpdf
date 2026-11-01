@@ -1,5 +1,6 @@
 import { DOCUMENT, EnvironmentInjector, Service, inject, type Type } from '@angular/core';
 import { PDF_FONT_SET } from './pdf-fonts';
+import { PDF_HYPHENATE } from './pdf-hyphenation';
 import { renderTree } from './render-tree';
 
 export interface RenderOptions {
@@ -42,7 +43,11 @@ export async function renderToBlob<T>(
   try {
     const loaded = await loadEngine();
     const fonts = options.injector.get(PDF_FONT_SET, null)?.sources((src) => loaded.loadFont(src));
-    return await loaded.renderDocument(tree.root, { fonts: fonts ?? [] });
+    const hyphenate = options.injector.get(PDF_HYPHENATE, null);
+    return await loaded.renderDocument(tree.root, {
+      fonts: fonts ?? [],
+      ...(hyphenate && { hyphenate }),
+    });
   } finally {
     tree.destroy();
   }

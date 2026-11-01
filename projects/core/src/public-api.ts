@@ -20,6 +20,8 @@ export { PdfRenderer, downloadPdf, renderToBlob } from './lib/render/pdf-rendere
 export { PdfDownload } from './lib/render/pdf-download';
 export { providePdfFonts } from './lib/render/pdf-fonts';
 export type { PdfFont } from './lib/render/pdf-fonts';
+export { providePdfHyphenation } from './lib/render/pdf-hyphenation';
+export type { PdfHyphenate } from './lib/render/pdf-hyphenation';
 export { pdfResource } from './lib/render/pdf-resource';
 export type { PdfResourceOptions, PdfResourceRef } from './lib/render/pdf-resource';
 export type {

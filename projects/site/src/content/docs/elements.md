@@ -104,7 +104,7 @@ Part of a `pdf-text` drawn in its own text styles, such as one bold word in a se
 <pdf-text>Total due: <pdf-span style="font-weight: bold">{{ total() }}</pdf-span></pdf-text>
 ```
 
-It holds text and other `pdf-span` elements, and must be inside a `pdf-text`: anywhere else the render fails with `ngpdf: pdf-span must be inside a pdf-text`. Only `color`, `font-family`, `font-size`, `font-weight`, `font-style`, `text-decoration`, `letter-spacing` and `text-transform` apply to it. See [Styled runs](/docs/text-and-fonts#styled-runs-pdf-span).
+It holds text and other `pdf-span` elements, and must be inside a `pdf-text`: anywhere else the render fails with `ngpdf: pdf-span must be inside a pdf-text`. Only `color`, `font-family`, `font-size`, `font-weight`, `font-style`, `text-decoration`, `letter-spacing`, `text-transform` and `hyphens` apply to it. See [Styled runs](/docs/text-and-fonts#styled-runs-pdf-span).
 
 ## pdf-link
 
