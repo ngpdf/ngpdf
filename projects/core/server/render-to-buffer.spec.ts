@@ -88,7 +88,7 @@ class ServerDocument {
   `,
 })
 class ImageDocument {
-  readonly src = input.required<string>();
+  readonly src = input.required<string | Uint8Array>();
 }
 
 @Component({
@@ -263,6 +263,11 @@ describe('renderToBuffer', () => {
           fetchImage: () => Promise.resolve(PNG),
         }),
       ).rejects.toThrow('ngpdf: relative image URL "/logo.png" on the server');
+    });
+
+    it('loads bytes, such as a Buffer from readFile, without fetchImage', async () => {
+      const pdf = await renderToBuffer(ImageDocument, { inputs: { src: PNG } });
+      expect(latin1(pdf)).toContain('/Subtype /Image');
     });
 
     it('loads a data URL without fetchImage', async () => {

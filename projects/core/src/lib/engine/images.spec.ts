@@ -226,6 +226,21 @@ describe('loadImages', () => {
     ).rejects.toThrow(/could not load image "data URL"/);
   });
 
+  it('loads a Uint8Array, also a view into a larger buffer as a Node Buffer often is', async () => {
+    const pooled = new Uint8Array(png.length + 16);
+    pooled.set(png, 8);
+    const view = pooled.subarray(8, 8 + png.length);
+    const node = imageNode(view);
+    const assets = await loadImages(root(node), writer);
+    expect(assets.get(node)).toEqual({ data: png, width: 200, height: 100 });
+  });
+
+  it('names a Uint8Array that is not an image', async () => {
+    await expect(loadImages(root(imageNode(new Uint8Array([1, 2, 3]))), writer)).rejects.toThrow(
+      'ngpdf: could not load image "Uint8Array": ngpdf: image is neither PNG nor JPEG',
+    );
+  });
+
   it('rejects a source of the wrong type', async () => {
     await expect(loadImages(root(imageNode(42)), writer)).rejects.toThrow(/could not load image/);
   });
