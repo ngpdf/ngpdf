@@ -91,6 +91,19 @@ describe('resolveStyles', () => {
     expect(styleOf({ margin: 'auto 10%' }).margin.top).toBe('auto');
   });
 
+  it('ignores unknown margin and padding side-like properties (#238)', () => {
+    const style = styleOf({
+      'margin-top-x': '10',
+      'padding-leftover': '5',
+      'margin-top': '2',
+      'padding-left': '3',
+    });
+    expect(style.margin.top).toBe(2);
+    expect(style.padding.left).toBe(3);
+    expect(styleOf({ 'margin-top-x': '10' }).margin.top).toBe(0);
+    expect(styleOf({ 'padding-leftover': '5' }).padding.left).toBe(0);
+  });
+
   it('lets a longhand override the shorthand it follows', () => {
     const style = styleOf({ padding: '4', 'padding-left': '9' });
     expect(style.padding).toEqual({ top: 4, right: 4, bottom: 4, left: 9 });

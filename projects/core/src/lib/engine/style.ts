@@ -913,7 +913,7 @@ function apply(
   tag: string,
   warn: Warn,
 ): void {
-  const side = SIDES.find((s) => property.includes(`-${s}`));
+  const side = SIDES.find((s) => property === `margin-${s}` || property === `padding-${s}` || property.startsWith(`border-${s}`));
   if (side && property.startsWith('margin-')) {
     style.margin = withSide(style.margin, side, parseLength(value, tag));
     return;
