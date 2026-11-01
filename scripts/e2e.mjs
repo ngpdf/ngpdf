@@ -72,6 +72,12 @@ const DOCUMENTS = [
   // Encrypted: extracted with this user password, and it must not open without it.
   { name: 'secure-sample', pages: 1, password: 'demo-1234', contains: ['Net pay: € 2,480.75'] },
   { name: 'hyphens-sample', pages: 1, contains: ['nar‐', 'com-', 'uncomfort-'] },
+  // A row taller than a page, split across sheets under its repeated header.
+  {
+    name: 'split-row-sample',
+    pages: 3,
+    contains: ['Inspection log', 'Note 01:', 'Note 48:', 'Follow up next week', 'Page 3 of 3'],
+  },
 ];
 
 const update = process.argv.includes('--update');

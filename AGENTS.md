@@ -125,11 +125,20 @@ The site (`projects/site`) is a prerendered Angular app. Its docs are the Markdo
   - Units are the children of a page, at any depth through column `pdf-view`s and tables. A table
     yields its rows as units. A row `pdf-view` is one unit, and so is a column `pdf-view` with a
     `transform` or an `overflow` other than `visible`.
-  - A unit is never split. A `pdf-text` that would be a unit is cut into line groups instead: the
-    first `orphans` lines, each line between, and the last `widows` lines (2 and 2 by default).
-    A short text, `break-inside: avoid`, a fixed `height`, a `max-height`, a `transform` or
-    an `overflow` other than `visible` keeps it one unit.
+  - A unit is never split, except a table row taller than a page (below). A `pdf-text` that
+    would be a unit is cut into line groups instead: the first `orphans` lines, each line between,
+    and the last `widows` lines (2 and 2 by default). A short text, `break-inside: avoid`, a fixed
+    `height`, a `max-height`, a `transform` or an `overflow` other than `visible` keeps it one
+    unit.
   - A `header` row repeats at the top of every page its table runs onto.
+  - A body row of a table taller than a page (below its repeated header) splits instead of being
+    clipped. It starts on the current sheet when one line of each non-empty cell fits there.
+    Each cell breaks on its own, between the lines of its texts or the children of a column view
+    in it, with no orphans or widows; content that can't break moves whole to the next piece, or
+    is clipped when taller than a page. Each piece is as tall as its tallest cell piece, cells
+    are drawn from the top and stretched to it, and cell and row decorations are sliced. A row
+    with `break-inside: avoid`, a fixed `height`, a `max-height`, a `transform` or an `overflow`
+    other than `visible`, a header row, and a row with nothing to break stay one unit.
   - `breakBefore` starts a new page, and `breakAfter` starts one after the element.
   - `break-after: avoid` (or `avoid-page`) moves an element to the next page with the unit after
     it when that unit does not fit. An element at the top of a page, a chain that would not fit on
@@ -143,6 +152,7 @@ The site (`projects/site`) is a prerendered Angular app. Its docs are the Markdo
     out once and drawn on every sheet; the flow gets the space between them. Bottom views sit
     above the page number.
   - A unit taller than a page goes on a page of its own, is clipped, and gets a dev-mode warning.
+    So does a piece of a split row that holds content taller than a page.
   - An element with `position: absolute` is never a unit, and never moves, splits or pushes one.
     It is placed against its nearest relative, absolute or transformed ancestor, or the page's
     content area. When that containing block is one unit, it is drawn with that unit. Otherwise it

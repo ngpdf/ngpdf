@@ -2,6 +2,7 @@ import fc from 'fast-check';
 import { beforeAll, describe, expect, it } from 'vitest';
 import type { Yoga } from 'yoga-layout/load';
 import { createNode, type PdfNode } from '../tree/node';
+import type { Box } from './layout';
 import { paginatePage } from './paginate';
 import { resolveStyles } from './style';
 import { createPdfkitWriter, type PdfWriter } from './writer';
@@ -32,7 +33,7 @@ function adopt(parent: PdfNode, children: PdfNode[]): PdfNode {
   return parent;
 }
 
-function row(height: number, header = false): PdfNode {
+function rowOf(height: number, header = false): PdfNode {
   return adopt(el('pdf-row', { height: String(height) }, { header }), [el('pdf-cell', {})]);
 }
 
@@ -45,8 +46,8 @@ describe('paginatePage properties', () => {
         fc.option(fc.integer({ min: 5, max: 100 }), { nil: undefined }),
         fc.boolean(),
         (heights, headerHeight, wrapped) => {
-          const header = headerHeight === undefined ? undefined : row(headerHeight, true);
-          const rows = heights.map((h) => row(h));
+          const header = headerHeight === undefined ? undefined : rowOf(headerHeight, true);
+          const rows = heights.map((h) => rowOf(h));
           const table = adopt(el('pdf-table', {}, { columns: ['1fr'] }), [
             ...(header ? [header] : []),
             ...rows,
@@ -102,6 +103,69 @@ describe('paginatePage properties', () => {
             expect(pages).toHaveLength(1);
             expect(pages[0]!.placed.map((placed) => placed.box.node)).toEqual([header]);
           }
+        },
+      ),
+      { numRuns: 60 },
+    );
+  });
+
+  it('draws every line of a split row once, in order, above the content bottom', () => {
+    fc.assert(
+      fc.property(
+        fc.array(fc.tuple(fc.integer({ min: 0, max: 220 }), fc.integer({ min: 6, max: 30 })), {
+          minLength: 1,
+          maxLength: 4,
+        }),
+        fc.option(fc.integer({ min: 5, max: 100 }), { nil: undefined }),
+        fc.integer({ min: 0, max: 700 }),
+        (cells, headerHeight, before) => {
+          const contents = cells.map(([count], c) =>
+            Array.from({ length: count }, (_, i) => `c${String(c)}w${String(i)}`).join(' '),
+          );
+          const texts = cells.map(([, size], c) => {
+            const style = { 'font-size': String(size), 'line-height': '1' };
+            return adopt(el('pdf-text', style), [createNode('text', '', contents[c])]);
+          });
+          const row = adopt(
+            el('pdf-row', {}),
+            texts.map((text) => adopt(el('pdf-cell', {}), [text])),
+          );
+          const header = headerHeight === undefined ? null : rowOf(headerHeight, true);
+          const table = adopt(el('pdf-table', {}, { columns: cells.map(() => '1fr') }), [
+            ...(header ? [header] : []),
+            row,
+          ]);
+          const page = adopt(el('pdf-page', { padding: '36' }, { size: 'A4' }), [
+            el('pdf-view', { height: String(before) }),
+            table,
+            el('pdf-page-number', { height: '9' }),
+          ]);
+          const warnings: string[] = [];
+          const pages = paginatePage(page, resolveStyles(page), {
+            yoga,
+            metrics: writer,
+            images: new Map(),
+            warn: (message) => warnings.push(message),
+          });
+          expect(warnings).toEqual([]);
+
+          const drawn = texts.map((): string[] => []);
+          const walk = (box: Box): void => {
+            const index = texts.indexOf(box.node);
+            if (index >= 0) drawn[index]!.push(...(box.text?.lines ?? []).map((l) => l.text));
+            box.children.forEach(walk);
+          };
+          for (const laid of pages) {
+            for (const placed of laid.placed) {
+              walk(placed.box);
+              expect(placed.y + placed.box.h).toBeLessThanOrEqual(CONTENT_BOTTOM + 1e-6);
+            }
+            const nodes = laid.placed.map((placed) => placed.box.node);
+            if (header && nodes.includes(row)) expect(nodes[nodes.indexOf(row) - 1]).toBe(header);
+          }
+          drawn.forEach((lines, c) => {
+            expect(lines.join(' ')).toBe(contents[c]);
+          });
         },
       ),
       { numRuns: 60 },

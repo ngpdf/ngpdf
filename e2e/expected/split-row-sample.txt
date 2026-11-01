@@ -1,0 +1,113 @@
+Inspection log
+Unit     Notes                                         Status
+
+Pump 1   Seals checked, no leaks.                      OK
+
+Pump 2   Note 01: reading taken at gauge 1, pressure   Follow up next week
+         40 psi, valve open.
+         Note 02: reading taken at gauge 2, pressure
+         47 psi, valve closed.
+         Note 03: reading taken at gauge 3, pressure
+         41 psi, valve open.
+         Note 04: reading taken at gauge 4, pressure
+         48 psi, valve closed.
+         Note 05: reading taken at gauge 5, pressure
+         42 psi, valve open.
+         Note 06: reading taken at gauge 6, pressure
+         49 psi, valve closed.
+         Note 07: reading taken at gauge 1, pressure
+         43 psi, valve open.
+         Note 08: reading taken at gauge 2, pressure
+         50 psi, valve closed.
+         Note 09: reading taken at gauge 3, pressure
+         44 psi, valve open.
+         Note 10: reading taken at gauge 4, pressure
+         51 psi, valve closed.
+         Note 11: reading taken at gauge 5, pressure
+         45 psi, valve open.
+         Note 12: reading taken at gauge 6, pressure
+         52 psi, valve closed.
+         Note 13: reading taken at gauge 1, pressure
+         46 psi, valve open.
+         Note 14: reading taken at gauge 2, pressure
+         40 psi, valve closed.
+         Note 15: reading taken at gauge 3, pressure
+         47 psi, valve open.
+         Note 16: reading taken at gauge 4, pressure
+         41 psi, valve closed.
+         Note 17: reading taken at gauge 5, pressure
+         48 psi, valve open.
+         Note 18: reading taken at gauge 6, pressure
+                                                                 Page 1 of 3
+Unit   Notes                                         Status
+       42 psi, valve closed.
+       Note 19: reading taken at gauge 1, pressure
+       49 psi, valve open.
+       Note 20: reading taken at gauge 2, pressure
+       43 psi, valve closed.
+       Note 21: reading taken at gauge 3, pressure
+       50 psi, valve open.
+       Note 22: reading taken at gauge 4, pressure
+       44 psi, valve closed.
+       Note 23: reading taken at gauge 5, pressure
+       51 psi, valve open.
+       Note 24: reading taken at gauge 6, pressure
+       45 psi, valve closed.
+       Note 25: reading taken at gauge 1, pressure
+       52 psi, valve open.
+       Note 26: reading taken at gauge 2, pressure
+       46 psi, valve closed.
+       Note 27: reading taken at gauge 3, pressure
+       40 psi, valve open.
+       Note 28: reading taken at gauge 4, pressure
+       47 psi, valve closed.
+       Note 29: reading taken at gauge 5, pressure
+       41 psi, valve open.
+       Note 30: reading taken at gauge 6, pressure
+       48 psi, valve closed.
+       Note 31: reading taken at gauge 1, pressure
+       42 psi, valve open.
+       Note 32: reading taken at gauge 2, pressure
+       49 psi, valve closed.
+       Note 33: reading taken at gauge 3, pressure
+       43 psi, valve open.
+       Note 34: reading taken at gauge 4, pressure
+       50 psi, valve closed.
+       Note 35: reading taken at gauge 5, pressure
+       44 psi, valve open.
+       Note 36: reading taken at gauge 6, pressure
+       51 psi, valve closed.
+       Note 37: reading taken at gauge 1, pressure
+       45 psi, valve open.
+       Note 38: reading taken at gauge 2, pressure
+                                                              Page 2 of 3
+Unit     Notes                                         Status
+         52 psi, valve closed.
+         Note 39: reading taken at gauge 3, pressure
+         46 psi, valve open.
+         Note 40: reading taken at gauge 4, pressure
+         40 psi, valve closed.
+         Note 41: reading taken at gauge 5, pressure
+         47 psi, valve open.
+         Note 42: reading taken at gauge 6, pressure
+         41 psi, valve closed.
+         Note 43: reading taken at gauge 1, pressure
+         48 psi, valve open.
+         Note 44: reading taken at gauge 2, pressure
+         42 psi, valve closed.
+         Note 45: reading taken at gauge 3, pressure
+         49 psi, valve open.
+         Note 46: reading taken at gauge 4, pressure
+         43 psi, valve closed.
+         Note 47: reading taken at gauge 5, pressure
+         50 psi, valve open.
+         Note 48: reading taken at gauge 6, pressure
+         44 psi, valve closed.
+
+Pump 3   Filter replaced.                              OK
+         Logged by the night shift.
+
+
+
+
+                                                                Page 3 of 3

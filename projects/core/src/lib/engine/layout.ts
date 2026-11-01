@@ -38,6 +38,15 @@ export interface Box {
    * and `y` stay where the flow put it.
    */
   readonly shift?: { readonly x: number; readonly y: number };
+  /**
+   * Set by pagination on a piece of a box inside a split table row: the edges that are sheet
+   * cuts, drawn without a border, and for a gradient the piece's offset in the whole box.
+   */
+  readonly cut?: {
+    readonly top: boolean;
+    readonly bottom: boolean;
+    readonly slice?: { readonly offset: number; readonly height: number };
+  };
   readonly children: readonly Box[];
 }
 

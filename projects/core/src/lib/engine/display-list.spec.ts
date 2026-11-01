@@ -563,6 +563,32 @@ describe('displayList', () => {
       }
     });
 
+    it('draws no border on the cut edges of the cells of a split table row', () => {
+      const words = Array.from({ length: 100 }, (_, i) => `w${String(i)}`).join(' ');
+      const style = { width: '25', 'font-size': '10', 'line-height': '1' };
+      const border = { border: '1 solid #123456' };
+      const row = el('pdf-row', {}, [
+        el('pdf-cell', border, [text(words, style)]),
+        el('pdf-cell', border, [text('x', style)]),
+      ]);
+      const pages = layout(page([el('pdf-table', {}, [row], { columns: ['1fr', '1fr'] })]));
+      expect(pages).toHaveLength(2);
+      const horizontal = pages.map((laid, index) =>
+        only(list(laid, index, 2), 'line').filter((l) => l.y1 === l.y2),
+      );
+      // Both cells keep their top edge on the first sheet and their bottom edge on the second.
+      expect(horizontal[0]!.map((l) => l.y1)).toEqual([36.5, 36.5]);
+      expect(horizontal[1]).toHaveLength(2);
+      expect(horizontal[1]![0]!.y1).toBeGreaterThan(36.5);
+      for (const [index, laid] of pages.entries()) {
+        const vertical = only(list(laid, index, 2), 'line').filter((l) => l.x1 === l.x2);
+        expect(vertical).toHaveLength(4);
+      }
+      // No word is drawn twice or lost at the cut.
+      const drawn = pages.flatMap((laid, index) => only(list(laid, index, 2), 'text'));
+      expect(drawn.map((op) => op.text)).toHaveLength(101);
+    });
+
     it('keeps square corners on an edge cut by a page break', () => {
       const rows = [0, 1, 2].map(() => el('pdf-view', { height: '300' }));
       const style = { border: '2 solid #123456', 'border-radius': '8', 'background-color': '#eee' };

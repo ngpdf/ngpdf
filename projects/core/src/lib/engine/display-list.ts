@@ -241,13 +241,12 @@ function drawBox(
   const inClip = !ownQueue && (clipped || clips);
   const draw = (child: Box): void => {
     const [childX, childY] = [x + child.x, y + child.y];
-    const nested = { top: false, bottom: false };
     drawBox(
       child,
       childX,
       childY,
       limit,
-      nested,
+      child.cut ?? NOT_CUT,
       opacity,
       matrix,
       numbering,

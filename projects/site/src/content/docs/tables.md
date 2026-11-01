@@ -129,12 +129,12 @@ Use the `$even` or `$odd` variable of `@for` with a style binding:
 
 ## Header rows
 
-Mark a row with `header` and it repeats at the top of every page the table runs onto. Several header rows are repeated together. Rows are never split across pages.
+Mark a row with `header` and it repeats at the top of every page the table runs onto. Several header rows are repeated together. A row moves to the next page whole, unless it is taller than a page below the header: then it splits between the lines of its cells, and the header repeats above each piece (see [Pagination](/docs/pagination#rows-taller-than-a-page)). Header rows never split.
 
 Current limits of header repetition:
 
 - Headers taller than the page's content area are not repeated; their rows are laid out as ordinary rows.
-- On a page whose first row fits only without the header, that row is placed without it, and the header is not repeated on that page.
+- On a page whose first row fits only without the header and can't split (it has `break-inside: avoid`, or its cells hold nothing that can break), that row is placed without it, and the header is not repeated on that page.
 - A table made only of header rows has nothing to repeat over, so its rows are ordinary rows.
 - Header rows lose `break-before` and `break-after`.
 

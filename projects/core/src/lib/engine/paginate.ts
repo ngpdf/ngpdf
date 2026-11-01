@@ -8,7 +8,10 @@ export interface PlacedBox {
   /** Absolute page coordinates of the box's border-box origin; children stay relative to it. */
   readonly x: number;
   readonly y: number;
-  /** Page y below which nothing of the box is drawn: a unit taller than the content area. */
+  /**
+   * Page y below which nothing of the box is drawn: a unit taller than the content area, or a
+   * piece of a split table row, whose absolute boxes are cut at the bottom of the sheet.
+   */
   readonly clipBottom?: number;
   /** On a sliced decoration: this piece's top or bottom edge is a page cut, so no border there. */
   readonly sliceTop?: boolean;
@@ -93,6 +96,8 @@ interface Unit extends Flowed {
   readonly opacity: number;
   readonly bottom: number;
   readonly header: Header | null;
+  /** A body row of a table that may split across sheets when it is taller than a page. */
+  readonly splits?: true;
 }
 
 /** A column pdf-view or a table the units were taken from; it covers units first..last. */
@@ -175,21 +180,26 @@ function isWrapper(box: Box): boolean {
 }
 
 /**
- * A text that may break between lines: long enough to leave `orphans` lines before a break and
- * `widows` after it, not kept whole with `break-inside: avoid`, not of a fixed height, and not
- * transformed or clipped: one clip covers the whole text, padding included.
+ * A box that may be cut: not kept whole with `break-inside: avoid`, not of a fixed height, and
+ * not transformed or clipped: one clip covers the whole box, padding included.
  */
-function isSplittable(box: Box): boolean {
-  const { style, text } = box;
+function canBreak(style: ResolvedStyle): boolean {
   return (
-    text !== undefined &&
-    text.lines.length >= style.orphans + style.widows &&
     style.breakInside !== 'avoid' &&
     style.height === 'auto' &&
     style.maxHeight === 'auto' &&
     style.transform.length === 0 &&
     style.overflow === 'visible'
   );
+}
+
+/**
+ * A text that may break between lines: one that can break at all, long enough to leave
+ * `orphans` lines before a break and `widows` after it.
+ */
+function isSplittable(box: Box): boolean {
+  const { style, text } = box;
+  return text !== undefined && text.lines.length >= style.orphans + style.widows && canBreak(style);
 }
 
 /**
@@ -250,6 +260,7 @@ function collectUnits(content: Box, maxHeader: number, pageOpacity: number): Col
     opacity: number,
     dx: number,
     dy: number,
+    inTable = false,
   ): void => {
     if (box.text && isSplittable(box)) {
       visitText(box, box.text, x, top, header, opacity, dx, dy);
@@ -257,7 +268,19 @@ function collectUnits(content: Box, maxHeader: number, pageOpacity: number): Col
     }
     if (!isWrapper(box)) {
       const own = detach(box, { box, x, top, opacity, dx, dy }, contains(box));
-      units.push({ box: own, x, top, bottom: top + box.h, header, opacity, dx, dy });
+      // A header row that is not repeated stays whole, like one that is.
+      const splits = inTable && box.node.tag === 'pdf-row' && !isHeaderRow(box.node);
+      units.push({
+        box: own,
+        x,
+        top,
+        bottom: top + box.h,
+        header,
+        opacity,
+        dx,
+        dy,
+        ...(splits && canBreak(box.style) && { splits }),
+      });
       return;
     }
     const wrapper: Wrapper = {
@@ -315,7 +338,8 @@ function collectUnits(content: Box, maxHeader: number, pageOpacity: number): Col
           dy: innerDy,
         });
       } else {
-        visit(child, childX, childTop, childHeader, inside, innerDx, innerDy);
+        const inTable = box.node.tag === 'pdf-table';
+        visit(child, childX, childTop, childHeader, inside, innerDx, innerDy, inTable);
       }
     }
     wrapper.last = units.length - 1;
@@ -520,6 +544,22 @@ interface Placement {
   readonly page: number;
   readonly unitShift: number;
   readonly leadShift: number;
+  /** A split row: its sheet pieces in order, each with page y minus flow y from its flow top. */
+  readonly pieces?: readonly {
+    readonly page: number;
+    readonly flowTop: number;
+    readonly shift: number;
+    /** Page y of the piece's bottom. */
+    readonly bottom: number;
+  }[];
+}
+
+/** Where a unit and its repeated header go on the current sheet. */
+interface Plan {
+  readonly header: Header | null;
+  readonly leadFlow: number;
+  readonly leadTop: number;
+  readonly top: number;
 }
 
 /** An absolute box asks for no break: it is never a unit. */
@@ -551,11 +591,248 @@ function at<T>(list: readonly T[], index: number): T {
   return item;
 }
 
+/** A cell of a row split across sheets, drawn from its top. */
+interface SplitCell {
+  readonly box: Box;
+  /** Cell y's where a piece may end and the next one start, ascending, between 0 and `end`. */
+  readonly breaks: readonly number[];
+  /** The bottom of its content, with its bottom padding and border. */
+  readonly end: number;
+}
+
+/** One sheet's piece of a split row: where each cell's piece starts and stops, in cell y. */
+interface RowPiece {
+  readonly first: boolean;
+  readonly last: boolean;
+  readonly h: number;
+  readonly starts: readonly number[];
+  readonly stops: readonly number[];
+}
+
+/**
+ * A view, link or cell whose children may go on different sheets. Like a kept wrapper on the
+ * page, one with `break-inside: avoid` that is taller than a page breaks anyway.
+ */
+function breaksBetween(box: Box, pageHeight: number): boolean {
+  const { style } = box;
+  const tag = box.node.tag;
+  const kept = style.breakInside === 'avoid' && box.h <= pageHeight + EPSILON;
+  return (
+    (tag === 'pdf-view' || tag === 'pdf-link' || tag === 'pdf-cell') &&
+    style.flexDirection === 'column' &&
+    !kept &&
+    canBreak({ ...style, breakInside: 'auto' })
+  );
+}
+
+/**
+ * The cell y's inside `box` (at cell y `top`) where a piece may end: between two lines of a text
+ * and between two children of a column view. Orphans and widows don't apply in a cell.
+ */
+function collectBreaks(box: Box, top: number, pageHeight: number, out: number[]): void {
+  if (box.text) {
+    if (!canBreak(box.style)) return;
+    const inner = top + box.padding.top + box.border.top;
+    for (let i = 1; i < box.text.lines.length; i++) out.push(inner + at(box.text.lines, i).y);
+    return;
+  }
+  if (!breaksBetween(box, pageHeight)) return;
+  inFlow(box).forEach((child, i) => {
+    if (i > 0) out.push(top + child.y);
+    collectBreaks(child, top + child.y, pageHeight, out);
+  });
+}
+
+/**
+ * The cells of a row taller than a page, ready to split; null when none of them can break. A
+ * cell's content pushed down by `justify-content` is moved back to its top: each piece is drawn
+ * from the top.
+ */
+function splitCells(row: Box, pageHeight: number): SplitCell[] | null {
+  const cells = inFlow(row).map((cell): SplitCell => {
+    const inset = cell.padding.top + cell.border.top;
+    const flow = inFlow(cell);
+    const lead = Math.max(0, (flow[0]?.y ?? inset) - inset);
+    const box: Box =
+      lead > 0
+        ? {
+            ...cell,
+            children: cell.children.map((c) => (isAbsolute(c) ? c : { ...c, y: c.y - lead })),
+          }
+        : cell;
+    const contentBottom = flow.reduce((bottom, c) => Math.max(bottom, c.y + c.h - lead), inset);
+    const end =
+      cell.style.height !== 'auto' || cell.text
+        ? cell.h
+        : Math.min(cell.h, contentBottom + cell.padding.bottom + cell.border.bottom);
+    const found: number[] = [];
+    collectBreaks(box, 0, pageHeight, found);
+    const breaks = [...new Set(found)]
+      .filter((y) => y > EPSILON && y < end - EPSILON)
+      .sort((a, b) => a - b);
+    return { box, breaks, end };
+  });
+  return cells.some((cell) => cell.breaks.length > 0) ? cells : null;
+}
+
+/** The index of the first item above `value` in an ascending list, or its length. */
+function firstAbove(list: readonly number[], value: number): number {
+  let [lo, hi] = [0, list.length];
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (at(list, mid) > value) hi = mid;
+    else lo = mid + 1;
+  }
+  return lo;
+}
+
+/**
+ * Where each cell's next piece stops, from `starts`, with `room` points for the cells. A cell
+ * stops at its last break that fits; one that ends here also needs `reserve` below it. When a
+ * cell with content left has no break that fits, the piece is null, unless `force` makes the cell
+ * take its next piece anyway, to be cut at the bottom of the sheet.
+ */
+function nextStops(
+  cells: readonly SplitCell[],
+  starts: readonly number[],
+  room: number,
+  reserve: number,
+  force: true,
+): number[];
+function nextStops(
+  cells: readonly SplitCell[],
+  starts: readonly number[],
+  room: number,
+  reserve: number,
+  force: boolean,
+): number[] | null;
+function nextStops(
+  cells: readonly SplitCell[],
+  starts: readonly number[],
+  room: number,
+  reserve: number,
+  force: boolean,
+): number[] | null {
+  const stops: number[] = [];
+  for (const [i, cell] of cells.entries()) {
+    const start = at(starts, i);
+    const limit = start + room + EPSILON;
+    if (start >= cell.end - EPSILON) {
+      stops.push(start);
+    } else if (cell.end + reserve <= limit) {
+      stops.push(cell.end);
+    } else {
+      const fits = firstAbove(cell.breaks, limit) - 1;
+      const next = firstAbove(cell.breaks, start + EPSILON);
+      if (fits >= next) stops.push(at(cell.breaks, fits));
+      else if (force) stops.push(cell.breaks[next] ?? cell.end);
+      else return null;
+    }
+  }
+  return stops;
+}
+
+/**
+ * Marks a piece of a box cut by a sheet break: no border on the cut edges, and its anchor only on
+ * the piece with its top.
+ */
+function cutPiece(
+  box: Box,
+  top: boolean,
+  bottom: boolean,
+  slice: { readonly offset: number; readonly height: number },
+): Box {
+  if (!top && !bottom) return box;
+  const { anchor, ...rest } = box;
+  return {
+    ...(top || anchor === undefined ? rest : { ...rest, anchor }),
+    cut: { top, bottom, ...(box.style.backgroundImage !== null && { slice }) },
+  };
+}
+
+/**
+ * The children of `box` (at cell y `top`) with a part in [from, to), placed in its piece that
+ * starts at cell y `pieceTop`.
+ */
+function sliceChildren(box: Box, top: number, pieceTop: number, from: number, to: number): Box[] {
+  const kept: Box[] = [];
+  for (const child of box.children) {
+    const piece = sliceBox(child, top + child.y, pieceTop, from, to);
+    if (piece) kept.push(piece);
+  }
+  return kept;
+}
+
+/**
+ * The part of `box` (at cell y `top`) in [from, to), placed in a parent piece that starts at cell
+ * y `parentTop`. A box across a cut is a text, cut between its lines, or a view, cut between its
+ * children; everything else, and an absolute box, goes whole with the piece its top lands in.
+ */
+function sliceBox(box: Box, top: number, parentTop: number, from: number, to: number): Box | null {
+  const bottom = top + box.h;
+  const cutTop = top < from - EPSILON;
+  const cutBottom = bottom > to + EPSILON;
+  const whole = top >= from - EPSILON && top < to - EPSILON;
+  const across =
+    (cutTop || cutBottom) &&
+    !isAbsolute(box) &&
+    (box.text !== undefined || box.children.length > 0) &&
+    top < to - EPSILON &&
+    bottom > from + EPSILON;
+  if (!across) return whole ? { ...box, y: top - parentTop } : null;
+  const pieceTop = Math.max(top, from);
+  const piece: Box = { ...box, y: pieceTop - parentTop, h: Math.min(bottom, to) - pieceTop };
+  const slice = { offset: pieceTop - top, height: box.h };
+  if (box.text) {
+    const inner = box.padding.top + box.border.top;
+    const lines = box.text.lines.filter((line) => {
+      const lineTop = top + inner + line.y;
+      return lineTop >= from - EPSILON && lineTop < to - EPSILON;
+    });
+    const moved = lines.map((line) => ({ ...line, y: top + line.y - pieceTop }));
+    return cutPiece({ ...piece, text: { ...box.text, lines: moved } }, cutTop, cutBottom, slice);
+  }
+  const children = sliceChildren(box, top, pieceTop, from, to);
+  return cutPiece({ ...piece, children }, cutTop, cutBottom, slice);
+}
+
+/** A split row's piece: its cells all as tall as the piece, each holding its own part. */
+function rowPieceBox(
+  row: Box,
+  cells: readonly SplitCell[],
+  piece: RowPiece,
+  offset: number,
+  height: number,
+): Box {
+  const insetTop = row.padding.top + row.border.top;
+  const insetBottom = row.padding.bottom + row.border.bottom;
+  const y = piece.first ? insetTop : 0;
+  const h = piece.h - y - (piece.last ? insetBottom : 0);
+  const slice = {
+    offset: Math.max(0, offset - insetTop),
+    height: Math.max(0, height - insetTop - insetBottom),
+  };
+  const children = cells.map((cell, i) => {
+    const from = at(piece.starts, i);
+    const to = at(piece.stops, i);
+    const pieceTop = piece.first ? 0 : from;
+    const content = sliceChildren(cell.box, 0, pieceTop, from, to);
+    return cutPiece({ ...cell.box, y, h, children: content }, !piece.first, !piece.last, slice);
+  });
+  const { anchor, ...rest } = row;
+  return {
+    ...(piece.first && anchor !== undefined ? { ...rest, anchor } : rest),
+    h: piece.h,
+    children,
+  };
+}
+
 /**
  * Breaks one pdf-page's content into pages. The content is laid out once at the content width
  * with unbounded height; units keep the vertical offsets between them from that layout, and a
  * unit moved to a new page starts at the content top (after the padding and border of the
- * wrappers that open with it). A unit is never split.
+ * wrappers that open with it). A unit is never split, except a table row taller than a page,
+ * which goes in pieces, one per sheet.
  */
 export function paginatePage(
   page: PdfNode,
@@ -791,6 +1068,114 @@ export function paginatePage(
   const keptHere = (i: number): Wrapper | undefined =>
     keptAt.get(i)?.find((wrapper) => keptBottom(wrapper) - wrapper.top <= contentHeight + EPSILON);
 
+  const placeHeader = (header: Header | null, leadTop: number): void => {
+    if (!header) return;
+    for (const row of header.rows) {
+      place(row, frame.left + row.x, leadTop + row.top - header.top, header.opacity);
+    }
+    current.headers.add(header);
+  };
+
+  /**
+   * Places a row taller than a page in pieces, one per sheet, from `next` on the current sheet,
+   * or from the top of the next one when a cell with content can't fit a piece here.
+   */
+  const splitRow = (
+    index: number,
+    unit: Unit,
+    cells: readonly SplitCell[],
+    planned: Plan,
+    replan: () => Plan,
+  ): void => {
+    const row = unit.box;
+    const insetTop = row.padding.top + row.border.top;
+    const insetBottom = row.padding.bottom + row.border.bottom;
+    // The last piece keeps the row's bottom inset and the wrappers closing with it on its sheet.
+    const reserve = insetBottom + Math.max(0, (closesAt.get(index) ?? unit.bottom) - unit.bottom);
+    const room = (top: number, first: boolean): number =>
+      frame.bottom - top - (first ? insetTop : 0);
+    let next = planned;
+    let starts: readonly number[] = cells.map(() => 0);
+    const here = nextStops(cells, starts, room(next.top, true), reserve, current.units === 0);
+    if (!here) {
+      startPage();
+      next = replan();
+    }
+    let stops = here ?? nextStops(cells, starts, room(next.top, true), reserve, true);
+    const pieces: (RowPiece & { built: PageBuilder; page: number; plan: Plan })[] = [];
+    for (;;) {
+      const first = pieces.length === 0;
+      const last = cells.every((cell, i) => at(stops, i) >= cell.end - EPSILON);
+      let content = 0;
+      for (const [i, stop] of stops.entries()) content = Math.max(content, stop - at(starts, i));
+      const h = (first ? insetTop : 0) + content + (last ? insetBottom : 0);
+      placeHeader(next.header, next.leadTop);
+      pieces.push({
+        first,
+        last,
+        h,
+        starts,
+        stops,
+        built: current,
+        page: pages.length - 1,
+        plan: next,
+      });
+      current.units++;
+      current.lastUnit = index;
+      if (last) break;
+      starts = stops;
+      startPage();
+      next = replan();
+      stops = nextStops(cells, starts, room(next.top, false), reserve, true);
+    }
+    // The pieces go in after their sheets' headers; a gradient runs over them end to end.
+    const height = pieces.reduce((sum, piece) => sum + piece.h, 0);
+    const sliced = pieces.length > 1 && row.style.backgroundImage !== null;
+    let offset = 0;
+    for (const piece of pieces) {
+      const top = piece.plan.top;
+      if (top + piece.h > frame.bottom + EPSILON) {
+        warn(`ngpdf: ${row.node.tag} is taller than a page and is cut at the bottom`);
+      }
+      piece.built.placed.push({
+        box: rowPieceBox(row, cells, piece, offset, height),
+        x: frame.left + unit.x + unit.dx,
+        y: top + unit.dy,
+        clipBottom: frame.bottom,
+        sliceTop: !piece.first,
+        sliceBottom: !piece.last,
+        ...(sliced && { slice: { offset, height } }),
+        ...fade(unit.opacity),
+      });
+      offset += piece.h;
+    }
+    const head = at(pieces, 0);
+    const tail = at(pieces, pieces.length - 1);
+    cursor = tail.plan.top + tail.h;
+    previousBottom = unit.bottom;
+    placements.push({
+      unit,
+      page: head.page,
+      unitShift: head.plan.top - unit.top,
+      leadShift: head.plan.leadTop - head.plan.leadFlow,
+      pieces: pieces.map((piece) => {
+        // A later piece starts where the cell that is furthest behind resumes.
+        let start = piece.first ? 0 : Infinity;
+        for (const [i, cell] of cells.entries()) {
+          const from = at(piece.starts, i);
+          if (from < cell.end - EPSILON) start = Math.min(start, insetTop + from);
+        }
+        const flowTop = unit.top + start;
+        return {
+          page: piece.page,
+          flowTop,
+          shift: piece.plan.top - flowTop,
+          bottom: piece.plan.top + piece.h,
+        };
+      }),
+    });
+  };
+
   units.forEach((unit, index) => {
     const before = units[index - 1];
     const afterPrevious = breaksAfter.has(index - 1) || (before && asksForBreakAfter(before.box));
@@ -798,10 +1183,17 @@ export function paginatePage(
       startPage();
       previousBottom = null;
     }
-    const plan = () => {
+    // A row taller than a page below its header splits, when its cells can break.
+    const below = unit.header ? unit.header.height + unit.header.gap : 0;
+    const cells =
+      unit.splits && unit.box.h > contentHeight - below + EPSILON
+        ? splitCells(unit.box, contentHeight)
+        : null;
+    const plan = (): Plan => {
       const header = unit.header && !current.headers.has(unit.header) ? unit.header : null;
       // A row that fits a page only without the header goes on its own page, at the top, without it.
       if (
+        !cells &&
         header &&
         current.units === 0 &&
         header.height + header.gap + unit.box.h > contentHeight + EPSILON &&
@@ -871,6 +1263,13 @@ export function paginatePage(
       textFirst = run.first;
       textLast = run.last;
     }
+    if (cells) {
+      splitRow(index, unit, cells, next, () => {
+        previousBottom = null;
+        return plan();
+      });
+      return;
+    }
     const planned = index <= textLast ? textBreaks : null;
     const trail = Math.max(0, (closesAt.get(index) ?? unit.bottom) - unit.bottom);
     const overflows = next.top + unit.box.h + trail > frame.bottom + EPSILON;
@@ -880,12 +1279,7 @@ export function paginatePage(
       next = plan();
     }
     const { header, leadFlow, leadTop, top } = next;
-    if (header) {
-      for (const row of header.rows) {
-        place(row, frame.left + row.x, leadTop + row.top - header.top, header.opacity);
-      }
-      current.headers.add(header);
-    }
+    placeHeader(header, leadTop);
     place(unit, frame.left + unit.x, top, unit.opacity);
     current.units++;
     current.lastUnit = index;
@@ -912,8 +1306,12 @@ export function paginatePage(
       else hi = mid - 1;
     }
     const above = placements[Math.max(0, found)];
-    let page = above?.page ?? 0;
-    let y = float.top + (above?.unitShift ?? frame.top);
+    // In a split row, the piece the box's top lands in.
+    const pieces = above?.pieces ?? [];
+    let piece = pieces[0];
+    for (const candidate of pieces) if (candidate.flowTop <= float.top + EPSILON) piece = candidate;
+    let page = piece?.page ?? above?.page ?? 0;
+    let y = float.top + (piece?.shift ?? above?.unitShift ?? frame.top);
     if (y >= frame.bottom - EPSILON) {
       const below = placements[found + 1];
       if (below) {
@@ -951,16 +1349,24 @@ export function paginatePage(
     if (!draws(wrapper.box.style) && !marked && !ctx.debug) continue;
     const first = at(placements, wrapper.first);
     const last = at(placements, wrapper.last);
+    const lastPage = last.pieces?.at(-1)?.page ?? last.page;
     // `full` is the piece's height before the page bottom cuts it.
     const pieces: { page: number; top: number; h: number; full: number }[] = [];
-    for (let p = first.page; p <= last.page; p++) {
+    for (let p = first.page; p <= lastPage; p++) {
       const built = at(pages, p);
       const top = p === first.page ? Math.max(frame.top, wrapper.top + first.leadShift) : frame.top;
-      const lastHere = p === last.page ? last : at(placements, built.lastUnit);
+      const lastHere = p === lastPage ? last : at(placements, built.lastUnit);
       // On a cut, the piece still covers the wrappers nested in it that close on this page.
-      const end =
-        p === last.page ? wrapper.bottom : (closesAt.get(built.lastUnit) ?? lastHere.unit.bottom);
-      const full = Math.max(0, end + lastHere.unitShift - top);
+      const flowEnd =
+        p === lastPage ? wrapper.bottom : (closesAt.get(built.lastUnit) ?? lastHere.unit.bottom);
+      // A row split across sheets ends with its piece there, and its last piece ends the row.
+      const rowPieces = lastHere.pieces ?? [];
+      const lastPiece = rowPieces.at(-1);
+      const piece = rowPieces.find((candidate) => candidate.page === p);
+      let end = flowEnd + lastHere.unitShift;
+      if (piece && piece !== lastPiece) end = piece.bottom;
+      else if (lastPiece) end = flowEnd - lastHere.unit.bottom + lastPiece.bottom;
+      const full = Math.max(0, end - top);
       pieces.push({ page: p, top, h: Math.min(full, Math.max(0, frame.bottom - top)), full });
     }
     // A gradient runs once over the pieces put end to end, uncut, so each sheet shows its part.
@@ -974,7 +1380,7 @@ export function paginatePage(
         x: frame.left + wrapper.x + wrapper.dx,
         y: piece.top + wrapper.dy,
         sliceTop: piece.page !== first.page,
-        sliceBottom: piece.page !== last.page,
+        sliceBottom: piece.page !== lastPage,
         ...(sliced && { slice: { offset, height } }),
         ...fade(wrapper.opacity),
       });
