@@ -822,12 +822,19 @@ function cutPiece(
 
 /**
  * The children of `box` (at cell y `top`) with a part in [from, to), placed in its piece that
- * starts at cell y `pieceTop`.
+ * starts at cell y `pieceTop`. `last` marks the piece that ends the cell.
  */
-function sliceChildren(box: Box, top: number, pieceTop: number, from: number, to: number): Box[] {
+function sliceChildren(
+  box: Box,
+  top: number,
+  pieceTop: number,
+  from: number,
+  to: number,
+  last: boolean,
+): Box[] {
   const kept: Box[] = [];
   for (const child of box.children) {
-    const piece = sliceBox(child, top + child.y, pieceTop, from, to);
+    const piece = sliceBox(child, top + child.y, pieceTop, from, to, last);
     if (piece) kept.push(piece);
   }
   return kept;
@@ -836,13 +843,23 @@ function sliceChildren(box: Box, top: number, pieceTop: number, from: number, to
 /**
  * The part of `box` (at cell y `top`) in [from, to), placed in a parent piece that starts at cell
  * y `parentTop`. A box across a cut is a text, cut between its lines, or a view, cut between its
- * children; everything else, and an absolute box, goes whole with the piece its top lands in.
+ * children; everything else, and an absolute box, goes whole with the piece its top lands in. So
+ * a note at a cut goes with the content after it. A box with its top at the very end of the cell,
+ * such as a note that is its last child, goes on the piece that ends the cell.
  */
-function sliceBox(box: Box, top: number, parentTop: number, from: number, to: number): Box | null {
+function sliceBox(
+  box: Box,
+  top: number,
+  parentTop: number,
+  from: number,
+  to: number,
+  last: boolean,
+): Box | null {
   const bottom = top + box.h;
   const cutTop = top < from - EPSILON;
   const cutBottom = bottom > to + EPSILON;
-  const whole = top >= from - EPSILON && top < to - EPSILON;
+  const atEnd = last && top <= to + EPSILON;
+  const whole = top >= from - EPSILON && (top < to - EPSILON || atEnd);
   const across =
     (cutTop || cutBottom) &&
     !isAbsolute(box) &&
@@ -862,7 +879,7 @@ function sliceBox(box: Box, top: number, parentTop: number, from: number, to: nu
     const moved = lines.map((line) => ({ ...line, y: top + line.y - pieceTop }));
     return cutPiece({ ...piece, text: { ...box.text, lines: moved } }, cutTop, cutBottom, slice);
   }
-  const children = sliceChildren(box, top, pieceTop, from, to);
+  const children = sliceChildren(box, top, pieceTop, from, to, last);
   return cutPiece({ ...piece, children }, cutTop, cutBottom, slice);
 }
 
@@ -886,7 +903,9 @@ function rowPieceBox(
     const from = at(piece.starts, i);
     const to = at(piece.stops, i);
     const pieceTop = piece.first ? 0 : from;
-    const content = sliceChildren(cell.box, 0, pieceTop, from, to);
+    // The piece that reaches the cell's end; later ones hold nothing of it.
+    const ends = to >= cell.end - EPSILON && (piece.first || from < cell.end - EPSILON);
+    const content = sliceChildren(cell.box, 0, pieceTop, from, to, ends);
     return cutPiece({ ...cell.box, y, h, children: content }, !piece.first, !piece.last, slice);
   });
   const { anchor, ...rest } = row;

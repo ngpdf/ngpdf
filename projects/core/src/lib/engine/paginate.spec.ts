@@ -1572,6 +1572,34 @@ describe('paginatePage: table rows taller than a page', () => {
     for (const node of [small, large]) expect(boxesOf(pages[1]!, node)[0]!.y).toBeCloseTo(0, 6);
   });
 
+  it('puts a note in a split cell on the piece where its point falls, once', () => {
+    const block = (): PdfNode => el('pdf-view', { height: '500' });
+    const [before, last, short, alone] = [
+      el('pdf-note'),
+      el('pdf-note'),
+      el('pdf-note'),
+      el('pdf-note'),
+    ];
+    const [a, b] = [block(), block()];
+    const row = el('pdf-row', {}, [cell([a, before, b, last]), cell([lines(3, 10, 'b'), short])]);
+    // A split row whose second cell holds the note only, starting on the second sheet.
+    const other = el('pdf-row', {}, [cell([lines(100, 10, 'c')]), cell([alone])]);
+    const pages = paginate(page([tableOf([row]), tableOf([other])]));
+    expect(pages).toHaveLength(3);
+    const sheets = (node: PdfNode): number[] =>
+      pages.flatMap((laid, i) => boxesOf(laid, node).map(() => i));
+    // Before the view that starts the second piece: there, at its top.
+    expect(sheets(before)).toEqual([1]);
+    expect(boxesOf(pages[1]!, before)[0]!.y).toBeCloseTo(boxesOf(pages[1]!, b)[0]!.y, 6);
+    // The last child of a cell, at the very end of its content, with no padding below.
+    expect(sheets(last)).toEqual([1]);
+    expect(boxesOf(pages[1]!, last)[0]!.y).toBeCloseTo(500, 6);
+    // In a cell that ends on the first piece, and in a cell with nothing else.
+    expect(sheets(short)).toEqual([0]);
+    expect(sheets(alone)).toEqual([1]);
+    expect(pages[1]!.placed.filter((p) => p.box.node === other)).toHaveLength(1);
+  });
+
   it('repeats the header above every piece', () => {
     const header = el('pdf-row', { height: '20' }, [cell([]), cell([])], { header: true });
     const long = lines(100);

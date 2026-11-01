@@ -1308,6 +1308,33 @@ describe('resolveStyles: pdf-note', () => {
     ).not.toThrow();
   });
 
+  it('throws under a pdf-text at any depth, also inside a view in it', () => {
+    const deep = el('pdf-text', {}, [el('pdf-view', {}, [el('pdf-view', {}, [note()])])]);
+    expect(() => resolveStyles(el('pdf-document', {}, [deep]))).toThrow(
+      'ngpdf: pdf-note inside a pdf-text',
+    );
+    const beside = el('pdf-view', {}, [el('pdf-text'), el('pdf-view', {}, [note()])]);
+    expect(() => resolveStyles(el('pdf-document', {}, [beside]))).not.toThrow();
+  });
+
+  it('drops the properties that do not apply before parsing them, with a warning', () => {
+    const warn = vi.fn();
+    const style = styleOf(
+      { transform: 'rotate(45deg)', padding: 'not a length', margin: '10', color: 'blue' },
+      'pdf-note',
+      warn,
+    );
+    expect(style.transform).toEqual([]);
+    expect(style.padding).toEqual({ top: 0, right: 0, bottom: 0, left: 0 });
+    expect(style.margin).toEqual({ top: 0, right: 0, bottom: 0, left: 0 });
+    expect(style.color).toEqual(BLUE);
+    expect(warn.mock.calls).toEqual([
+      ['ngpdf: transform has no effect on pdf-note'],
+      ['ngpdf: padding has no effect on pdf-note'],
+      ['ngpdf: margin has no effect on pdf-note'],
+    ]);
+  });
+
   it('warns about properties other than color and position', () => {
     const warn = vi.fn();
     styleOf(

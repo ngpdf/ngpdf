@@ -160,13 +160,14 @@ An element with [`position: absolute`](/docs/layout-and-styling#positioning) is 
 
 ## Notes
 
-A [`pdf-note`](/docs/elements#pdf-note) takes no space and is never a unit of its own, so it never starts a sheet or lands alone on an empty one.
+A [`pdf-note`](/docs/elements#pdf-note) takes no space and is never a unit of its own. A note in the flow never adds a sheet: it goes on a sheet that other content already needs. A page with nothing but notes still gets its one sheet, as an empty page does.
 
 - It goes on the sheet of the content right after it, at the top of where that content starts. When that content moves to the next sheet, or a `breakBefore` or `breakAfter` sends it there, the note goes with it.
 - When it is the last child of its parent, it goes on the sheet of the content before it, at its bottom.
 - Inside a unit, such as a row `pdf-view`, it is drawn with that unit.
+- Inside a [table row split across sheets](#rows-taller-than-a-page), it goes on the piece where its point falls: with the content after it at a break, or on the last piece of its cell when it is that cell's last child.
 - Inside a [fixed view](#fixed-headers-and-footers) it is written on every sheet.
-- With `position: absolute` it follows the rules of [positioned elements](#positioned-elements) instead.
+- With `position: absolute` it follows the rules of [positioned elements](#positioned-elements) instead, so one placed below all the content gets a sheet of its own.
 
 ## Fixed headers and footers
 
