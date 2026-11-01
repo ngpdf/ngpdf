@@ -317,6 +317,36 @@ describe('renderDocument', () => {
     expect(hyphenate).toHaveBeenCalledExactlyOnceWith('hyphenation', 'en-US');
   });
 
+  it('asks the hyphenation function again in each render, with that render’s language', async () => {
+    const hyphenate = vi.fn((word: string) =>
+      word === 'hyphenation' ? ['hy', 'phen', 'ation'] : [word],
+    );
+    const page = () =>
+      el(
+        'pdf-page',
+        {},
+        [el('pdf-view', { width: '40', hyphens: 'auto' }, [text('hyphenation')])],
+        {
+          size: 'A4',
+        },
+      );
+    await renderDocument(host({ language: 'en-us' }, [page()]), {
+      writer: recordingWriter(),
+      dev: false,
+      hyphenate,
+    });
+    const writer = recordingWriter();
+    await renderDocument(host({}, [page()]), { writer, dev: false, hyphenate });
+    expect(hyphenate.mock.calls).toEqual([
+      ['hyphenation', 'en-US'],
+      ['hyphenation', undefined],
+    ]);
+    const drawn = writer.recorded[0]!.pages[0]!.ops.flatMap((op) =>
+      op.op === 'text' ? [op.text] : [],
+    );
+    expect(drawn).toEqual(['hyphen-', 'ation']);
+  });
+
   it('warns once that hyphens: auto has no hyphenation function', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     const column = el('pdf-view', { width: '40', hyphens: 'auto' }, [
