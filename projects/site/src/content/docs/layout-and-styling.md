@@ -207,6 +207,37 @@ These throw an `ngpdf:` error: `repeating-linear-gradient()`, `repeating-radial-
 - An absolute element is never split across sheets; [Pagination](/docs/pagination#positioned-elements) says where it goes.
 - `z-index` is not supported. None of these properties is inherited. They are ignored on `pdf-page`, `pdf-row` and `pdf-cell`, whose values are still checked, and have no effect on a `pdf-span`.
 
+## Debugging layouts
+
+When a box is not where you expect it, turn on `debug` on `pdf-document` and look at the PDF:
+
+```html
+<pdf-document [debug]="debug()">
+  <pdf-page style="padding: 36">
+    <pdf-view style="padding: 12; border: 1 solid #ccc">
+      <pdf-text>Where does this end?</pdf-text>
+    </pdf-view>
+  </pdf-page>
+</pdf-document>
+```
+
+A bare `debug` attribute turns it on too. Bind it to an input or a signal so it is on only while you check a layout. Every box then gets outlines drawn on top of the page:
+
+- Each `pdf-view`, `pdf-text`, `pdf-image`, `pdf-table`, `pdf-row`, `pdf-cell`, `pdf-link` and `pdf-page-number` gets a 0.5pt red outline around its border box.
+- When the box has padding or a border, its content box gets a blue dashed outline. The gap between the red and the blue line is the padding plus the border.
+- A grey label in 4pt Helvetica sits in the top left corner: the tag without `pdf-` and the size in points, such as `view 120×40`. A box smaller than its label gets no label.
+- The content area of the page, the sheet less its padding, gets a green dashed outline.
+- Each line of a `pdf-text` gets a thin grey outline, which shows the line height and where the text wrapped.
+- An element of size 0 by 0 gets a small red cross where it sits.
+
+What debug does and does not change:
+
+- The layout and the page breaks stay the same as without `debug`. Only the outlines are added.
+- The outlines are drawn after everything else on the sheet, so no background hides them. They turn with a [transform](#transforms), and an [`overflow`](#overflow) clip does not cut them, so a clipped box still shows its whole outline.
+- A box split across sheets is outlined piece by piece on each sheet. A repeated table header and a [fixed view](/docs/pagination#fixed-headers-and-footers) are outlined on every sheet. [Absolute elements](#positioning) are outlined where they land.
+- The labels use a standard font, so they work without any custom font.
+- Each render with `debug` on prints one dev-mode warning, `ngpdf: debug outlines are on`, so a debug PDF does not get shipped by mistake. Labels are real text, so they show up when the PDF is searched or copied.
+
 ## Inheritance
 
 Text styles are inherited from parent to child: `color`, `font-family`, `font-size`, `font-weight`, `font-style`, `line-height`, `text-align`, `text-decoration`, `letter-spacing` and `text-transform`. Set them on a `pdf-page`, a `pdf-view` or a `pdf-cell` and every text inside follows. No other property is inherited.

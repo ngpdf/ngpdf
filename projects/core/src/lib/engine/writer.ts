@@ -114,6 +114,8 @@ export type DrawOp =
       readonly width: number;
       readonly color: string;
       readonly opacity: number;
+      /** Dash and gap lengths, repeated along the path; solid without. Each one above 0. */
+      readonly dash?: readonly number[];
     }
   | {
       readonly op: 'text';
@@ -932,6 +934,7 @@ function drawOp(
     case 'path':
       doc.save();
       doc.lineWidth(op.width).strokeColor(op.color, op.opacity);
+      if (op.dash) doc.dash([...op.dash]);
       doc.moveTo(op.from.x, op.from.y);
       for (const segment of op.segments) pathTo(doc, segment);
       doc.stroke();

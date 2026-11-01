@@ -20,6 +20,7 @@ const DOCUMENT_NAMES = [
   'span-sample',
   'article-sample',
   'fixed-sample',
+  'fixed-debug',
   'contents-sample',
   'secure-sample',
 ] as const;
@@ -112,6 +113,8 @@ export class App {
         return this.pdf.toBlob(ArticleSample);
       case 'fixed-sample':
         return this.pdf.toBlob(FixedSample);
+      case 'fixed-debug':
+        return this.pdf.toBlob(FixedSample, { inputs: { debug: true } });
       case 'contents-sample':
         return this.pdf.toBlob(ContentsSample);
       case 'secure-sample':

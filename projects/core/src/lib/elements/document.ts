@@ -1,4 +1,4 @@
-import { Component, ElementRef, inject, input } from '@angular/core';
+import { Component, ElementRef, booleanAttribute, inject, input } from '@angular/core';
 import type { PdfNode } from '../tree/node';
 
 import type { PdfSecurity } from '../tree/security';
@@ -23,6 +23,8 @@ export class PdfDocument {
   readonly pageLayout = input<PageLayout>();
   /** Encrypts the file with AES-256 and sets what a viewer lets the reader do. */
   readonly security = input<PdfSecurity>();
+  /** Outlines every box, the page's content area and each text line, for checking a layout. */
+  readonly debug = input(false, { transform: booleanAttribute });
 
   constructor() {
     (inject(ElementRef).nativeElement as PdfNode).owner = this;
@@ -41,6 +43,7 @@ export class PdfDocument {
       pageMode: this.pageMode(),
       pageLayout: this.pageLayout(),
       security: this.security(),
+      debug: this.debug(),
     };
   }
 }

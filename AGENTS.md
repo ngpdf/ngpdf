@@ -181,6 +181,10 @@ The site (`projects/site`) is a prerendered Angular app. Its docs are the Markdo
   - Restricted permissions without an `ownerPassword` get a random 32-byte owner password.
   - A wrong type, an unknown field or value, or a password over 127 bytes in UTF-8 (also after
     NFKC) throws `ngpdf: invalid security <field>`. No error message contains a password.
+- **Debug outlines:** `debug` on `pdf-document` outlines every box (border box, content box, a
+  label with the tag and size), the page's content area and each text line, after everything
+  else on the sheet. It never changes layout or pagination, and each render with it on gives one
+  dev-mode warning, `ngpdf: debug outlines are on`.
 - **Out of v0.1:**
   - server rendering;
   - SVG;

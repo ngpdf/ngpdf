@@ -42,6 +42,12 @@ const DOCUMENTS = [
     pages: 3,
     contains: ['Stock count', 'Sheet 1 of 3', 'Sheet 3 of 3', '3/3', 'SKU-1069'],
   },
+  // The same document with debug outlines: the same pages, plus a label on each box.
+  {
+    name: 'fixed-debug',
+    pages: 3,
+    contains: ['Stock count', 'Sheet 3 of 3', 'SKU-1069', 'row 347.5×18', 'page-number 76.2×12'],
+  },
   {
     name: 'contents-sample',
     pages: 3,

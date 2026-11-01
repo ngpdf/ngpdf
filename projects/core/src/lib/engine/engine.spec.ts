@@ -98,6 +98,49 @@ describe('renderDocument', () => {
     expect(pages[0]!.ops.some((op) => op.op === 'text' && op.text === 'single')).toBe(true);
   });
 
+  it('breaks pages in the same places with debug on, adding outlines after each sheet', async () => {
+    const paragraph = Array.from({ length: 40 }, (_, i) => `Line ${String(i)} of a long text.`);
+    const build = (debug: boolean): PdfNode => {
+      const rows = [0, 1, 2].map(() => el('pdf-view', { height: '250', padding: '6' }));
+      const wrapper = el('pdf-view', { padding: '10' }, [...rows, text(paragraph.join(' '))]);
+      const header = el('pdf-view', { height: '20' }, [text('Head')], { fixed: 'top' });
+      const page = el('pdf-page', { padding: '36' }, [header, wrapper, el('pdf-page-number')], {
+        size: 'A5',
+      });
+      return host({ debug }, [page]);
+    };
+    const plain = recordingWriter();
+    const debug = recordingWriter();
+    await renderDocument(build(false), { writer: plain, dev: false });
+    await renderDocument(build(true), { writer: debug, dev: false });
+    const plainPages = plain.recorded[0]!.pages;
+    const debugPages = debug.recorded[0]!.pages;
+    expect(plainPages.length).toBeGreaterThan(1);
+    expect(debugPages).toHaveLength(plainPages.length);
+    debugPages.forEach((sheet, index) => {
+      const ops = plainPages[index]!.ops;
+      expect(sheet.ops.slice(0, ops.length)).toEqual(ops);
+      // The fixed header and its text, the page number and the piece of the plain wrapper.
+      const full = sheet.ops.filter(
+        (op) =>
+          op.op === 'path' &&
+          op.color === '#ff0000' &&
+          op.from.x === 36 &&
+          Math.round((op.segments[0]?.to.x ?? 0) * 100) === 38353,
+      );
+      expect(full).toHaveLength(4);
+    });
+  });
+
+  it('warns once per render in dev mode while debug outlines are on', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    await renderDocument(twoPages({ debug: true }), { writer: recordingWriter(), dev: true });
+    expect(warn.mock.calls).toEqual([['ngpdf: debug outlines are on']]);
+    warn.mockClear();
+    await renderDocument(twoPages({ debug: false }), { writer: recordingWriter(), dev: true });
+    expect(warn).not.toHaveBeenCalled();
+  });
+
   it('accepts pageMode UseOutlines, which opens the bookmarks panel', async () => {
     const writer = recordingWriter();
     await renderDocument(twoPages({ pageMode: 'UseOutlines' }), { writer, dev: false });

@@ -18,6 +18,8 @@ export interface DisplayListOptions {
   readonly fonts?: FontRegistry;
   /** Receives the characters of the page number that no font in its family has. */
   readonly warnMissing?: (chars: string[]) => void;
+  /** Outlines every box, the page's content area and each text line, after the sheet's ops. */
+  readonly debug?: boolean;
 }
 
 /** The op color and opacity for `color`; null when its alpha leaves nothing to paint. */
@@ -46,6 +48,8 @@ interface Numbering {
   /** Overrides every page number's own format. */
   readonly format: string | undefined;
   readonly options: DisplayListOptions;
+  /** The sheet's debug outlines, drawn after everything else on it; unset with debug off. */
+  readonly outlines?: DrawOp[] | undefined;
 }
 
 const IDENTITY: Matrix = [1, 0, 0, 1, 0, 0];
@@ -346,6 +350,10 @@ function drawBox(
     // A box that drew nothing needs no transform.
     if (out.length === firstOp + 1) out.pop();
     else out.push({ op: 'untransform' });
+  }
+
+  if (numbering.outlines) {
+    outlineBox(box, x, y, limit, cuts, matrix, numbering.options.metrics, numbering.outlines);
   }
 }
 
@@ -665,7 +673,16 @@ export function displayList(
   options: DisplayListOptions,
 ): DrawOp[] {
   const out: DrawOp[] = [];
-  const numbering: Numbering = { pageIndex, pageCount, format: formatOverride, options };
+  const outlines = options.debug
+    ? [outlinePath(page.content, DEBUG_COLORS.page, OUTLINE_WIDTH, DASH)]
+    : undefined;
+  const numbering: Numbering = {
+    pageIndex,
+    pageCount,
+    format: formatOverride,
+    options,
+    outlines,
+  };
   for (const decoration of page.decorations) drawPlaced(decoration, numbering, out);
   for (const placed of page.placed) drawPlaced(placed, numbering, out);
   if (page.pageNumber) {
@@ -673,5 +690,146 @@ export function displayList(
     const cuts = { top: false, bottom: false };
     drawBox(box, x, y, Infinity, cuts, page.pageNumber.opacity ?? 1, IDENTITY, numbering, out, []);
   }
+  // On top of everything, outside every clip, so nothing hides them.
+  if (outlines) out.push(...outlines);
   return out;
+}
+
+const DEBUG_COLORS = {
+  border: '#ff0000',
+  content: '#0000ff',
+  page: '#008000',
+  line: '#808080',
+} as const;
+const OUTLINE_WIDTH = 0.5;
+const LINE_OUTLINE_WIDTH = 0.25;
+const DASH = [2, 2] as const;
+const LABEL_SIZE = 4;
+// A label's line box at LABEL_SIZE, and its gap from the border box's top left corner.
+const LABEL_HEIGHT = LABEL_SIZE * 1.2;
+const LABEL_INSET = 1;
+const CROSS = 2;
+
+/** `rect` as a closed stroked path: a rect op only fills. */
+function outlinePath(
+  rect: Rect,
+  color: string,
+  width: number,
+  dash?: readonly number[],
+): Op<'path'> {
+  const { x, y, w, h } = rect;
+  return {
+    op: 'path',
+    from: { x, y },
+    segments: [
+      { kind: 'line', to: { x: x + w, y } },
+      { kind: 'line', to: { x: x + w, y: y + h } },
+      { kind: 'line', to: { x, y: y + h } },
+      { kind: 'line', to: { x, y } },
+    ],
+    width,
+    color,
+    opacity: 1,
+    ...(dash && { dash }),
+  };
+}
+
+type Op<K extends DrawOp['op']> = Extract<DrawOp, { op: K }>;
+
+const points = (n: number): string => String(Math.round(n * 10) / 10);
+
+/**
+ * The debug outlines of a box or of its piece on this sheet: its border box, its content box
+ * when that differs, each text line box and a label with the tag and size, or a cross for a
+ * zero-size box. Cut at `limit` like the box, not by an overflow clip, and drawn under the box's
+ * transform.
+ */
+function outlineBox(
+  box: Box,
+  x: number,
+  y: number,
+  limit: number,
+  cuts: Cuts,
+  matrix: Matrix,
+  metrics: FontMetrics,
+  outlines: DrawOp[],
+): void {
+  // The page's content area stands for the page.
+  if (box.node.tag === 'pdf-page' || y >= limit) return;
+  const ops: DrawOp[] = [];
+  const red = { width: OUTLINE_WIDTH, color: DEBUG_COLORS.border, opacity: 1 };
+  if (box.w === 0 && box.h === 0) {
+    ops.push(
+      { op: 'line', x1: x - CROSS, y1: y - CROSS, x2: x + CROSS, y2: y + CROSS, ...red },
+      { op: 'line', x1: x - CROSS, y1: y + CROSS, x2: x + CROSS, y2: y - CROSS, ...red },
+    );
+  } else {
+    const bottom = Math.min(y + box.h, limit);
+    ops.push(outlinePath({ x, y, w: box.w, h: bottom - y }, red.color, red.width));
+
+    // A page cut or the limit is no edge of the box, so no padding or border sits there.
+    const inset = {
+      top: cuts.top ? 0 : box.padding.top + box.border.top,
+      right: box.padding.right + box.border.right,
+      bottom: cuts.bottom || y + box.h > limit ? 0 : box.padding.bottom + box.border.bottom,
+      left: box.padding.left + box.border.left,
+    };
+    if (inset.top + inset.right + inset.bottom + inset.left > 0) {
+      const content = {
+        x: x + inset.left,
+        y: y + inset.top,
+        w: Math.max(0, box.w - inset.left - inset.right),
+        h: Math.max(0, bottom - inset.bottom - y - inset.top),
+      };
+      ops.push(outlinePath(content, DEBUG_COLORS.content, OUTLINE_WIDTH, DASH));
+    }
+
+    if (box.text) {
+      const contentLeft = x + box.padding.left + box.border.left;
+      const contentTop = y + box.padding.top + box.border.top;
+      const contentWidth = Math.max(
+        0,
+        box.w - box.padding.left - box.border.left - box.padding.right - box.border.right,
+      );
+      const align = box.style.textAlign;
+      for (const line of box.text.lines) {
+        const lineTop = contentTop + line.y;
+        if (lineTop + line.height > limit + 1e-6) continue;
+        // A justified line is stretched to the content width.
+        const stretched = align === 'justify' && wordSpacing(line, contentWidth) > 0;
+        const rect = {
+          x: alignedX(contentLeft, contentWidth, line.width, align),
+          y: lineTop,
+          w: stretched ? contentWidth : line.width,
+          h: line.height,
+        };
+        ops.push(outlinePath(rect, DEBUG_COLORS.line, LINE_OUTLINE_WIDTH));
+      }
+    }
+
+    const tag = box.node.tag.startsWith('pdf-') ? box.node.tag.slice(4) : box.node.tag;
+    const label = `${tag} ${points(box.w)}×${points(box.h)}`;
+    const fits =
+      metrics.widthOf(label, 'Helvetica', LABEL_SIZE) + 2 * LABEL_INSET <= box.w &&
+      LABEL_HEIGHT + 2 * LABEL_INSET <= bottom - y;
+    if (fits) {
+      ops.push({
+        op: 'text',
+        x: x + LABEL_INSET,
+        y: y + LABEL_INSET,
+        text: label,
+        font: 'Helvetica',
+        size: LABEL_SIZE,
+        color: DEBUG_COLORS.line,
+        opacity: 1,
+        underline: false,
+        strike: false,
+      });
+    }
+  }
+  if (matrix === IDENTITY) {
+    outlines.push(...ops);
+  } else {
+    outlines.push({ op: 'transform', matrix }, ...ops, { op: 'untransform' });
+  }
 }

@@ -1,0 +1,501 @@
+Stock count
+text 200.3×12
+view  347.5×19
+                                          Warehouse 7
+                                          text 59.1×12
+                                                              Sheet 1 of 3
+                                                              page-number 76.2×12
+
+
+
+
+Item
+table260.6×12
+text
+cell
+row  347.5×13
+      347.5×463                                          text 86.9×12
+                                                         cell
+                                                                                    Count
+row 347.5×18
+SKU-1000 Bolts
+text 260.6×12
+cell                                                     text 86.9×12
+                                                         cell
+                                                                                        0
+row 347.5×18
+SKU-1001 Washers
+text 260.6×12
+cell                                                     text 86.9×12
+                                                         cell
+                                                                                       37
+row 347.5×18
+SKU-1002 Hinges
+text 260.6×12
+cell                                                     text 86.9×12
+                                                         cell
+                                                                                       74
+row 347.5×18
+SKU-1003 Brackets
+text 260.6×12
+cell                                                     text 86.9×12
+                                                         cell
+                                                                                      111
+row 347.5×18
+SKU-1004 Screws
+text 260.6×12
+cell                                                     text 86.9×12
+                                                         cell
+                                                                                      148
+row 347.5×18
+SKU-1005 Bolts
+text 260.6×12
+cell                                                     text 86.9×12
+                                                         cell
+                                                                                      185
+row 347.5×18
+SKU-1006 Washers
+text 260.6×12
+cell                                                     text 86.9×12
+                                                         cell
+                                                                                      222
+row 347.5×18
+SKU-1007 Hinges
+text 260.6×12
+cell                                                     text 86.9×12
+                                                         cell
+                                                                                      259
+row 347.5×18
+SKU-1008 Brackets
+text 260.6×12
+cell                                                     text 86.9×12
+                                                         cell
+                                                                                      296
+row 347.5×18
+SKU-1009 Screws
+text 260.6×12
+cell                                                     text 86.9×12
+                                                         cell
+                                                                                      333
+row 347.5×18
+SKU-1010 Bolts
+text 260.6×12
+cell                                                     text 86.9×12
+                                                         cell
+                                                                                      370
+row 347.5×18
+SKU-1011 Washers
+text 260.6×12
+cell                                                     text 86.9×12
+                                                         cell
+                                                                                      407
+row 347.5×18
+SKU-1012 Hinges
+text 260.6×12
+cell                                                     text 86.9×12
+                                                         cell
+                                                                                      444
+row 347.5×18
+SKU-1013 Brackets
+text 260.6×12
+cell                                                     text 86.9×12
+                                                         cell
+                                                                                      481
+row 347.5×18
+SKU-1014 Screws
+text 260.6×12
+cell                                                     text 86.9×12
+                                                         cell
+                                                                                       18
+row 347.5×18
+SKU-1015 Bolts
+text 260.6×12
+cell                                                     text 86.9×12
+                                                         cell
+                                                                                       55
+row 347.5×18
+SKU-1016 Washers
+text 260.6×12
+cell                                                     text 86.9×12
+                                                         cell
+                                                                                       92
+row 347.5×18
+SKU-1017 Hinges
+text 260.6×12
+cell                                                     text 86.9×12
+                                                         cell
+                                                                                      129
+row 347.5×18
+SKU-1018 Brackets
+text 260.6×12
+cell                                                     text 86.9×12
+                                                         cell
+                                                                                      166
+row 347.5×18
+SKU-1019 Screws
+text 260.6×12
+cell                                                     text 86.9×12
+                                                         cell
+                                                                                      203
+row 347.5×18
+SKU-1020 Bolts
+text 260.6×12
+cell                                                     text 86.9×12
+                                                         cell
+                                                                                      240
+row 347.5×18
+SKU-1021 Washers
+text 260.6×12
+cell                                                     text 86.9×12
+                                                         cell
+                                                                                      277
+row 347.5×18
+SKU-1022 Hinges
+text 260.6×12
+cell                                                     text 86.9×12
+                                                         cell
+                                                                                      314
+row 347.5×18
+SKU-1023 Brackets
+text 260.6×12
+cell                                                     text 86.9×12
+                                                         cell
+                                                                                      351
+row 347.5×18
+SKU-1024 Screws
+text 260.6×12
+cell                                                     text 86.9×12
+                                                         cell
+                                                                                      388
+
+Made-up
+      347.5×9.6 data for the ngpdf demo
+text 347.5×9.6
+view
+
+page-number 347.5×9.6                                                                  1/3
+Stock count
+text 200.3×12
+view  347.5×19
+                                          Warehouse 7
+                                          text 59.1×12
+                                                              Sheet 2 of 3
+                                                              page-number 76.2×12
+
+
+
+
+Item
+table260.6×12
+text
+cell
+row  347.5×13
+      347.5×463                                          text 86.9×12
+                                                         cell
+                                                                                    Count
+row 347.5×18
+SKU-1025 Bolts
+text 260.6×12
+cell                                                     text 86.9×12
+                                                         cell
+                                                                                      425
+row 347.5×18
+SKU-1026 Washers
+text 260.6×12
+cell                                                     text 86.9×12
+                                                         cell
+                                                                                      462
+row 347.5×18
+SKU-1027 Hinges
+text 260.6×12
+cell                                                     text 86.9×12
+                                                         cell
+                                                                                      499
+row 347.5×18
+SKU-1028 Brackets
+text 260.6×12
+cell                                                     text 86.9×12
+                                                         cell
+                                                                                       36
+row 347.5×18
+SKU-1029 Screws
+text 260.6×12
+cell                                                     text 86.9×12
+                                                         cell
+                                                                                       73
+row 347.5×18
+SKU-1030 Bolts
+text 260.6×12
+cell                                                     text 86.9×12
+                                                         cell
+                                                                                      110
+row 347.5×18
+SKU-1031 Washers
+text 260.6×12
+cell                                                     text 86.9×12
+                                                         cell
+                                                                                      147
+row 347.5×18
+SKU-1032 Hinges
+text 260.6×12
+cell                                                     text 86.9×12
+                                                         cell
+                                                                                      184
+row 347.5×18
+SKU-1033 Brackets
+text 260.6×12
+cell                                                     text 86.9×12
+                                                         cell
+                                                                                      221
+row 347.5×18
+SKU-1034 Screws
+text 260.6×12
+cell                                                     text 86.9×12
+                                                         cell
+                                                                                      258
+row 347.5×18
+SKU-1035 Bolts
+text 260.6×12
+cell                                                     text 86.9×12
+                                                         cell
+                                                                                      295
+row 347.5×18
+SKU-1036 Washers
+text 260.6×12
+cell                                                     text 86.9×12
+                                                         cell
+                                                                                      332
+row 347.5×18
+SKU-1037 Hinges
+text 260.6×12
+cell                                                     text 86.9×12
+                                                         cell
+                                                                                      369
+row 347.5×18
+SKU-1038 Brackets
+text 260.6×12
+cell                                                     text 86.9×12
+                                                         cell
+                                                                                      406
+row 347.5×18
+SKU-1039 Screws
+text 260.6×12
+cell                                                     text 86.9×12
+                                                         cell
+                                                                                      443
+row 347.5×18
+SKU-1040 Bolts
+text 260.6×12
+cell                                                     text 86.9×12
+                                                         cell
+                                                                                      480
+row 347.5×18
+SKU-1041 Washers
+text 260.6×12
+cell                                                     text 86.9×12
+                                                         cell
+                                                                                       17
+row 347.5×18
+SKU-1042 Hinges
+text 260.6×12
+cell                                                     text 86.9×12
+                                                         cell
+                                                                                       54
+row 347.5×18
+SKU-1043 Brackets
+text 260.6×12
+cell                                                     text 86.9×12
+                                                         cell
+                                                                                       91
+row 347.5×18
+SKU-1044 Screws
+text 260.6×12
+cell                                                     text 86.9×12
+                                                         cell
+                                                                                      128
+row 347.5×18
+SKU-1045 Bolts
+text 260.6×12
+cell                                                     text 86.9×12
+                                                         cell
+                                                                                      165
+row 347.5×18
+SKU-1046 Washers
+text 260.6×12
+cell                                                     text 86.9×12
+                                                         cell
+                                                                                      202
+row 347.5×18
+SKU-1047 Hinges
+text 260.6×12
+cell                                                     text 86.9×12
+                                                         cell
+                                                                                      239
+row 347.5×18
+SKU-1048 Brackets
+text 260.6×12
+cell                                                     text 86.9×12
+                                                         cell
+                                                                                      276
+row 347.5×18
+SKU-1049 Screws
+text 260.6×12
+cell                                                     text 86.9×12
+                                                         cell
+                                                                                      313
+
+Made-up
+      347.5×9.6 data for the ngpdf demo
+text 347.5×9.6
+view
+
+page-number 347.5×9.6                                                                  2/3
+Stock count
+text 200.3×12
+view  347.5×19
+                                          Warehouse 7
+                                          text 59.1×12
+                                                              Sheet 3 of 3
+                                                              page-number 76.2×12
+
+
+
+
+Item
+table260.6×12
+text
+cell
+row  347.5×13
+      347.5×373                                          text 86.9×12
+                                                         cell
+                                                                                    Count
+row 347.5×18
+SKU-1050 Bolts
+text 260.6×12
+cell                                                     text 86.9×12
+                                                         cell
+                                                                                      350
+row 347.5×18
+SKU-1051 Washers
+text 260.6×12
+cell                                                     text 86.9×12
+                                                         cell
+                                                                                      387
+row 347.5×18
+SKU-1052 Hinges
+text 260.6×12
+cell                                                     text 86.9×12
+                                                         cell
+                                                                                      424
+row 347.5×18
+SKU-1053 Brackets
+text 260.6×12
+cell                                                     text 86.9×12
+                                                         cell
+                                                                                      461
+row 347.5×18
+SKU-1054 Screws
+text 260.6×12
+cell                                                     text 86.9×12
+                                                         cell
+                                                                                      498
+row 347.5×18
+SKU-1055 Bolts
+text 260.6×12
+cell                                                     text 86.9×12
+                                                         cell
+                                                                                       35
+row 347.5×18
+SKU-1056 Washers
+text 260.6×12
+cell                                                     text 86.9×12
+                                                         cell
+                                                                                       72
+row 347.5×18
+SKU-1057 Hinges
+text 260.6×12
+cell                                                     text 86.9×12
+                                                         cell
+                                                                                      109
+row 347.5×18
+SKU-1058 Brackets
+text 260.6×12
+cell                                                     text 86.9×12
+                                                         cell
+                                                                                      146
+row 347.5×18
+SKU-1059 Screws
+text 260.6×12
+cell                                                     text 86.9×12
+                                                         cell
+                                                                                      183
+row 347.5×18
+SKU-1060 Bolts
+text 260.6×12
+cell                                                     text 86.9×12
+                                                         cell
+                                                                                      220
+row 347.5×18
+SKU-1061 Washers
+text 260.6×12
+cell                                                     text 86.9×12
+                                                         cell
+                                                                                      257
+row 347.5×18
+SKU-1062 Hinges
+text 260.6×12
+cell                                                     text 86.9×12
+                                                         cell
+                                                                                      294
+row 347.5×18
+SKU-1063 Brackets
+text 260.6×12
+cell                                                     text 86.9×12
+                                                         cell
+                                                                                      331
+row 347.5×18
+SKU-1064 Screws
+text 260.6×12
+cell                                                     text 86.9×12
+                                                         cell
+                                                                                      368
+row 347.5×18
+SKU-1065 Bolts
+text 260.6×12
+cell                                                     text 86.9×12
+                                                         cell
+                                                                                      405
+row 347.5×18
+SKU-1066 Washers
+text 260.6×12
+cell                                                     text 86.9×12
+                                                         cell
+                                                                                      442
+row 347.5×18
+SKU-1067 Hinges
+text 260.6×12
+cell                                                     text 86.9×12
+                                                         cell
+                                                                                      479
+row 347.5×18
+SKU-1068 Brackets
+text 260.6×12
+cell                                                     text 86.9×12
+                                                         cell
+                                                                                       16
+row 347.5×18
+SKU-1069 Screws
+text 260.6×12
+cell                                                     text 86.9×12
+                                                         cell
+                                                                                       53
+
+
+
+
+Made-up
+      347.5×9.6 data for the ngpdf demo
+text 347.5×9.6
+view
+
+page-number 347.5×9.6                                                                  3/3

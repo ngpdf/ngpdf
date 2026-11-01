@@ -1661,3 +1661,226 @@ describe('position', () => {
     expect(kinds(ops)).toEqual(['clip', '#111111', 'unclip', '#333333']);
   });
 });
+
+describe('debug outlines', () => {
+  const RED = '#ff0000';
+  const BLUE = '#0000ff';
+  const GREEN = '#008000';
+  const GREY = '#808080';
+
+  function debugLayout(root: PdfNode, images = new Map<PdfNode, ImageAsset>()): PageLayout[] {
+    const ctx: LayoutContext = { yoga, metrics: writer, images, debug: true };
+    return paginatePage(root, resolveStyles(root), ctx);
+  }
+
+  /** The ops with debug on, after checking they start with every op of the same sheet without. */
+  function debugOps(root: PdfNode, index = 0, images = new Map<PdfNode, ImageAsset>()): DrawOp[] {
+    const pages = debugLayout(root, images);
+    const on = list(pages[index]!, index, pages.length, undefined, { debug: true });
+    const off = list(layout(root, images)[index]!, index, pages.length);
+    expect(on.slice(0, off.length)).toEqual(off);
+    return on.slice(off.length);
+  }
+
+  /** The bounds of a path op's points, rounded to 0.01pt. */
+  function rectOf(op: Op<'path'>): { x: number; y: number; w: number; h: number } {
+    const points = [op.from, ...op.segments.map((segment) => segment.to)];
+    const round = (n: number): number => Math.round(n * 100) / 100;
+    const xs = points.map((p) => p.x);
+    const ys = points.map((p) => p.y);
+    const x = Math.min(...xs);
+    const y = Math.min(...ys);
+    return {
+      x: round(x),
+      y: round(y),
+      w: round(Math.max(...xs) - x),
+      h: round(Math.max(...ys) - y),
+    };
+  }
+
+  const outlines = (ops: readonly DrawOp[], color: string) =>
+    only(ops, 'path')
+      .filter((op) => op.color === color)
+      .map(rectOf);
+  const labels = (ops: readonly DrawOp[]) =>
+    only(ops, 'text')
+      .filter((op) => op.size === 4)
+      .map((op) => op.text);
+
+  it('outlines the border box in red, the content box in blue dashes, with a label', () => {
+    const view = el('pdf-view', { padding: '10', border: '2 solid #000', height: '100' });
+    const ops = debugOps(page([view]));
+    expect(outlines(ops, RED)).toContainEqual({ x: 36, y: 36, w: 523.28, h: 100 });
+    const content = only(ops, 'path').filter((op) => op.color === BLUE);
+    expect(content.map(rectOf)).toEqual([{ x: 48, y: 48, w: 499.28, h: 76 }]);
+    expect(content[0]).toMatchObject({ width: 0.5, opacity: 1, dash: [2, 2] });
+    const red = only(ops, 'path').find((op) => op.color === RED);
+    expect(red).toMatchObject({ width: 0.5, opacity: 1 });
+    expect(red?.dash).toBeUndefined();
+    const [label] = only(ops, 'text');
+    expect(label).toMatchObject({
+      text: 'view 523.3×100',
+      x: 37,
+      y: 37,
+      font: 'Helvetica',
+      size: 4,
+      color: GREY,
+      opacity: 1,
+    });
+  });
+
+  it('draws no content box when the box has no padding or border', () => {
+    const ops = debugOps(page([el('pdf-view', { height: '40' })]));
+    expect(outlines(ops, RED)).toHaveLength(1);
+    expect(outlines(ops, BLUE)).toEqual([]);
+  });
+
+  it('outlines the content area of the page in green dashes', () => {
+    const ops = debugOps(page([text('Hi')], { padding: '36 20' }));
+    const area = only(ops, 'path').filter((op) => op.color === GREEN);
+    expect(area.map(rectOf)).toEqual([{ x: 20, y: 36, w: 555.28, h: 769.89 }]);
+    expect(area[0]?.dash).toBeDefined();
+    expect(ops[0]).toBe(area[0]);
+  });
+
+  it('outlines every kind of box, labelled with its tag without pdf-', () => {
+    const asset: ImageAsset = { data: new Uint8Array([1]), width: 10, height: 10 };
+    const image = el('pdf-image', { width: '40', height: '40' });
+    const table = el('pdf-table', {}, [el('pdf-row', {}, [el('pdf-cell', {}, [text('Cell')])])], {
+      columns: ['1fr'],
+    });
+    const link = el('pdf-link', {}, [text('Go')], { href: 'https://example.com/' });
+    // A page with a background is a box too, but its content area stands for it.
+    const root = page(
+      [el('pdf-view', {}, [text('Hello')]), image, table, link, el('pdf-page-number')],
+      { padding: '36', 'background-color': '#ffffff' },
+    );
+    const ops = debugOps(root, 0, new Map([[image, asset]]));
+    const tags = new Set(labels(ops).map((label) => label.split(' ')[0]));
+    expect([...tags].sort()).toEqual(
+      ['cell', 'image', 'link', 'page-number', 'row', 'table', 'text', 'view'].sort(),
+    );
+  });
+
+  it('outlines each line box of a pdf-text in grey', () => {
+    const paragraph = text('one two three four five six seven eight', {
+      width: '60',
+      'font-size': '10',
+      'line-height': '1.5',
+    });
+    // A long text is cut into line groups, each placed as its own box.
+    const [laid] = debugLayout(page([paragraph]));
+    const lines = laid!.placed.flatMap((placed) =>
+      (placed.box.text?.lines ?? []).map((line) => ({ ...line, y: placed.y + line.y })),
+    );
+    expect(lines.length).toBeGreaterThan(2);
+    const boxes = only(debugOps(page([paragraph])), 'path').filter((op) => op.color === GREY);
+    expect(boxes.map(rectOf)).toEqual(
+      lines.map((line) => ({
+        x: 36,
+        y: Math.round(line.y * 100) / 100,
+        w: Math.round(line.width * 100) / 100,
+        h: 15,
+      })),
+    );
+    expect(boxes[0]).toMatchObject({ width: 0.25 });
+  });
+
+  it('draws the outlines last on the sheet, outside an overflow clip', () => {
+    const inner = el('pdf-view', {
+      height: '80',
+      'flex-shrink': '0',
+      'background-color': '#eee',
+    });
+    const clipper = el('pdf-view', { overflow: 'hidden', height: '20' }, [inner]);
+    const ops = debugOps(page([clipper]));
+    // Nothing but outlines after the content: debugOps checked the content comes first.
+    expect(ops.some((op) => op.op === 'clip' || op.op === 'rect')).toBe(false);
+    // The clipped child still shows its whole box.
+    expect(outlines(ops, RED)).toContainEqual({ x: 36, y: 36, w: 523.28, h: 80 });
+  });
+
+  it('follows the transform of a box, also for what it holds', () => {
+    const child = el('pdf-view', { width: '10', height: '10' });
+    const turned = el(
+      'pdf-view',
+      { width: '40', height: '20', transform: 'rotate(90deg)', 'background-color': '#eee' },
+      [child],
+    );
+    const root = page([turned]);
+    const content = list(layout(root)[0]!, 0, 1);
+    const matrix = only(content, 'transform')[0]?.matrix;
+    const ops = debugOps(root);
+    const transforms = only(ops, 'transform');
+    expect(transforms).toHaveLength(2);
+    for (const op of transforms) expect(op.matrix).toEqual(matrix);
+    expect(only(ops, 'untransform')).toHaveLength(2);
+    // Each outline sits between its transform and untransform, in the box's own coordinates.
+    const first = ops.findIndex((op) => op.op === 'transform');
+    const end = ops.findIndex((op) => op.op === 'untransform');
+    const between = ops.slice(first, end);
+    expect(outlines(between, RED).length).toBe(1);
+  });
+
+  it('outlines each piece of a split box and a fixed view on every sheet', () => {
+    const rows = [0, 1, 2, 3].map(() => el('pdf-view', { height: '300' }));
+    const wrapper = el('pdf-view', { width: '400', padding: '5' }, rows);
+    const header = el('pdf-view', { height: '20' }, [], { fixed: 'top' });
+    const root = page([header, wrapper]);
+    const pages = debugLayout(root);
+    expect(pages.length).toBeGreaterThan(1);
+    pages.forEach((_, index) => {
+      const red = outlines(debugOps(root, index), RED);
+      expect(red).toContainEqual({ x: 36, y: 36, w: 523.28, h: 20 });
+      const [piece] = red.filter((rect) => rect.w === 400);
+      expect(piece).toBeDefined();
+      expect(red.filter((rect) => rect.w === 400)).toHaveLength(1);
+      // A cut edge has no padding: the content box reaches it.
+      const [content] = outlines(debugOps(root, index), BLUE).filter((rect) => rect.w === 390);
+      expect(content?.y).toBe(index === 0 ? piece!.y + 5 : piece!.y);
+      expect(content!.y + content!.h).toBeCloseTo(
+        index === pages.length - 1 ? piece!.y + piece!.h - 5 : piece!.y + piece!.h,
+      );
+    });
+  });
+
+  it('outlines an absolute box where it lands, and crosses a zero-size one', () => {
+    const placed = el('pdf-view', {
+      position: 'absolute',
+      top: '10',
+      left: '20',
+      width: '30',
+      height: '15',
+    });
+    const dot = el('pdf-view', {
+      position: 'absolute',
+      top: '50',
+      left: '50',
+      width: '0',
+      height: '0',
+    });
+    const holder = el('pdf-view', { height: '100' }, [placed, dot]);
+    const ops = debugOps(page([holder]));
+    expect(outlines(ops, RED)).toContainEqual({ x: 56, y: 46, w: 30, h: 15 });
+    const cross = only(ops, 'line');
+    expect(cross).toHaveLength(2);
+    for (const line of cross) {
+      expect(line).toMatchObject({ color: RED, width: 0.5 });
+      expect((line.x1 + line.x2) / 2).toBe(86);
+      expect((line.y1 + line.y2) / 2).toBe(86);
+    }
+  });
+
+  it('leaves out the label of a box smaller than it', () => {
+    const tiny = el('pdf-view', { width: '10', height: '10' });
+    const ops = debugOps(page([tiny]));
+    expect(outlines(ops, RED)).toEqual([{ x: 36, y: 36, w: 10, h: 10 }]);
+    expect(labels(ops)).toEqual([]);
+  });
+
+  it('adds nothing with debug off', () => {
+    const root = page([el('pdf-view', { padding: '4', height: '40' }, [text('Hi')])]);
+    const ops = list(debugLayout(root)[0]!, 0, 1);
+    expect(ops).toEqual(list(layout(root)[0]!, 0, 1));
+  });
+});
