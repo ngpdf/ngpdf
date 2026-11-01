@@ -164,9 +164,16 @@ function providePdfHyphenation(hyphenate: PdfHyphenate): EnvironmentProviders;
 - A word that has soft hyphens breaks only at them.
 - The function is called only for words that do not fit their line, at most once per word and render.
 - Without the provider, `auto` breaks at soft hyphens only, and warns once per render in development mode.
-- Like `providePdfFonts`, it applies to documents rendered with its injector or one below it, so a route or a child injector can have its own.
+- Like `providePdfFonts`, it applies to documents rendered with its injector or one below it, so a route or a child injector can have its own. `pdfResource`, `pdfDownload` and `renderToBlob` see a route's provider. `PdfRenderer` is a root service, so it sees only the app's: to use a route's function, pass the route's injector to `renderToBlob` or `downloadPdf`, as below.
 
-A pattern library, such as the `hyphen` package from npm, can back the function. Load it lazily, so its patterns stay out of your initial bundle and load only when a document needs them:
+A pattern library, such as the `hyphen` package from npm, can back the function. `hyphen` ships no type declarations, so a TypeScript app also installs `@types/hyphen`:
+
+```sh
+npm install hyphen
+npm install --save-dev @types/hyphen
+```
+
+Load it lazily, so its patterns stay out of your initial bundle and load only when a document needs them:
 
 ```ts
 // pdf-hyphenation.ts
@@ -190,6 +197,18 @@ export const pdfHyphenation = providePdfHyphenation((word) =>
 // in the component that renders:
 await loadHyphenation();
 await this.pdf.download(ReportDocument, { fileName: 'report.pdf' });
+```
+
+With `pdfHyphenation` in a route's `providers` instead, render with that route's injector, since `PdfRenderer` would not see it:
+
+```ts
+// in a component of that route
+private readonly injector = inject(EnvironmentInjector);
+
+async save(): Promise<void> {
+  await loadHyphenation();
+  await downloadPdf(ReportDocument, { injector: this.injector, fileName: 'report.pdf' });
+}
 ```
 
 ## Cutting text to a number of lines
