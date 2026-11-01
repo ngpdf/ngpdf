@@ -160,13 +160,18 @@ jobs:
 
   # The packed package on the server: a plain Node script installs the tarball, renders with
   # @ngpdf/core/server and no DOM, and pdftotext checks the PDF. On the lowest Node major Angular
-  # supports, and on the one the other jobs use.
+  # supports and on the one the other jobs use, with the repository's Angular, and once with the
+  # lowest @angular/core the peer range allows, since renderToBuffer uses a private Angular export.
   server:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     strategy:
       matrix:
         node-version: [22, 24]
+        angular: ['']
+        include:
+          - node-version: 22
+            angular: 22.0.0
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -178,7 +183,9 @@ jobs:
       - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends poppler-utils
       - run: npm ci --ignore-scripts
       - run: npm run build:core
-      - run: node scripts/server-check.mjs
+      - run: node scripts/server-check.mjs ${ANGULAR:+--angular "$ANGULAR"}
+        env:
+          ANGULAR: ${{ matrix.angular }}
 
   e2e:
     needs: build

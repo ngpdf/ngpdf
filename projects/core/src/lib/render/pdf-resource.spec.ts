@@ -5,6 +5,7 @@ import {
   EnvironmentInjector,
   PLATFORM_ID,
   createEnvironmentInjector,
+  runInInjectionContext,
   signal,
 } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
@@ -200,7 +201,22 @@ describe('pdfResource', () => {
     expect(pdf.status()).toBe('resolved');
   });
 
-  it('throws under a server platform, before any render', () => {
+  it('stays idle on a server platform when made in an injection context', async () => {
+    const injector = createEnvironmentInjector(
+      [{ provide: PLATFORM_ID, useValue: 'server' }],
+      TestBed.inject(EnvironmentInjector),
+    );
+    const pdf = runInInjectionContext(injector, () =>
+      pdfResource(TestDocument, { inputs: () => ({ customer: 'ACME' }) }),
+    );
+    await settle();
+
+    expect(pdf.status()).toBe('idle');
+    expect(pdf.url()).toBeUndefined();
+    expect(renders.calls).toEqual([]);
+  });
+
+  it('throws on a server platform when given an injector, before any render', () => {
     const injector = createEnvironmentInjector(
       [{ provide: PLATFORM_ID, useValue: 'server' }],
       TestBed.inject(EnvironmentInjector),

@@ -342,12 +342,17 @@ describe('PdfViewer', () => {
 });
 
 describe('PdfViewer on the server', () => {
-  it('throws before any render', () => {
+  it('renders its loading content and starts no render', async () => {
     TestBed.resetTestingModule();
     TestBed.configureTestingModule({ providers: [{ provide: PLATFORM_ID, useValue: 'server' }] });
-    expect(() => TestBed.createComponent(PdfViewer)).toThrow(
-      'ngpdf: pdf-viewer needs a browser; on the server, use renderToBuffer from @ngpdf/core/server',
-    );
+    const fixture = TestBed.createComponent(Host);
+    fixture.detectChanges();
+    await settle();
+    fixture.detectChanges();
+
+    expect(textOf(fixture, '[pdfViewerLoading]')).toBe('Rendering…');
+    expect(textOf(fixture, '[pdfViewerError]')).toBeUndefined();
+    expect(iframeOf(fixture)).toBeNull();
     expect(renders.calls).toEqual([]);
   });
 });
