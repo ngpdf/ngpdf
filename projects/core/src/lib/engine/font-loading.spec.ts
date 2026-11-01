@@ -26,6 +26,14 @@ describe('loadFont', () => {
       expect(font).toEqual({ label: 'https://fonts.example.com/a.ttf', data: bytes });
     });
 
+    it('refuses a URL that is not http or https, before fetchImage sees it', async () => {
+      const fetchImage = vi.fn(() => Promise.resolve(bytes));
+      await expect(loadFont('file:///fonts/a.ttf', undefined, { fetchImage })).rejects.toThrow(
+        'ngpdf: font URL "file:///fonts/a.ttf" is not http or https; the server reads no other scheme',
+      );
+      expect(fetchImage).not.toHaveBeenCalled();
+    });
+
     it('refuses a relative URL', async () => {
       const fetchImage = vi.fn(() => Promise.resolve(bytes));
       await expect(loadFont('/fonts/a.ttf', undefined, { fetchImage })).rejects.toThrow(

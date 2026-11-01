@@ -64,7 +64,11 @@ export interface ServerSources {
   readonly fetchImage?: (url: string) => Promise<Uint8Array>;
 }
 
-/** The server's reader for an absolute URL; a relative one has no page to resolve against. */
+/**
+ * The server's reader for an http or https URL. A relative one has no page to resolve against,
+ * and any other scheme (`file:`, `ftp:`, or `localhost:` and `C:` read as schemes) never reaches
+ * `fetchImage`, so a careless callback cannot be made to read one.
+ */
 function serverRead(
   url: string,
   label: string,
@@ -72,6 +76,12 @@ function serverRead(
   kind: 'image' | 'font',
 ): () => Promise<Uint8Array> {
   if (!URL.canParse(url)) throw new Error(`ngpdf: relative ${kind} URL "${label}" on the server`);
+  const { protocol } = new URL(url);
+  if (protocol !== 'http:' && protocol !== 'https:') {
+    throw new Error(
+      `ngpdf: ${kind} URL "${label}" is not http or https; the server reads no other scheme`,
+    );
+  }
   const { fetchImage } = server;
   if (!fetchImage) {
     throw new Error(`ngpdf: remote ${kind} "${label}" refused on the server; pass fetchImage`);

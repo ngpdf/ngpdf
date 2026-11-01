@@ -319,6 +319,30 @@ describe('loadImages on the server', () => {
     },
   );
 
+  it.each(['file:///etc/passwd', 'ftp://host/a.png', 'localhost:3000/a.png', 'C:\\logo.png'])(
+    'refuses %s, which is not http or https, before fetchImage sees it',
+    async (src) => {
+      const fetchImage = vi.fn(() => Promise.resolve(png));
+      const load = loadImages(root(imageNode(src)), writer, undefined, { fetchImage });
+      await expect(load).rejects.toThrow(
+        `ngpdf: image URL "${src}" is not http or https; the server reads no other scheme`,
+      );
+      expect(fetchImage).not.toHaveBeenCalled();
+    },
+  );
+
+  it('passes an http URL and an upper-case HTTPS one to fetchImage', async () => {
+    const fetchImage = vi.fn(() => Promise.resolve(png));
+    await loadImages(
+      root(imageNode('http://cdn.example.com/a.png'), imageNode('HTTPS://cdn.example.com/b.png')),
+      writer,
+      undefined,
+      { fetchImage },
+    );
+    expect(fetchImage).toHaveBeenCalledWith('http://cdn.example.com/a.png');
+    expect(fetchImage).toHaveBeenCalledWith('HTTPS://cdn.example.com/b.png');
+  });
+
   it('still loads data URLs, Blobs and ArrayBuffers', async () => {
     const nodes = [
       imageNode(dataUrl),
