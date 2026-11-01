@@ -202,7 +202,7 @@ projects/core/src/lib/elements/   pdf-* components, PDF_ELEMENTS        (eager)
 projects/core/src/lib/render/     render-tree, PdfRenderer facade       (eager)
 projects/core/src/lib/engine/     hosts, color, style, anchors, fonts, text, images, layout,
                                   paginate, canvas-recorder, display-list, writer, index (lazy)
-projects/core/schematics/         ng add: an example document, and a demo page and route
+projects/core/schematics/         ng add: an example document; with --demo-route, a demo page and route
 projects/core/viewer/             pdf-viewer, entry point @ngpdf/core/viewer (own chunk)
 projects/demo/                    the three reference documents
 projects/site/                    ngpdf.dev: landing, docs (Markdown), examples
