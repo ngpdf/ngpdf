@@ -1188,7 +1188,7 @@ function resolveOne(node: PdfNode, inherited: TextStyle, warn: Warn): ResolvedSt
     else apply(style, property, value, node.tag, warn);
   }
   // Resolved last because a length depends on this element's own font size.
-  if (lineHeight !== null && lineHeight !== 'normal') {
+  if (lineHeight !== null && lineHeight.toLowerCase() !== 'normal') {
     style.lineHeight = lineHeightOf(lineHeight, style.fontSize, node.tag);
   }
   return style;

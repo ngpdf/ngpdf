@@ -987,6 +987,8 @@ describe('resolveStyles property coverage', () => {
     expect(styleOf({ 'line-height': '150%' }).lineHeight).toBe(1.5);
     expect(styleOf({ 'font-size': '10', 'line-height': '20pt' }).lineHeight).toBe(2);
     expect(styleOf({ 'line-height': 'normal' }).lineHeight).toBe(ROOT_TEXT_STYLE.lineHeight);
+    expect(styleOf({ 'line-height': 'NORMAL' }).lineHeight).toBe(ROOT_TEXT_STYLE.lineHeight);
+    expect(styleOf({ 'line-height': 'Normal' }).lineHeight).toBe(ROOT_TEXT_STYLE.lineHeight);
     expect(() => styleOf({ 'line-height': 'auto' })).toThrow(
       'ngpdf: invalid line-height "auto" on pdf-view',
     );
