@@ -138,6 +138,17 @@ class AnchorsDocument {
   readonly title: string | null = null;
 }
 
+const SECURITY = { userPassword: 'open', permissions: { printing: 'low' } } as const;
+
+@Component({
+  selector: 'pdf-test-secure',
+  imports: [PDF_ELEMENTS],
+  template: `<pdf-document title="Locked" [security]="security"><pdf-page /></pdf-document>`,
+})
+class SecureDocument {
+  readonly security = SECURITY;
+}
+
 function at<T>(items: readonly T[], index: number): T {
   const item = items[index];
   if (item === undefined) throw new Error(`no item at ${String(index)}`);
@@ -162,7 +173,8 @@ describe('pdf-* elements', () => {
       | typeof BoundDocument
       | typeof SpansDocument
       | typeof LinksDocument
-      | typeof AnchorsDocument,
+      | typeof AnchorsDocument
+      | typeof SecureDocument,
   ): PdfNode {
     const environmentInjector = createEnvironmentInjector(
       [{ provide: RendererFactory2, useFactory: () => new PdfRendererFactory() }],
@@ -202,6 +214,12 @@ describe('pdf-* elements', () => {
     expect(propsOf(at(kids, 4))).toEqual({ format: '{page} / {total}' });
     const cell = at(elementChildren(at(elementChildren(at(kids, 3)), 0)), 0);
     expect(propsOf(cell)).toEqual({ span: 1 });
+  });
+
+  it('exposes the security of pdf-document through pdfProps', () => {
+    const document = render(SecureDocument);
+    expect(propsOf(document)['security']).toBe(SECURITY);
+    expect(propsOf(document)['title']).toBe('Locked');
   });
 
   it('exposes bound and attribute values, applying the input transforms', () => {

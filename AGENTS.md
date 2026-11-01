@@ -174,11 +174,18 @@ The site (`projects/site`) is a prerendered Angular app. Its docs are the Markdo
   - Formats are PNG and JPEG, from a data URL, an http(s) URL, a `Blob` or an `ArrayBuffer`.
   - `object-fit` is `contain` (default) or `cover`.
   - A failed load rejects the render with `ngpdf: could not load image "<src>": <reason>`.
+- **Encryption:** `security` on `pdf-document` takes `userPassword`, `ownerPassword` and
+  `permissions` (`printing: 'none' | 'low' | 'high'` and six booleans, all allowed by default).
+  - The file is written with AES-256 (pdfkit's `pdfVersion: '1.7ext3'`, `/V 5 /R 5`) when a
+    password is set or a permission is turned off; otherwise it is unencrypted.
+  - Restricted permissions without an `ownerPassword` get a random 32-byte owner password.
+  - A wrong type, an unknown field or value, or a password over 127 bytes in UTF-8 (also after
+    NFKC) throws `ngpdf: invalid security <field>`. No error message contains a password.
 - **Out of v0.1:**
   - server rendering;
   - SVG;
   - hyphenation, RTL;
-  - forms, encryption;
+  - forms;
   - a preview component;
   - capturing the DOM.
 

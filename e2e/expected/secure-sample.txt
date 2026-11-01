@@ -1,0 +1,4 @@
+Payslip, October 2026
+Employee: Rosa Example, #0042
+Gross pay: € 3,150.00
+Net pay: € 2,480.75

@@ -12,6 +12,7 @@ import { dissolveHosts } from './hosts';
 import { loadImages } from './images';
 import type { LayoutContext } from './layout';
 import { paginatePage } from './paginate';
+import { securityOf } from './security';
 import { resolveStyles } from './style';
 import { TextMeasureCache } from './text';
 import {
@@ -160,6 +161,7 @@ function infoOf(document: PdfNode, now: Date): DocumentInfo {
   const language = languageOf(props['language']);
   const pageMode = enumValue(props['pageMode'], 'pageMode', PAGE_MODES);
   const pageLayout = enumValue(props['pageLayout'], 'pageLayout', PAGE_LAYOUTS);
+  const security = securityOf(props['security']);
   return {
     ...(title !== undefined && { title }),
     ...(author !== undefined && { author }),
@@ -171,6 +173,7 @@ function infoOf(document: PdfNode, now: Date): DocumentInfo {
     ...(pageMode !== undefined && { pageMode }),
     ...(pageLayout !== undefined && { pageLayout }),
     creationDate: date instanceof Date ? date : now,
+    ...(security !== undefined && { security }),
   };
 }
 

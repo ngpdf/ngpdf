@@ -1260,3 +1260,166 @@ describe('createPdfkitWriter with registered fonts', () => {
     expect(b).toEqual(a);
   });
 });
+
+describe('createPdfkitWriter encryption', () => {
+  const ALLOWED = {
+    printing: 'high',
+    copying: true,
+    modifying: true,
+    annotating: true,
+    fillingForms: true,
+    contentAccessibility: true,
+    documentAssembly: true,
+  } as const;
+  const HELLO: DrawOp = {
+    op: 'text',
+    x: 10,
+    y: 10,
+    text: 'Hello PDF',
+    font: 'Helvetica',
+    size: 12,
+    color: '#000',
+    opacity: 1,
+    underline: false,
+    strike: false,
+  };
+
+  let writer: PdfWriter;
+  beforeAll(async () => {
+    writer = await createPdfkitWriter({ compress: false });
+  });
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  async function pdfOf(security?: DocumentInfo['security']): Promise<string> {
+    const blob = await writer.write([{ ...A4, ops: [HELLO] }], {
+      ...info,
+      ...(security !== undefined && { security }),
+    });
+    return new TextDecoder('latin1').decode(new Uint8Array(await blob.arrayBuffer()));
+  }
+
+  function entry(pdf: string, key: 'O' | 'U'): Uint8Array {
+    const hex = new RegExp(`/${key} <([0-9a-f]+)>`).exec(pdf)?.[1] ?? '';
+    return Uint8Array.from(hex.match(/../g) ?? [], (byte) => parseInt(byte, 16));
+  }
+
+  async function sha256(...parts: Uint8Array[]): Promise<Uint8Array> {
+    const joined = new Uint8Array(parts.reduce((sum, part) => sum + part.length, 0));
+    let at = 0;
+    for (const part of parts) {
+      joined.set(part, at);
+      at += part.length;
+    }
+    return new Uint8Array(await crypto.subtle.digest('SHA-256', joined));
+  }
+
+  // Revision 5 checks: the hash of password + validation salt is the first 32 bytes of the entry.
+  async function opensAsUser(pdf: string, password: string): Promise<boolean> {
+    const u = entry(pdf, 'U');
+    const hash = await sha256(new TextEncoder().encode(password), u.slice(32, 40));
+    return hash.every((byte, i) => byte === u[i]);
+  }
+
+  async function opensAsOwner(pdf: string, password: string): Promise<boolean> {
+    const o = entry(pdf, 'O');
+    const hash = await sha256(
+      new TextEncoder().encode(password),
+      o.slice(32, 40),
+      entry(pdf, 'U').slice(0, 48),
+    );
+    return hash.every((byte, i) => byte === o[i]);
+  }
+
+  it('writes no /Encrypt without security', async () => {
+    const pdf = await pdfOf();
+    expect(pdf).not.toContain('/Encrypt');
+    expect(pdf).toContain('<48656c6c6f20504446>');
+  });
+
+  it('encrypts with AES-256, so text and metadata are no longer readable', async () => {
+    const pdf = await pdfOf({ userPassword: 'open sesame', permissions: ALLOWED });
+    expect(pdf.startsWith('%PDF-1.7')).toBe(true);
+    expect(pdf).toMatch(/\/Encrypt \d+ 0 R/);
+    expect(pdf).toMatch(/\/Filter \/Standard\s+\/V 5\s+\/Length 256/);
+    expect(pdf).toContain('/CFM /AESV3');
+    expect(pdf).toContain('/R 5');
+    expect(pdf).not.toContain('<48656c6c6f20504446>');
+    expect(pdf).not.toContain('Hello PDF');
+    expect(pdf).not.toContain('Quarterly report');
+    expect(pdf).not.toContain('open sesame');
+  });
+
+  it('checks the user and owner passwords', async () => {
+    const pdf = await pdfOf({
+      userPassword: 'reader',
+      ownerPassword: 'editor',
+      permissions: ALLOWED,
+    });
+    expect(await opensAsUser(pdf, 'reader')).toBe(true);
+    expect(await opensAsUser(pdf, 'editor')).toBe(false);
+    expect(await opensAsOwner(pdf, 'editor')).toBe(true);
+    expect(await opensAsOwner(pdf, 'reader')).toBe(false);
+  });
+
+  it.each([
+    [{}, -4],
+    [{ printing: 'none' }, -2056],
+    [{ printing: 'low' }, -2052],
+    [{ copying: false }, -20],
+    [{ modifying: false }, -12],
+    [{ annotating: false }, -36],
+    [{ fillingForms: false }, -260],
+    [{ contentAccessibility: false }, -516],
+    [{ documentAssembly: false }, -1028],
+    [{ printing: 'none', copying: false, modifying: false }, -2080],
+  ] as const)('writes the permissions %o as /P %i', async (permissions, bits) => {
+    const pdf = await pdfOf({ ownerPassword: 'o', permissions: { ...ALLOWED, ...permissions } });
+    expect(pdf).toContain(`/P ${String(bits)}\n`);
+  });
+
+  it('uses a random owner password when permissions are restricted without one', async () => {
+    const drawn: string[] = [];
+    const real = crypto.getRandomValues.bind(crypto);
+    vi.spyOn(crypto, 'getRandomValues').mockImplementation(
+      <T extends ArrayBufferView | null>(array: T): T => {
+        const result = real(array as never) as T;
+        if (array instanceof Uint8Array && array.length === 32) {
+          drawn.push([...array].map((byte) => byte.toString(16).padStart(2, '0')).join(''));
+        }
+        return result;
+      },
+    );
+    const pdf = await pdfOf({
+      userPassword: 'reader',
+      permissions: { ...ALLOWED, copying: false },
+    });
+    expect(await opensAsUser(pdf, 'reader')).toBe(true);
+    expect(await opensAsOwner(pdf, 'reader')).toBe(false);
+    expect(await opensAsOwner(pdf, '')).toBe(false);
+    const owners = await Promise.all(drawn.map((password) => opensAsOwner(pdf, password)));
+    expect(owners.filter(Boolean)).toHaveLength(1);
+  });
+
+  it('encrypts restricted permissions without any password, opening with none', async () => {
+    const pdf = await pdfOf({ permissions: { ...ALLOWED, printing: 'none' } });
+    expect(pdf).toMatch(/\/Encrypt \d+ 0 R/);
+    expect(await opensAsUser(pdf, '')).toBe(true);
+    expect(await opensAsOwner(pdf, '')).toBe(false);
+  });
+
+  it('keeps the user password as owner when nothing is restricted', async () => {
+    const pdf = await pdfOf({ userPassword: 'reader', permissions: ALLOWED });
+    expect(await opensAsOwner(pdf, 'reader')).toBe(true);
+  });
+
+  it('rejects a password the PDF cannot store, without showing it', async () => {
+    const write = writer.write([{ ...A4, ops: [] }], {
+      ...info,
+      security: { userPassword: 'tab\there', permissions: ALLOWED },
+    });
+    await expect(write).rejects.toThrow(/^ngpdf: invalid security password \(Prohibited character/);
+    await expect(write).rejects.not.toThrow('tab\there');
+  });
+});

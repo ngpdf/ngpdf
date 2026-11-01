@@ -49,6 +49,8 @@ These invariants are checked for any input:
 
 - Each demo PDF is compared as text (`pdftotext -layout`) with `e2e/expected/<name>.txt`, along
   with its page count.
+- An encrypted demo PDF is extracted with its user password (`pdftotext -upw`), and the run fails
+  if pdftotext opens it without one.
 - `node scripts/e2e.mjs --update` rewrites the expected files. A PR that changes them shows the
   text diff, and a person checks the PDFs by eye before merging.
 - Image comparison of rendered pages (`pdftoppm` + pixel diff) is planned for v0.2, once custom

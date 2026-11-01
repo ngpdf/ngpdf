@@ -166,6 +166,47 @@ describe('renderDocument', () => {
     ).rejects.toThrow(`ngpdf: invalid ${key}`);
   });
 
+  it('hands the writer the security with its permissions filled in', async () => {
+    const writer = recordingWriter();
+    await renderDocument(
+      twoPages({ security: { userPassword: 'open', permissions: { copying: false } } }),
+      {
+        writer,
+        dev: false,
+      },
+    );
+    expect(writer.recorded[0]!.info.security).toEqual({
+      userPassword: 'open',
+      permissions: {
+        printing: 'high',
+        copying: false,
+        modifying: true,
+        annotating: true,
+        fillingForms: true,
+        contentAccessibility: true,
+        documentAssembly: true,
+      },
+    });
+  });
+
+  it('leaves out a security that changes nothing', async () => {
+    const writer = recordingWriter();
+    await renderDocument(twoPages({ security: { permissions: { printing: 'high' } } }), {
+      writer,
+      dev: false,
+    });
+    expect('security' in writer.recorded[0]!.info).toBe(false);
+  });
+
+  it('rejects an invalid security', async () => {
+    await expect(
+      renderDocument(twoPages({ security: { userPassword: 42 } }), {
+        writer: recordingWriter(),
+        dev: false,
+      }),
+    ).rejects.toThrow('ngpdf: invalid security userPassword');
+  });
+
   it('rejects an empty language tag and non-string language values', async () => {
     await expect(
       renderDocument(twoPages({ language: '' }), { writer: recordingWriter(), dev: false }),

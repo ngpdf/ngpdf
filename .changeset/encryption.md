@@ -1,0 +1,5 @@
+---
+'@ngpdf/core': minor
+---
+
+Adds a `security` input on `pdf-document` to protect a PDF with a password and restrict what a viewer lets the reader do. `userPassword` is asked for when the file is opened, `ownerPassword` lifts the restrictions, and `permissions` limits printing to low resolution (`'low'`) or turns it off (`'none'`), and turns off copying, modifying, annotating, filling forms, content extraction for accessibility or page assembly. Everything is allowed unless you turn it off. The file is encrypted with AES-256, with no new dependency. Restricting permissions without an owner password uses a random one, so the restrictions cannot be lifted. Permissions are only a request to the viewer and do not protect the content; the user password does. A password written in your app's code is visible to every user, so pass one the user typed or your server sent. A password longer than 127 bytes in UTF-8, as typed or after Unicode NFKC normalization, or a value of the wrong type, throws `ngpdf: invalid security <field>`.
