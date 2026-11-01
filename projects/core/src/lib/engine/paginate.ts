@@ -18,8 +18,18 @@ export interface PlacedBox {
   readonly sliceBottom?: boolean;
   /** On a sliced decoration with a gradient: the piece's offset in the whole box and its height. */
   readonly slice?: { readonly offset: number; readonly height: number };
-  /** Product of the opacities of the ancestors that are not part of `box` (default 1). */
-  readonly opacity?: number;
+  /**
+   * The faded boxes around `box`, outer first; each one's pieces on a sheet are drawn as one
+   * group. A faded wrapper piece, text piece, or unit with absolute boxes taken out of it is the
+   * last one, with opacity 1 in its own style, so the group around it is its only fade.
+   */
+  readonly groups?: readonly OpacityGroup[];
+}
+
+/** A box with `opacity` below 1, drawn with what it holds as one picture at that opacity. */
+export interface OpacityGroup {
+  readonly node: PdfNode;
+  readonly opacity: number;
 }
 
 export interface PageLayout {
@@ -40,7 +50,7 @@ export interface PageLayout {
     readonly box: Box;
     readonly x: number;
     readonly y: number;
-    readonly opacity?: number;
+    readonly groups?: readonly OpacityGroup[];
   };
 }
 
@@ -87,13 +97,13 @@ interface Header {
   readonly height: number;
   /** The table's gap, kept between a repeated header and the row under it. */
   readonly gap: number;
-  /** Opacity of the table and its ancestors, which the header rows inherit. */
-  readonly opacity: number;
+  /** The faded table and its faded ancestors, around the header rows. */
+  readonly groups: readonly OpacityGroup[];
 }
 
 interface Unit extends Flowed {
-  /** Product of the opacities of the wrappers (and the page) above the unit. */
-  readonly opacity: number;
+  /** The faded wrappers (and page) above the unit, and the unit itself when it is faded. */
+  readonly groups: readonly OpacityGroup[];
   readonly bottom: number;
   readonly header: Header | null;
   /** A body row of a table that may split across sheets when it is taller than a page. */
@@ -102,8 +112,8 @@ interface Unit extends Flowed {
 
 /** A column pdf-view or a table the units were taken from; it covers units first..last. */
 interface Wrapper extends Flowed {
-  /** Product of the opacities of the wrappers (and the page) above this one. */
-  readonly opacity: number;
+  /** The faded wrappers (and page) above this one. */
+  readonly groups: readonly OpacityGroup[];
   readonly bottom: number;
   readonly first: number;
   last: number;
@@ -119,7 +129,7 @@ interface TextRun {
 
 /** An absolute box placed apart from the units: its containing block is split across sheets. */
 interface Float extends Flowed {
-  readonly opacity: number;
+  readonly groups: readonly OpacityGroup[];
 }
 
 interface Collected {
@@ -137,9 +147,23 @@ function lengthIn(length: Length, base: number): number {
   return typeof length === 'number' ? length : (length.percent / 100) * base;
 }
 
-/** An `opacity` entry only when it changes anything. */
-function fade(opacity: number): { opacity?: number } {
-  return opacity === 1 ? {} : { opacity };
+/** `groups` with the node added when its opacity fades it. */
+function within(
+  groups: readonly OpacityGroup[],
+  node: PdfNode,
+  opacity: number,
+): readonly OpacityGroup[] {
+  return opacity < 1 ? [...groups, { node, opacity }] : groups;
+}
+
+/** The box with opacity 1, once its group carries its opacity. */
+function opaque(box: Box): Box {
+  return box.style.opacity < 1 ? { ...box, style: { ...box.style, opacity: 1 } } : box;
+}
+
+/** A `groups` entry only when there is a group. */
+function grouped(groups: readonly OpacityGroup[]): { groups?: readonly OpacityGroup[] } {
+  return groups.length === 0 ? {} : { groups };
 }
 
 function draws(style: ResolvedStyle): boolean {
@@ -222,7 +246,11 @@ function isHeaderRow(node: PdfNode): boolean {
  * Units in flow order, and the wrappers they came from in pre-order (outer first). A header
  * taller than `maxHeader` (the content area) is not repeated: its rows become plain units.
  */
-function collectUnits(content: Box, maxHeader: number, pageOpacity: number): Collected {
+function collectUnits(
+  content: Box,
+  maxHeader: number,
+  pageGroups: readonly OpacityGroup[],
+): Collected {
   const units: Unit[] = [];
   const wrappers: Wrapper[] = [];
   const texts: TextRun[] = [];
@@ -235,7 +263,7 @@ function collectUnits(content: Box, maxHeader: number, pageOpacity: number): Col
   const detach = (box: Box, at: Float, contained: boolean): Box => {
     if (contained || box.children.length === 0) return box;
     // A box with a shift is relative and contains its absolute boxes, so none adds to dx or dy.
-    const inside: Float = { ...at, box, opacity: at.opacity * box.style.opacity };
+    const inside: Float = { ...at, box, groups: within(at.groups, box.node, box.style.opacity) };
     let changed = false;
     const kept: Box[] = [];
     for (const child of box.children) {
@@ -257,26 +285,29 @@ function collectUnits(content: Box, maxHeader: number, pageOpacity: number): Col
     x: number,
     top: number,
     header: Header | null,
-    opacity: number,
+    groups: readonly OpacityGroup[],
     dx: number,
     dy: number,
     inTable = false,
   ): void => {
     if (box.text && isSplittable(box)) {
-      visitText(box, box.text, x, top, header, opacity, dx, dy);
+      visitText(box, box.text, x, top, header, groups, dx, dy);
       return;
     }
     if (!isWrapper(box)) {
-      const own = detach(box, { box, x, top, opacity, dx, dy }, contains(box));
+      const own = detach(box, { box, x, top, groups, dx, dy }, contains(box));
       // A header row that is not repeated stays whole, like one that is.
       const splits = inTable && box.node.tag === 'pdf-row' && !isHeaderRow(box.node);
+      // A faded unit that lost absolute boxes to the flow gets its group here, so the group also
+      // holds them; any other draws its own group, inside its transform.
+      const taken = own !== box;
       units.push({
-        box: own,
+        box: taken ? opaque(own) : own,
         x,
         top,
         bottom: top + box.h,
         header,
-        opacity,
+        groups: taken ? within(groups, box.node, box.style.opacity) : groups,
         dx,
         dy,
         ...(splits && canBreak(box.style) && { splits }),
@@ -289,12 +320,12 @@ function collectUnits(content: Box, maxHeader: number, pageOpacity: number): Col
       top,
       dx,
       dy,
-      opacity,
+      groups,
       bottom: top + box.h,
       first: units.length,
       last: 0,
     };
-    const inside = opacity * box.style.opacity;
+    const inside = within(groups, box.node, box.style.opacity);
     const innerDx = dx + (box.shift?.x ?? 0);
     const innerDy = dy + (box.shift?.y ?? 0);
     wrappers.push(wrapper);
@@ -320,7 +351,7 @@ function collectUnits(content: Box, maxHeader: number, pageOpacity: number): Col
             top: headerTop,
             height: headerBottom - headerTop,
             gap: box.style.gap,
-            opacity: inside,
+            groups: inside,
           };
           children = body;
         }
@@ -333,7 +364,7 @@ function collectUnits(content: Box, maxHeader: number, pageOpacity: number): Col
           box: child,
           x: childX,
           top: childTop,
-          opacity: inside,
+          groups: inside,
           dx: innerDx,
           dy: innerDy,
         });
@@ -353,7 +384,7 @@ function collectUnits(content: Box, maxHeader: number, pageOpacity: number): Col
     x: number,
     top: number,
     header: Header | null,
-    opacity: number,
+    groups: readonly OpacityGroup[],
     dx: number,
     dy: number,
   ): void => {
@@ -376,12 +407,13 @@ function collectUnits(content: Box, maxHeader: number, pageOpacity: number): Col
       top,
       dx,
       dy,
-      opacity,
+      groups,
       bottom: top + box.h,
       first: units.length,
       last: 0,
     };
     wrappers.push(wrapper);
+    const pieceGroups = within(groups, node, boxStyle.opacity);
     const left = box.padding.left + box.border.left;
     const right = box.padding.right + box.border.right;
     const inner = top + box.padding.top + box.border.top;
@@ -394,6 +426,8 @@ function collectUnits(content: Box, maxHeader: number, pageOpacity: number): Col
       breakBefore: false,
       breakAfter: false,
       keepWithNext: false,
+      // The text's group, with its background, carries its opacity.
+      opacity: 1,
     };
     for (const [first, end] of lineGroups(text.lines.length, box.style.orphans, box.style.widows)) {
       const lines = text.lines.slice(first, end);
@@ -418,7 +452,7 @@ function collectUnits(content: Box, maxHeader: number, pageOpacity: number): Col
         top: inner + start,
         bottom: inner + start + h,
         header,
-        opacity,
+        groups: pieceGroups,
         dx,
         dy,
       });
@@ -433,8 +467,7 @@ function collectUnits(content: Box, maxHeader: number, pageOpacity: number): Col
   };
 
   if (content.style.flexDirection === 'row') {
-    // The unit is the content box itself, whose style already carries the page's opacity; the
-    // display list applies it, so passing pageOpacity here would fade the page twice.
+    // The unit is the content box itself, in the page's group like the rest of the sheet.
     units.push({
       box: content,
       x: 0,
@@ -443,14 +476,14 @@ function collectUnits(content: Box, maxHeader: number, pageOpacity: number): Col
       dy: 0,
       bottom: content.h,
       header: null,
-      opacity: 1,
+      groups: pageGroups,
     });
   } else {
     for (const child of content.children) {
       if (isAbsolute(child)) {
-        floats.push({ box: child, x: child.x, top: child.y, opacity: pageOpacity, dx: 0, dy: 0 });
+        floats.push({ box: child, x: child.x, top: child.y, groups: pageGroups, dx: 0, dy: 0 });
       } else {
-        visit(child, child.x, child.y, null, pageOpacity, 0, 0);
+        visit(child, child.x, child.y, null, pageGroups, 0, 0);
       }
     }
   }
@@ -843,6 +876,8 @@ export function paginatePage(
   const pageStyle = styles.get(page);
   if (!pageStyle) throw new Error('ngpdf: no resolved style for <pdf-page>');
   const base = frameOf(page, pageStyle);
+  // A faded page is one group per sheet, with everything on it.
+  const pageGroups = within([], page, pageStyle.opacity);
 
   const numberNode = page.children.find(isPageNumber);
   const numberBox = numberNode
@@ -853,7 +888,7 @@ export function paginatePage(
     box: numberBox,
     x: base.left,
     y: numberTop,
-    ...fade(pageStyle.opacity),
+    ...grouped(pageGroups),
   };
 
   // Fixed views are laid out once and drawn on every sheet; the flow gets the space between them.
@@ -875,7 +910,7 @@ export function paginatePage(
   for (const node of page.children.filter((child) => fixedSide(child) === 'top')) {
     const view = fixedBox(node);
     const y = top + view.top;
-    fixedViews.push({ box: view.box, x: base.left + view.left, y, ...fade(pageStyle.opacity) });
+    fixedViews.push({ box: view.box, x: base.left + view.left, y, ...grouped(pageGroups) });
     top = y + view.box.h + view.bottom;
   }
   let bottom = numberTop;
@@ -883,7 +918,7 @@ export function paginatePage(
   for (const node of page.children.filter((child) => fixedSide(child) === 'bottom').reverse()) {
     const view = fixedBox(node);
     const y = bottom - view.bottom - view.box.h;
-    bottoms.unshift({ box: view.box, x: base.left + view.left, y, ...fade(pageStyle.opacity) });
+    bottoms.unshift({ box: view.box, x: base.left + view.left, y, ...grouped(pageGroups) });
     bottom = y - view.top;
   }
   fixedViews.push(...bottoms);
@@ -909,11 +944,12 @@ export function paginatePage(
     borderWidth: NO_BORDER,
     backgroundColor: null,
     backgroundImage: null,
+    opacity: 1,
   };
   const contentStyles = new Map(styles).set(content, contentStyle);
   const laid = layoutBox(content, contentStyles, frame.contentWidth, ctx);
   const contentHeight = frame.bottom - frame.top;
-  const { units, wrappers, texts, floats } = collectUnits(laid, contentHeight, pageStyle.opacity);
+  const { units, wrappers, texts, floats } = collectUnits(laid, contentHeight, pageGroups);
 
   // Per unit: the outermost wrapper top opening at it, the outermost wrapper bottom closing at
   // it, whether any of them asks for a page break before or after it or to stay with the next
@@ -1040,9 +1076,15 @@ export function paginatePage(
   let textLast = -1;
 
   // `at` is in flow coordinates on the sheet; the offsets of relative boxes above are added after.
-  const place = (at: Flowed, x: number, y: number, opacity: number, on = current): void => {
+  const place = (
+    at: Flowed,
+    x: number,
+    y: number,
+    groups: readonly OpacityGroup[],
+    on = current,
+  ): void => {
     const { box } = at;
-    const drawn = { box, x: x + at.dx, y: y + at.dy, ...fade(opacity) };
+    const drawn = { box, x: x + at.dx, y: y + at.dy, ...grouped(groups) };
     if (y + box.h > frame.bottom + EPSILON) {
       const what = isHeaderRow(box.node) ? `${box.node.tag} header` : box.node.tag;
       warn(`ngpdf: ${what} is taller than a page and is cut at the bottom`);
@@ -1071,7 +1113,7 @@ export function paginatePage(
   const placeHeader = (header: Header | null, leadTop: number): void => {
     if (!header) return;
     for (const row of header.rows) {
-      place(row, frame.left + row.x, leadTop + row.top - header.top, header.opacity);
+      place(row, frame.left + row.x, leadTop + row.top - header.top, header.groups);
     }
     current.headers.add(header);
   };
@@ -1145,7 +1187,7 @@ export function paginatePage(
         sliceTop: !piece.first,
         sliceBottom: !piece.last,
         ...(sliced && { slice: { offset, height } }),
-        ...fade(unit.opacity),
+        ...grouped(unit.groups),
       });
       offset += piece.h;
     }
@@ -1280,7 +1322,7 @@ export function paginatePage(
     }
     const { header, leadFlow, leadTop, top } = next;
     placeHeader(header, leadTop);
-    place(unit, frame.left + unit.x, top, unit.opacity);
+    place(unit, frame.left + unit.x, top, unit.groups);
     current.units++;
     current.lastUnit = index;
     cursor = top + unit.box.h;
@@ -1324,13 +1366,13 @@ export function paginatePage(
       }
     }
     // Never above the content top, as a unit moved to a new sheet.
-    place(float, frame.left + float.x, Math.max(frame.top, y), float.opacity, at(pages, page));
+    place(float, frame.left + float.x, Math.max(frame.top, y), float.groups, at(pages, page));
   }
 
   if (draws(pageStyle)) {
     const box: Box = {
       node: page,
-      style: pageStyle,
+      style: { ...pageStyle, opacity: 1 },
       x: 0,
       y: 0,
       w: frame.width,
@@ -1339,7 +1381,7 @@ export function paginatePage(
       border: pageStyle.borderWidth,
       children: [],
     };
-    for (const built of pages) built.decorations.push({ box, x: 0, y: 0 });
+    for (const built of pages) built.decorations.push({ box, x: 0, y: 0, ...grouped(pageGroups) });
   }
   for (const wrapper of wrappers) {
     // A link's area and an anchor's place are drawn with its pieces, so such a wrapper always has
@@ -1376,13 +1418,13 @@ export function paginatePage(
     let offset = 0;
     for (const piece of pieces) {
       at(pages, piece.page).decorations.push({
-        box: { ...wrapper.box, h: piece.h, children: [] },
+        box: { ...opaque(wrapper.box), h: piece.h, children: [] },
         x: frame.left + wrapper.x + wrapper.dx,
         y: piece.top + wrapper.dy,
         sliceTop: piece.page !== first.page,
         sliceBottom: piece.page !== lastPage,
         ...(sliced && { slice: { offset, height } }),
-        ...fade(wrapper.opacity),
+        ...grouped(within(wrapper.groups, wrapper.box.node, wrapper.box.style.opacity)),
       });
       offset += piece.full;
     }

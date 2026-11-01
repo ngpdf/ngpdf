@@ -81,23 +81,22 @@ describe('displayList', () => {
     expect(ops[1]).toMatchObject({ op: 'text', text: 'Hello', x: 36, y: 36 });
   });
 
-  it('writes colors as #rrggbb and multiplies their alpha into the op opacity', () => {
+  it('writes colors as #rrggbb and their alpha as the op opacity', () => {
     const view = el(
       'pdf-view',
       {
         'background-color': 'rgba(0, 0, 255, 0.5)',
         'border-top': '2 solid #ff000080',
         color: 'Red',
-        opacity: '0.5',
       },
       [text('Faded', { color: 'rgb(0 128 0 / 50%)' }), text('Plain')],
     );
     const ops = list(layout(page([view]))[0]!, 0, 1);
-    expect(only(ops, 'rect')[0]).toMatchObject({ fill: '#0000ff', opacity: 0.25 });
-    expect(only(ops, 'line')[0]).toMatchObject({ color: '#ff0000', opacity: 0.5 * (0x80 / 255) });
+    expect(only(ops, 'rect')[0]).toMatchObject({ fill: '#0000ff', opacity: 0.5 });
+    expect(only(ops, 'line')[0]).toMatchObject({ color: '#ff0000', opacity: 0x80 / 255 });
     const [faded, plain] = only(ops, 'text');
-    expect(faded).toMatchObject({ text: 'Faded', color: '#008000', opacity: 0.25 });
-    expect(plain).toMatchObject({ text: 'Plain', color: '#ff0000', opacity: 0.5 });
+    expect(faded).toMatchObject({ text: 'Faded', color: '#008000', opacity: 0.5 });
+    expect(plain).toMatchObject({ text: 'Plain', color: '#ff0000', opacity: 1 });
   });
 
   it('paints nothing in a transparent color', () => {
@@ -113,27 +112,16 @@ describe('displayList', () => {
     expect(only(ops, 'text').map((op) => op.text)).toEqual(['Shown']);
   });
 
-  it('fades the content of a faded page once, in a row page as in a column page', () => {
-    const opacityOf = (direction: string): number[] => {
-      const child = el('pdf-view', { 'background-color': '#000', width: '20', height: '20' });
-      const laid = layout(page([child], { opacity: '0.5', 'flex-direction': direction }));
-      return only(list(laid[0]!, 0, 1), 'rect').map((op) => op.opacity);
-    };
-    expect(opacityOf('column')).toEqual([0.5]);
-    expect(opacityOf('row')).toEqual([0.5]);
-  });
-
-  it('passes the corner radii and opacity to the background rect', () => {
+  it('passes the corner radii to the background rect', () => {
     const style = {
       'background-color': '#000',
       'border-radius': '6 1 2 3',
-      opacity: '0.5',
       height: '20',
     };
     const [rect] = only(list(layout(page([el('pdf-view', style)]))[0]!, 0, 1), 'rect');
     expect(rect).toMatchObject({
       radii: { topLeft: 6, topRight: 1, bottomRight: 2, bottomLeft: 3 },
-      opacity: 0.5,
+      opacity: 1,
       h: 20,
     });
   });
@@ -518,25 +506,192 @@ describe('displayList', () => {
   });
 
   describe('opacity', () => {
-    it('multiplies down the tree and reaches every op kind', () => {
-      const inner = text('x', { opacity: '0.5', 'text-decoration': 'underline' });
-      const outer = el(
-        'pdf-view',
-        { opacity: '0.5', 'background-color': '#000', border: '1 solid #f00' },
-        [inner],
-      );
-      const ops = list(layout(page([outer]))[0]!, 0, 1);
-      expect(only(ops, 'rect')[0]!.opacity).toBe(0.5);
-      expect(only(ops, 'text')[0]!.opacity).toBe(0.25);
-      for (const line of only(ops, 'line')) expect(line.opacity).toBe(0.5);
+    /** The ops as a string, with each group's opacity and its content in braces. */
+    function shape(ops: readonly DrawOp[]): string {
+      return ops
+        .map((op) =>
+          op.op === 'group' ? `group ${String(op.opacity)} {` : op.op === 'ungroup' ? '}' : op.op,
+        )
+        .join(' ');
+    }
+
+    const square = (color: string, style: Record<string, string> = {}): PdfNode =>
+      el('pdf-view', { width: '40', height: '40', 'background-color': color, ...style });
+
+    it('draws a faded view and its content as one group, at full opacity inside', () => {
+      const overlap = square('#00f', { 'margin-top': '-20', 'margin-left': '20' });
+      const view = el('pdf-view', { opacity: '0.5', border: '1 solid #f00' }, [
+        square('#f00'),
+        overlap,
+        text('x', { 'text-decoration': 'underline' }),
+      ]);
+      const ops = list(layout(page([view]))[0]!, 0, 1);
+      expect(shape(ops)).toBe('group 0.5 { line line line line rect rect text }');
+      for (const op of ops) {
+        if ('opacity' in op && op.op !== 'group') expect(op.opacity).toBe(1);
+      }
     });
 
-    it('applies the inherited opacity to images', () => {
+    it('keeps the alpha of a color inside a group, without the group opacity', () => {
+      const view = el('pdf-view', { opacity: '0.5', 'background-color': 'rgba(0, 0, 255, 0.5)' }, [
+        text('Faded', { color: 'rgb(0 128 0 / 50%)' }),
+      ]);
+      const ops = list(layout(page([view]))[0]!, 0, 1);
+      expect(only(ops, 'rect')[0]).toMatchObject({ fill: '#0000ff', opacity: 0.5 });
+      expect(only(ops, 'text')[0]).toMatchObject({ color: '#008000', opacity: 0.5 });
+    });
+
+    it('nests groups, so a faded view in a faded view composes', () => {
+      const inner = el('pdf-view', { opacity: '0.4' }, [square('#f00')]);
+      const outer = el('pdf-view', { opacity: '0.5', 'background-color': '#000' }, [inner]);
+      const ops = list(layout(page([outer]))[0]!, 0, 1);
+      expect(shape(ops)).toBe('group 0.5 { rect group 0.4 { rect } }');
+    });
+
+    it('writes no group at opacity 1, nor for a faded box that draws nothing', () => {
+      const plain = el('pdf-view', { opacity: '1' }, [square('#f00')]);
+      const empty = el('pdf-view', { opacity: '0.5', height: '10' });
+      expect(shape(list(layout(page([plain, empty]))[0]!, 0, 1))).toBe('rect');
+    });
+
+    it('draws nothing at opacity 0 but keeps the links and anchors inside', () => {
+      const linked = el('pdf-link', {}, [text('Open')], { href: 'https://example.com/' });
+      const view = el('pdf-view', { opacity: '0', 'background-color': '#000' }, [linked], {
+        anchor: 'gone',
+      });
+      const root = page([view]);
+      const anchors = collectAnchors(root, () => undefined);
+      const ctx: LayoutContext = { yoga, metrics: writer, images: new Map(), anchors };
+      const ops = list(paginatePage(root, resolveStyles(root), ctx)[0]!, 0, 1);
+      expect(shape(ops)).toBe('anchor link');
+    });
+
+    it('groups images, without an opacity of their own', () => {
       const image = el('pdf-image', { width: '10', height: '10', opacity: '0.5' });
       const asset: ImageAsset = { data: new Uint8Array([1]), width: 10, height: 10 };
-      const outer = el('pdf-view', { opacity: '0.5' }, [image]);
-      const ops = list(layout(page([outer]), new Map([[image, asset]]))[0]!, 0, 1);
-      expect(only(ops, 'image')[0]!.opacity).toBe(0.25);
+      const ops = list(layout(page([image]), new Map([[image, asset]]))[0]!, 0, 1);
+      expect(shape(ops)).toBe('group 0.5 { image }');
+      expect(only(ops, 'image')[0]).not.toHaveProperty('opacity');
+    });
+
+    it('draws the group inside the transform of its box', () => {
+      const view = el('pdf-view', { opacity: '0.5', transform: 'rotate(10deg)' }, [square('#f00')]);
+      const ops = list(layout(page([view]))[0]!, 0, 1);
+      expect(shape(ops)).toBe('transform group 0.5 { rect } untransform');
+    });
+
+    it('draws the group inside the clip of its parent, and its own clip inside the group', () => {
+      const inner = el(
+        'pdf-view',
+        { opacity: '0.5', overflow: 'hidden', 'background-color': '#000', height: '20' },
+        [square('#f00')],
+      );
+      const outer = el('pdf-view', { overflow: 'hidden', height: '30' }, [inner]);
+      const ops = list(layout(page([outer]))[0]!, 0, 1);
+      expect(shape(ops)).toBe('clip group 0.5 { rect clip rect unclip } unclip');
+    });
+
+    it('draws the absolute boxes of a faded static view inside its group, outside its clip', () => {
+      const stamp = square('#00f', { position: 'absolute', top: '0', left: '0' });
+      const view = el('pdf-view', { opacity: '0.5', overflow: 'hidden', height: '20' }, [
+        square('#f00'),
+        stamp,
+      ]);
+      const holder = el('pdf-view', { position: 'relative', 'flex-direction': 'row' }, [view]);
+      const ops = list(layout(page([holder]))[0]!, 0, 1);
+      expect(shape(ops)).toBe('group 0.5 { clip rect unclip rect }');
+    });
+
+    it('keeps a relative child of a faded clipping view inside its clip', () => {
+      const moved = square('#00f', { position: 'relative', top: '5' });
+      const view = el('pdf-view', { opacity: '0.5', overflow: 'hidden', height: '20' }, [moved]);
+      const holder = el('pdf-view', { 'flex-direction': 'row' }, [view]);
+      const ops = list(layout(page([holder]))[0]!, 0, 1);
+      expect(shape(ops)).toBe('group 0.5 { clip rect unclip }');
+    });
+
+    it('fades a page once per sheet, page number included, in a row page as in a column page', () => {
+      const shapeOf = (direction: string): string => {
+        const child = square('#000');
+        const number = el('pdf-page-number', {}, [], { format: '{page}' });
+        const style = { opacity: '0.5', 'flex-direction': direction, 'background-color': '#eee' };
+        return shape(list(layout(page([child, number], style))[0]!, 0, 1));
+      };
+      expect(shapeOf('column')).toBe('group 0.5 { rect rect text }');
+      expect(shapeOf('row')).toBe('group 0.5 { rect rect text }');
+    });
+
+    it("makes one group per sheet of a split faded view, with that sheet's part", () => {
+      const rows = [0, 1, 2].map(() => square('#f00', { height: '300', width: 'auto' }));
+      const view = el('pdf-view', { opacity: '0.5', 'background-color': '#eee' }, rows);
+      const sheets = layout(page([text('Before'), view, text('After')]));
+      expect(sheets).toHaveLength(2);
+      // Wrapper backgrounds come first, as without a group.
+      expect(shape(list(sheets[0]!, 0, 2))).toBe('group 0.5 { rect rect rect } text');
+      expect(shape(list(sheets[1]!, 1, 2))).toBe('group 0.5 { rect rect } text');
+    });
+
+    it('makes one group per sheet of a split faded text, with its background', () => {
+      const lines = Array.from({ length: 80 }, (_, i) => `Line ${String(i)}`).join(' ');
+      const paragraph = text(lines, {
+        opacity: '0.5',
+        'background-color': '#eee',
+        width: '40',
+        'font-size': '12',
+      });
+      const sheets = layout(page([paragraph]));
+      expect(sheets).toHaveLength(2);
+      for (const [index, sheet] of sheets.entries()) {
+        expect(shape(list(sheet, index, 2))).toMatch(/^group 0\.5 \{ rect( text)+ \}$/);
+      }
+    });
+
+    it('draws each piece of a faded split row in its own group, inside its faded table', () => {
+      const words = Array.from({ length: 100 }, (_, i) => `w${String(i)}`).join(' ');
+      const style = { width: '25', 'font-size': '10', 'line-height': '1' };
+      const head = el('pdf-row', {}, [el('pdf-cell', {}, [text('Head')])], { header: true });
+      const row = el('pdf-row', { opacity: '0.5', 'background-color': '#eee' }, [
+        el('pdf-cell', {}, [text(words, style)]),
+      ]);
+      const table = el('pdf-table', { opacity: '0.4' }, [head, row], { columns: ['1fr'] });
+      const sheets = layout(page([table]));
+      expect(sheets).toHaveLength(2);
+      for (const [index, sheet] of sheets.entries()) {
+        const ops = list(sheet, index, 2);
+        expect(shape(ops)).toMatch(/^group 0\.4 \{ text group 0\.5 \{ rect( text)+ \} \}$/);
+        expect(only(ops, 'text')[0]!.text).toBe('Head');
+      }
+    });
+
+    it('draws an absolute box taken out of a faded unit in the group of that unit', () => {
+      const stamp = square('#00f', { position: 'absolute', top: '0', left: '0' });
+      const unit = el('pdf-view', { opacity: '0.5', 'flex-direction': 'row' }, [
+        square('#f00'),
+        stamp,
+      ]);
+      const ops = list(layout(page([unit]))[0]!, 0, 1);
+      expect(shape(ops)).toBe('group 0.5 { rect rect }');
+    });
+
+    it("gives a faded fixed view and a faded table's repeated header a group on every sheet", () => {
+      const header = el('pdf-view', { height: '20', opacity: '0.5' }, [square('#f00')], {
+        fixed: 'top',
+      });
+      const rows = [
+        el('pdf-row', { height: '20' }, [el('pdf-cell', {}, [text('Head')])], { header: true }),
+        ...Array.from({ length: 50 }, () =>
+          el('pdf-row', { height: '20' }, [el('pdf-cell', {}, [text('Row')])]),
+        ),
+      ];
+      const table = el('pdf-table', { opacity: '0.4' }, rows, { columns: ['1fr'] });
+      const sheets = layout(page([header, table]));
+      expect(sheets.length).toBeGreaterThan(1);
+      for (const [index, sheet] of sheets.entries()) {
+        const ops = list(sheet, index, sheets.length);
+        expect(shape(ops)).toMatch(/^group 0\.5 \{ rect \} group 0\.4 \{ text( text)+ \}$/);
+        const texts = only(ops, 'text').map((op) => op.text);
+        expect(texts[0]).toBe('Head');
+      }
     });
   });
 
@@ -916,14 +1071,13 @@ describe('displayList', () => {
 
     it('fits the image in the box and clips it to the box', () => {
       const op = drawn('contain');
-      expect(op).toMatchObject({ x: 36, w: 40, h: 20, opacity: 1, data: asset.data });
+      expect(op).toMatchObject({ x: 36, w: 40, h: 20, data: asset.data });
       expect(op.y).toBe(36 + 10);
       expect(op.clip).toEqual({ x: 36, y: 36, w: 40, h: 40 });
     });
 
     it('lets cover overflow the box but not the clip', () => {
-      const op = drawn('cover', { opacity: '0.5', padding: '4' });
-      expect(op.opacity).toBe(0.5);
+      const op = drawn('cover', { padding: '4' });
       expect(op.w).toBeGreaterThan(op.clip.w);
       expect(op.clip).toEqual({ x: 40, y: 40, w: 32, h: 32 });
     });
@@ -1241,8 +1395,8 @@ describe('gradient backgrounds', () => {
   });
 
   it('keeps the background color under the gradient in the same op', () => {
-    const rect = rectOf({ background: 'linear-gradient(red, blue) #eeeeee', opacity: '0.5' });
-    expect(rect).toMatchObject({ fill: '#eeeeee', opacity: 0.5, gradient: { kind: 'linear' } });
+    const rect = rectOf({ background: 'linear-gradient(red, blue) #eeeeee' });
+    expect(rect).toMatchObject({ fill: '#eeeeee', opacity: 1, gradient: { kind: 'linear' } });
   });
 
   it('makes an angled gradient line long enough to reach the corners', () => {
@@ -1311,12 +1465,12 @@ describe('gradient backgrounds', () => {
     expect(ring.stops.map((stop) => stop.offset)).toEqual([0, 0.00001, 1]);
   });
 
-  it('multiplies stop alpha and element opacity into each stop opacity', () => {
+  it('keeps the stop alpha as each stop opacity, without the element opacity', () => {
     const gradient = linear({
       opacity: '0.5',
       'background-image': 'linear-gradient(rgba(255, 0, 0, 0.5), blue)',
     });
-    expect(gradient.stops.map((stop) => stop.opacity)).toEqual([0.25, 0.5]);
+    expect(gradient.stops.map((stop) => stop.opacity)).toEqual([0.5, 1]);
   });
 
   it('gives a transparent stop the color of its neighbours, so it fades without darkening', () => {
@@ -1753,6 +1907,13 @@ describe('debug outlines', () => {
       color: GREY,
       opacity: 1,
     });
+  });
+
+  it('draws the outlines of faded boxes after every group, at full opacity', () => {
+    const inner = el('pdf-view', { opacity: '0.5', height: '20', 'background-color': '#eee' });
+    const ops = debugOps(page([el('pdf-view', { opacity: '0.5', padding: '4' }, [inner])]));
+    expect(ops.some((op) => op.op === 'group' || op.op === 'ungroup')).toBe(false);
+    expect(outlines(ops, RED)).toHaveLength(2);
   });
 
   it('draws no content box when the box has no padding or border', () => {

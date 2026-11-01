@@ -109,7 +109,6 @@ const PAD = 1;
  */
 function spanOf(
   placed: readonly Placed[],
-  opacity: number,
   lowest: number,
 ): { start: number; length: number; stops: GradientStop[] } {
   const padded = [...placed];
@@ -128,7 +127,7 @@ function spanOf(
   const stops = padded.map((stop, i) => ({
     offset: offsets[i] ?? 0,
     color: toHex(stop.color),
-    opacity: stop.color.a * opacity,
+    opacity: stop.color.a,
   }));
   return { start, length, stops };
 }
@@ -158,7 +157,6 @@ function increasing(offsets: readonly number[]): number[] {
 function linearFill(
   gradient: Extract<Gradient, { kind: 'linear' }>,
   area: GradientArea,
-  opacity: number,
 ): GradientFill | null {
   const { w, h } = area;
   let dx: number;
@@ -180,7 +178,7 @@ function linearFill(
   if (line <= 0) return null;
   const placed = premultiplyFix(placeStops(gradient.stops, line));
   if (placed.every((stop) => stop.color.a <= 0)) return null;
-  const { start, length, stops } = spanOf(placed, opacity, -Infinity);
+  const { start, length, stops } = spanOf(placed, -Infinity);
   const cx = area.x + w / 2;
   const cy = area.y + h / 2;
   const from = start - line / 2;
@@ -230,7 +228,6 @@ function radiiOf(
 function radialFill(
   gradient: Extract<Gradient, { kind: 'radial' }>,
   area: GradientArea,
-  opacity: number,
 ): GradientFill | null {
   const { w, h } = area;
   const px = pointsOf(gradient.center.x, w);
@@ -241,7 +238,7 @@ function radialFill(
   // Fix transparent stops first, so the color cut at the center mixes their neighbours.
   const placed = cutBeforeCenter(premultiplyFix(placeStops(gradient.stops, rx)));
   if (placed.every((stop) => stop.color.a <= 0)) return null;
-  const { start, length, stops } = spanOf(placed, opacity, 0);
+  const { start, length, stops } = spanOf(placed, 0);
   return {
     kind: 'radial',
     cx: area.x + px,
@@ -257,12 +254,6 @@ function radialFill(
  * The shading of `gradient` over `area`, the whole border box (all of it, also when only a
  * slice is on this page). Null when it paints nothing.
  */
-export function gradientFill(
-  gradient: Gradient,
-  area: GradientArea,
-  opacity: number,
-): GradientFill | null {
-  return gradient.kind === 'linear'
-    ? linearFill(gradient, area, opacity)
-    : radialFill(gradient, area, opacity);
+export function gradientFill(gradient: Gradient, area: GradientArea): GradientFill | null {
+  return gradient.kind === 'linear' ? linearFill(gradient, area) : radialFill(gradient, area);
 }
