@@ -172,6 +172,29 @@ export default tseslint.config(
     },
   },
   {
+    // The viewer is its own entry point: ng-packagr builds it apart from @ngpdf/core, so it
+    // reaches the primary entry point by its package name only.
+    files: ['projects/core/viewer/**/*.ts'],
+    ignores: ['projects/core/viewer/**/*.spec.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['../src', '../src/*', '../src/**'],
+              message: "Import from '@ngpdf/core', not from its sources.",
+            },
+            {
+              group: ['@angular/common', '@angular/common/*'],
+              message: '@ngpdf/core peers on @angular/core and @angular/platform-browser only.',
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
     files: ['**/*.mjs', '**/*.js'],
     extends: [eslint.configs.recommended, tseslint.configs.disableTypeChecked],
     languageOptions: { globals: globals.node },

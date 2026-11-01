@@ -1,13 +1,14 @@
 // End-to-end check: builds the demo in development mode (it exposes window.ngpdfDemo there),
 // renders the demo documents in headless Chrome, extracts their text with pdftotext and compares
-// it with e2e/expected/<name>.txt. `--update` rewrites the expected files; `--skip-build` reuses
-// dist/demo.
+// it with e2e/expected/<name>.txt. It also checks that the demo's pdf-viewer shows a PDF in its
+// iframe, and shows the new one after an edit. `--update` rewrites the expected files;
+// `--skip-build` reuses dist/demo.
 //
 // Runs on the host: needs node, /usr/bin/google-chrome and pdftotext/pdfimages (poppler-utils).
 // The expected files assume poppler 24 (Ubuntu 24.04, which CI uses). Without pdftotext on the
 // host, or with NGPDF_E2E_DOCKER=1, one Ubuntu 24.04 container extracts the text of all PDFs. Any
 // other poppler major version fails the run, since its text layout may differ.
-/* global window */
+/* global window, document */
 import { execFileSync, spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
@@ -284,6 +285,52 @@ function diff(expected, actual) {
   return lines.join('\n');
 }
 
+/** The blob: URL in the preview's iframe once Chrome has opened it as a PDF, other than `previous`. */
+async function viewerPdf(page, previous) {
+  const handle = await within(
+    page.waitForFunction(
+      (previousUrl) => {
+        const iframe = document.querySelector('app-preview pdf-viewer iframe');
+        if (!iframe?.src.startsWith('blob:') || iframe.src === previousUrl) return false;
+        return iframe.contentDocument?.contentType === 'application/pdf' && iframe.src;
+      },
+      { timeout: TIMEOUT_MS },
+      previous,
+    ),
+    'waiting for the preview iframe',
+  );
+  const url = await handle.jsonValue();
+  // Chrome shows a PDF through its viewer extension, in a frame inside the iframe. A blocked
+  // frame (a sandboxed one, for one) gets an error page and no such frame.
+  await within(
+    (async () => {
+      for (;;) {
+        const frame = page.frames().find((candidate) => candidate.url() === url);
+        if (frame?.childFrames().some((child) => child.url().startsWith('chrome-extension://')))
+          return;
+        await new Promise((done) => setTimeout(done, 100));
+      }
+    })(),
+    `Chrome's PDF viewer opening ${url}`,
+  );
+  return url;
+}
+
+async function checkViewer(page) {
+  const first = await viewerPdf(page);
+  await page.type('app-preview input', ' 2');
+  await viewerPdf(page, first);
+  const revoked = await page.evaluate(
+    (url) =>
+      fetch(url).then(
+        () => false,
+        () => true,
+      ),
+    first,
+  );
+  if (!revoked) throw new Error(`${first} was not revoked after the new PDF replaced it`);
+}
+
 if (!process.argv.includes('--skip-build')) {
   const build = ['ng', 'build', 'demo', '--configuration', 'development'];
   // Locally the toolchain is in Docker; in CI Node is already on the runner.
@@ -318,6 +365,14 @@ try {
       `rendering ${name}`,
     );
     writeFileSync(join(OUT, `${name}.pdf`), Buffer.from(base64, 'base64'));
+  }
+
+  try {
+    await checkViewer(page);
+    console.log('OK pdf-viewer (the iframe shows the PDF, and the new one after an edit)');
+  } catch (error) {
+    failed = true;
+    console.error(`FAIL pdf-viewer\n  ${error instanceof Error ? error.message : error}`);
   }
 
   const extracted = extractAll(DOCUMENTS);

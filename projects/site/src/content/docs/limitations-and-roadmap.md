@@ -49,12 +49,15 @@ ngpdf v0.1 covers documents built from text, tables, boxes and images. This page
 - PNG and JPEG only.
 - Images fetched from a URL have no size limit; a very large image is downloaded in full.
 
+### Preview
+
+- `pdf-viewer` shows the PDF with the browser's own PDF viewer. Chrome on Android shows no PDF inside a page, and Safari on iOS shows only the first page. See [Where the preview works](/docs/rendering-api#where-the-preview-works) for a download fallback.
+
 ### Not in v0.1
 
 - Server rendering. Render in the browser.
 - SVG.
 - Forms.
-- A preview component.
 - Capturing the DOM of a page as a PDF.
 
 ## Planned for v0.2

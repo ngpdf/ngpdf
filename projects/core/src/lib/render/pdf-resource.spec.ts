@@ -107,6 +107,25 @@ describe('pdfResource', () => {
     expect(revoked).toEqual(['blob:test/1']);
   });
 
+  it('keeps the same URL for the current PDF while a newer render runs', async () => {
+    const customer = signal('ACME');
+    const pdf = pdfResource(TestDocument, {
+      inputs: () => ({ customer: customer() }),
+      debounce: 20,
+      injector: scope(),
+    });
+    await settle();
+    expect(pdf.url()).toBe('blob:test/1');
+
+    customer.set('Globex');
+    TestBed.tick();
+
+    expect(pdf.isLoading()).toBe(true);
+    expect(pdf.url()).toBe('blob:test/1');
+    expect(revoked).toEqual([]);
+    pdf.destroy();
+  });
+
   it('renders once for a burst of changes inside the debounce window', async () => {
     const customer = signal('A');
     const pdf = pdfResource(TestDocument, {

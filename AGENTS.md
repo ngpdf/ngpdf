@@ -87,8 +87,15 @@ The site (`projects/site`) is a prerendered Angular app. Its docs are the Markdo
 ## Product rules
 
 - **Selectors:** `pdf-document`, `pdf-page`, `pdf-view`, `pdf-text`, `pdf-span`, `pdf-link`,
-  `pdf-image`, `pdf-table`, `pdf-row`, `pdf-cell`, `pdf-page-number`. The `pdf-` prefix is
-  mandatory: `table`, `image` and `text` exist in HTML and SVG.
+  `pdf-image`, `pdf-table`, `pdf-row`, `pdf-cell`, `pdf-page-number`, and `pdf-viewer`, the
+  preview component (an HTML component in the app, not a document element). The `pdf-` prefix
+  is mandatory: `table`, `image` and `text` exist in HTML and SVG.
+- **Preview:** `pdf-viewer` comes from its own entry point, `@ngpdf/core/viewer`, and never
+  reaches an app that imports `@ngpdf/core` alone; `scripts/bundle-budget.mjs` checks it. It is
+  built on `pdfResource` and shows the PDF in an `<iframe>` whose only trusted source is the
+  `blob:` URL `pdfResource` makes. The iframe has no `sandbox`: Chrome blocks its PDF viewer in
+  any sandboxed frame. It reaches `@ngpdf/core` by its package name only, never by a relative
+  path.
 - **Units:**
   - a bare number and `pt` are points;
   - 1in = 72pt, 1cm = 72/2.54pt, 1mm = 72/25.4pt;
@@ -190,7 +197,6 @@ The site (`projects/site`) is a prerendered Angular app. Its docs are the Markdo
   - SVG;
   - hyphenation, RTL;
   - forms;
-  - a preview component;
   - capturing the DOM.
 
   Do not add them without a design update.

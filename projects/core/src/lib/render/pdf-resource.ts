@@ -25,7 +25,10 @@ export interface PdfResourceOptions {
 }
 
 export interface PdfResourceRef extends Resource<Blob | undefined> {
-  /** An object URL for the current PDF, revoked when a new one replaces it or on destroy. */
+  /**
+   * An object URL for the current PDF. It stays while a newer render runs, and is revoked when a
+   * new PDF replaces it, when a render fails, or on destroy.
+   */
   readonly url: Signal<string | undefined>;
   /** Renders again with the same inputs. */
   reload(): boolean;
@@ -63,6 +66,8 @@ export function pdfResource<T>(
     current = undefined;
   };
   const url = computed(() => {
+    // The previous PDF stays until a newer one replaces it, so a preview never goes blank.
+    if (pdf.isLoading()) return current;
     const blob = pdf.hasValue() ? pdf.value() : undefined;
     revoke();
     if (blob) current = URL.createObjectURL(blob);

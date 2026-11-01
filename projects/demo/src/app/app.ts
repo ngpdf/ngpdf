@@ -11,6 +11,7 @@ import { FontsSample } from './documents/fonts-sample';
 import { LicencesList } from './documents/licences-list';
 import { SecureSample } from './documents/secure-sample';
 import { SpanSample } from './documents/span-sample';
+import { Preview } from './preview';
 
 const DOCUMENT_NAMES = [
   'capture-report',
@@ -53,6 +54,7 @@ function toBase64(bytes: ArrayBuffer): string {
 
 @Component({
   selector: 'app-root',
+  imports: [Preview],
   templateUrl: './app.html',
   styleUrl: './app.css',
 })

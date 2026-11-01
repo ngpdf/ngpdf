@@ -24,7 +24,13 @@
     "directory": "projects/core"
   },
   "peerDependencies": {
-    "@angular/core": "^22.0.0"
+    "@angular/core": "^22.0.0",
+    "@angular/platform-browser": "^22.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@angular/platform-browser": {
+      "optional": true
+    }
   },
   "dependencies": {
     "linebreak": "^1.1.0",
