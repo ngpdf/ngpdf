@@ -10,7 +10,8 @@ import type { PdfNode } from '../tree/node';
   template: '<ng-content />',
 })
 export class PdfLink {
-  readonly href = input.required<string>();
+  // Required, but a data-bound value may be missing: the engine then draws no link and warns.
+  readonly href = input.required<string | null | undefined>();
 
   constructor() {
     (inject(ElementRef).nativeElement as PdfNode).owner = this;

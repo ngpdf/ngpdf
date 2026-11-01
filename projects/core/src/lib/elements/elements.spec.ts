@@ -11,7 +11,7 @@ import { TestBed } from '@angular/core/testing';
 import { afterEach, beforeAll, describe, expect, expectTypeOf, it } from 'vitest';
 import { elementChildren, propsOf, textContent, type PdfNode } from '../tree/node';
 import { PdfRendererFactory } from '../tree/pdf-renderer-factory';
-import { PDF_ELEMENTS, type PdfDocument, type PdfTable, type TableColumn } from '.';
+import { PDF_ELEMENTS, type PdfDocument, type PdfLink, type PdfTable, type TableColumn } from '.';
 import type { PageSize } from './page';
 
 @Component({
@@ -95,6 +95,17 @@ class SpansDocument {
 })
 class LinksDocument {
   readonly url = 'mailto:team@example.com';
+}
+
+@Component({
+  selector: 'pdf-test-missing-link',
+  imports: [PDF_ELEMENTS],
+  template: `<pdf-document
+    ><pdf-link [href]="url"><pdf-text>No link</pdf-text></pdf-link></pdf-document
+  >`,
+})
+class MissingLinkDocument {
+  readonly url: string | undefined = undefined;
 }
 
 function at<T>(items: readonly T[], index: number): T {
@@ -203,6 +214,11 @@ describe('pdf-* elements', () => {
     expect(propsOf(inline)).toEqual({ href: 'mailto:team@example.com' });
     expect(inline.rawStyle).toEqual({ color: 'blue' });
   });
+
+  it('passes a missing data-bound href through, for the engine to refuse', () => {
+    const link = at(elementChildren(render(MissingLinkDocument)), 0);
+    expect(propsOf(link)).toEqual({ href: undefined });
+  });
 });
 
 describe('element input types', () => {
@@ -211,5 +227,7 @@ describe('element input types', () => {
     expectTypeOf<readonly TableColumn[]>().toExtend<ReturnType<PdfTable['columns']>>();
     expectTypeOf<readonly [number, number]>().toExtend<PageSize>();
     expectTypeOf<readonly string[]>().toExtend<ReturnType<PdfDocument['keywords']>>();
+    // A data-bound href may be missing: the engine then draws the content with no link.
+    expectTypeOf<string | null | undefined>().toExtend<ReturnType<PdfLink['href']>>();
   });
 });

@@ -103,7 +103,7 @@ A link to a URL. Where a `pdf-view` can go it is a column `pdf-view` whose box i
 
 | Input | Type | Default | Description |
 | --- | --- | --- | --- |
-| `href` | `string` | required | An absolute `http:`, `https:` or `mailto:` URL. Any other URL writes no link, with a warning in development mode. |
+| `href` | `string \| null \| undefined` | required | An absolute `http:`, `https:` or `mailto:` URL. Any other value, including a missing one, writes no link, with a warning in development mode. |
 
 ```html
 <pdf-text>Pay at <pdf-link [href]="payUrl" style="color: #1a56db; text-decoration: underline">example.com/pay</pdf-link>.</pdf-text>
