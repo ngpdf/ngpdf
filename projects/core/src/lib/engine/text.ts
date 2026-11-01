@@ -19,7 +19,7 @@ export interface TextRun {
   readonly width: number;
   /** Height of the font above its baseline. */
   readonly ascent: number;
-  /** The URL of the pdf-link the run belongs to. */
+  /** The URL of the pdf-link the run belongs to, or `#name` for one to an anchor. */
   readonly link?: string;
 }
 
@@ -49,7 +49,7 @@ export interface TextRange {
   readonly text: string;
   readonly style: TextStyle;
   readonly fonts?: TextFonts;
-  /** The checked URL of the pdf-link the range is in. */
+  /** The checked URL of the pdf-link the range is in, or `#name` for one to an anchor. */
   readonly link?: string;
 }
 

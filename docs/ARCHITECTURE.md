@@ -15,6 +15,7 @@ this project calls for it. Where the simplest correct answer is no pattern, this
         ▼                                 lazy half: engine/
  dissolveHosts      → PdfNode tree of pdf-* elements only
  resolveStyles      → Map<PdfNode, ResolvedStyle>
+ collectAnchors     → anchor names, marked elements, outline
  loadImages         → Map<PdfNode, ImageAsset>          (the only async I/O)
  layoutBox (Yoga)   → Box tree
  paginatePage       → PageLayout[]
@@ -146,9 +147,9 @@ invalidation would buy nothing here.
 
 ### `DrawOp` handling: a discriminated union and an exhaustive `switch`, no Visitor
 
-- **Context.** The writer and the tests act on ten draw operation kinds: `rect`, `line`, `path`,
-  `text`, `image`, `transform` with its closing `untransform`, `clip` with its closing `unclip`,
-  and `link`.
+- **Context.** The writer and the tests act on eleven draw operation kinds: `rect`, `line`,
+  `path`, `text`, `image`, `transform` with its closing `untransform`, `clip` with its closing
+  `unclip`, `link` and `anchor`.
 - **Decision.** `DrawOp` is a TypeScript discriminated union. Code that handles it uses a
   `switch (op.op)` with an `assertNever` default, so adding a kind fails to compile wherever it is
   not handled.
@@ -193,7 +194,7 @@ direct code. Strategy would add indirection with one implementation each.
 projects/core/src/lib/tree/       PdfNode, PdfRendererFactory           (eager)
 projects/core/src/lib/elements/   pdf-* components, PDF_ELEMENTS        (eager)
 projects/core/src/lib/render/     render-tree, PdfRenderer facade       (eager)
-projects/core/src/lib/engine/     hosts, color, style, fonts, text, images, layout,
+projects/core/src/lib/engine/     hosts, color, style, anchors, fonts, text, images, layout,
                                   paginate, display-list, writer, index (lazy)
 projects/demo/                    the three reference documents
 projects/site/                    ngpdf.dev: landing, docs (Markdown), examples

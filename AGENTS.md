@@ -159,13 +159,24 @@ The site (`projects/site`) is a prerendered Angular app. Its docs are the Markdo
     link is one per line fragment. Rectangles are cut at the content bottom but not by an
     `overflow` clip, and under a `transform` they are the axis-aligned bounds of the area.
   - A `pdf-link` inside a `pdf-link` throws `ngpdf: pdf-link inside a pdf-link`.
+  - `href="#name"` jumps to the element with `anchor="name"`; a name no anchor has writes no link,
+    with a dev-mode warning. Each anchor a link or bookmark uses is a named `/XYZ` destination
+    at the top left of the element's first piece, and the link a GoTo action to it.
+- **Anchors and bookmarks:** `pdf-view`, `pdf-text`, `pdf-image`, `pdf-table`, `pdf-row` and
+  `pdf-cell` take `anchor` (a name) and `bookmark` (an outline title).
+  - An anchor is the sheet where the element's first piece lands, at its top: a split text's
+    first line group, a fixed view's first sheet. Names and titles are trimmed; an empty one is
+    ignored. A second element with a name warns in dev mode (`ngpdf: duplicate anchor "<name>"`),
+    and the first in tree order keeps it.
+  - Bookmarks keep tree order and nest as their elements do, open. No entries, no outline. The
+    outline panel opens only with `pageMode="UseOutlines"`.
 - **Images:**
   - Formats are PNG and JPEG, from a data URL, an http(s) URL, a `Blob` or an `ArrayBuffer`.
   - `object-fit` is `contain` (default) or `cover`.
   - A failed load rejects the render with `ngpdf: could not load image "<src>": <reason>`.
 - **Out of v0.1:**
   - server rendering;
-  - SVG, bookmarks;
+  - SVG;
   - hyphenation, RTL;
   - forms, encryption;
   - a preview component;
@@ -190,7 +201,8 @@ The site (`projects/site`) is a prerendered Angular app. Its docs are the Markdo
   needs a reason in the PR and must pass `npm audit` and OSV-Scanner. Vulnerabilities are fixed
   within the CVSS deadlines in `docs/ENGINEERING.md`.
 - **Output safety:** never write PDF JavaScript, forms or embedded files, and no action other than
-  the URI action of a `pdf-link` to an http, https or mailto URL.
+  the URI action of a `pdf-link` to an http, https or mailto URL, or its GoTo action to a named
+  destination in the same file.
 - **Commits:** Conventional Commits (`feat(core): …`, `fix(core): …`, `chore: …`), with no AI
   attribution or co-author lines.
 - **Pull requests:** describe what changed and why, and how it was tested. The maintainer reviews

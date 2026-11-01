@@ -11,7 +11,18 @@ import { TestBed } from '@angular/core/testing';
 import { afterEach, beforeAll, describe, expect, expectTypeOf, it } from 'vitest';
 import { elementChildren, propsOf, textContent, type PdfNode } from '../tree/node';
 import { PdfRendererFactory } from '../tree/pdf-renderer-factory';
-import { PDF_ELEMENTS, type PdfDocument, type PdfLink, type PdfTable, type TableColumn } from '.';
+import {
+  PDF_ELEMENTS,
+  type PdfCell,
+  type PdfDocument,
+  type PdfImage,
+  type PdfLink,
+  type PdfRow,
+  type PdfTable,
+  type PdfText,
+  type PdfView,
+  type TableColumn,
+} from '.';
 import type { PageSize } from './page';
 
 @Component({
@@ -108,6 +119,25 @@ class MissingLinkDocument {
   readonly url: string | undefined = undefined;
 }
 
+@Component({
+  selector: 'pdf-test-anchors',
+  imports: [PDF_ELEMENTS],
+  template: `
+    <pdf-document>
+      <pdf-view anchor="v" bookmark="View" />
+      <pdf-text anchor="t" [bookmark]="title" />
+      <pdf-image src="data:image/png;base64,AAAA" anchor="i" bookmark="Image" />
+      <pdf-table [columns]="['1fr']" anchor="tb" bookmark="Table">
+        <pdf-row anchor="r" bookmark="Row"><pdf-cell anchor="c" bookmark="Cell" /></pdf-row>
+      </pdf-table>
+      <pdf-link href="#v"><pdf-text>Back to the view</pdf-text></pdf-link>
+    </pdf-document>
+  `,
+})
+class AnchorsDocument {
+  readonly title: string | null = null;
+}
+
 function at<T>(items: readonly T[], index: number): T {
   const item = items[index];
   if (item === undefined) throw new Error(`no item at ${String(index)}`);
@@ -128,7 +158,11 @@ describe('pdf-* elements', () => {
 
   function render(
     component:
-      typeof DefaultsDocument | typeof BoundDocument | typeof SpansDocument | typeof LinksDocument,
+      | typeof DefaultsDocument
+      | typeof BoundDocument
+      | typeof SpansDocument
+      | typeof LinksDocument
+      | typeof AnchorsDocument,
   ): PdfNode {
     const environmentInjector = createEnvironmentInjector(
       [{ provide: RendererFactory2, useFactory: () => new PdfRendererFactory() }],
@@ -215,6 +249,18 @@ describe('pdf-* elements', () => {
     expect(inline.rawStyle).toEqual({ color: 'blue' });
   });
 
+  it('exposes anchor and bookmark on views, texts, images, tables, rows and cells', () => {
+    const [view, text, image, table, link] = elementChildren(render(AnchorsDocument));
+    expect(propsOf(view!)).toMatchObject({ anchor: 'v', bookmark: 'View' });
+    expect(propsOf(text!)).toMatchObject({ anchor: 't', bookmark: null });
+    expect(propsOf(image!)).toMatchObject({ anchor: 'i', bookmark: 'Image' });
+    expect(propsOf(table!)).toMatchObject({ anchor: 'tb', bookmark: 'Table' });
+    const row = at(elementChildren(table!), 0);
+    expect(propsOf(row)).toMatchObject({ anchor: 'r', bookmark: 'Row' });
+    expect(propsOf(at(elementChildren(row), 0))).toMatchObject({ anchor: 'c', bookmark: 'Cell' });
+    expect(propsOf(link!)).toEqual({ href: '#v' });
+  });
+
   it('passes a missing data-bound href through, for the engine to refuse', () => {
     const link = at(elementChildren(render(MissingLinkDocument)), 0);
     expect(propsOf(link)).toEqual({ href: undefined });
@@ -229,5 +275,12 @@ describe('element input types', () => {
     expectTypeOf<readonly string[]>().toExtend<ReturnType<PdfDocument['keywords']>>();
     // A data-bound href may be missing: the engine then draws the content with no link.
     expectTypeOf<string | null | undefined>().toExtend<ReturnType<PdfLink['href']>>();
+    // So may an anchor name or a bookmark title: the engine then ignores it.
+    expectTypeOf<string | null | undefined>().toExtend<ReturnType<PdfView['anchor']>>();
+    expectTypeOf<string | null | undefined>().toExtend<ReturnType<PdfText['bookmark']>>();
+    expectTypeOf<string | null | undefined>().toExtend<ReturnType<PdfImage['anchor']>>();
+    expectTypeOf<string | null | undefined>().toExtend<ReturnType<PdfTable['bookmark']>>();
+    expectTypeOf<string | null | undefined>().toExtend<ReturnType<PdfRow['anchor']>>();
+    expectTypeOf<string | null | undefined>().toExtend<ReturnType<PdfCell['bookmark']>>();
   });
 });

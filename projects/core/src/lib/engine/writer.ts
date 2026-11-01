@@ -154,17 +154,40 @@ export type DrawOp =
     }
   | { readonly op: 'unclip' }
   /**
-   * A clickable rectangle that opens `url`, an http, https or mailto URL the engine checked. In
-   * page space: the transforms and clips around it do not apply. It draws nothing.
+   * A clickable rectangle. It opens `url`, an http, https or mailto URL the engine checked, or
+   * jumps to the anchor `name`. In page space: the transforms and clips around it do not apply.
+   * It draws nothing.
    */
-  | {
+  | ({
       readonly op: 'link';
       readonly x: number;
       readonly y: number;
       readonly w: number;
       readonly h: number;
-      readonly url: string;
+    } & (
+      | { readonly kind: 'uri'; readonly url: string }
+      | { readonly kind: 'goto'; readonly name: string }
+    ))
+  /**
+   * A place in the document, at the top left of a box with an `anchor` or a `bookmark`, in page
+   * space. The first op of each `id` in the document is the place; later ones repeat it, as a
+   * fixed view or a split text does. It draws nothing.
+   */
+  | {
+      readonly op: 'anchor';
+      readonly id: number;
+      /** The anchor name links use; a bookmark alone has none. */
+      readonly name?: string;
+      readonly x: number;
+      readonly y: number;
     };
+
+/** One bookmark of the document outline, pointing at the place of anchor op `anchor`. */
+export interface OutlineItem {
+  readonly title: string;
+  readonly anchor: number;
+  readonly children: readonly OutlineItem[];
+}
 
 export interface FontMetrics {
   /** With `ligatures` false, the optional ligatures (liga, clig, dlig) are left out. */
@@ -185,6 +208,8 @@ export interface DocumentInfo {
   readonly pageMode?: PageMode;
   readonly pageLayout?: PageLayout;
   readonly creationDate: Date;
+  /** The bookmarks, in tree order. No entries, no outline. */
+  readonly outline?: readonly OutlineItem[];
 }
 
 export interface PageOps {
@@ -347,7 +372,95 @@ interface FontInternals {
 
 interface PdfKitInternals {
   info: { Creator?: unknown };
-  _root: { data: { PageMode?: PageMode; PageLayout?: PageLayout } };
+  _root: {
+    data: {
+      PageMode?: PageMode;
+      PageLayout?: PageLayout;
+      Pages: { data: { Kids: unknown[] } };
+      Names: { data: { Dests: NameTreeInternals } };
+    };
+  };
+  /** Typed here because `@types/pdfkit` takes numbers only, and an XYZ zoom of null keeps it. */
+  addNamedDestination(name: string, fit: 'XYZ', x: number, y: number, zoom: null): void;
+  outline: OutlineInternals;
+}
+
+/** pdfkit 0.20's name tree: keys in a plain object, sorted with `localeCompare` when written. */
+interface NameTreeInternals {
+  _items: Record<string, unknown>;
+  _compareKeys: (a: string, b: string) => number;
+}
+
+/** pdfkit 0.20's outline entry, which points at the current page unless `Dest` is replaced. */
+interface OutlineInternals {
+  addItem(title: string, options: { expanded: boolean }): OutlineInternals;
+  outlineData: { Dest?: unknown };
+}
+
+function isAscii(key: string): boolean {
+  for (let i = 0; i < key.length; i++) if (key.charCodeAt(i) > 0x7f) return false;
+  return true;
+}
+
+/**
+ * Name tree keys in the order of their bytes, as the PDF format asks and viewers search them.
+ * pdfkit writes an ASCII string as it is and any other as UTF-16BE after FE FF, so ASCII keys
+ * come first, and within each kind the code units decide.
+ */
+function compareKeyBytes(a: string, b: string): number {
+  const [asciiA, asciiB] = [isAscii(a), isAscii(b)];
+  if (asciiA !== asciiB) return asciiA ? -1 : 1;
+  return a < b ? -1 : a > b ? 1 : 0;
+}
+
+/** Where an anchor landed: its first op in the document. */
+interface Place {
+  readonly page: number;
+  readonly x: number;
+  readonly y: number;
+  readonly name?: string;
+}
+
+function placesOf(pages: readonly PageOps[]): Map<number, Place> {
+  const places = new Map<number, Place>();
+  pages.forEach((page, index) => {
+    for (const op of page.ops) {
+      if (op.op !== 'anchor' || places.has(op.id)) continue;
+      const { x, y, name } = op;
+      places.set(op.id, { page: index, x, y, ...(name !== undefined && { name }) });
+    }
+  });
+  return places;
+}
+
+/**
+ * The names written as named destinations: those a link jumps to or a bookmark points at, and
+ * only once their anchor has a place. An unused anchor writes nothing.
+ */
+function destinationsOf(
+  pages: readonly PageOps[],
+  places: ReadonlyMap<number, Place>,
+  outline: readonly OutlineItem[],
+): Map<string, Place> {
+  const byName = new Map<string, Place>();
+  for (const place of places.values()) if (place.name !== undefined) byName.set(place.name, place);
+  const used = new Map<string, Place>();
+  const use = (name: string | undefined): void => {
+    if (name === undefined) return;
+    const place = byName.get(name);
+    if (place) used.set(name, place);
+  };
+  for (const page of pages) {
+    for (const op of page.ops) if (op.op === 'link' && op.kind === 'goto') use(op.name);
+  }
+  const visit = (items: readonly OutlineItem[]): void => {
+    for (const item of items) {
+      use(places.get(item.anchor)?.name);
+      visit(item.children);
+    }
+  };
+  visit(outline);
+  return used;
 }
 
 /** pdfkit 0.20's gradient transform, which `@types/pdfkit` leaves out. */
@@ -447,6 +560,13 @@ export async function createPdfkitWriter(options: { compress?: boolean } = {}): 
       if (info.creator === undefined) delete internals.info.Creator;
       if (info.pageMode !== undefined) internals._root.data.PageMode = info.pageMode;
       if (info.pageLayout !== undefined) internals._root.data.PageLayout = info.pageLayout;
+      // Byte order, and no inherited keys, so a name such as "__proto__" is kept as written.
+      const dests = internals._root.data.Names.data.Dests;
+      dests._items = Object.create(null) as Record<string, unknown>;
+      dests._compareKeys = compareKeyBytes;
+      const outline = info.outline ?? [];
+      const places = placesOf(pages);
+      const destinations = destinationsOf(pages, places, outline);
       const chunks: Uint8Array[] = [];
       const done = new Promise<Blob>((resolve, reject) => {
         doc.on('data', (chunk: Uint8Array) => chunks.push(chunk));
@@ -458,13 +578,27 @@ export async function createPdfkitWriter(options: { compress?: boolean } = {}): 
       // One data URL per source array in this write, so a repeated image is encoded once.
       const dataUrls = new WeakMap<Uint8Array, string>();
       try {
-        for (const page of pages) {
+        for (const [index, page] of pages.entries()) {
           doc.addPage({ size: [page.width, page.height], margin: 0 });
           const links: LinkOp[] = [];
           for (const op of page.ops) drawOp(doc, op, dataUrls, links);
           // After the drawing, when every transform is restored: pdfkit maps an annotation's
           // rect through the current transform.
-          for (const link of links) doc.link(link.x, link.y, link.w, link.h, link.url);
+          for (const link of links) {
+            if (link.kind === 'uri') doc.link(link.x, link.y, link.w, link.h, link.url);
+            else if (destinations.has(link.name)) {
+              doc.goTo(link.x, link.y, link.w, link.h, link.name);
+            }
+          }
+          // pdfkit puts a destination on the current page and flips its y.
+          for (const [name, place] of destinations) {
+            if (place.page === index)
+              internals.addNamedDestination(name, 'XYZ', place.x, place.y, null);
+          }
+        }
+        // pdfkit opens the outline panel whenever there is an outline; that is pageMode's job.
+        if (writeOutline(internals, outline, places, pages) && info.pageMode === undefined) {
+          internals._root.data.PageMode = 'UseNone';
         }
       } catch (error) {
         // Nobody awaits `done` on this path; keep a late stream error from going unhandled.
@@ -479,6 +613,42 @@ export async function createPdfkitWriter(options: { compress?: boolean } = {}): 
 }
 
 type Doc = PDFKit.PDFDocument;
+
+/**
+ * Adds the bookmarks under pdfkit's outline root, each open and pointing at its anchor's place:
+ * by name when the anchor has one, which is then a named destination, or as an XYZ destination.
+ * An entry whose element was never drawn is left out, and its children take its place. Returns
+ * whether any entry was written.
+ */
+function writeOutline(
+  internals: PdfKitInternals,
+  outline: readonly OutlineItem[],
+  places: ReadonlyMap<number, Place>,
+  pages: readonly PageOps[],
+): boolean {
+  const kids = internals._root.data.Pages.data.Kids;
+  let written = false;
+  const add = (parent: OutlineInternals, items: readonly OutlineItem[]): void => {
+    for (const item of items) {
+      const place = places.get(item.anchor);
+      if (!place) {
+        add(parent, item.children);
+        continue;
+      }
+      const entry = parent.addItem(item.title, { expanded: true });
+      const height = pages[place.page]?.height ?? 0;
+      entry.outlineData.Dest =
+        place.name !== undefined
+          ? // A String object is written as a PDF string; a primitive would become a PDF name.
+            new String(place.name)
+          : [kids[place.page], 'XYZ', place.x, height - place.y, null];
+      written = true;
+      add(entry, item.children);
+    }
+  };
+  add(internals.outline, outline);
+  return written;
+}
 
 /**
  * pdfkit options that draw `op.text` as the one line the layout made of it. Any `width` turns on
@@ -760,6 +930,9 @@ function drawOp(
       return;
     case 'link':
       links.push(op);
+      return;
+    case 'anchor':
+      // Placed before the pages are written; see `placesOf`.
       return;
     default:
       return assertNever(op);

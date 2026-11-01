@@ -50,11 +50,8 @@ interface Numbering {
 
 const IDENTITY: Matrix = [1, 0, 0, 1, 0, 0];
 
-/**
- * A link op over `rect` as `matrix` maps it to the page: the axis-aligned bounds of its corners,
- * since a PDF link area is an upright rectangle.
- */
-function pushLink(out: DrawOp[], matrix: Matrix, rect: Rect, url: string): void {
+/** The axis-aligned bounds of `rect` as `matrix` maps it to the page. */
+function bounds(matrix: Matrix, rect: Rect): Rect {
   const [a, b, c, d, e, f] = matrix;
   const xs: number[] = [];
   const ys: number[] = [];
@@ -69,7 +66,20 @@ function pushLink(out: DrawOp[], matrix: Matrix, rect: Rect, url: string): void 
   }
   const x = Math.min(...xs);
   const y = Math.min(...ys);
-  out.push({ op: 'link', x, y, w: Math.max(...xs) - x, h: Math.max(...ys) - y, url });
+  return { x, y, w: Math.max(...xs) - x, h: Math.max(...ys) - y };
+}
+
+/**
+ * A link op over the page bounds of `rect`, since a PDF link area is an upright rectangle. A
+ * `#name` link jumps to that anchor; any other is a URL.
+ */
+function pushLink(out: DrawOp[], matrix: Matrix, rect: Rect, link: string): void {
+  const area = bounds(matrix, rect);
+  out.push(
+    link.startsWith('#')
+      ? { op: 'link', ...area, kind: 'goto', name: link.slice(1) }
+      : { op: 'link', ...area, kind: 'uri', url: link },
+  );
 }
 
 /** A positioned box waiting to be drawn at the end of its containing block. */
@@ -106,13 +116,16 @@ function drawBox(
   // A containing block draws its absolute descendants last, inside its own clip and transform;
   // a static box hands them up, so its clip does not cut them, as in CSS.
   const absolutes = style.position !== 'static' || transformed ? [] : deferred;
-  const firstOp = out.length;
-  let matrix = outer;
-  if (transformed) {
-    const own = transformMatrix(style, x, y, box.w, box.h);
-    matrix = multiply(outer, own);
-    out.push({ op: 'transform', matrix: own });
+  const own = transformed ? transformMatrix(style, x, y, box.w, box.h) : undefined;
+  const matrix = own ? multiply(outer, own) : outer;
+  // The top left of the piece, outside its transform so an otherwise empty box stays untransformed.
+  if (box.anchor) {
+    const place = bounds(matrix, { x, y, w: box.w, h: box.h });
+    const { id, name } = box.anchor;
+    out.push({ op: 'anchor', id, ...(name !== undefined && { name }), x: place.x, y: place.y });
   }
+  const firstOp = out.length;
+  if (own) out.push({ op: 'transform', matrix: own });
 
   const bottomEdge = Math.min(y + box.h, limit);
   // The edges cut by a page break or by the limit keep square corners.

@@ -98,6 +98,46 @@ describe('renderDocument', () => {
     expect(pages[0]!.ops.some((op) => op.op === 'text' && op.text === 'single')).toBe(true);
   });
 
+  it('accepts pageMode UseOutlines, which opens the bookmarks panel', async () => {
+    const writer = recordingWriter();
+    await renderDocument(twoPages({ pageMode: 'UseOutlines' }), { writer, dev: false });
+    expect(writer.recorded[0]!.info.pageMode).toBe('UseOutlines');
+  });
+
+  it('hands the writer the anchors, the internal links and the outline', async () => {
+    const writer = recordingWriter();
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const chapter = el('pdf-view', {}, [el('pdf-text', {}, [], { bookmark: 'Detail' })], {
+      anchor: 'ch1',
+      bookmark: 'Chapter 1',
+    });
+    const page = el(
+      'pdf-page',
+      {},
+      [
+        el('pdf-link', {}, [text('Go')], { href: '#ch1' }),
+        el('pdf-link', {}, [text('Lost')], { href: '#ch9' }),
+        chapter,
+        el('pdf-view', {}, [], { anchor: 'ch1' }),
+      ],
+      { size: 'A4' },
+    );
+    await renderDocument(host({}, [page]), { writer, dev: true });
+    const [{ pages, info }] = writer.recorded as [Recorded];
+    const ops = pages[0]!.ops;
+    expect(ops.filter((op) => op.op === 'link')).toMatchObject([{ kind: 'goto', name: 'ch1' }]);
+    expect(ops.filter((op) => op.op === 'anchor')).toMatchObject([
+      { id: 0, name: 'ch1' },
+      { id: 1 },
+    ]);
+    expect(info.outline).toEqual([
+      { title: 'Chapter 1', anchor: 0, children: [{ title: 'Detail', anchor: 1, children: [] }] },
+    ]);
+    const warned = warn.mock.calls.flat();
+    expect(warned).toContain('ngpdf: duplicate anchor "ch1"');
+    expect(warned).toContain('ngpdf: pdf-link href "#ch9" names no anchor; no link written');
+  });
+
   it('leaves unset metadata out of the info', async () => {
     const writer = recordingWriter();
     await renderDocument(twoPages(), { writer, dev: false });
@@ -107,7 +147,7 @@ describe('renderDocument', () => {
 
   it.each([
     ['language', 'not_a_locale', 'ngpdf: invalid language "not_a_locale"'],
-    ['pageMode', 'UseOutlines', 'ngpdf: invalid pageMode "UseOutlines"'],
+    ['pageMode', 'UseAttachments', 'ngpdf: invalid pageMode "UseAttachments"'],
     ['pageLayout', 'InvalidLayout', 'ngpdf: invalid pageLayout "InvalidLayout"'],
   ])('rejects an invalid %s', async (key, value, message) => {
     await expect(
@@ -265,7 +305,15 @@ describe('renderDocument', () => {
     const inline = hrefs.map((href, i) =>
       el('pdf-link', {}, [createNode('text', '', `inline ${String(i)} `)], { href }),
     );
-    const page = el('pdf-page', {}, [...blocks, el('pdf-text', {}, inline)], { size: 'A4' });
+    // Internal links: one to an anchor, and ones to names no anchor has.
+    const internal = ['#ok', '#missing', '#'].flatMap((href) => [
+      el('pdf-link', {}, [text('to')], { href }),
+      el('pdf-text', {}, [el('pdf-link', {}, [createNode('text', '', 'to')], { href })]),
+    ]);
+    const target = el('pdf-view', {}, [text('target')], { anchor: 'ok', bookmark: 'Target' });
+    const page = el('pdf-page', {}, [...blocks, el('pdf-text', {}, inline), ...internal, target], {
+      size: 'A4',
+    });
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     const linked = await bytesOf(
       await renderDocument(host({ creationDate: new Date(0) }, [page]), {
@@ -282,9 +330,15 @@ describe('renderDocument', () => {
     // The three allowed URLs, once as a block and once inline.
     expect(uris).toHaveLength(6);
     for (const uri of uris) expect(uri).toMatch(/^(?:https?:\/\/|mailto:)/);
-    // Every action is a URI action.
-    expect(linked.match(/\/S\s*\/URI/g)).toHaveLength(6);
-    expect(linked.match(/\/S\s*\//g)).toHaveLength(6);
+    // Every action is a URI action or a GoTo to a named destination in the file.
+    const actions = [...linked.matchAll(/\/S\s*\/(\w+)/g)].map((match) => match[1]);
+    expect(actions.filter((kind) => kind === 'URI')).toHaveLength(6);
+    expect(actions.filter((kind) => kind === 'GoTo')).toHaveLength(2);
+    expect(actions).toHaveLength(8);
+    const goTos = [...linked.matchAll(/\/S\s*\/GoTo\s*\/D\s*\(([^)]*)\)/g)].map((m) => m[1]);
+    expect(goTos).toEqual(['ok', 'ok']);
+    const dests = /\/Dests\s*<<[\s\S]*?\/Names\s*\[([\s\S]*?)\]\s*>>/.exec(linked)?.[1] ?? '';
+    for (const name of goTos) expect(dests).toContain(`(${name ?? ''}) [`);
     // Each /URI is either an action type or one of the six strings above.
     expect(linked.match(/\/URI\b/g)).toHaveLength(12);
     expect(warn.mock.calls.flat().join('\n')).toContain('javascript:app.alert(1)');

@@ -204,6 +204,22 @@ A `pdf-text` inside a `pdf-text` is drawn in the outer text's style, with a warn
 - A clickable area is an upright rectangle. Inside a `transform`, it is the smallest rectangle around the transformed area. It is cut at the bottom of the page's content area, but not by an `overflow` clip: PDF viewers cannot clip a link area, so a link inside a clipped box stays clickable over its whole box.
 - A block link split across sheets is clickable on each sheet over its part. See [Pagination](/docs/pagination#wrapper-backgrounds-and-borders).
 
+### Links to a place in the document
+
+Give an element an `anchor` name, and a `pdf-link` with `href="#name"` jumps to it, as a table of contents does:
+
+```html
+<pdf-text>See <pdf-link href="#prices" style="color: #1a56db">the price list</pdf-link>.</pdf-text>
+
+<pdf-table anchor="prices" [columns]="['1fr', 80]">…</pdf-table>
+```
+
+- `pdf-view`, `pdf-text`, `pdf-image`, `pdf-table`, `pdf-row` and `pdf-cell` take `anchor`.
+- The link jumps to the sheet where the element's first piece lands, with the top left of that piece at the top left of the window, at the reader's zoom. For a text split across sheets that is its first lines; for an element in a fixed view, the first sheet.
+- Names are trimmed, and an empty name is ignored. When two elements have the same name, the first one in the template keeps it, with a warning in development mode: `ngpdf: duplicate anchor "<name>"`.
+- A link to a name that no element has writes no link: the content is still drawn, with a warning in development mode.
+- In the PDF, each anchor a link uses is a named destination, so a viewer can also open the file at it, as in `report.pdf#nameddest=prices`. An anchor no link or bookmark uses writes nothing.
+
 ## Bare text
 
 Text written directly in an element other than `pdf-text` is laid out as an anonymous `pdf-text` with its parent's text styles:
