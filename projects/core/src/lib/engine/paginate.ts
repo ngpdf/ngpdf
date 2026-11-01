@@ -1380,7 +1380,7 @@ export function paginatePage(
         x: frame.left + wrapper.x + wrapper.dx,
         y: piece.top + wrapper.dy,
         sliceTop: piece.page !== first.page,
-        sliceBottom: piece.page !== last.page,
+        sliceBottom: piece.page !== lastPage,
         ...(sliced && { slice: { offset, height } }),
         ...fade(wrapper.opacity),
       });

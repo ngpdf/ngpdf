@@ -1731,6 +1731,25 @@ describe('paginatePage: table rows taller than a page', () => {
     }
   });
 
+  it('ends the wrappers around a split last row on its last sheet, not at the cut', () => {
+    const row = el('pdf-row', {}, [cell([lines(100)]), cell([])]);
+    const first = el('pdf-row', {}, [cell([lines(2)]), cell([])]);
+    const table = tableOf([first, row], { border: '2 solid #000', 'border-radius': '4' });
+    const view = el('pdf-view', { border: '1 solid #000' }, [table]);
+    const pages = paginate(page([view]));
+    expect(pages).toHaveLength(2);
+    for (const node of [view, table]) {
+      const pieces = pages.map((laid) => laid.decorations.find((d) => d.box.node === node)!);
+      expect(pieces.map((d) => [d.sliceTop, d.sliceBottom])).toEqual([
+        [false, true],
+        [true, false],
+      ]);
+    }
+    const tablePiece = pages[1]!.decorations.find((d) => d.box.node === table)!;
+    const rowPiece = piecesOf(pages[1]!, row)[0]!;
+    expect(tablePiece.y + tablePiece.box.h).toBeCloseTo(rowPiece.y + rowPiece.box.h + 2, 6);
+  });
+
   it('draws the content of a split row from the top of each cell piece', () => {
     const short = lines(3, 10, 'b');
     const centred = el('pdf-row', { 'align-items': 'center' }, [cell([lines(100)]), cell([short])]);
