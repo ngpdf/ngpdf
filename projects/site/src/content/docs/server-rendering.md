@@ -134,12 +134,12 @@ A server that fetched any URL found in a document could be made to fetch interna
 `fetchImage` is where you decide what the server may fetch: an allow-list of hosts, a timeout and a size limit. For example:
 
 ```ts
-const ALLOWED_HOSTS = new Set(['cdn.example.com']);
+// Whole origins (scheme, host and port), so another port on the same host stays out.
+const ALLOWED_ORIGINS = new Set(['https://cdn.example.com']);
 const MAX_BYTES = 5 * 1024 * 1024;
 
 async function fetchImage(url: string): Promise<Uint8Array> {
-  const { protocol, hostname } = new URL(url);
-  if (protocol !== 'https:' || !ALLOWED_HOSTS.has(hostname)) {
+  if (!ALLOWED_ORIGINS.has(new URL(url).origin)) {
     throw new Error('not on the allow-list');
   }
   const response = await fetch(url, { redirect: 'error', signal: AbortSignal.timeout(5000) });
@@ -168,7 +168,7 @@ async function fetchImage(url: string): Promise<Uint8Array> {
 const pdf = await renderToBuffer(Invoice, { inputs: { invoice }, fetchImage });
 ```
 
-`redirect: 'error'` stops an allowed host from redirecting the request to an internal one. For files on disk, read them yourself and pass the bytes: `pdf-image` takes the `Buffer` that `readFile(path)` returns, as it takes any `Uint8Array`.
+`redirect: 'error'` stops an allowed origin from redirecting the request to an internal one. For files on disk, read them yourself and pass the bytes: `pdf-image` takes the `Buffer` that `readFile(path)` returns, as it takes any `Uint8Array`.
 
 ## What needs a browser
 
