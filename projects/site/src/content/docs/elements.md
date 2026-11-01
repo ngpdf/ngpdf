@@ -1,11 +1,11 @@
 ---
 title: Elements
-description: Reference for the eleven pdf-* elements of @ngpdf/core, with every input, its type, its default value and what it does in the rendered PDF.
+description: Reference for the twelve pdf-* elements of @ngpdf/core, with every input, its type, its default value and what it does in the rendered PDF.
 section: Reference
 order: 9
 ---
 
-All eleven elements are standalone components exported from `@ngpdf/core`. Import them all at once with `PDF_ELEMENTS`, or one by one by class name.
+All twelve elements are standalone components exported from `@ngpdf/core`. Import them all at once with `PDF_ELEMENTS`, or one by one by class name.
 
 ```ts
 import { PDF_ELEMENTS } from '@ngpdf/core';
@@ -26,6 +26,7 @@ export class Report {}
 | `pdf-text` | `PdfText` |
 | `pdf-span` | `PdfSpan` |
 | `pdf-link` | `PdfLink` |
+| `pdf-note` | `PdfNote` |
 | `pdf-image` | `PdfImage` |
 | `pdf-table` | `PdfTable` |
 | `pdf-row` | `PdfRow` |
@@ -119,6 +120,31 @@ A link to a URL. Where a `pdf-view` can go it is a column `pdf-view` whose box i
 ```
 
 A link has no default color or underline. Inline, only the text styles of a `pdf-span` apply to it. A `pdf-link` inside another `pdf-link` fails the render with `ngpdf: pdf-link inside a pdf-link`. See [Links](/docs/text-and-fonts#links-pdf-link).
+
+## pdf-note
+
+A comment on the page, like a sticky note in a PDF viewer: the viewer shows an icon, and clicking it opens a popup with the note's text. Put it where a `pdf-view` can go. Its content is the note's text.
+
+| Input | Type | Default | Description |
+| --- | --- | --- | --- |
+| `author` | `string \| null \| undefined` | `undefined` | Shown as the note's title, usually the reviewer's name. Trimmed; an empty or missing author writes no title. |
+| `icon` | `NoteIcon` | `'comment'` | The icon the viewer draws: `'comment'`, `'note'`, `'help'`, `'key'`, `'insert'`, `'paragraph'` or `'new-paragraph'`. Any other value fails the render with `ngpdf: unknown icon "<icon>" on pdf-note`. |
+| `open` | `boolean` | `false` | Shows the popup when the file opens. A boolean attribute: `<pdf-note open>`. |
+
+```html
+<pdf-note author="Ana" icon="help">Is this total before or after tax?</pdf-note>
+<pdf-text>Total: {{ total() }}</pdf-text>
+```
+
+A note takes no space in the layout. Its icon sits at the left edge of its parent's content box, at the top of the next element, or at the bottom of the element before it when it is the last child. With `position: absolute` and `top`, `right`, `bottom` or `left` it can go anywhere on its containing block, for example next to a paragraph's top right corner. The annotation is 20pt square, kept inside the sheet; viewers draw the icon at their own size.
+
+The icon color is the note's own `color`, sticky-note yellow (`#ffd400`) by default; it does not inherit the text color around it. Only `color`, `position`, `top`, `right`, `bottom` and `left` apply to a note. Any other property is ignored without being read, so a `transform` doesn't move the note and an invalid value doesn't fail the render, and it warns in development mode.
+
+The text is plain: text nodes only, with whitespace collapsed as in a `pdf-text`. Any character works, including those the standard fonts can't draw, because the viewer shows it, not ngpdf. An element inside a note fails the render with `ngpdf: pdf-note takes text only`, and a note anywhere inside a `pdf-text`, even inside a `pdf-view` in it, with `ngpdf: pdf-note inside a pdf-text`.
+
+A note is never printed, as viewers expect from review comments, and it has no action. Where its icon overlaps a link, for example a note just before a `pdf-link`, the link takes the click there: the note opens from the rest of its icon or from the viewer's comments panel. In pagination it goes on the sheet of the content after it, or of the content before it when it is the last child, so a note in the flow never adds a sheet of its own. See [Notes](/docs/pagination#notes).
+
+`NoteIcon` is an exported type.
 
 ## pdf-image
 

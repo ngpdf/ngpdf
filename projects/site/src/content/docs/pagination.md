@@ -21,8 +21,9 @@ Starting from the children of the `pdf-page`, ngpdf looks inside some elements a
 | `pdf-table` | a wrapper: each of its rows is a unit; a row taller than a page splits instead (see [Rows taller than a page](#rows-taller-than-a-page)) |
 | `pdf-view` with `flex-direction: row` | one unit, with everything inside it |
 | `pdf-text` | its lines, grouped by `orphans` and `widows`; one unit if it is short, has `break-inside: avoid`, a fixed height, a `transform` or an `overflow` other than `visible` |
-| `pdf-row`, `pdf-image`, an empty `pdf-view` or one that holds only absolute elements | one unit |
+| `pdf-row`, `pdf-image`, an empty `pdf-view` or one that holds only absolute elements and notes | one unit |
 | an element with `position: absolute` | never a unit; see [Positioned elements](#positioned-elements) |
+| `pdf-note` | never a unit; see [Notes](#notes) |
 
 Wrappers can nest to any depth, so a table inside a column `pdf-view` inside another column `pdf-view` still yields its rows as units. A table inside a cell or inside a row `pdf-view` is part of that unit.
 
@@ -156,6 +157,17 @@ An element with [`position: absolute`](/docs/layout-and-styling#positioning) is 
 - Against the page, `bottom` and percentages of the height are measured on the page's whole content, all sheets together, not on one sheet.
 - Inside a [fixed view](#fixed-headers-and-footers) it is drawn with the view on every sheet, and the view is its containing block.
 - A `position: relative` element is placed like any other: pagination ignores its offsets, which only move it when it is drawn. A relative column `pdf-view` that is split moves each of its pieces by its offsets.
+
+## Notes
+
+A [`pdf-note`](/docs/elements#pdf-note) takes no space and is never a unit of its own. A note in the flow never adds a sheet: it goes on a sheet that other content already needs. A page with nothing but notes still gets its one sheet, as an empty page does.
+
+- It goes on the sheet of the content right after it, at the top of where that content starts. When that content moves to the next sheet, or a `breakBefore` or `breakAfter` sends it there, the note goes with it.
+- When it is the last child of its parent, it goes on the sheet of the content before it, at its bottom.
+- Inside a unit, such as a row `pdf-view`, it is drawn with that unit.
+- Inside a [table row split across sheets](#rows-taller-than-a-page), it goes on the piece where its point falls: with the content after it at a break, or on the last piece of its cell when it is that cell's last child. A note right after a split row goes on the row's last piece, at its bottom.
+- Inside a [fixed view](#fixed-headers-and-footers) it is written on every sheet.
+- With `position: absolute` it follows the rules of [positioned elements](#positioned-elements) instead, so one placed below all the content gets a sheet of its own.
 
 ## Fixed headers and footers
 

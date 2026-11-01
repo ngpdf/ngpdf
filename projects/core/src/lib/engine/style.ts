@@ -1180,11 +1180,28 @@ function lineHeightOf(value: string, fontSize: number, tag: string): number {
   return fontSize > 0 ? length / fontSize : ROOT_TEXT_STYLE.lineHeight;
 }
 
+// A note takes no space: only its icon color and where it sits apply to it.
+const NOTE_PROPERTIES: readonly string[] = Object.freeze([
+  'color',
+  'position',
+  'top',
+  'right',
+  'bottom',
+  'left',
+]);
+
+// A note's icon is sticky-note yellow unless the note sets its own color.
+const NOTE_YELLOW: Color = Object.freeze({ r: 255, g: 212, b: 0, a: 1 });
+
 function resolveOne(node: PdfNode, inherited: TextStyle, warn: Warn): ResolvedStyle {
-  const style = defaultStyle(node, inherited);
+  const isNote = node.tag === 'pdf-note';
+  const style = defaultStyle(node, isNote ? { ...inherited, color: NOTE_YELLOW } : inherited);
   let lineHeight: string | null = null;
   for (const [property, value] of Object.entries(node.rawStyle)) {
-    if (property === 'line-height') lineHeight = value.trim();
+    // Dropped unparsed, so it neither moves the note nor fails the render.
+    if (isNote && !NOTE_PROPERTIES.includes(property)) {
+      warn(`ngpdf: ${property} has no effect on pdf-note`);
+    } else if (property === 'line-height') lineHeight = value.trim();
     else apply(style, property, value, node.tag, warn);
   }
   // Resolved last because a length depends on this element's own font size.
@@ -1260,6 +1277,18 @@ function inText(node: PdfNode): boolean {
   return INLINE.has(parent.tag) || (parent.tag === 'pdf-link' && inText(parent));
 }
 
+/**
+ * A note holds plain text, and is not yet anchored to a run of text: no pdf-text may hold it, at
+ * any depth.
+ */
+function checkNote(node: PdfNode): void {
+  if (node.tag !== 'pdf-note') return;
+  for (let above = node.parent; above; above = above.parent) {
+    if (above.tag === 'pdf-text') fail('pdf-note inside a pdf-text');
+  }
+  if (node.children.some((child) => child.kind === 'element')) fail('pdf-note takes text only');
+}
+
 function checkInline(node: PdfNode, warn: Warn): void {
   const inline = inText(node);
   if (node.tag === 'pdf-span' || (node.tag === 'pdf-link' && inline)) {
@@ -1290,6 +1319,7 @@ export function resolveStyles(
     if (isLink && item.inLink) fail('pdf-link inside a pdf-link');
     checkImageChildren(item.node);
     checkInline(item.node, warn);
+    checkNote(item.node);
     const style = resolveOne(item.node, item.inherited, warn);
     result.set(item.node, style);
     const inherited = textPartOf(style);

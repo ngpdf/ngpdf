@@ -661,6 +661,124 @@ describe('createPdfkitWriter', () => {
       expect(pdf.match(/\/Rect \[10 140 40 180\]/g)).toHaveLength(2);
     });
 
+    describe('notes', () => {
+      const NOTE = {
+        op: 'note',
+        x: 10,
+        y: 10,
+        text: 'Check this (total)',
+        icon: 'key',
+        color: '#00aa77',
+        open: true,
+      } as const;
+
+      /** The dictionary of each Text annotation in the file. */
+      function notesIn(pdf: string): string[] {
+        return pdf.split('endobj').filter((body) => body.includes('/Subtype /Text'));
+      }
+
+      /**
+       * A PDF text string as pdfkit writes one outside PDFDocEncoding, UTF-16BE after FE FF, decoded
+       * as `pdfText` decodes the file.
+       */
+      function utf16(text: string): string {
+        const bytes = [0xfe, 0xff];
+        for (let i = 0; i < text.length; i++) {
+          const unit = text.charCodeAt(i);
+          bytes.push(unit >> 8, unit & 0xff);
+        }
+        return new TextDecoder('latin1').decode(new Uint8Array(bytes));
+      }
+
+      it('writes a Text annotation with contents, author, icon, color and open flag', async () => {
+        const pdf = await pdfText([{ ...NOTE, author: 'Ana' }]);
+        const [note, ...rest] = notesIn(pdf);
+        expect(rest).toEqual([]);
+        expect(note).toContain(String.raw`/Contents (Check this \(total\))`);
+        expect(note).toContain('/T (Ana)');
+        expect(note).toContain('/Name /Key');
+        expect(note).toContain('/Open true');
+        expect(note).toMatch(/\/C \[0 0\.666\d* 0\.466\d*\]/);
+        // 20pt square from (10, 10), y flipped: the page is 200 tall.
+        expect(note).toContain('/Rect [10 170 30 190]');
+        expect(pdf).toMatch(/\/Annots \[\d+ 0 R\]/);
+        // A note draws nothing.
+        expect(contentOf(pdf)).toBe('');
+      });
+
+      it('writes text outside WinAnsi as UTF-16BE PDF strings', async () => {
+        const pdf = await pdfText([{ ...NOTE, text: 'Łódź → 日本 ✓', author: 'Zoë' }]);
+        const [note] = notesIn(pdf);
+        expect(note).toContain(`/Contents (${utf16('Łódź → 日本 ✓')})`);
+        expect(note).toContain(`/T (${utf16('Zoë')})`);
+      });
+
+      it('maps each icon to its standard name', async () => {
+        const icons = {
+          comment: 'Comment',
+          note: 'Note',
+          help: 'Help',
+          key: 'Key',
+          insert: 'Insert',
+          paragraph: 'Paragraph',
+          'new-paragraph': 'NewParagraph',
+        } as const;
+        const pdf = await pdfText(
+          Object.keys(icons).map((icon) => ({ ...NOTE, icon: icon as keyof typeof icons })),
+        );
+        const names = notesIn(pdf).map((note) => /\/Name \/(\w+)/.exec(note)?.[1]);
+        expect(names).toEqual(Object.values(icons));
+      });
+
+      it('writes no title without an author, a closed note, and never the Print flag', async () => {
+        const pdf = await pdfText([{ ...NOTE, open: false }]);
+        const [note] = notesIn(pdf);
+        expect(note).not.toContain('/T ');
+        expect(note).toContain('/Open false');
+        // No /F at all: annotation flags default to 0, so viewers don't print the note.
+        expect(note).not.toMatch(/\/F\b/);
+        expect(note).not.toContain('/A ');
+      });
+
+      it('writes the notes of a page before its links, so a link is on top where they overlap', async () => {
+        const link = {
+          op: 'link',
+          x: 10,
+          y: 10,
+          w: 100,
+          h: 12,
+          kind: 'uri',
+          url: 'https://example.com/',
+        } as const;
+        const pdf = await pdfText([link, NOTE]);
+        const annots = /\/Annots \[([^\]]*)\]/.exec(pdf)?.[1] ?? '';
+        const refs = [...annots.matchAll(/(\d+) 0 R/g)].map((match) => match[1]);
+        const subtype = (ref: string | undefined): string | undefined =>
+          new RegExp(`\\n${ref ?? ''} 0 obj\\n<<[^]*?/Subtype /(\\w+)`).exec(pdf)?.[1];
+        expect(refs.map(subtype)).toEqual(['Text', 'Link']);
+      });
+
+      it('writes a note inside an opacity group as a page annotation, outside the group', async () => {
+        const pdf = await pdfText([{ op: 'group', opacity: 0.5 }, NOTE, { op: 'ungroup' }]);
+        const [note] = notesIn(pdf);
+        expect(note).toContain('/Rect [10 170 30 190]');
+        expect(pdf).toMatch(/\/Annots \[\d+ 0 R\]/);
+        // The group's form holds no annotation: only the page lists one.
+        expect(pdf.match(/\/Annots/g)).toHaveLength(1);
+      });
+
+      it('writes a note in page space, whatever transform or clip it sits in', async () => {
+        const pdf = await pdfText([
+          { op: 'transform', matrix: [0, 1, -1, 0, 100, 50] },
+          { op: 'clip', x: 0, y: 0, w: 5, h: 5, radii: SQUARE },
+          NOTE,
+          { op: 'unclip' },
+          { op: 'untransform' },
+        ]);
+        expect(notesIn(pdf)[0]).toContain('/Rect [10 170 30 190]');
+      });
+    });
+
     it('draws the ops between transform and untransform in the transformed space', async () => {
       const rect = {
         op: 'rect',

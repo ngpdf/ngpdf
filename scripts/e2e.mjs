@@ -79,6 +79,35 @@ const DOCUMENTS = [
     contains: ['Inspection log', 'Note 01:', 'Note 48:', 'Follow up next week', 'Page 3 of 3'],
   },
   { name: 'opacity-sample', pages: 1, contains: ['Faded content', 'Not approved yet.'] },
+  {
+    name: 'notes-sample',
+    pages: 2,
+    contains: ['Budget draft', 'Field kits', 'Next steps', 'Page 2 of 2'],
+    // The Text annotations, by page: 1-based page, icon, author, open flag and contents.
+    notes: [
+      {
+        page: 1,
+        icon: 'Key',
+        author: 'Bruno',
+        open: false,
+        contents: 'Travel includes the second trip.',
+      },
+      {
+        page: 1,
+        icon: 'Help',
+        author: 'Ana',
+        open: true,
+        contents: 'Check with Zoë: are these figures in € or in $? ✓ when confirmed.',
+      },
+      {
+        page: 2,
+        icon: 'Note',
+        author: 'Ana',
+        open: false,
+        contents: 'Move the plan to its own sheet?',
+      },
+    ],
+  },
 ];
 
 const update = process.argv.includes('--update');
@@ -281,6 +310,72 @@ function navigationOf(pdf) {
   return { destinations: sorted, links, outline };
 }
 
+/**
+ * The PDF string literal that starts after the `(` at `start`: escapes undone, and UTF-16BE after
+ * FE FF decoded, as a viewer reads a text string.
+ */
+function pdfString(text, start) {
+  const ESCAPES = { n: '\n', r: '\r', t: '\t', b: '\b', f: '\f' };
+  let bytes = '';
+  let depth = 1;
+  for (let i = start; i < text.length; i++) {
+    const char = text[i];
+    if (char === '\\') {
+      const next = text[++i];
+      const octal = /^[0-7]{1,3}/.exec(text.slice(i, i + 3))?.[0];
+      if (octal) {
+        bytes += String.fromCharCode(parseInt(octal, 8));
+        i += octal.length - 1;
+      } else bytes += ESCAPES[next] ?? next;
+      continue;
+    }
+    if (char === '(') depth++;
+    if (char === ')' && --depth === 0) break;
+    bytes += char;
+  }
+  if (!bytes.startsWith('\u00fe\u00ff')) return bytes;
+  let out = '';
+  for (let i = 2; i + 1 < bytes.length; i += 2) {
+    out += String.fromCharCode((bytes.charCodeAt(i) << 8) | bytes.charCodeAt(i + 1));
+  }
+  return out;
+}
+
+/**
+ * The Text annotations of a pdfkit file, in page order and then in each page's /Annots order:
+ * the page each one is on (1-based), its icon name, author, open flag and contents. pdfkit
+ * writes annotations and pages as uncompressed dictionaries, one object each.
+ */
+function notesOf(pdf) {
+  const text = pdf.toString('latin1');
+  const objects = new Map();
+  for (const match of text.matchAll(/(\d+) 0 obj\s*(<<[\s\S]*?>>)\s*(?:stream|endobj)/g)) {
+    objects.set(match[1], match[2]);
+  }
+  const kids = [...objects.values()].find((body) => /\/Type \/Pages\b/.test(body));
+  const pages = [...(kids?.match(/\/Kids \[([^\]]*)\]/)?.[1] ?? '').matchAll(/(\d+) 0 R/g)];
+  const notes = [];
+  pages.forEach(([, id], index) => {
+    const annots = objects.get(id)?.match(/\/Annots \[([^\]]*)\]/)?.[1] ?? '';
+    for (const [, ref] of annots.matchAll(/(\d+) 0 R/g)) {
+      const body = objects.get(ref) ?? '';
+      if (!body.includes('/Subtype /Text')) continue;
+      const string = (key) => {
+        const at = body.indexOf(`/${key} (`);
+        return at < 0 ? undefined : pdfString(body, at + key.length + 3);
+      };
+      notes.push({
+        page: index + 1,
+        icon: body.match(/\/Name \/(\w+)/)?.[1],
+        author: string('T'),
+        open: /\/Open true\b/.test(body),
+        contents: string('Contents'),
+      });
+    }
+  });
+  return notes;
+}
+
 function diff(expected, actual) {
   const a = expected.split('\n');
   const b = actual.split('\n');
@@ -411,6 +506,11 @@ try {
         const got = JSON.stringify(found[key]);
         if (want !== got) problems.push(`${key}: expected ${want}, got ${got}`);
       }
+    }
+    if (document.notes) {
+      const want = JSON.stringify(document.notes);
+      const got = JSON.stringify(notesOf(readFileSync(join(OUT, `${document.name}.pdf`))));
+      if (want !== got) problems.push(`notes: expected ${want}, got ${got}`);
     }
     if (update) {
       writeFileSync(expectedPath, text);

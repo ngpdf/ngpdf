@@ -2071,3 +2071,115 @@ describe('debug outlines', () => {
     expect(ops).toEqual(list(layout(root)[0]!, 0, 1));
   });
 });
+
+describe('notes', () => {
+  function note(
+    style: Record<string, string> = {},
+    props: Record<string, unknown> = {},
+    content = 'Check this',
+  ): PdfNode {
+    return el('pdf-note', style, [createNode('text', '', content)], props);
+  }
+
+  it('keeps a note in a unit at opacity 0, as it keeps one in a wrapper', () => {
+    const row = el('pdf-view', { 'flex-direction': 'row', opacity: '0', height: '20' }, [
+      el('pdf-view', { width: '10', height: '10' }, [note()]),
+    ]);
+    const wrapper = el('pdf-view', { opacity: '0' }, [note(), text('After')]);
+    const ops = list(layout(page([row, wrapper]))[0]!, 0, 1);
+    expect(only(ops, 'note')).toHaveLength(2);
+  });
+
+  it('emits a note op where the next sibling starts, at the left of the content box', () => {
+    const ops = list(
+      layout(page([el('pdf-view', { height: '20' }), note(), text('After')]))[0]!,
+      0,
+      1,
+    );
+    expect(only(ops, 'note')).toEqual([
+      {
+        op: 'note',
+        x: 36,
+        y: 56,
+        text: 'Check this',
+        icon: 'comment',
+        color: '#ffd400',
+        open: false,
+      },
+    ]);
+  });
+
+  it('carries the author, icon, open flag and color', () => {
+    const marked = note({ color: '#0a7' }, { author: ' Ana ', icon: 'key', open: true });
+    const [op] = only(list(layout(page([marked]))[0]!, 0, 1), 'note');
+    expect(op).toMatchObject({ author: 'Ana', icon: 'key', open: true, color: '#00aa77' });
+  });
+
+  it('puts an absolute note anywhere on its containing block', () => {
+    const marked = note({ position: 'absolute', top: '0', right: '0' });
+    const card = el('pdf-view', { position: 'relative', width: '100', height: '40' }, [
+      text('Total'),
+      marked,
+    ]);
+    const [op] = only(list(layout(page([card]))[0]!, 0, 1), 'note');
+    expect(op).toMatchObject({ x: 136, y: 36 });
+  });
+
+  it('keeps the 20pt icon inside the page', () => {
+    const corner = (style: Record<string, string>): Op<'note'> => {
+      const marked = note({ position: 'absolute', ...style });
+      const [op] = only(list(layout(page([marked], {}))[0]!, 0, 1), 'note');
+      return op!;
+    };
+    expect(corner({ top: '0', right: '0' })).toMatchObject({ x: 595.28 - 20, y: 0 });
+    // At 830 in a unit at the foot of the sheet: the icon would end below the page.
+    const low = note({ position: 'absolute', top: '30', left: '0' });
+    const foot = el('pdf-view', { position: 'relative', 'flex-direction': 'row', height: '30' }, [
+      low,
+    ]);
+    const laid = layout(page([el('pdf-view', { height: '800' }), foot], {}))[0]!;
+    expect(only(list(laid, 0, 1), 'note')[0]).toMatchObject({ x: 0, y: 841.89 - 20 });
+    expect(corner({ top: '-50', left: '-50' })).toMatchObject({ x: 0, y: 0 });
+  });
+
+  it('maps the point through the transforms around it, and ignores an overflow clip', () => {
+    const turned = el(
+      'pdf-view',
+      { width: '100', height: '40', transform: 'translate(10, 5)', overflow: 'hidden' },
+      [el('pdf-view', { height: '60', 'flex-shrink': '0' }), note()],
+    );
+    const ops = list(layout(page([turned]))[0]!, 0, 1);
+    const [op] = only(ops, 'note');
+    expect(op!.x).toBeCloseTo(46, 6);
+    expect(op!.y).toBeCloseTo(36 + 5 + 60, 6);
+    // In page space, as a link is, although it sits between the transform ops.
+    expect(ops.map((o) => o.op)).toEqual(['transform', 'clip', 'note', 'unclip', 'untransform']);
+  });
+
+  it('emits the note of a faded view outside its group, at its point', () => {
+    const faded = el('pdf-view', { opacity: '0.5' }, [text('Before'), note(), text('After')]);
+    const ops = list(layout(page([faded]))[0]!, 0, 1);
+    const kinds = ops.map((op) => op.op);
+    expect(kinds).toEqual(['group', 'text', 'text', 'ungroup', 'note']);
+    const after = only(ops, 'text')[1]!;
+    expect(only(ops, 'note')[0]).toMatchObject({ x: 36, text: 'Check this' });
+    expect(only(ops, 'note')[0]!.y).toBeCloseTo(after.y, 6);
+  });
+
+  it('keeps a note in a faded unit inside its group, where the writer still lifts it out', () => {
+    const faded = el('pdf-view', { opacity: '0.5', 'flex-direction': 'row' }, [
+      text('Total'),
+      note(),
+    ]);
+    const kinds = list(layout(page([faded]))[0]!, 0, 1).map((op) => op.op);
+    expect(kinds).toEqual(['group', 'text', 'note', 'ungroup']);
+  });
+
+  it('marks a note with a cross in debug outlines, and still emits it', () => {
+    const laid = layout(page([el('pdf-view', { height: '20' }), note()]))[0]!;
+    const ops = list(laid, 0, 1, undefined, { debug: true });
+    expect(only(ops, 'note')).toHaveLength(1);
+    const cross = only(ops, 'line').filter((line) => line.x1 === 34 && line.x2 === 38);
+    expect(cross).toHaveLength(2);
+  });
+});
