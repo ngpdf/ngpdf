@@ -24,8 +24,14 @@ at most 15 KB gzipped to your initial bundle.
 ## Install
 
 ```sh
-npm install @ngpdf/core
+ng add @ngpdf/core
 ```
+
+`ng add` installs the package and writes an example document to
+`src/app/documents/example-document.ts`. Add `--demo-route` for a `/pdf-demo` page with a Download
+PDF button, `--project <name>` to pick an application, or `--path <folder>` for another folder. It
+never overwrites a file, and ngpdf needs no providers. To install the package alone, run
+`npm install @ngpdf/core`.
 
 It needs `@angular/core` 22 or newer, and works zoneless and with zone.js. The preview component,
 `pdf-viewer` from `@ngpdf/core/viewer`, also uses `@angular/platform-browser`, which every browser

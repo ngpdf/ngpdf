@@ -1,0 +1,11 @@
+/* Specs of the ng add schematic. They run in Vitest as ES modules, like the library's specs. */
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "outDir": "../../out-tsc/schematics-spec",
+    "rootDir": "../..",
+    "allowJs": true,
+    "types": ["node"]
+  },
+  "include": ["schematics/**/*.spec.ts"]
+}

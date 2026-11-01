@@ -29,6 +29,7 @@ export default defineConfig({
       'projects/core/src/**/*.spec.ts',
       'projects/core/viewer/**/*.spec.ts',
       'projects/core/server/**/*.spec.ts',
+      'projects/core/schematics/**/*.spec.ts',
       'scripts/**/*.spec.mjs',
     ],
     coverage: {

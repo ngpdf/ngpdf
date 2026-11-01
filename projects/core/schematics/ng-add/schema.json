@@ -1,0 +1,23 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema",
+  "$id": "NgpdfNgAdd",
+  "title": "ng add @ngpdf/core",
+  "type": "object",
+  "properties": {
+    "project": {
+      "type": "string",
+      "description": "The application to add the example document to.",
+      "$default": { "$source": "projectName" },
+      "x-prompt": "Which application should get the example document?"
+    },
+    "path": {
+      "type": "string",
+      "description": "The folder for the example files. Defaults to src/app/documents in the project."
+    },
+    "demoRoute": {
+      "type": "boolean",
+      "default": false,
+      "description": "Also add a pdf-demo page with a Download PDF button, and its route in app.routes.ts."
+    }
+  }
+}
