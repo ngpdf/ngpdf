@@ -746,7 +746,7 @@ export function layoutBox(
   }
 }
 
-const NO_EDGES: Edges<number> = { top: 0, right: 0, bottom: 0, left: 0 };
+const NO_EDGES: Edges<number> = Object.freeze({ top: 0, right: 0, bottom: 0, left: 0 });
 
 function isFlowNote(node: PdfNode, style: ResolvedStyle): boolean {
   return node.tag === 'pdf-note' && style.position !== 'absolute';

@@ -1181,7 +1181,14 @@ function lineHeightOf(value: string, fontSize: number, tag: string): number {
 }
 
 // A note takes no space: only its icon color and where it sits apply to it.
-const NOTE_PROPERTIES = new Set(['color', 'position', 'top', 'right', 'bottom', 'left']);
+const NOTE_PROPERTIES: readonly string[] = Object.freeze([
+  'color',
+  'position',
+  'top',
+  'right',
+  'bottom',
+  'left',
+]);
 
 // A note's icon is sticky-note yellow unless the note sets its own color.
 const NOTE_YELLOW: Color = Object.freeze({ r: 255, g: 212, b: 0, a: 1 });
@@ -1192,7 +1199,7 @@ function resolveOne(node: PdfNode, inherited: TextStyle, warn: Warn): ResolvedSt
   let lineHeight: string | null = null;
   for (const [property, value] of Object.entries(node.rawStyle)) {
     // Dropped unparsed, so it neither moves the note nor fails the render.
-    if (isNote && !NOTE_PROPERTIES.has(property)) {
+    if (isNote && !NOTE_PROPERTIES.includes(property)) {
       warn(`ngpdf: ${property} has no effect on pdf-note`);
     } else if (property === 'line-height') lineHeight = value.trim();
     else apply(style, property, value, node.tag, warn);

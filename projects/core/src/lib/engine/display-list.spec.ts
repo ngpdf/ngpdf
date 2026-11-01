@@ -2081,6 +2081,15 @@ describe('notes', () => {
     return el('pdf-note', style, [createNode('text', '', content)], props);
   }
 
+  it('keeps a note in a unit at opacity 0, as it keeps one in a wrapper', () => {
+    const row = el('pdf-view', { 'flex-direction': 'row', opacity: '0', height: '20' }, [
+      el('pdf-view', { width: '10', height: '10' }, [note()]),
+    ]);
+    const wrapper = el('pdf-view', { opacity: '0' }, [note(), text('After')]);
+    const ops = list(layout(page([row, wrapper]))[0]!, 0, 1);
+    expect(only(ops, 'note')).toHaveLength(2);
+  });
+
   it('emits a note op where the next sibling starts, at the left of the content box', () => {
     const ops = list(
       layout(page([el('pdf-view', { height: '20' }), note(), text('After')]))[0]!,

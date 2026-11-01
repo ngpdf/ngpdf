@@ -38,7 +38,7 @@ function paint(color: Color): { color: string; opacity: number } | null {
 
 /** Ops that draw nothing: a faded box at opacity 0 keeps them, and needs no group for them. */
 function isMark(op: DrawOp): boolean {
-  return op.op === 'link' || op.op === 'anchor';
+  return op.op === 'link' || op.op === 'anchor' || op.op === 'note';
 }
 
 /**
