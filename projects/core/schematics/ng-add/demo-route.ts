@@ -90,13 +90,13 @@ function findRoutesArray(fileName: string, text: string): ts.ArrayLiteralExpress
   return undefined;
 }
 
-/** The string `path` of a route object literal. */
+/** The string `path` of a route object literal, with its key written `path`, `'path'` or `"path"`. */
 function routePath(element: ts.Expression): string | undefined {
   if (!ts.isObjectLiteralExpression(element)) return undefined;
   for (const property of element.properties) {
     if (
       ts.isPropertyAssignment(property) &&
-      ts.isIdentifier(property.name) &&
+      (ts.isIdentifier(property.name) || ts.isStringLiteral(property.name)) &&
       property.name.text === 'path' &&
       ts.isStringLiteralLike(property.initializer)
     ) {

@@ -338,6 +338,49 @@ export const routes: Routes = [
       expect(result.readContent(routesPath)).toContain(`path: 'pdf-demo'`);
     });
 
+    it('adds the route before a wildcard whose path key is quoted', async () => {
+      const tree = await application(await workspace(), 'app');
+      tree.overwrite(
+        routesPath,
+        `import { Routes } from '@angular/router';
+import { NotFound } from './not-found';
+
+export const routes: Routes = [{ 'path': '**', component: NotFound }];
+`,
+      );
+
+      const result = await ngAdd(tree, { demoRoute: true });
+
+      expect(result.readContent(routesPath)).toBe(
+        `import { Routes } from '@angular/router';
+import { NotFound } from './not-found';
+
+export const routes: Routes = [{
+    path: 'pdf-demo',
+    loadComponent: () => import('./documents/pdf-demo').then((m) => m.PdfDemo),
+  },
+  { 'path': '**', component: NotFound }];
+`,
+      );
+    });
+
+    it('adds no route when app.routes.ts already has a pdf-demo route', async () => {
+      const tree = await application(await workspace(), 'app');
+      const routes = `import { Routes } from '@angular/router';
+import { Mine } from './mine';
+
+export const routes: Routes = [
+  { "path": 'pdf-demo', component: Mine },
+];
+`;
+      tree.overwrite(routesPath, routes);
+
+      const result = await ngAdd(tree, { demoRoute: true });
+
+      expect(result.exists(demoPath)).toBe(true);
+      expect(result.readContent(routesPath)).toBe(routes);
+    });
+
     it('does not add the route twice', async () => {
       const once = await ngAdd(await application(await workspace(), 'app'), { demoRoute: true });
       const routes = once.readContent(routesPath);
