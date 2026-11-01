@@ -50,7 +50,13 @@ The site (`projects/site`) is a prerendered Angular app. Its docs are the Markdo
 
 `scripts/dev` runs a command in `node:24-bookworm-slim` with the repo at `/w`, uid 1000 and a
 6 GB memory cap. The end-to-end script uses the host's `/usr/bin/google-chrome` and runs
-`pdftotext` in Docker.
+`pdftotext` in Docker. `NGPDF_APT=poppler-utils ./scripts/dev …` installs Debian packages as root
+first, then runs the command as uid 1000; the server check needs it:
+
+```sh
+./scripts/dev npm run build:core
+NGPDF_APT=poppler-utils ./scripts/dev node scripts/server-check.mjs   # packed dist/core in Node
+```
 
 - Never stop, kill or remove Docker containers you did not start. Name your own containers
   (`--name`) and stop only those.
@@ -97,6 +103,19 @@ The site (`projects/site`) is a prerendered Angular app. Its docs are the Markdo
   `blob:` URL `pdfResource` makes. The iframe has no `sandbox`: Chrome blocks its PDF viewer in
   any sandboxed frame. It reaches `@ngpdf/core` by its package name only, never by a relative
   path.
+- **Server rendering:** `renderToBuffer` comes from its own entry point, `@ngpdf/core/server`,
+  and reaches `@ngpdf/core` by its package name only. It renders in Node with no DOM, through the
+  same `renderTree` and engine as the browser, and returns a `Uint8Array`.
+  - Without `injector`, each call builds a root injector of its own: root scope
+    (`ɵINJECTOR_SCOPE`), zoneless change detection, the call's `providers`, and an empty object as
+    `DOCUMENT`, which Angular reads once when it creates a component. With `injector`,
+    `providers` go in a child of it. The injectors it creates are destroyed in `finally`.
+  - On the server, an absolute image or font URL is read only through the app's `fetchImage`, and
+    refused without it: `ngpdf: remote image "<url>" refused on the server; pass fetchImage`
+    (`remote font` for fonts). A relative URL throws `ngpdf: relative image URL "<url>" on the
+    server`. Data URLs and bytes always work.
+  - `downloadPdf`, `PdfDownload`, `pdfResource` and `pdf-viewer` throw `ngpdf: <name> needs a
+    browser; …` when there is no global `document` or the platform is `server`, before any render.
 - **Units:**
   - a bare number and `pt` are points;
   - 1in = 72pt, 1cm = 72/2.54pt, 1mm = 72/25.4pt;
@@ -233,7 +252,6 @@ The site (`projects/site`) is a prerendered Angular app. Its docs are the Markdo
     `ngpdf: pdf-canvas …`; an error thrown by `paint` rejects the render with
     `ngpdf: pdf-canvas paint failed: <message>`.
 - **Out of v0.1:**
-  - server rendering;
   - SVG;
   - RTL;
   - forms;

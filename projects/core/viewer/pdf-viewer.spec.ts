@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { ApplicationRef, Component, signal, type Type } from '@angular/core';
+import { ApplicationRef, Component, PLATFORM_ID, signal, type Type } from '@angular/core';
 import { TestBed, type ComponentFixture } from '@angular/core/testing';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DomSanitizer } from '@angular/platform-browser';
@@ -338,5 +338,16 @@ describe('PdfViewer', () => {
     await settle();
 
     expect(iframeOf(fixture)).toBeNull();
+  });
+});
+
+describe('PdfViewer on the server', () => {
+  it('throws before any render', () => {
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({ providers: [{ provide: PLATFORM_ID, useValue: 'server' }] });
+    expect(() => TestBed.createComponent(PdfViewer)).toThrow(
+      'ngpdf: pdf-viewer needs a browser; on the server, use renderToBuffer from @ngpdf/core/server',
+    );
+    expect(renders.calls).toEqual([]);
   });
 });

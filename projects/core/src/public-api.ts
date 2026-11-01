@@ -27,6 +27,9 @@ export type {
 export type { PageOrientation, PageSize } from './lib/elements/page';
 export type { PageLayout, PageMode, PdfSecurity } from './lib/elements/document';
 export { PdfRenderer, downloadPdf, renderToBlob } from './lib/render/pdf-renderer';
+// For the server and viewer entry points only; not public API.
+export { renderPdf as ɵrenderPdf } from './lib/render/pdf-renderer';
+export { assertBrowser as ɵassertBrowser } from './lib/render/browser-only';
 export { PdfDownload } from './lib/render/pdf-download';
 export { providePdfFonts } from './lib/render/pdf-fonts';
 export type { PdfFont } from './lib/render/pdf-fonts';

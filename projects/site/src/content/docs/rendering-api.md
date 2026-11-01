@@ -5,7 +5,7 @@ section: Reference
 order: 10
 ---
 
-`@ngpdf/core` exports one service, three functions and a directive that render a document component to a PDF. `@ngpdf/core/viewer` adds a component that shows one in the page.
+`@ngpdf/core` exports one service, three functions and a directive that render a document component to a PDF. `@ngpdf/core/viewer` adds a component that shows one in the page. `renderToBuffer` from `@ngpdf/core/server` renders one in Node: see [Server rendering](/docs/server-rendering).
 
 | Export | Needs an injection context | Returns |
 | --- | --- | --- |
@@ -263,6 +263,7 @@ The returned promise rejects with an `Error`. Errors from ngpdf start with `ngpd
 | `ngpdf: text longer than 1 MB` | One text longer than 1,048,576 characters. |
 | `ngpdf: could not load font "<src>": <reason>` | A font from `providePdfFonts` could not be fetched or read. The URL is shown without its query string. |
 | `ngpdf: invalid font "<src>"` | The bytes are not a TrueType, OpenType, WOFF or WOFF2 font. |
+| `ngpdf: <name> needs a browser; on the server, use renderToBuffer from @ngpdf/core/server` | `downloadPdf`, `PdfRenderer.download`, `PdfDownload`, `pdfResource` or `pdf-viewer` used on the server. See [Server rendering](/docs/server-rendering#what-needs-a-browser). |
 
 Errors from your own template, such as a missing required input or an exception in a binding, reject the render with Angular's own error.
 

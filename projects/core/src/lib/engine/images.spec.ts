@@ -249,3 +249,68 @@ describe('fitImage', () => {
     expect(fitImage(asset, { w: 100, h: 100 }, 'cover')).toEqual({ x: -50, y: 0, w: 200, h: 100 });
   });
 });
+
+describe('loadImages on the server', () => {
+  const dataUrl = `data:image/png;base64,${base64(png)}`;
+
+  it('refuses a remote URL without fetchImage, and never calls fetch', async () => {
+    const fetchFn = vi.fn(() => Promise.resolve(new Response(png as BodyInit)));
+    const load = loadImages(root(imageNode('https://cdn.example.com/a.png')), writer, fetchFn, {});
+    await expect(load).rejects.toThrow(
+      /^ngpdf: remote image "https:\/\/cdn\.example\.com\/a\.png" refused on the server; pass fetchImage$/,
+    );
+    expect(fetchFn).not.toHaveBeenCalled();
+  });
+
+  it('leaves the query string out of the refusal', async () => {
+    const load = loadImages(
+      root(imageNode('https://cdn.example.com/a.png?token=secret')),
+      writer,
+      undefined,
+      {},
+    );
+    await expect(load).rejects.toThrow(
+      /^ngpdf: remote image "https:\/\/cdn\.example\.com\/a\.png" refused/,
+    );
+  });
+
+  it('reads a remote URL through fetchImage, with the whole URL', async () => {
+    const fetchImage = vi.fn(() => Promise.resolve(png));
+    const fetchFn = vi.fn(() => Promise.resolve(new Response(png as BodyInit)));
+    const node = imageNode('https://cdn.example.com/a.png?size=2');
+    const assets = await loadImages(root(node), writer, fetchFn, { fetchImage });
+    expect(fetchImage).toHaveBeenCalledWith('https://cdn.example.com/a.png?size=2');
+    expect(fetchFn).not.toHaveBeenCalled();
+    expect(assets.get(node)).toEqual({ data: png, width: 200, height: 100 });
+  });
+
+  it('rejects with the reason when fetchImage fails', async () => {
+    const fetchImage = vi.fn(() => Promise.reject(new Error('not on the allow-list')));
+    const load = loadImages(root(imageNode('https://evil.test/a.png')), writer, undefined, {
+      fetchImage,
+    });
+    await expect(load).rejects.toThrow(
+      'ngpdf: could not load image "https://evil.test/a.png": not on the allow-list',
+    );
+  });
+
+  it.each(['/logo.png', 'logo.png', '//cdn.example.com/a.png'])(
+    'refuses the relative URL %s, even with fetchImage',
+    async (src) => {
+      const fetchImage = vi.fn(() => Promise.resolve(png));
+      const load = loadImages(root(imageNode(src)), writer, undefined, { fetchImage });
+      await expect(load).rejects.toThrow(`ngpdf: relative image URL "${src}" on the server`);
+      expect(fetchImage).not.toHaveBeenCalled();
+    },
+  );
+
+  it('still loads data URLs, Blobs and ArrayBuffers', async () => {
+    const nodes = [
+      imageNode(dataUrl),
+      imageNode(new Blob([png as BlobPart])),
+      imageNode(png.buffer.slice(0)),
+    ];
+    const assets = await loadImages(root(...nodes), writer, undefined, {});
+    for (const node of nodes) expect(assets.get(node)?.width).toBe(200);
+  });
+});

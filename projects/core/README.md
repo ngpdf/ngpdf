@@ -2,7 +2,7 @@
 
 Write PDFs as Angular components, for Angular. A document is a normal component whose template
 uses the `pdf-*` elements; ngpdf lays it out, breaks it into pages and writes the PDF in the
-browser. The layout and PDF engine is loaded on the first render, so importing `@ngpdf/core` adds
+browser, or in Node with `renderToBuffer` from `@ngpdf/core/server`. The layout and PDF engine is loaded on the first render, so importing `@ngpdf/core` adds
 at most 15 KB gzipped to your initial bundle.
 
 <!-- The sections from "Install" to "v0.1 limits" are copied from the repository README;
@@ -17,6 +17,9 @@ npm install @ngpdf/core
 It needs `@angular/core` 22 or newer, and works zoneless and with zone.js. The preview component,
 `pdf-viewer` from `@ngpdf/core/viewer`, also uses `@angular/platform-browser`, which every browser
 app already has.
+
+To render on a server, `renderToBuffer` from `@ngpdf/core/server` returns the PDF's bytes in Node,
+with no DOM. See [Server rendering](https://ngpdf.dev/docs/server-rendering).
 
 ## Example: a communicators list
 
