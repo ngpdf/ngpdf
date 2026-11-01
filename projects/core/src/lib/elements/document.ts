@@ -1,9 +1,10 @@
 import { Component, ElementRef, inject, input } from '@angular/core';
 import type { PdfNode } from '../tree/node';
 
+import type { PdfSecurity } from '../tree/security';
 import type { PageLayout, PageMode } from '../tree/viewer-preferences';
 
-export type { PageLayout, PageMode };
+export type { PageLayout, PageMode, PdfSecurity };
 
 @Component({
   selector: 'pdf-document',
@@ -20,6 +21,8 @@ export class PdfDocument {
   readonly producer = input<string>();
   readonly pageMode = input<PageMode>();
   readonly pageLayout = input<PageLayout>();
+  /** Encrypts the file with AES-256 and sets what a viewer lets the reader do. */
+  readonly security = input<PdfSecurity>();
 
   constructor() {
     (inject(ElementRef).nativeElement as PdfNode).owner = this;
@@ -37,6 +40,7 @@ export class PdfDocument {
       producer: this.producer(),
       pageMode: this.pageMode(),
       pageLayout: this.pageLayout(),
+      security: this.security(),
     };
   }
 }

@@ -53,7 +53,7 @@ ngpdf v0.1 covers documents built from text, tables, boxes and images. This page
 
 - Server rendering. Render in the browser.
 - SVG.
-- Forms and encryption.
+- Forms.
 - A preview component.
 - Capturing the DOM of a page as a PDF.
 

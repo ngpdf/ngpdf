@@ -9,6 +9,7 @@ import { ContentsSample } from './documents/contents-sample';
 import { FixedSample } from './documents/fixed-sample';
 import { FontsSample } from './documents/fonts-sample';
 import { LicencesList } from './documents/licences-list';
+import { SecureSample } from './documents/secure-sample';
 import { SpanSample } from './documents/span-sample';
 
 const DOCUMENT_NAMES = [
@@ -20,12 +21,16 @@ const DOCUMENT_NAMES = [
   'article-sample',
   'fixed-sample',
   'contents-sample',
+  'secure-sample',
 ] as const;
 export type DemoDocument = (typeof DOCUMENT_NAMES)[number];
 
 function isDemoDocument(name: string): name is DemoDocument {
   return (DOCUMENT_NAMES as readonly string[]).includes(name);
 }
+
+/** Made up for the demo. In an app, the password comes from the user or the server. */
+const DEMO_PASSWORD = 'demo-1234';
 
 /** Fixed so the end-to-end text does not depend on the day it runs. */
 const CAPTURED_AT = new Date(2026, 9, 22, 14, 30);
@@ -109,6 +114,8 @@ export class App {
         return this.pdf.toBlob(FixedSample);
       case 'contents-sample':
         return this.pdf.toBlob(ContentsSample);
+      case 'secure-sample':
+        return this.pdf.toBlob(SecureSample, { inputs: { password: DEMO_PASSWORD } });
     }
   }
 

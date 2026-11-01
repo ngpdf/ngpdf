@@ -1,3 +1,4 @@
+import type { PdfSecurity } from '../tree/security';
 import type { PageLayout, PageMode } from '../tree/viewer-preferences';
 import { graphemeStarts } from './graphemes';
 import type { Corners } from './style';
@@ -210,6 +211,43 @@ export interface DocumentInfo {
   readonly creationDate: Date;
   /** The bookmarks, in tree order. No entries, no outline. */
   readonly outline?: readonly OutlineItem[];
+  /** Encrypts the file. Unset, it is written unencrypted. */
+  readonly security?: DocumentSecurity;
+}
+
+/** A checked `PdfSecurity`: empty passwords left out and every permission spelled out. */
+export interface DocumentSecurity {
+  readonly userPassword?: string;
+  readonly ownerPassword?: string;
+  readonly permissions: Readonly<Required<NonNullable<PdfSecurity['permissions']>>>;
+}
+
+/** Whether any permission is turned off. */
+export function restricts(permissions: DocumentSecurity['permissions']): boolean {
+  const { printing, ...flags } = permissions;
+  return printing !== 'high' || Object.values(flags).some((allowed) => !allowed);
+}
+
+const PRINTING = { none: undefined, low: 'lowResolution', high: 'highResolution' } as const;
+
+/** 32 random bytes as hex, so nobody can lift the permissions without being given a password. */
+function randomOwnerPassword(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(32));
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+
+/** pdfkit's options for AES-256 (PDF 1.7, extension level 3). */
+function encryptionOptions(security: DocumentSecurity): PDFKit.PDFDocumentOptions {
+  const { printing, ...flags } = security.permissions;
+  const ownerPassword =
+    security.ownerPassword ?? (restricts(security.permissions) ? randomOwnerPassword() : undefined);
+  const printingOption = PRINTING[printing];
+  return {
+    pdfVersion: '1.7ext3',
+    ...(security.userPassword !== undefined && { userPassword: security.userPassword }),
+    ...(ownerPassword !== undefined && { ownerPassword }),
+    permissions: { ...flags, ...(printingOption !== undefined && { printing: printingOption }) },
+  };
 }
 
 export interface PageOps {
@@ -540,20 +578,30 @@ export async function createPdfkitWriter(options: { compress?: boolean } = {}): 
     imageSize,
 
     async write(pages, info) {
-      const doc = new PDFDocument({
-        autoFirstPage: false,
-        compress,
-        ...(info.language !== undefined && { lang: info.language }),
-        info: {
-          ...(info.title !== undefined && { Title: info.title }),
-          ...(info.author !== undefined && { Author: info.author }),
-          ...(info.subject !== undefined && { Subject: info.subject }),
-          ...(info.keywords !== undefined && { Keywords: info.keywords.join(', ') }),
-          ...(info.creator !== undefined && { Creator: info.creator }),
-          Producer: info.producer,
-          CreationDate: info.creationDate,
-        },
-      });
+      let doc: PDFKit.PDFDocument;
+      try {
+        doc = new PDFDocument({
+          autoFirstPage: false,
+          compress,
+          ...(info.language !== undefined && { lang: info.language }),
+          info: {
+            ...(info.title !== undefined && { Title: info.title }),
+            ...(info.author !== undefined && { Author: info.author }),
+            ...(info.subject !== undefined && { Subject: info.subject }),
+            ...(info.keywords !== undefined && { Keywords: info.keywords.join(', ') }),
+            ...(info.creator !== undefined && { Creator: info.creator }),
+            Producer: info.producer,
+            CreationDate: info.creationDate,
+          },
+          ...(info.security !== undefined && encryptionOptions(info.security)),
+        });
+      } catch (error) {
+        // SASLprep, which AES-256 passwords go through, refuses control and unassigned characters.
+        // Its message names the rule, never the password.
+        if (info.security === undefined) throw error;
+        const { message } = error as Error;
+        throw new Error(`ngpdf: invalid security password (${message})`, { cause: error });
+      }
       for (const [name, data] of registered) doc.registerFont(name, data);
       const internals = doc as unknown as PdfKitInternals;
       // PDFKit injects Creator: 'PDFKit' when unset and has no public viewer-preference options.

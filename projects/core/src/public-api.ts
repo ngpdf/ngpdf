@@ -15,7 +15,7 @@ export {
 } from './lib/elements';
 export type { TableColumn } from './lib/elements';
 export type { PageOrientation, PageSize } from './lib/elements/page';
-export type { PageLayout, PageMode } from './lib/elements/document';
+export type { PageLayout, PageMode, PdfSecurity } from './lib/elements/document';
 export { PdfRenderer, downloadPdf, renderToBlob } from './lib/render/pdf-renderer';
 export { PdfDownload } from './lib/render/pdf-download';
 export { providePdfFonts } from './lib/render/pdf-fonts';

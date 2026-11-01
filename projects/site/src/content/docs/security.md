@@ -13,6 +13,7 @@ Documents often contain data that came from users or a server. ngpdf is built so
 - **Deep or huge trees.** Limits stop runaway work before it can overflow the stack or the memory (see below).
 - **The PDF as an attack surface.** ngpdf never writes PDF JavaScript, forms or embedded files, and a test checks the output for them. The only actions it writes are the links of `pdf-link`: to an absolute `http:`, `https:` or `mailto:` URL, or to a named destination in the same file for a link to an anchor. A test renders hostile URLs and checks that no other action is written. See [Links](/docs/text-and-fonts#links-pdf-link).
 - **Network access.** Images are the only thing ngpdf fetches, with the browser's own `fetch`.
+- **Encrypted files.** `security` on `pdf-document` encrypts the PDF with AES-256. The user password protects the content; permissions are only a request to the viewer, and a password in your app's code is visible to every user. See [Passwords and permissions](/docs/documents-and-pages#passwords-and-permissions).
 - **Supply chain.** Runtime dependencies are kept to pdfkit, yoga-layout and linebreak, plus the `tslib` helpers. A new one needs a reason and must pass `npm audit` and OSV-Scanner.
 
 ## Limits

@@ -62,6 +62,8 @@ const DOCUMENTS = [
       ],
     },
   },
+  // Encrypted: extracted with this user password, and it must not open without it.
+  { name: 'secure-sample', pages: 1, password: 'demo-1234', contains: ['Net pay: € 2,480.75'] },
 ];
 
 const update = process.argv.includes('--update');
@@ -90,8 +92,13 @@ function serve() {
 
 const useDocker = process.env.NGPDF_E2E_DOCKER === '1' || !existsSync(PDFTOTEXT);
 
-/** Text of every PDF (layout mode) and its embedded image count, keyed by document name. */
-function extractAll(names) {
+/**
+ * Text of every PDF (layout mode), its embedded image count and, for an encrypted one, whether
+ * pdftotext refused it without the password, keyed by document name.
+ */
+function extractAll(documents) {
+  const names = documents.map((document) => document.name);
+  const passwords = Object.fromEntries(documents.map((d) => [d.name, d.password]));
   if (!useDocker) {
     // pdftotext prints its version on stderr.
     const result = spawnSync(PDFTOTEXT, ['-v'], { encoding: 'utf8' });
@@ -99,11 +106,15 @@ function extractAll(names) {
     return Object.fromEntries(
       names.map((name) => {
         const pdf = join(OUT, `${name}.pdf`);
+        const password = passwords[name] === undefined ? [] : ['-upw', passwords[name]];
         return [
           name,
           {
-            raw: execFileSync(PDFTOTEXT, ['-layout', pdf, '-'], { encoding: 'utf8' }),
-            images: countImages(execFileSync('pdfimages', ['-list', pdf], { encoding: 'utf8' })),
+            raw: execFileSync(PDFTOTEXT, [...password, '-layout', pdf, '-'], { encoding: 'utf8' }),
+            images: countImages(
+              execFileSync('pdfimages', [...password, '-list', pdf], { encoding: 'utf8' }),
+            ),
+            locked: spawnSync(PDFTOTEXT, [pdf, '-'], { stdio: 'ignore' }).status !== 0,
           },
         ];
       }),
@@ -116,10 +127,16 @@ function extractAll(names) {
     'apt-get -qq update >/dev/null && apt-get -qq install -y --no-install-recommends poppler-utils >/dev/null' +
       ' || { echo "e2e: apt-get could not install poppler-utils in Docker" >&2; exit 1; }',
     'echo "@@@VERSION $(pdftotext -v 2>&1 | head -n 1)"',
-    `for n in ${names.join(' ')}; do`,
-    '  echo "@@@TEXT $n"; pdftotext -layout /w/e2e/out/$n.pdf -',
-    '  echo "@@@IMAGES $n"; pdfimages -list /w/e2e/out/$n.pdf',
-    'done',
+    // The passwords are made-up demo values, safe to put on a command line.
+    ...documents.map(({ name, password }) => {
+      const pdf = `/w/e2e/out/${name}.pdf`;
+      const upw = password === undefined ? '' : `-upw '${password}' `;
+      return [
+        `echo "@@@TEXT ${name}"; pdftotext ${upw}-layout ${pdf} -`,
+        `echo "@@@IMAGES ${name}"; pdfimages ${upw}-list ${pdf}`,
+        `pdftotext ${pdf} - >/dev/null 2>&1; echo "@@@LOCKED ${name} $?"`,
+      ].join('\n');
+    }),
   ].join('\n');
   const output = runDocker([
     'run',
@@ -137,8 +154,9 @@ function extractAll(names) {
   const result = {};
   for (const name of names) {
     const text = output.split(`@@@TEXT ${name}\n`)[1]?.split('@@@IMAGES')[0] ?? '';
-    const images = output.split(`@@@IMAGES ${name}\n`)[1]?.split('@@@TEXT')[0] ?? '';
-    result[name] = { raw: text, images: countImages(images) };
+    const images = output.split(`@@@IMAGES ${name}\n`)[1]?.split('@@@LOCKED')[0] ?? '';
+    const locked = output.split(`@@@LOCKED ${name} `)[1]?.split('\n')[0] !== '0';
+    result[name] = { raw: text, images: countImages(images), locked };
   }
   return result;
 }
@@ -296,9 +314,9 @@ try {
     writeFileSync(join(OUT, `${name}.pdf`), Buffer.from(base64, 'base64'));
   }
 
-  const extracted = extractAll(DOCUMENTS.map((document) => document.name));
+  const extracted = extractAll(DOCUMENTS);
   for (const document of DOCUMENTS) {
-    const { raw, images } = extracted[document.name];
+    const { raw, images, locked } = extracted[document.name];
     const text = normalizeText(raw);
     const expectedPath = join(EXPECTED, `${document.name}.txt`);
 
@@ -309,6 +327,10 @@ try {
       problems.push(`expected ${document.pages} pages, got ${pageCount}`);
     if (images !== (document.images ?? 0))
       problems.push(`expected ${document.images ?? 0} embedded images, got ${images}`);
+    if (locked !== (document.password !== undefined))
+      problems.push(
+        locked ? 'pdftotext could not open it without a password' : 'it opens without a password',
+      );
     for (const needle of document.contains) {
       if (!text.includes(needle)) problems.push(`text does not contain "${needle}"`);
     }

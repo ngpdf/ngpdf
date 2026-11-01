@@ -50,6 +50,7 @@ export class MetaDocument {
 | `producer` | `string` | `/Producer`; defaults to `ngpdf` instead of PDFKit. |
 | `pageMode` | `PageMode` | Initial viewer mode: `UseNone`, `UseOutlines` (the bookmarks panel), `UseThumbs` or `FullScreen`. |
 | `pageLayout` | `PageLayout` | Initial layout: `SinglePage`, `OneColumn`, `TwoColumnLeft`, `TwoColumnRight`, `TwoPageLeft` or `TwoPageRight`. |
+| `security` | `PdfSecurity` | Encryption and permissions. See [Passwords and permissions](#passwords-and-permissions). |
 
 Unset metadata inputs are omitted, except `producer`, which defaults to `ngpdf`, and `creationDate`, which defaults to the time of the render. Pass a fixed `creationDate` when you need the same bytes for the same data, for example in snapshot tests: it is the only time source in a render.
 
@@ -80,6 +81,65 @@ A `bookmark` title on an element adds an entry to the PDF's bookmarks, the outli
 - An entry jumps where a link to the element's `anchor` would: the top left of its first piece, at the reader's zoom.
 - Titles are trimmed, and an empty title adds no entry. Without any entry, the PDF has no outline.
 - Viewers open the bookmarks panel only when the document asks for it with `pageMode="UseOutlines"`.
+
+## Passwords and permissions
+
+`security` encrypts the file and sets what a PDF viewer lets the reader do with it.
+
+```ts
+import { Component, computed, input } from '@angular/core';
+import { PDF_ELEMENTS, type PdfSecurity } from '@ngpdf/core';
+
+@Component({
+  selector: 'app-payslip',
+  imports: [PDF_ELEMENTS],
+  template: `
+    <pdf-document title="Payslip" [security]="security()">
+      <pdf-page style="padding: 20mm">
+        <pdf-text>Net pay: € 2,480.75</pdf-text>
+      </pdf-page>
+    </pdf-document>
+  `,
+})
+export class Payslip {
+  // Typed by the user, or sent by the server for this user.
+  readonly password = input.required<string>();
+
+  protected readonly security = computed<PdfSecurity>(() => ({
+    userPassword: this.password(),
+    permissions: { printing: 'none', copying: false },
+  }));
+}
+```
+
+Pass the password at render time like any other input: `this.pdf.toBlob(Payslip, { inputs: { password } })`, with `pdf` the injected `PdfRenderer`.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `userPassword` | `string` | Asked for when the file is opened. |
+| `ownerPassword` | `string` | Lifts the permissions in viewers that ask for it. |
+| `permissions.printing` | `'none' \| 'low' \| 'high'` | `'high'` by default; `'low'` allows a degraded print only. |
+| `permissions.copying` | `boolean` | Copying text and images. |
+| `permissions.modifying` | `boolean` | Changing the document. |
+| `permissions.annotating` | `boolean` | Adding comments and annotations. |
+| `permissions.fillingForms` | `boolean` | Filling form fields. |
+| `permissions.contentAccessibility` | `boolean` | Extracting content for accessibility tools. |
+| `permissions.documentAssembly` | `boolean` | Inserting, rotating or deleting pages. |
+
+How it behaves:
+
+- The file is encrypted with AES-256 (PDF 1.7, extension level 3) when `security` sets a password or turns a permission off. pdfkit does the encryption in JavaScript, so there is no extra dependency.
+- Every permission is allowed by default. Turn one off with `false`, or printing with `'none'`. A document with only a `userPassword` behaves as an unprotected one once it is open.
+- With a permission turned off and no `ownerPassword`, a random 32-byte owner password is used, so the permissions cannot be lifted by someone who knows only the user password.
+- A `security` with no password and no permission turned off writes an unencrypted file. So does an empty string as the password.
+- A password that is not a string, a permission value not in the table, or an unknown field fails with `ngpdf: invalid security <field>`, for example `ngpdf: invalid security permissions.printing`.
+- A password longer than 127 bytes in UTF-8 fails too, whether it is that long as typed or after Unicode NFKC normalization (which can make it longer): AES-256 PDF passwords stop there, and a password cut short without a word would be a trap. A password with a character that SASLprep refuses, such as a tab or another control character, makes the render fail with `ngpdf: invalid security password` when the file is written. Error messages never contain the password.
+
+### Limits
+
+- **Permissions are a request to the viewer.** Most viewers honour them, but any tool can ignore them. They do not protect the content.
+- **A password written in your app's code ships to every user's browser.** Only a password the user enters, or one your server sends for that user, keeps meaning anything.
+- **The user password is real protection.** Without it the content cannot be decrypted.
 
 ## Page size and orientation
 
