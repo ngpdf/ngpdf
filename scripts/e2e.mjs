@@ -221,8 +221,11 @@ function navigationOf(pdf) {
     (match) => match[1],
   );
 
+  // Only the destinations a viewer can reach: the /Dests tree under the catalog's /Names.
+  const names = catalog && ref(catalog, 'Names');
+  const tree = (names && objects.get(names)?.match(/\/Dests\s*<<([\s\S]*)>>/)?.[1]) ?? '';
   const destinations = {};
-  for (const match of text.matchAll(/\(([^()]*)\) \[(\d+) 0 R \/XYZ/g)) {
+  for (const match of tree.matchAll(/\(([^()]*)\) \[(\d+) 0 R \/XYZ/g)) {
     destinations[match[1]] = pages.indexOf(match[2]) + 1;
   }
   const links = [...text.matchAll(/\/S \/GoTo\s*\/D \(([^()]*)\)/g)]
