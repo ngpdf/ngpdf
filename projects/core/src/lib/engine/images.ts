@@ -141,12 +141,16 @@ async function loadOne(
   }
 }
 
-/** Loads every `pdf-image` under `root` in parallel; the first failure rejects. */
+/**
+ * Loads every `pdf-image` under `root` in parallel; the first failure rejects. Loads of string
+ * sources go in `shared`, so calls that pass the same map fetch each source once.
+ */
 export async function loadImages(
   root: PdfNode,
   writer: Pick<PdfWriter, 'imageSize'>,
   fetchFn?: typeof fetch,
   server?: ServerSources,
+  shared = new Map<string, Promise<ImageAsset>>(),
 ): Promise<Map<PdfNode, ImageAsset>> {
   const nodes: PdfNode[] = [];
   const visit = (node: PdfNode): void => {
@@ -156,7 +160,6 @@ export async function loadImages(
   };
   visit(root);
   // One load per distinct string `src`, so a logo used ten times is fetched once.
-  const shared = new Map<string, Promise<ImageAsset>>();
   const loadNode = (node: PdfNode): Promise<ImageAsset> => {
     const src = propsOf(node)['src'];
     if (typeof src !== 'string') return loadOne(src, writer, fetchFn, server);

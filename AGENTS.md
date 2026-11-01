@@ -97,6 +97,8 @@ NGPDF_APT=poppler-utils ./scripts/dev node scripts/server-check.mjs   # packed d
   `pdf-note`, `pdf-image`, `pdf-canvas`, `pdf-table`, `pdf-row`, `pdf-cell`, `pdf-page-number`,
   and `pdf-viewer`, the preview component (an HTML component in the app, not a document
   element). The `pdf-` prefix is mandatory: `table`, `image` and `text` exist in HTML and SVG.
+  The one directive, `pdfPerSheet` (`PdfPerSheet`), goes on an `ng-template` and is part of
+  `PDF_ELEMENTS`.
 - **Preview:** `pdf-viewer` comes from its own entry point, `@ngpdf/core/viewer`, and never
   reaches an app that imports `@ngpdf/core` alone; `scripts/bundle-budget.mjs` checks it. It is
   built on `pdfResource` and shows the PDF in an `<iframe>` whose only trusted source is the
@@ -194,6 +196,14 @@ NGPDF_APT=poppler-utils ./scripts/dev node scripts/server-check.mjs   # packed d
   - A `pdf-view` with `fixed="top"` or `fixed="bottom"`, a direct child of `pdf-page`, is laid
     out once and drawn on every sheet; the flow gets the space between them. Bottom views sit
     above the page number.
+  - An `ng-template` with `pdfPerSheet` inside a fixed view renders once per sheet, with
+    `$implicit`/`sheet`, `total`, `first`, `last` and `page` (1-based pdf-page index) in its
+    context. The view reserves the height of a first render with `sheet = total = 1`; each
+    sheet's content is laid out in that height and cut at its bottom, with one dev-mode warning
+    per render when it is taller. Each sheet's embedded view is checked on its own and destroyed
+    before the next. Anchors and bookmarks inside it are ignored. Anywhere but inside a fixed view
+    it throws `ngpdf: pdfPerSheet must be inside a fixed pdf-view`: content in the flow that
+    changed per sheet could change the sheet count.
   - A unit taller than a page goes on a page of its own, is clipped, and gets a dev-mode warning.
     So does a piece of a split row that holds content taller than a page.
   - An element with `position: absolute` is never a unit, and never moves, splits or pushes one.

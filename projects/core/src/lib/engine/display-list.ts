@@ -451,10 +451,13 @@ function placeShape(shape: ShapeOp, dx: number, dy: number): ShapeOp {
 /**
  * Runs the paint function of every pdf-canvas on the pages once, with its content box size, and
  * keeps its shapes for the display list. A canvas drawn on several sheets, in a fixed view or a
- * repeated header row, is the same box on each, so it is painted once.
+ * repeated header row, is the same box on each, so it is painted once. Shapes go in `painted`,
+ * so a later call with the same map, one sheet at a time, paints only the canvases it has not.
  */
-export function paintCanvases(pages: readonly PageLayout[]): ReadonlyMap<Box, readonly ShapeOp[]> {
-  const painted = new Map<Box, readonly ShapeOp[]>();
+export function paintCanvases(
+  pages: readonly PageLayout[],
+  painted = new Map<Box, readonly ShapeOp[]>(),
+): ReadonlyMap<Box, readonly ShapeOp[]> {
   const visit = (box: Box): void => {
     if (box.node.tag === 'pdf-canvas' && !painted.has(box)) {
       const { padding, border } = box;

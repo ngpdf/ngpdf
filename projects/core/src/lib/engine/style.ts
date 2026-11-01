@@ -1313,10 +1313,13 @@ function checkInline(node: PdfNode, warn: Warn): void {
 export function resolveStyles(
   root: PdfNode,
   warn: Warn = () => undefined,
+  /** For a subtree resolved on its own: its parent's style and its own nesting depth. */
+  parent?: { readonly style: ResolvedStyle; readonly depth: number },
 ): Map<PdfNode, ResolvedStyle> {
   const result = new Map<PdfNode, ResolvedStyle>();
   if (root.kind !== 'element') return result;
-  const stack: Pending[] = [{ node: root, depth: 1, inherited: ROOT_TEXT_STYLE, inLink: false }];
+  const inherited = parent ? textPartOf(parent.style) : ROOT_TEXT_STYLE;
+  const stack: Pending[] = [{ node: root, depth: parent?.depth ?? 1, inherited, inLink: false }];
   for (let item = stack.pop(); item; item = stack.pop()) {
     if (item.depth > MAX_NESTING) fail(`nesting deeper than ${String(MAX_NESTING)}`);
     const isLink = item.node.tag === 'pdf-link';

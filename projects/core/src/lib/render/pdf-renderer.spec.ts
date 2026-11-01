@@ -27,8 +27,9 @@ vi.mock('../engine', async (importOriginal) => {
   const { createPdfkitWriter } = await import('../engine/writer');
   return {
     ...actual,
-    renderDocument: async (root: Parameters<typeof actual.renderDocument>[0]) =>
+    renderDocument: async (...[root, options]: Parameters<typeof actual.renderDocument>) =>
       actual.renderDocument(root, {
+        ...options,
         dev: false,
         writer: await createPdfkitWriter({ compress: false }),
       }),
@@ -76,6 +77,38 @@ class TestDocument {
 })
 class BareTextDocument {
   readonly cell = input('');
+}
+
+@Component({
+  selector: 'pdf-per-sheet-document',
+  imports: [PDF_ELEMENTS],
+  template: `
+    <pdf-document>
+      <pdf-page size="A5">
+        <pdf-view fixed="bottom">
+          <ng-template pdfPerSheet let-sheet let-total="total">
+            @if (sheet < total) {
+              <pdf-text>Continued on next page</pdf-text>
+            } @else {
+              <pdf-text>End of report</pdf-text>
+            }
+          </ng-template>
+        </pdf-view>
+        @for (row of rows; track $index) {
+          <pdf-view style="height: 250"
+            ><pdf-text>Row {{ row }}</pdf-text></pdf-view
+          >
+        }
+      </pdf-page>
+    </pdf-document>
+  `,
+})
+class PerSheetDocument {
+  readonly rows = [1, 2, 3, 4, 5];
+
+  constructor() {
+    inject(DestroyRef).onDestroy(() => destroyed.push('per-sheet'));
+  }
 }
 
 @Component({
@@ -128,6 +161,22 @@ describe('PdfRenderer', () => {
       inputs: { cell: 'In a cell' },
     });
     expect(await shownText(blob)).toEqual(['In a cell', 'a', 'b', 'c']);
+  });
+
+  it('renders a pdfPerSheet footer with the numbers of each sheet', async () => {
+    const blob = await TestBed.inject(PdfRenderer).toBlob(PerSheetDocument);
+    expect(await shownText(blob)).toEqual([
+      // A fixed view is drawn before the flow of its sheet.
+      'Continued on next page',
+      'Row 1',
+      'Row 2',
+      'Continued on next page',
+      'Row 3',
+      'Row 4',
+      'End of report',
+      'Row 5',
+    ]);
+    expect(destroyed).toEqual(['per-sheet']);
   });
 
   it('renders without inputs', async () => {

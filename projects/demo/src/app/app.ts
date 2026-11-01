@@ -22,6 +22,7 @@ import { FontsSample } from './documents/fonts-sample';
 import { HyphensSample, demoHyphenate } from './documents/hyphens-sample';
 import { LicencesList } from './documents/licences-list';
 import { OpacitySample } from './documents/opacity-sample';
+import { PerSheetSample } from './documents/per-sheet-sample';
 import { SecureSample } from './documents/secure-sample';
 import { NotesSample } from './documents/notes-sample';
 import { SpanSample } from './documents/span-sample';
@@ -45,6 +46,7 @@ const DOCUMENT_NAMES = [
   'notes-sample',
   'canvas-sample',
   'emoji-sample',
+  'per-sheet-sample',
 ] as const;
 export type DemoDocument = (typeof DOCUMENT_NAMES)[number];
 
@@ -164,6 +166,8 @@ export class App {
         return this.pdf.toBlob(CanvasSample);
       case 'emoji-sample':
         return renderToBlob(EmojiSample, { injector: this.emoji });
+      case 'per-sheet-sample':
+        return this.pdf.toBlob(PerSheetSample);
     }
   }
 

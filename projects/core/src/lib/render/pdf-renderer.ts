@@ -59,6 +59,7 @@ export async function renderPdf<T>(
     const emoji = injector.get(PDF_EMOJI, null);
     return await loaded.renderDocument(tree.root, {
       fonts: fonts ?? [],
+      perSheet: tree.perSheet,
       ...(hyphenate && { hyphenate }),
       ...(server && { server }),
       ...(emoji !== null && { emoji }),
