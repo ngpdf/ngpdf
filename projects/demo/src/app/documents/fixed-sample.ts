@@ -1,15 +1,15 @@
-import { Component } from '@angular/core';
+import { Component, input } from '@angular/core';
 import { PDF_ELEMENTS } from '@ngpdf/core';
 
 /**
  * A fixed header with the sheet number and a fixed footer, drawn on every sheet while a table runs
- * over several.
+ * over several. With `debug`, the same document with layout outlines.
  */
 @Component({
   selector: 'app-fixed-sample',
   imports: [PDF_ELEMENTS],
   template: `
-    <pdf-document title="Fixed header and footer" author="ngpdf demo">
+    <pdf-document title="Fixed header and footer" author="ngpdf demo" [debug]="debug()">
       <pdf-page size="A5" style="padding: 36; font-size: 10">
         <pdf-view
           fixed="top"
@@ -42,6 +42,7 @@ import { PDF_ELEMENTS } from '@ngpdf/core';
   `,
 })
 export class FixedSample {
+  readonly debug = input(false);
   readonly items = Array.from({ length: 70 }, (_, i) => ({
     code: `SKU-${String(1000 + i)}`,
     name: ['Bolts', 'Washers', 'Hinges', 'Brackets', 'Screws'][i % 5],

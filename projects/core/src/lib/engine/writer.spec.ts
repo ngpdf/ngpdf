@@ -805,6 +805,22 @@ describe('createPdfkitWriter', () => {
       expect(content).toMatch(/\n10 20 m\n50 20 l\n55 20 60 25 60 30 c\nS\n/);
     });
 
+    it('dashes a path op with a dash, inside its own graphics state', async () => {
+      const path = (dash?: readonly number[]): DrawOp => ({
+        op: 'path',
+        from: { x: 0, y: 0 },
+        segments: [{ kind: 'line', to: { x: 10, y: 0 } }],
+        width: 0.5,
+        color: '#0000ff',
+        opacity: 1,
+        ...(dash && { dash }),
+      });
+      const content = contentOf(await pdfText([path([2, 1]), path()]));
+      expect(content).toMatch(/\nq\n[^Q]*\[2 1\] 0 d\n[^Q]*0 0 m\n10 0 l\nS\nQ\n/);
+      // The second path starts from a restored state, so it is solid.
+      expect(count(content, / d\n/g)).toBe(1);
+    });
+
     it('clips an image with re + W n and paints it with Do', async () => {
       const content = contentOf(
         await pdfText([

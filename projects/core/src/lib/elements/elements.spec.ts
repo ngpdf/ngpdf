@@ -50,7 +50,7 @@ const BLOB = new Blob(['x']);
   selector: 'pdf-test-bound',
   imports: [PDF_ELEMENTS],
   template: `
-    <pdf-document>
+    <pdf-document debug>
       <pdf-page size="Letter" orientation="landscape" />
       <pdf-page [size]="[100, 200]" />
       <pdf-view breakBefore />
@@ -214,6 +214,11 @@ describe('pdf-* elements', () => {
     expect(propsOf(at(kids, 4))).toEqual({ format: '{page} / {total}' });
     const cell = at(elementChildren(at(elementChildren(at(kids, 3)), 0)), 0);
     expect(propsOf(cell)).toEqual({ span: 1 });
+  });
+
+  it('exposes debug on pdf-document, off by default and on as a bare attribute', () => {
+    expect(propsOf(render(DefaultsDocument))['debug']).toBe(false);
+    expect(propsOf(render(BoundDocument))['debug']).toBe(true);
   });
 
   it('exposes the security of pdf-document through pdfProps', () => {

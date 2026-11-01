@@ -209,6 +209,9 @@ export async function renderDocument(
     loadYogaOnce(),
     options.writer ?? createPdfkitWriter({ compress: true }),
   ]);
+  // Debug outlines are for looking at a layout, not for a file to ship.
+  const debug = propsOf(document)['debug'] === true;
+  if (debug) warn('ngpdf: debug outlines are on');
   try {
     // Component hosts are transparent: the stages below see only pdf-* elements.
     const tree = dissolveHosts(document, warn);
@@ -231,6 +234,7 @@ export async function renderDocument(
       fonts,
       warnMissing,
       anchors,
+      debug,
     };
 
     const layouts = elementChildren(tree)
@@ -244,6 +248,7 @@ export async function renderDocument(
         warn: warnChars,
         fonts,
         warnMissing,
+        debug,
       }),
     }));
     const info = infoOf(document, now);

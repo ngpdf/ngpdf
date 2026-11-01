@@ -60,6 +60,8 @@ export interface LayoutContext {
   readonly warnMissing?: (chars: string[]) => void;
   /** The document's anchors; without them, every link to `#name` is refused. */
   readonly anchors?: Anchors;
+  /** Debug outlines are on: pagination keeps every wrapper's pieces for them to outline. */
+  readonly debug?: boolean;
 }
 
 type Measure = (width: number, widthMode: number) => { width: number; height: number };

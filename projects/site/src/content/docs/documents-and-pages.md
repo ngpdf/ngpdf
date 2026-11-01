@@ -51,6 +51,7 @@ export class MetaDocument {
 | `pageMode` | `PageMode` | Initial viewer mode: `UseNone`, `UseOutlines` (the bookmarks panel), `UseThumbs` or `FullScreen`. |
 | `pageLayout` | `PageLayout` | Initial layout: `SinglePage`, `OneColumn`, `TwoColumnLeft`, `TwoColumnRight`, `TwoPageLeft` or `TwoPageRight`. |
 | `security` | `PdfSecurity` | Encryption and permissions. See [Passwords and permissions](#passwords-and-permissions). |
+| `debug` | `boolean` | Not metadata: draws layout outlines on every page. Off by default. See [Debugging layouts](/docs/layout-and-styling#debugging-layouts). |
 
 Unset metadata inputs are omitted, except `producer`, which defaults to `ngpdf`, and `creationDate`, which defaults to the time of the render. Pass a fixed `creationDate` when you need the same bytes for the same data, for example in snapshot tests: it is the only time source in a render.
 

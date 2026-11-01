@@ -22,6 +22,13 @@ export interface PlacedBox {
 export interface PageLayout {
   readonly width: number;
   readonly height: number;
+  /** The page's content area: the sheet less the page's padding and border. */
+  readonly content: {
+    readonly x: number;
+    readonly y: number;
+    readonly w: number;
+    readonly h: number;
+  };
   /** Units and repeated header rows, top to bottom. */
   readonly placed: readonly PlacedBox[];
   /** Page and wrapper backgrounds and borders, outer first, drawn before `placed`. */
@@ -940,7 +947,8 @@ export function paginatePage(
     // A link's area and an anchor's place are drawn with its pieces, so such a wrapper always has
     // them.
     const marked = wrapper.box.link !== undefined || wrapper.box.anchor !== undefined;
-    if (!draws(wrapper.box.style) && !marked) continue;
+    // Debug outlines draw every wrapper, so its pieces are kept; they change no position.
+    if (!draws(wrapper.box.style) && !marked && !ctx.debug) continue;
     const first = at(placements, wrapper.first);
     const last = at(placements, wrapper.last);
     // `full` is the piece's height before the page bottom cuts it.
@@ -977,6 +985,12 @@ export function paginatePage(
   return pages.map((built) => ({
     width: frame.width,
     height: frame.height,
+    content: {
+      x: base.left,
+      y: base.top,
+      w: base.contentWidth,
+      h: Math.max(0, base.innerBottom - base.top),
+    },
     placed: built.placed,
     decorations: built.decorations,
     ...(pageNumber ? { pageNumber } : {}),
