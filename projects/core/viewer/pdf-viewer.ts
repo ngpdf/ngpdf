@@ -68,8 +68,12 @@ export class PdfViewer {
    */
   private readonly previous = signal<PdfResourceRef | undefined>(undefined);
 
+  /** A string, so `src` recomputes only when the URL itself changes, not when `pdf` does. */
+  private readonly url = computed(() => this.pdf()?.url() ?? this.previous()?.url());
+
   protected readonly src = computed<SafeResourceUrl | undefined>(() => {
-    const url = this.pdf()?.url() ?? this.previous()?.url();
+    // A new trusted value for the same URL would make Angular write [src] and reload the frame.
+    const url = this.url();
     // pdfResource makes blob: URLs only; nothing else is ever trusted as a frame source.
     return url?.startsWith('blob:')
       ? this.sanitizer.bypassSecurityTrustResourceUrl(url)

@@ -2,6 +2,7 @@
 import { ApplicationRef, Component, signal, type Type } from '@angular/core';
 import { TestBed, type ComponentFixture } from '@angular/core/testing';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { DomSanitizer } from '@angular/platform-browser';
 import { PdfViewer } from './pdf-viewer';
 
 interface Render {
@@ -313,6 +314,22 @@ describe('PdfViewer', () => {
     fixture.destroy();
 
     expect(revoked).toEqual(['blob:test/1']);
+  });
+
+  it('does not set the iframe source again while the old PDF stays on screen', async () => {
+    const fixture = TestBed.createComponent(Host);
+    await settle();
+    const iframe = iframeOf(fixture);
+    const trust = vi.spyOn(TestBed.inject(DomSanitizer), 'bypassSecurityTrustResourceUrl');
+
+    fixture.componentInstance.document.set(Receipt);
+    fixture.detectChanges();
+
+    // A new trusted value, even for the same URL, would make Angular write [src] and reload it.
+    expect(trust).not.toHaveBeenCalled();
+    expect(iframeOf(fixture)).toBe(iframe);
+    await settle();
+    expect(trust.mock.calls).toEqual([['blob:test/2']]);
   });
 
   it('trusts only a blob: URL as the iframe source', async () => {
