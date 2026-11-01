@@ -1,7 +1,7 @@
 import LineBreaker from 'linebreak';
 import type { Color } from './color';
 import { covers, fontFor, normalizeText, shapeText, SOFT_HYPHEN } from './fonts';
-import { graphemeCount } from './graphemes';
+import { graphemeCount, graphemeStarts } from './graphemes';
 import type { TextStyle } from './style';
 import type { FontMetrics, FontName } from './writer';
 
@@ -677,14 +677,16 @@ function breakLines(
     for (const match of collapsed.slice(from, to).matchAll(/[\p{L}\p{M}]+/gu)) {
       const word = match[0];
       const at = from + match.index;
-      const letters = graphemeCount(word);
+      // One scan per word: the points come in order, so an index walks the cluster starts.
+      const starts = graphemeStarts(word);
+      const letters = starts.length;
       if (letters < HYPHENATE_MIN_WORD) continue;
+      let before = 0;
       for (const point of ask(word)) {
-        const lettersBefore = graphemeCount(word.slice(0, point));
-        if (lettersBefore < HYPHENATE_MIN_SIDE || letters - lettersBefore < HYPHENATE_MIN_SIDE)
-          continue;
+        while (before < letters && (starts[before] ?? word.length) < point) before++;
         // Never inside a grapheme cluster: before a combining mark or a surrogate pair's second half.
-        if (graphemeCount(word.slice(point - 1, point + 1)) < 2) continue;
+        if (starts[before] !== point) continue;
+        if (before < HYPHENATE_MIN_SIDE || letters - before < HYPHENATE_MIN_SIDE) continue;
         if (autoAt[at + point - 1] && autoAt[at + point]) points.push(at + point);
       }
     }
