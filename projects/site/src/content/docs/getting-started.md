@@ -28,7 +28,7 @@ Then run `ng serve` and open `/pdf-demo` if you added the demo route.
 - With `--demo-route`, if `pdf-demo.ts` is already there, `ng add` keeps it and adds no route, and says why: the route imports `PdfDemo` from it, which your file may not export.
 - It does not change `main.ts` or your providers: ngpdf needs no setup, because `PdfRenderer` is provided in the root injector.
 - If there is no `app.routes.ts`, or no `routes` array in it, `--demo-route` adds no route. It prints the route to add by hand instead.
-- The package goes in `dependencies`, and nothing else is installed.
+- The package goes in `dependencies`, with its own dependencies (pdfkit, yoga-layout, linebreak and tslib) as usual. `ng add` adds no other direct dependency to your app.
 
 `ng build` then prints eight warnings like `Module 'unicode-trie' used by 'node_modules/linebreak/dist/module.mjs' is not ESM`. They name `unicode-trie` and `base64-js` (used by `linebreak` and `unicode-properties`), and `fast-deep-equal`, `dfa`, `clone`, `tiny-inflate` and `brotli/decompress.js` (used by `fontkit`). They come from `linebreak`, a dependency of ngpdf, and from `fontkit`, a dependency of pdfkit, and they ship only as CommonJS. They are in the PDF engine's lazy chunk, not in your initial bundle, and the build still succeeds. To silence the warnings, list them in the build options of your project in `angular.json`:
 
