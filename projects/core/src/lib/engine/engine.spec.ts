@@ -858,3 +858,53 @@ describe('renderDocument with fonts', () => {
     expect(pdf.match(/\/FontFile2/g)).toHaveLength(2);
   });
 });
+
+describe('renderDocument with emoji', () => {
+  // A 1×1 opaque PNG.
+  const PNG =
+    'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGO4y2AIAALMAQ+JqrH2AAAAAElFTkSuQmCC';
+  const onePage = (content: string) =>
+    host({}, [el('pdf-page', {}, [text(content)], { size: 'A4' })]);
+  const opsOf = (writer: ReturnType<typeof recordingWriter>) =>
+    writer.recorded[0]!.pages.flatMap((page) => page.ops);
+
+  it('draws each emoji as an image from the source, one image per sequence', async () => {
+    const writer = recordingWriter();
+    const source = vi.fn(() => PNG);
+    await renderDocument(onePage('Done 👍 and 👍 ©'), { writer, dev: false, emoji: source });
+    expect(source).toHaveBeenCalledTimes(1);
+    const images = opsOf(writer).filter((op) => op.op === 'image');
+    expect(images).toHaveLength(2);
+    expect(images[0]!.data).toBe(images[1]!.data);
+    const texts = opsOf(writer).flatMap((op) => (op.op === 'text' ? [op.text] : []));
+    expect(texts.join('')).toBe('Done  and  ©');
+  });
+
+  it('keeps today’s text glyph without a source', async () => {
+    const writer = recordingWriter();
+    await renderDocument(onePage('Done 👍'), { writer, dev: false });
+    expect(opsOf(writer).some((op) => op.op === 'image')).toBe(false);
+    expect(opsOf(writer).some((op) => op.op === 'text' && op.text === 'Done ?')).toBe(true);
+  });
+
+  it('draws an emoji without an image as text, with one warning in dev mode', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const writer = recordingWriter();
+    await renderDocument(onePage('👍 🎉 👍'), { writer, dev: true, emoji: () => null });
+    expect(opsOf(writer).some((op) => op.op === 'image')).toBe(false);
+    expect(warn.mock.calls.map(([message]: unknown[]) => message)).toContain(
+      'ngpdf: emoji without an image, drawn as text: 👍 🎉',
+    );
+  });
+
+  it('embeds an emoji image once in the PDF', async () => {
+    const pdf = await bytesOf(
+      await renderDocument(onePage('👍 👍 👍'), {
+        writer: await createPdfkitWriter({ compress: false }),
+        dev: false,
+        emoji: () => PNG,
+      }),
+    );
+    expect(pdf.match(/\/Subtype \/Image/g)).toHaveLength(1);
+  });
+});

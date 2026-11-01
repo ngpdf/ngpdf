@@ -274,6 +274,8 @@ Some problems still produce a PDF. ngpdf collects them during the render and pri
 | --- | --- |
 | `ngpdf: characters outside WinAnsi replaced with "?": <characters>` | See [Text and fonts](/docs/text-and-fonts#characters-winansi). |
 | `ngpdf: characters missing from every font in their font-family, drawn as an empty box: <characters>` | See [Text and fonts](/docs/text-and-fonts#the-family-list-and-fallback). |
+| `ngpdf: emoji without an image, drawn as text: <emoji>` | Emoji whose image from `providePdfEmoji` was `null`, failed to load or was not a PNG or JPEG. See [Emoji](/docs/text-and-fonts#emoji). |
+| `ngpdf: more than 500 distinct emoji; the rest are drawn as text` | See [Emoji](/docs/text-and-fonts#loading). |
 | `ngpdf: font "<family>" has no <face> face; using its <face> face` | A registered family without the weight or style asked for. See [Custom fonts](/docs/text-and-fonts#custom-fonts). |
 | `ngpdf: <element> is taller than a page and is cut at the bottom` | A unit is clipped. See [Pagination](/docs/pagination#units-taller-than-a-page). |
 | `ngpdf: ignored inside tables: <list>` | Row or cell styles that tables do not use. See [Tables](/docs/tables#padding-and-borders). |

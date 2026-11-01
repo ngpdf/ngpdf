@@ -234,6 +234,12 @@ describe('createPdfkitWriter', () => {
     expect(writer.ascent('Helvetica', 20)).toBeCloseTo(ascent * 2, 5);
   });
 
+  it('reports the descent below the baseline as a positive length that scales with size', () => {
+    // Helvetica's descender is -207/1000 em.
+    expect(writer.descent?.('Helvetica', 10)).toBeCloseTo(2.07, 6);
+    expect(writer.descent?.('Helvetica', 20)).toBeCloseTo(4.14, 6);
+  });
+
   it('writes a PDF blob with a rect and a text op', async () => {
     const ops: DrawOp[] = [
       {

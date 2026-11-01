@@ -1,4 +1,5 @@
 import { DOCUMENT, EnvironmentInjector, Service, inject, type Type } from '@angular/core';
+import { PDF_EMOJI } from './pdf-emoji';
 import { PDF_FONT_SET } from './pdf-fonts';
 import { PDF_HYPHENATE } from './pdf-hyphenation';
 import { renderTree } from './render-tree';
@@ -44,9 +45,11 @@ export async function renderToBlob<T>(
     const loaded = await loadEngine();
     const fonts = options.injector.get(PDF_FONT_SET, null)?.sources((src) => loaded.loadFont(src));
     const hyphenate = options.injector.get(PDF_HYPHENATE, null);
+    const emoji = options.injector.get(PDF_EMOJI, null);
     return await loaded.renderDocument(tree.root, {
       fonts: fonts ?? [],
       ...(hyphenate && { hyphenate }),
+      ...(emoji !== null && { emoji }),
     });
   } finally {
     tree.destroy();

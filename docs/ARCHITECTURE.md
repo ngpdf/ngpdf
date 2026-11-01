@@ -16,7 +16,8 @@ this project calls for it. Where the simplest correct answer is no pattern, this
  dissolveHosts      → PdfNode tree of pdf-* elements only
  resolveStyles      → Map<PdfNode, ResolvedStyle>
  collectAnchors     → anchor names, marked elements, outline
- loadImages         → Map<PdfNode, ImageAsset>          (the only async I/O)
+ loadImages         → Map<PdfNode, ImageAsset>          (the only async I/O,
+ loadEmoji          → Map<string, ImageAsset>            in parallel)
  layoutBox (Yoga)   → Box tree
  paginatePage       → PageLayout[]
  paintCanvases      → Map<Box, shape ops>                (runs each pdf-canvas paint once)
@@ -200,7 +201,7 @@ direct code. Strategy would add indirection with one implementation each.
 projects/core/src/lib/tree/       PdfNode, PdfRendererFactory           (eager)
 projects/core/src/lib/elements/   pdf-* components, PDF_ELEMENTS        (eager)
 projects/core/src/lib/render/     render-tree, PdfRenderer facade       (eager)
-projects/core/src/lib/engine/     hosts, color, style, anchors, fonts, text, images, layout,
+projects/core/src/lib/engine/     hosts, color, style, anchors, fonts, text, images, emoji, layout,
                                   paginate, canvas-recorder, display-list, writer, index (lazy)
 projects/core/viewer/             pdf-viewer, entry point @ngpdf/core/viewer (own chunk)
 projects/demo/                    the three reference documents

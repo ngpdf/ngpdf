@@ -7,6 +7,7 @@ import { elementChildren, propsOf, type PdfNode } from '../tree/node';
 import { collectAnchors } from './anchors';
 import { displayList, paintCanvases } from './display-list';
 export { loadFont } from './font-loading';
+import { loadEmoji, type EmojiSource } from './emoji';
 import { parseFontFamily, type FontRegistry, type RegisteredFace } from './fonts';
 import { dissolveHosts } from './hosts';
 import { loadImages } from './images';
@@ -52,6 +53,8 @@ export interface RenderDocumentOptions {
   readonly fonts?: readonly FontSource[];
   /** The app's hyphenation function, for `hyphens: auto`; called with the document's language. */
   readonly hyphenate?: Hyphenate;
+  /** Where emoji images come from; without it, emoji are text like any other character. */
+  readonly emoji?: EmojiSource;
 }
 
 /** One face of a font family, with a way to get its bytes. */
@@ -220,9 +223,11 @@ export async function renderDocument(
     const styles = resolveStyles(tree, warn);
     // Before layout: a link to "#name" is checked against every name in the document.
     const anchors = collectAnchors(tree, warn);
-    const [images, fonts] = await Promise.all([
+    // Emoji images load with the others, before layout, so measuring stays synchronous.
+    const [images, fonts, emoji] = await Promise.all([
       loadImages(tree, writer),
       registerUsedFonts(options.fonts ?? [], styles, writer),
+      loadEmoji(tree, options.emoji, writer, warn),
     ]);
     // One text cache per render, passed down like the metrics and images, so renders share nothing.
     const language = languageOf(propsOf(document)['language']);
@@ -242,6 +247,7 @@ export async function renderDocument(
       warnMissing,
       anchors,
       debug,
+      emoji,
     };
 
     const layouts = elementChildren(tree)

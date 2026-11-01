@@ -74,6 +74,8 @@ export interface LayoutContext {
   readonly anchors?: Anchors;
   /** Debug outlines are on: pagination keeps every wrapper's pieces for them to outline. */
   readonly debug?: boolean;
+  /** Images of the document's emoji by sequence; an emoji without one is drawn as text. */
+  readonly emoji?: ReadonlyMap<string, ImageAsset>;
 }
 
 type Measure = (width: number, widthMode: number) => { width: number; height: number };
@@ -495,6 +497,7 @@ export function layoutBox(
                 style,
                 ...withFonts(fontsOf(style)),
                 ...(link !== undefined && { link }),
+                ...(ctx.emoji?.size && { emoji: ctx.emoji }),
               });
           }
         }

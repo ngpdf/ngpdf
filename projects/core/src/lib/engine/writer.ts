@@ -250,6 +250,8 @@ export interface FontMetrics {
   /** With `ligatures` false, the optional ligatures (liga, clig, dlig) are left out. */
   widthOf(text: string, font: FontName, size: number, ligatures?: boolean): number;
   ascent(font: FontName, size: number): number;
+  /** Depth of the font below its baseline, as a positive length. Emoji images sit on it. */
+  descent?(font: FontName, size: number): number;
   /** Whether a registered font has a glyph for the code point. */
   hasGlyph(font: CustomFont, codePoint: number): boolean;
 }
@@ -461,7 +463,11 @@ function toDataUrl(data: Uint8Array): string {
 
 /** The slice of a pdfkit document that the writer touches that `@types/pdfkit` leaves private. */
 interface FontInternals {
-  _font: { ascender: number; font?: { hasGlyphForCodePoint(codePoint: number): boolean } };
+  _font: {
+    ascender: number;
+    descender: number;
+    font?: { hasGlyphForCodePoint(codePoint: number): boolean };
+  };
 }
 
 interface PdfKitInternals {
@@ -649,6 +655,11 @@ export async function createPdfkitWriter(options: { compress?: boolean } = {}): 
     ascent(font, size) {
       measurer.font(font);
       return ((measurer as unknown as FontInternals)._font.ascender / 1000) * size;
+    },
+
+    descent(font, size) {
+      measurer.font(font);
+      return (-(measurer as unknown as FontInternals)._font.descender / 1000) * size;
     },
 
     imageSize,
