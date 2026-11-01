@@ -235,7 +235,8 @@ NGPDF_APT=poppler-utils ./scripts/dev node scripts/server-check.mjs   # packed d
   an absolute note follows the absolute rules. Its color is its own, `#ffd400` by default.
   A page's notes are written before its links in `/Annots`, so a link is on top where they overlap.
 - **Images:**
-  - Formats are PNG and JPEG, from a data URL, an http(s) URL, a `Blob` or an `ArrayBuffer`.
+  - Formats are PNG and JPEG, from a data URL, an http(s) URL, a `Blob`, an `ArrayBuffer` or a
+    `Uint8Array` (a Node `Buffer` too).
   - `object-fit` is `contain` (default) or `cover`.
   - A failed load rejects the render with `ngpdf: could not load image "<src>": <reason>`.
 - **Encryption:** `security` on `pdf-document` takes `userPassword`, `ownerPassword` and
