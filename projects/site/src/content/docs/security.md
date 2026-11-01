@@ -31,6 +31,10 @@ There is no size limit on images fetched from a URL yet: a very large image is d
 
 Values interpolated into a document are drawn as text. They are not parsed as HTML or as PDF syntax, and property bindings such as `[innerHTML]` do nothing in a document.
 
+## The preview iframe
+
+`pdf-viewer` from `@ngpdf/core/viewer` shows the PDF in an `<iframe>` whose source is the `blob:` URL of the PDF ngpdf just wrote, and no other URL is ever trusted as its source. The iframe is not sandboxed, because Chrome blocks its PDF viewer in any sandboxed frame. What it loads is same-origin and contains no JavaScript or actions other than the links of `pdf-link`. With a Content-Security-Policy that sets `frame-src` (or `child-src` or `default-src` without them), allow `blob:` there.
+
 ## Images and the network
 
 - Images are fetched with `fetch(src, { credentials: 'same-origin' })`, so cookies go only to your own origin.

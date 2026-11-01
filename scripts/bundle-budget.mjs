@@ -1,5 +1,7 @@
 // Bundle budget: importing @ngpdf/core adds at most 15 KB gzipped to an app's initial bundle,
-// and pdfkit and Yoga never reach an initial chunk. Builds the demo, reads the esbuild metafile
+// pdfkit and Yoga never reach an initial chunk, and neither does @ngpdf/core/viewer: the demo
+// loads its preview in a deferred chunk, so the viewer in main means @ngpdf/core pulled it in.
+// Builds the demo, reads the esbuild metafile
 // that `--stats-json` writes, and checks the initial chunks.
 //
 // esbuild reports bytes per input but not gzip per input, so each chunk's gzip size is shared
@@ -15,6 +17,7 @@ const BROWSER_DIR = join(OUT_DIR, 'browser');
 const STATS_FILE = join(OUT_DIR, 'browser-stats.json');
 const EAGER_CORE = /^projects\/core\/src\/lib\/(tree|elements|render)\//;
 const ENGINE_ONLY = /(^|\/)(pdfkit|yoga-layout)(\/|$)|^projects\/core\/src\/lib\/engine\//;
+const VIEWER = /^projects\/core\/viewer\//;
 
 if (!process.argv.includes('--skip-build')) {
   execFileSync('npx', ['ng', 'build', 'demo', '--stats-json'], { stdio: 'inherit' });
@@ -37,13 +40,24 @@ while (queue.length > 0) {
   }
 }
 
+// Without the viewer anywhere in the build, the check below would pass for nothing.
+const viewerBuilt = Object.values(outputs).some((output) =>
+  Object.keys(output.inputs).some((path) => VIEWER.test(path)),
+);
+if (!viewerBuilt) {
+  console.error('bundle-budget: the demo does not use @ngpdf/core/viewer — FAIL');
+  process.exit(1);
+}
+
 let eager = 0;
 const leaks = [];
+const viewerLeaks = [];
 for (const name of initial) {
   const output = outputs[name];
   const inputs = Object.entries(output.inputs);
   for (const [path] of inputs) {
     if (ENGINE_ONLY.test(path)) leaks.push(`${path} (in ${name})`);
+    if (VIEWER.test(path)) viewerLeaks.push(`${path} (in ${name})`);
   }
   const total = inputs.reduce((sum, [, input]) => sum + input.bytesInOutput, 0);
   if (total === 0) continue;
@@ -61,8 +75,14 @@ if (leaks.length > 0) {
   );
   process.exit(1);
 }
+if (viewerLeaks.length > 0) {
+  console.error(
+    `eager @ngpdf/core: @ngpdf/core/viewer in an initial chunk — FAIL\n  ${viewerLeaks.join('\n  ')}`,
+  );
+  process.exit(1);
+}
 if (eager > BUDGET_BYTES) {
   console.error(`eager @ngpdf/core: ${eager} B gzipped — FAIL (budget ${BUDGET_BYTES} B)`);
   process.exit(1);
 }
-console.log(`eager @ngpdf/core: ${eager} B gzipped — OK`);
+console.log(`eager @ngpdf/core: ${eager} B gzipped, viewer lazy — OK`);

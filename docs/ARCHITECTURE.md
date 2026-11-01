@@ -196,6 +196,7 @@ projects/core/src/lib/elements/   pdf-* components, PDF_ELEMENTS        (eager)
 projects/core/src/lib/render/     render-tree, PdfRenderer facade       (eager)
 projects/core/src/lib/engine/     hosts, color, style, anchors, fonts, text, images, layout,
                                   paginate, display-list, writer, index (lazy)
+projects/core/viewer/             pdf-viewer, entry point @ngpdf/core/viewer (own chunk)
 projects/demo/                    the three reference documents
 projects/site/                    ngpdf.dev: landing, docs (Markdown), examples
 scripts/                          dev (Docker), e2e, bundle budget

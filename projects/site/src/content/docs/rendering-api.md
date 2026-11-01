@@ -1,11 +1,11 @@
 ---
 title: Rendering API
-description: Reference for PdfRenderer, renderToBlob and downloadPdf in @ngpdf/core - signatures, option types, render lifecycle, errors and dev-mode warnings.
+description: Reference for PdfRenderer, renderToBlob, downloadPdf, pdfResource, PdfDownload and the PdfViewer preview in @ngpdf/core - signatures, option types, render lifecycle, errors and dev-mode warnings.
 section: Reference
 order: 10
 ---
 
-`@ngpdf/core` exports one service, three functions and a directive that render a document component to a PDF.
+`@ngpdf/core` exports one service, three functions and a directive that render a document component to a PDF. `@ngpdf/core/viewer` adds a component that shows one in the page.
 
 | Export | Needs an injection context | Returns |
 | --- | --- | --- |
@@ -15,6 +15,7 @@ order: 10
 | `downloadPdf` | no, you pass an injector | `Promise<void>` |
 | `pdfResource` | yes, or pass `injector` | `PdfResourceRef` |
 | `PdfDownload` | no, it is a directive | - |
+| `PdfViewer` (`@ngpdf/core/viewer`) | no, it is a component | - |
 
 ## PdfRenderer
 
@@ -82,7 +83,7 @@ protected readonly pdf = pdfResource(InvoiceDocument, {
 ```
 
 - `value()` is the `Blob`, and `status()`, `isLoading()`, `error()` and `hasValue()` work as on any `Resource`. Like any `Resource`, `value()` throws in the `error` status; `url()` does not, so templates can read it directly.
-- `url()` is an object URL for the current PDF. It is created the first time you read it, and revoked when a newer PDF replaces it or when the resource is destroyed. Do not revoke it yourself.
+- `url()` is an object URL for the current PDF. It is created the first time you read it. While a newer render runs it keeps the previous PDF's URL, so a preview does not go blank. It is revoked when a newer PDF replaces it, when a render fails, or when the resource is destroyed. Do not revoke it yourself.
 - `inputs` returning `undefined` holds off rendering, and the resource stays `idle`. Use it while the data is still loading.
 - `debounce` is how many milliseconds to wait after the last change before rendering. A slider or a text field otherwise starts a render per keystroke, and only the last one is kept.
 - `injector` is needed outside an injection context. The resource is destroyed with it, and the document resolves its services from its `EnvironmentInjector`.
@@ -113,6 +114,72 @@ A directive for the most common case, a button that downloads a document. Import
 - A click starts `downloadPdf` with the nearest `EnvironmentInjector`: a route's, if the route has `providers`, or the root one. The document can inject route-scoped services.
 - While the PDF renders, the host gets `aria-busy="true"` and `aria-disabled="true"`, and further clicks are ignored, with their default action (a form submit, a link) cancelled. The directive never sets `disabled`, which would drop keyboard focus and could undo the app's own `[disabled]`. Style the busy state with `[aria-busy='true']`.
 - The render counts as a pending task, so `whenStable()` in a test waits for it.
+
+## PdfViewer
+
+```ts
+import { PdfViewer } from '@ngpdf/core/viewer';
+```
+
+```html
+<pdf-viewer
+  [document]="InvoiceDocument"
+  [inputs]="{ customer: customer(), lines: lines() }"
+  label="Invoice preview"
+  (failed)="showError($event)"
+  style="height: 40rem"
+>
+  <p pdfViewerLoading>Rendering…</p>
+  <p pdfViewerError>The preview could not be shown.</p>
+</pdf-viewer>
+```
+
+A live preview: the PDF in an `<iframe>`, shown by the browser's own PDF viewer with its zoom, search and print. It comes from its own entry point, `@ngpdf/core/viewer`, so an app that never shows a preview does not bundle it. Import `PdfViewer` in the component that uses it.
+
+| Input or output | Type | |
+| --- | --- | --- |
+| `document` | `Type<unknown>` | Required. The document component. A new one renders again. |
+| `inputs` | `Record<string, unknown>` | The document's inputs, as in `RenderOptions`. Default `{}`. A new object renders again. |
+| `debounce` | `number` | Milliseconds to wait after the last change before rendering, the first render included. Default `300`, since a form bound to `inputs` changes on every key. |
+| `label` | `string` | The iframe's accessible name (`title`). Default `"PDF preview"`. |
+| `(rendered)` | `Blob` | Emits the PDF after each render that is shown. |
+| `(failed)` | `unknown` | Emits the error when a render fails. |
+
+- It is built on `pdfResource`: a render overtaken by a newer one is dropped, and each object URL is revoked when the next PDF replaces it or the viewer is destroyed.
+- While a new render runs, the previous PDF stays on screen.
+- Content with the `pdfViewerLoading` attribute shows until the first PDF is there, and content with `pdfViewerError` shows when a render fails, in place of the PDF. Without them the viewer shows nothing in those states.
+- The host is `display: block` and the iframe fills it at 100% width and height. Set the size on `pdf-viewer`.
+- The iframe's only source is the `blob:` URL of the PDF ngpdf wrote; it is the only resource URL the viewer ever trusts. The iframe has no `sandbox` attribute: Chrome blocks its PDF viewer in a sandboxed frame whatever the `allow-*` tokens. If your Content-Security-Policy sets `frame-src` (or `child-src` or `default-src` without them), add `blob:` to it.
+- It needs `@angular/platform-browser`, which every browser app already has. `@ngpdf/core` lists it as an optional peer dependency.
+
+### Where the preview works
+
+The preview depends on the browser's PDF viewer. Chrome, Edge, Firefox and desktop Safari show it. Chrome on Android shows no PDF inside a page, and Safari on iOS shows only the first page. Give those readers a download as well; the `pdfViewerError` slot covers a render that fails, and a `PdfDownload` button next to the viewer works everywhere:
+
+```ts
+import { PdfDownload } from '@ngpdf/core';
+import { PdfViewer } from '@ngpdf/core/viewer';
+
+@Component({
+  selector: 'app-invoice-preview',
+  imports: [PdfViewer, PdfDownload],
+  template: `
+    <pdf-viewer [document]="invoice" [inputs]="{ lines: lines() }" style="height: 40rem">
+      <p pdfViewerLoading>Rendering the preview…</p>
+      <p pdfViewerError>The preview could not be shown. Download the PDF instead.</p>
+    </pdf-viewer>
+    <button type="button" [pdfDownload]="invoice" [pdfInputs]="{ lines: lines() }" pdfFileName="invoice.pdf">
+      Download PDF
+    </button>
+  `,
+})
+export class InvoicePreview {
+  protected readonly invoice = InvoiceDocument;
+  readonly lines = input.required<InvoiceLine[]>();
+}
+```
+
+A canvas viewer built on pdf.js would work in every browser, but it is a large dependency, so ngpdf does not ship one. If you need it, render with `pdfResource` or `renderToBlob` and pass the `Blob` to pdf.js yourself.
 
 ## Option types
 

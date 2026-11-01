@@ -4,7 +4,10 @@
   "extends": "../../tsconfig.json",
   "compilerOptions": {
     "types": [],
-    "paths": { "@ngpdf/core": ["../core/src/public-api.ts"] }
+    "paths": {
+      "@ngpdf/core": ["../core/src/public-api.ts"],
+      "@ngpdf/core/viewer": ["../core/viewer/public-api.ts"]
+    }
   },
   "include": ["src/**/*.ts", "../core/src/**/*.d.ts"],
   "exclude": ["src/**/*.spec.ts"]
