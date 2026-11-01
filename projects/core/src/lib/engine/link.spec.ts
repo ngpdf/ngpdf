@@ -8,9 +8,12 @@ function link(href: unknown): PdfNode {
   return node;
 }
 
-function resolve(href: unknown): { url: string | undefined; warnings: string[] } {
+function resolve(
+  href: unknown,
+  anchors?: ReadonlySet<string>,
+): { url: string | undefined; warnings: string[] } {
   const warnings: string[] = [];
-  const url = linkUrl(link(href), (message) => warnings.push(message));
+  const url = linkUrl(link(href), (message) => warnings.push(message), anchors);
   return { url, warnings };
 }
 
@@ -46,7 +49,7 @@ describe('linkUrl', () => {
   });
 
   it('writes no link for a relative, malformed, empty or missing URL', () => {
-    for (const href of ['/pay', 'example.com/pay', '#top', 'https://', 'http://exa mple.com', '']) {
+    for (const href of ['/pay', 'example.com/pay', 'https://', 'http://exa mple.com', '']) {
       expect(resolve(href).url).toBeUndefined();
       expect(resolve(href).warnings).toHaveLength(1);
     }
@@ -61,5 +64,24 @@ describe('linkUrl', () => {
   it('shortens a long URL in the warning', () => {
     const { warnings } = resolve(`javascript:${'a'.repeat(500)}`);
     expect(warnings[0]!.length).toBeLessThan(200);
+  });
+
+  it('points "#name" at the anchor of that name, trimmed, as "#name"', () => {
+    const anchors = new Set(['intro', 'a b', '#hash']);
+    expect(resolve('#intro', anchors)).toEqual({ url: '#intro', warnings: [] });
+    expect(resolve('  # intro ', anchors)).toEqual({ url: '#intro', warnings: [] });
+    expect(resolve('#a b', anchors).url).toBe('#a b');
+    expect(resolve('##hash', anchors).url).toBe('##hash');
+  });
+
+  it('writes no link to a name no anchor has, with a warning naming it', () => {
+    const anchors = new Set(['intro']);
+    for (const href of ['#Intro', '#missing', '#', '#   ']) {
+      expect(resolve(href, anchors)).toEqual({
+        url: undefined,
+        warnings: [`ngpdf: pdf-link href "${href}" names no anchor; no link written`],
+      });
+    }
+    expect(resolve('#intro').url).toBeUndefined();
   });
 });

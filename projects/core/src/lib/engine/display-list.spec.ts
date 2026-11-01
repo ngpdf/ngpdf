@@ -1,6 +1,7 @@
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import type { Yoga } from 'yoga-layout/load';
 import { createNode, type PdfNode } from '../tree/node';
+import { collectAnchors } from './anchors';
 import { displayList, type DisplayListOptions } from './display-list';
 import type { ImageAsset } from './images';
 import type { LayoutContext } from './layout';
@@ -931,7 +932,7 @@ describe('links', () => {
     ]);
     const ops = list(layout(page([block]))[0]!, 0, 1);
     expect(ops.map((op) => op.op)).toEqual(['rect', 'link', 'text']);
-    expect(ops[1]).toEqual({ op: 'link', x: 46, y: 46, w: 100, h: 40, url: URL_A });
+    expect(ops[1]).toEqual({ op: 'link', x: 46, y: 46, w: 100, h: 40, kind: 'uri', url: URL_A });
   });
 
   it('adds no link for a refused URL but still draws the content', () => {
@@ -959,7 +960,7 @@ describe('links', () => {
     expect(links[0]!.y).toBeCloseTo(36, 6);
     expect(links[0]!.w).toBeCloseTo(writer.widthOf('the', 'Helvetica', 12), 6);
     expect(links[0]!.h).toBeCloseTo(lines[0]!.height, 6);
-    expect(links[1]).toMatchObject({ x: 36, url: URL_A });
+    expect(links[1]).toMatchObject({ x: 36, kind: 'uri', url: URL_A });
     expect(links[1]!.y).toBeCloseTo(36 + lines[1]!.y, 6);
     expect(links[1]!.w).toBeCloseTo(writer.widthOf('docs', 'Helvetica-Bold', 12), 6);
   });
@@ -1051,6 +1052,114 @@ describe('links', () => {
     expect(rect!.y).toBeCloseTo(36, 6);
     expect(rect!.w).toBeCloseTo(height, 6);
     expect(rect!.h).toBeCloseTo(writer.widthOf('go', 'Helvetica', 10), 6);
+  });
+});
+
+describe('anchors', () => {
+  function anchored(root: PdfNode, warnings: string[] = []): PageLayout[] {
+    const warn = (message: string): void => {
+      warnings.push(message);
+    };
+    const anchors = collectAnchors(root, warn);
+    const ctx: LayoutContext = { yoga, metrics: writer, images: new Map(), warn, anchors };
+    return paginatePage(root, resolveStyles(root), ctx);
+  }
+
+  it('puts an anchor op at the top left of a named box, before what it draws', () => {
+    const view = el('pdf-view', { margin: '10', 'background-color': '#eee' }, [text('Hi')], {
+      anchor: 'intro',
+    });
+    const ops = list(anchored(page([view]))[0]!, 0, 1);
+    expect(ops.map((op) => op.op)).toEqual(['anchor', 'rect', 'text']);
+    expect(ops[0]).toEqual({ op: 'anchor', id: 0, name: 'intro', x: 46, y: 46 });
+  });
+
+  it('puts one on a bookmarked box with no name, and none on other boxes', () => {
+    const marked = el('pdf-view', { height: '20' }, [], { bookmark: 'Part' });
+    const ops = list(anchored(page([el('pdf-view', { height: '30' }), marked]))[0]!, 0, 1);
+    expect(only(ops, 'anchor')).toEqual([{ op: 'anchor', id: 0, x: 36, y: 66 }]);
+  });
+
+  it('marks a text split across sheets at the top of its first line group', () => {
+    const words = Array.from({ length: 80 }, (_, i) => `word${String(i)}`).join(' ');
+    const paragraph = el(
+      'pdf-text',
+      { width: '100', padding: '10' },
+      [createNode('text', '', words)],
+      {
+        anchor: 'long',
+      },
+    );
+    const pages = anchored(page([el('pdf-view', { height: '700' }), paragraph]));
+    expect(pages.length).toBeGreaterThan(1);
+    const [first] = only(list(pages[0]!, 0, pages.length), 'anchor');
+    expect(first).toEqual({ op: 'anchor', id: 0, name: 'long', x: 46, y: 746 });
+  });
+
+  it('marks a view split across sheets at the top of its first piece, background or not', () => {
+    const rows = [0, 1, 2].map(() => el('pdf-view', { height: '300' }));
+    const view = el('pdf-view', { 'padding-top': '5' }, rows, { anchor: 'rows' });
+    const pages = anchored(page([el('pdf-view', { height: '100' }), view]));
+    expect(pages).toHaveLength(2);
+    expect(only(list(pages[0]!, 0, 2), 'anchor')).toEqual([
+      { op: 'anchor', id: 0, name: 'rows', x: 36, y: 136 },
+    ]);
+  });
+
+  it('marks a box in a fixed view on every sheet it is drawn on', () => {
+    const header = el('pdf-view', { height: '20' }, [text('Head')], { fixed: 'top', anchor: 'h' });
+    const rows = [0, 1, 2].map(() => el('pdf-view', { height: '300' }));
+    const pages = anchored(page([header, ...rows]));
+    expect(pages).toHaveLength(2);
+    for (const [index, laid] of pages.entries()) {
+      expect(only(list(laid, index, 2), 'anchor')).toEqual([
+        { op: 'anchor', id: 0, name: 'h', x: 36, y: 36 },
+      ]);
+    }
+  });
+
+  it('marks a transformed box at the top left of its bounds, outside the transform', () => {
+    const turned = el('pdf-view', { width: '100', height: '40', transform: 'rotate(90deg)' }, [], {
+      anchor: 'turned',
+    });
+    const ops = list(anchored(page([turned]))[0]!, 0, 1);
+    // Nothing else is drawn, so no transform is either.
+    expect(ops.map((op) => op.op)).toEqual(['anchor']);
+    const [mark] = only(ops, 'anchor');
+    // Turned about its center (86, 56): 40 wide and 100 tall.
+    expect(mark!.x).toBeCloseTo(66, 6);
+    expect(mark!.y).toBeCloseTo(6, 6);
+  });
+
+  it('links to an anchor by name, as a block and inline', () => {
+    const target = text('Target', {});
+    const named = el('pdf-view', {}, [target], { anchor: 'end' });
+    const block = el('pdf-link', { height: '20' }, [], { href: '#end' });
+    const inline = el('pdf-text', {}, [
+      el('pdf-link', {}, [createNode('text', '', 'jump')], { href: ' #end' }),
+    ]);
+    const ops = list(anchored(page([block, inline, named]))[0]!, 0, 1);
+    const links = only(ops, 'link');
+    expect(links).toHaveLength(2);
+    for (const link of links) expect(link).toMatchObject({ kind: 'goto', name: 'end' });
+    expect(links[0]).toMatchObject({ x: 36, y: 36, h: 20 });
+  });
+
+  it('writes no link to an unknown name, draws the content and warns', () => {
+    const warnings: string[] = [];
+    const block = el('pdf-link', {}, [text('Lost')], { href: '#nowhere' });
+    const ops = list(anchored(page([block]), warnings)[0]!, 0, 1);
+    expect(ops.map((op) => op.op)).toEqual(['text']);
+    expect(warnings).toEqual(['ngpdf: pdf-link href "#nowhere" names no anchor; no link written']);
+  });
+
+  it('marks only the first of two boxes with the same name, and warns', () => {
+    const warnings: string[] = [];
+    const first = el('pdf-view', { height: '10' }, [], { anchor: 'dup' });
+    const second = el('pdf-view', { height: '10' }, [], { anchor: 'dup' });
+    const ops = list(anchored(page([first, second]), warnings)[0]!, 0, 1);
+    expect(only(ops, 'anchor')).toEqual([{ op: 'anchor', id: 0, name: 'dup', x: 36, y: 36 }]);
+    expect(warnings).toEqual(['ngpdf: duplicate anchor "dup"']);
   });
 });
 

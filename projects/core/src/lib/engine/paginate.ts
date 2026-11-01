@@ -937,8 +937,10 @@ export function paginatePage(
     for (const built of pages) built.decorations.push({ box, x: 0, y: 0 });
   }
   for (const wrapper of wrappers) {
-    // A link's area is drawn with its pieces, so a link wrapper always has them.
-    if (!draws(wrapper.box.style) && wrapper.box.link === undefined) continue;
+    // A link's area and an anchor's place are drawn with its pieces, so such a wrapper always has
+    // them.
+    const marked = wrapper.box.link !== undefined || wrapper.box.anchor !== undefined;
+    if (!draws(wrapper.box.style) && !marked) continue;
     const first = at(placements, wrapper.first);
     const last = at(placements, wrapper.last);
     // `full` is the piece's height before the page bottom cuts it.

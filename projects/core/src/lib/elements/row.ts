@@ -6,6 +6,10 @@ import type { PdfNode } from '../tree/node';
   template: '<ng-content />',
 })
 export class PdfRow {
+  /** Names this element as a place in the document, for `<pdf-link href="#name">`. */
+  readonly anchor = input<string | null | undefined>();
+  /** Adds an entry with this title to the document outline, pointing at this element. */
+  readonly bookmark = input<string | null | undefined>();
   readonly header = input(false, { transform: booleanAttribute });
 
   constructor() {
@@ -13,6 +17,6 @@ export class PdfRow {
   }
 
   pdfProps(): Record<string, unknown> {
-    return { header: this.header() };
+    return { header: this.header(), anchor: this.anchor(), bookmark: this.bookmark() };
   }
 }

@@ -31,7 +31,8 @@ ngpdf v0.1 covers documents built from text, tables, boxes and images. This page
 
 ### Links
 
-- Links open `http:`, `https:` and `mailto:` URLs only. There are no links to a place inside the document.
+- Links open `http:`, `https:` and `mailto:` URLs, or jump to an `anchor` in the same document. There are no links to a page number or to another PDF.
+- A link or bookmark jumps to the top left of the element's first piece, at the zoom the reader has. An anchor on an element that is not drawn as a box of its own, such as a `pdf-text` inside a `pdf-text`, is never placed, so links and bookmarks to it are left out.
 - A link's clickable area is an upright rectangle: inside a `transform` it covers the transformed area's bounding box, and an `overflow` clip does not cut it.
 
 ### Tables
@@ -51,7 +52,7 @@ ngpdf v0.1 covers documents built from text, tables, boxes and images. This page
 ### Not in v0.1
 
 - Server rendering. Render in the browser.
-- SVG and bookmarks.
+- SVG.
 - Forms and encryption.
 - A preview component.
 - Capturing the DOM of a page as a PDF.

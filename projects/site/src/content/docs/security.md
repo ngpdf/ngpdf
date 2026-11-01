@@ -11,7 +11,7 @@ Documents often contain data that came from users or a server. ngpdf is built so
 
 - **Untrusted data in a document.** Text, URLs and style values bound from data are parsed by ngpdf. The parsers are linear: no regular expression with nested quantifiers or overlapping alternatives, so a crafted value cannot cause catastrophic backtracking.
 - **Deep or huge trees.** Limits stop runaway work before it can overflow the stack or the memory (see below).
-- **The PDF as an attack surface.** ngpdf never writes PDF JavaScript, forms or embedded files, and a test checks the output for them. The only action it writes is the link of a `pdf-link`, and only to an absolute `http:`, `https:` or `mailto:` URL; a test renders hostile URLs and checks that no other is written. See [Links](/docs/text-and-fonts#links-pdf-link).
+- **The PDF as an attack surface.** ngpdf never writes PDF JavaScript, forms or embedded files, and a test checks the output for them. The only actions it writes are the links of `pdf-link`: to an absolute `http:`, `https:` or `mailto:` URL, or to a named destination in the same file for a link to an anchor. A test renders hostile URLs and checks that no other action is written. See [Links](/docs/text-and-fonts#links-pdf-link).
 - **Network access.** Images are the only thing ngpdf fetches, with the browser's own `fetch`.
 - **Supply chain.** Runtime dependencies are kept to pdfkit, yoga-layout and linebreak, plus the `tslib` helpers. A new one needs a reason and must pass `npm audit` and OSV-Scanner.
 

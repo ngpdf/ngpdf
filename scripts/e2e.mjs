@@ -42,6 +42,11 @@ const DOCUMENTS = [
     pages: 3,
     contains: ['Stock count', 'Sheet 1 of 3', 'Sheet 3 of 3', '3/3', 'SKU-1069'],
   },
+  {
+    name: 'contents-sample',
+    pages: 3,
+    contains: ['Contents', '1. The route', '3. Next season', 'Back to the contents', 'Page 3 of 3'],
+  },
 ];
 
 const update = process.argv.includes('--update');

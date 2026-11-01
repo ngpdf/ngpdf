@@ -1,6 +1,7 @@
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import {
   createPdfkitWriter,
+  type DocumentInfo,
   type DrawOp,
   type FontName,
   type PdfWriter,
@@ -619,7 +620,15 @@ describe('createPdfkitWriter', () => {
 
     it('writes a link as a borderless Link annotation with a URI action', async () => {
       const pdf = await pdfText([
-        { op: 'link', x: 10, y: 20, w: 30, h: 40, url: 'https://example.com/a?b=(c)' },
+        {
+          op: 'link',
+          x: 10,
+          y: 20,
+          w: 30,
+          h: 40,
+          kind: 'uri',
+          url: 'https://example.com/a?b=(c)',
+        },
       ]);
       expect(pdf).toContain('/Subtype /Link');
       expect(pdf).toContain('/Border [0 0 0]');
@@ -633,7 +642,15 @@ describe('createPdfkitWriter', () => {
     });
 
     it('writes a link in page space, whatever transform or clip it sits in', async () => {
-      const link = { op: 'link', x: 10, y: 20, w: 30, h: 40, url: 'https://example.com/' } as const;
+      const link = {
+        op: 'link',
+        x: 10,
+        y: 20,
+        w: 30,
+        h: 40,
+        kind: 'uri',
+        url: 'https://example.com/',
+      } as const;
       const pdf = await pdfText([
         { op: 'transform', matrix: [0, 1, -1, 0, 100, 50] },
         { op: 'clip', x: 0, y: 0, w: 5, h: 5, radii: SQUARE },
@@ -1016,6 +1033,154 @@ describe('createPdfkitWriter', () => {
       await pdfText([image(shared)]);
       expect(btoaSpy).toHaveBeenCalledTimes(1);
     });
+  });
+});
+
+describe('createPdfkitWriter with anchors, internal links and bookmarks', () => {
+  let writer: PdfWriter;
+  beforeAll(async () => {
+    writer = await createPdfkitWriter({ compress: false });
+  });
+
+  const SHEET = { width: 200, height: 300 };
+
+  async function pdfOf(pages: DrawOp[][], extra: Partial<DocumentInfo> = {}): Promise<string> {
+    const blob = await writer.write(
+      pages.map((ops) => ({ ...SHEET, ops })),
+      { ...info, ...extra },
+    );
+    return new TextDecoder('latin1').decode(new Uint8Array(await blob.arrayBuffer()));
+  }
+
+  /** The object numbers of the pages, in order. */
+  function pageRefs(pdf: string): string[] {
+    const kids = /\/Kids \[([^\]]*)\]/.exec(pdf)?.[1] ?? '';
+    return [...kids.matchAll(/(\d+) 0 R/g)].map((match) => match[1] ?? '');
+  }
+
+  /** The entries of the Dests name tree as `(name) [dest]` strings, in their written order. */
+  function dests(pdf: string): string[] {
+    const names = /\/Dests <<[\s\S]*?\/Names \[([\s\S]*?)\]\n>>/.exec(pdf)?.[1] ?? '';
+    return [...names.matchAll(/(\(.*?\)) (\[[^\]]*\])/g)].map((m) => `${m[1] ?? ''} ${m[2] ?? ''}`);
+  }
+
+  function goTo(name: string, x = 1, y = 2): DrawOp {
+    return { op: 'link', x, y, w: 10, h: 10, kind: 'goto', name };
+  }
+
+  it('makes a linked anchor a named XYZ destination, with a GoTo action to it', async () => {
+    const pdf = await pdfOf([
+      [goTo('intro', 10, 20)],
+      [{ op: 'anchor', id: 0, name: 'intro', x: 30, y: 40 }],
+    ]);
+    const [, second] = pageRefs(pdf);
+    // y is flipped: the sheet is 300 tall. The zoom stays as it is.
+    expect(dests(pdf)).toEqual([`(intro) [${second ?? ''} 0 R /XYZ 30 260 null]`]);
+    expect(pdf).toContain('/Rect [10 270 20 280]');
+    expect(pdf).toMatch(/\/S \/GoTo\s+\/D \(intro\)/);
+    expect(pdf).not.toContain('/URI');
+  });
+
+  it('places a name at its first anchor op, whatever comes later', async () => {
+    const mark = { op: 'anchor', id: 0, name: 'top', x: 0, y: 0 } as const;
+    const pdf = await pdfOf([[goTo('top'), { ...mark, y: 5 }], [mark]]);
+    const [first] = pageRefs(pdf);
+    expect(dests(pdf)).toEqual([`(top) [${first ?? ''} 0 R /XYZ 0 295 null]`]);
+  });
+
+  it('writes nothing for an unused anchor, and no link to an unplaced name', async () => {
+    const pdf = await pdfOf([
+      [{ op: 'anchor', id: 0, name: 'unused', x: 0, y: 0 }, goTo('nowhere')],
+    ]);
+    expect(pdf).not.toContain('unused');
+    expect(pdf).not.toContain('nowhere');
+    expect(pdf).not.toContain('/Annots');
+    expect(dests(pdf)).toEqual([]);
+  });
+
+  it('sorts the names by their bytes, as viewers search them', async () => {
+    const names = ['zeta', 'Zeta', 'alpha', 'é', '__proto__', '10', '9'];
+    const pdf = await pdfOf([
+      [
+        ...names.map((name, id) => ({ op: 'anchor', id, name, x: 0, y: 0 }) as const),
+        ...names.map((name) => goTo(name)),
+      ],
+    ]);
+    expect(dests(pdf).map((entry) => entry.slice(0, entry.indexOf(' [')))).toEqual([
+      '(10)',
+      '(9)',
+      '(Zeta)',
+      '(__proto__)',
+      '(alpha)',
+      '(zeta)',
+      // UTF-16BE with a byte order mark, after every ASCII name.
+      '(þÿ\u0000é)',
+    ]);
+  });
+
+  it('writes the outline in tree order, nested and open', async () => {
+    const pdf = await pdfOf(
+      [
+        [
+          { op: 'anchor', id: 0, x: 0, y: 10 },
+          { op: 'anchor', id: 1, name: 'one', x: 5, y: 50 },
+        ],
+        [{ op: 'anchor', id: 2, x: 0, y: 100 }],
+      ],
+      {
+        outline: [
+          {
+            title: 'Part A',
+            anchor: 0,
+            children: [
+              { title: 'A.1', anchor: 1, children: [] },
+              { title: 'Lost', anchor: 9, children: [{ title: 'Kept', anchor: 2, children: [] }] },
+            ],
+          },
+          { title: 'Part B', anchor: 2, children: [] },
+        ],
+      },
+    );
+    const [first, second] = pageRefs(pdf);
+    const item = (title: string): string =>
+      new RegExp(`<<[^<>]*/Title \\(${title}\\)[^<>]*>>`).exec(pdf)?.[0] ?? '';
+    expect(item('Part A')).toContain(`/Dest [${first ?? ''} 0 R /XYZ 0 290 null]`);
+    expect(item('Part A')).toContain('/Count 2');
+    // A bookmark on a named anchor goes to the name, which then exists.
+    expect(item('A.1')).toContain('/Dest (one)');
+    expect(dests(pdf)).toEqual([`(one) [${first ?? ''} 0 R /XYZ 5 250 null]`]);
+    // An entry whose element was never drawn is left out; its children move up.
+    expect(pdf).not.toContain('(Lost)');
+    expect(item('Kept')).toContain(`/Dest [${second ?? ''} 0 R /XYZ 0 200 null]`);
+    expect(item('Part B')).toContain(`/Dest [${second ?? ''} 0 R /XYZ 0 200 null]`);
+    // Tree order: Part A, then Part B; A.1, then Kept, both under Part A.
+    const ref = (title: string): string =>
+      `${new RegExp(`(\\d+) 0 obj\\s*<<[^<>]*/Title \\(${title}\\)`).exec(pdf)?.[1] ?? '?'} 0 R`;
+    expect(item('Part A')).toContain(`/Next ${ref('Part B')}`);
+    expect(item('Part A')).toContain(`/First ${ref('A.1')}`);
+    expect(item('Part A')).toContain(`/Last ${ref('Kept')}`);
+    expect(item('A.1')).toContain(`/Next ${ref('Kept')}`);
+    expect(item('Kept')).toContain(`/Parent ${ref('Part A')}`);
+    expect(pdf).toMatch(/\/Outlines \d+ 0 R/);
+    // Opening the outline panel stays the document's choice.
+    expect(pdf).not.toContain('/PageMode /UseOutlines');
+  });
+
+  it('keeps the page mode the document asks for alongside an outline', async () => {
+    const pages: DrawOp[][] = [[{ op: 'anchor', id: 0, x: 0, y: 0 }]];
+    const outline = [{ title: 'Only', anchor: 0, children: [] }];
+    expect(await pdfOf(pages, { outline, pageMode: 'UseOutlines' })).toContain(
+      '/PageMode /UseOutlines',
+    );
+    expect(await pdfOf(pages, { outline, pageMode: 'FullScreen' })).toContain(
+      '/PageMode /FullScreen',
+    );
+  });
+
+  it('writes no outline without entries', async () => {
+    const pdf = await pdfOf([[{ op: 'anchor', id: 0, x: 0, y: 0 }]], { outline: [] });
+    expect(pdf).not.toContain('/Outlines');
+    expect(pdf).not.toContain('/PageMode');
   });
 });
 

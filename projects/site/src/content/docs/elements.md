@@ -34,6 +34,15 @@ export class Report {}
 
 Every element also takes a `style` attribute and `[style.*]` bindings. See [Style properties](/docs/style-properties).
 
+`pdf-view`, `pdf-text`, `pdf-image`, `pdf-table`, `pdf-row` and `pdf-cell` also take these two inputs:
+
+| Input | Type | Default | Description |
+| --- | --- | --- | --- |
+| `anchor` | `string \| null \| undefined` | `undefined` | Names the element as a place that `<pdf-link href="#name">` jumps to. Trimmed; an empty name is ignored, and a name already used warns in development mode. |
+| `bookmark` | `string \| null \| undefined` | `undefined` | Adds an entry with this title to the PDF's bookmarks, pointing at the element. Trimmed; an empty title adds no entry. |
+
+See [Links to a place in the document](/docs/text-and-fonts#links-to-a-place-in-the-document) and [Bookmarks](/docs/documents-and-pages#bookmarks).
+
 ## pdf-document
 
 The root of a document. It holds `pdf-page` elements and the PDF's metadata.
@@ -48,7 +57,7 @@ The root of a document. It holds `pdf-page` elements and the PDF's metadata.
 | `language` | `string` | `undefined` | Canonical BCP 47 language tag written as `/Lang`. Empty or invalid values are errors. |
 | `creator` | `string` | `undefined` | Application attribution in `/Creator`; omitted when unset. |
 | `producer` | `string` | `'ngpdf'` | The PDF producer recorded in the metadata. |
-| `pageMode` | `PageMode` | `undefined` | Initial viewer mode: `UseNone`, `UseThumbs` or `FullScreen`. |
+| `pageMode` | `PageMode` | `undefined` | Initial viewer mode: `UseNone`, `UseOutlines` (the bookmarks panel), `UseThumbs` or `FullScreen`. |
 | `pageLayout` | `PageLayout` | `undefined` | Initial layout: `SinglePage`, `OneColumn`, `TwoColumnLeft`, `TwoColumnRight`, `TwoPageLeft` or `TwoPageRight`. |
 
 Only its `pdf-page` children are rendered. Its text styles are inherited by every page. See [Documents and pages](/docs/documents-and-pages).
@@ -103,7 +112,7 @@ A link to a URL. Where a `pdf-view` can go it is a column `pdf-view` whose box i
 
 | Input | Type | Default | Description |
 | --- | --- | --- | --- |
-| `href` | `string \| null \| undefined` | required | An absolute `http:`, `https:` or `mailto:` URL. Any other value, including a missing one, writes no link, with a warning in development mode. |
+| `href` | `string \| null \| undefined` | required | An absolute `http:`, `https:` or `mailto:` URL, or `#name` to jump to the element with `anchor="name"`. Any other value, including a missing one or a name no element has, writes no link, with a warning in development mode. |
 
 ```html
 <pdf-text>Pay at <pdf-link [href]="payUrl" style="color: #1a56db; text-decoration: underline">example.com/pay</pdf-link>.</pdf-text>

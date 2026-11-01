@@ -2,6 +2,7 @@ import type { Edge, Node as YogaNode, Yoga } from 'yoga-layout/load';
 import { createNode, propsOf, type PdfNode } from '../tree/node';
 import type { TableColumn } from '../tree/table-column';
 import type { ImageAsset } from './images';
+import type { AnchorMark, Anchors } from './anchors';
 import { linkUrl } from './link';
 import { anonymousTextStyle, type Edges, type Length, type ResolvedStyle } from './style';
 import { fontChain, type FontRegistry } from './fonts';
@@ -28,8 +29,10 @@ export interface Box {
   readonly border: Edges<number>;
   readonly text?: TextBlock;
   readonly image?: ImageAsset;
-  /** The checked URL of a block pdf-link. */
+  /** The checked URL of a block pdf-link, or `#name` for a link to the anchor `name`. */
   readonly link?: string;
+  /** Set on an element with an `anchor` or a `bookmark`: the display list marks its place. */
+  readonly anchor?: AnchorMark;
   /**
    * A relative box's offsets in points. It is drawn moved by them, with what it holds, while `x`
    * and `y` stay where the flow put it.
@@ -55,6 +58,8 @@ export interface LayoutContext {
   readonly fonts?: FontRegistry;
   /** Characters no font in their `font-family` has; the caller merges them into one warning. */
   readonly warnMissing?: (chars: string[]) => void;
+  /** The document's anchors; without them, every link to `#name` is refused. */
+  readonly anchors?: Anchors;
 }
 
 type Measure = (width: number, widthMode: number) => { width: number; height: number };
@@ -463,7 +468,7 @@ export function layoutBox(
       const visit = (node: PdfNode, style: ResolvedStyle, link: string | undefined): void => {
         for (const child of node.children) {
           if (child.tag === 'pdf-link') {
-            visit(child, styleOf(styles, child), linkUrl(child, ctx.warn));
+            visit(child, styleOf(styles, child), linkUrl(child, ctx.warn, ctx.anchors?.names));
           } else if (child.kind === 'element') {
             visit(child, child.tag === 'pdf-span' ? styleOf(styles, child) : style, link);
           } else if (child.kind === 'text') {
@@ -646,7 +651,9 @@ export function layoutBox(
     const { node: current, yoga: yogaNode } = built;
     const style = styleFor(current);
     const image = ctx.images.get(current);
-    const link = current.tag === 'pdf-link' ? linkUrl(current, ctx.warn) : undefined;
+    const link =
+      current.tag === 'pdf-link' ? linkUrl(current, ctx.warn, ctx.anchors?.names) : undefined;
+    const anchor = ctx.anchors?.marks.get(current);
     const { inset } = style;
     const shift =
       style.position === 'relative'
@@ -679,6 +686,7 @@ export function layoutBox(
         : {}),
       ...(image ? { image } : {}),
       ...(link !== undefined && { link }),
+      ...(anchor && { anchor }),
       ...(shift && (shift.x !== 0 || shift.y !== 0) ? { shift } : {}),
       children: built.children.map((child) => read(child, content)),
     };

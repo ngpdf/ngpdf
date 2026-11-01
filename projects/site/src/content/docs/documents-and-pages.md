@@ -48,7 +48,7 @@ export class MetaDocument {
 | `language` | `string` | Canonical BCP 47 tag in `/Lang`; empty or invalid tags are errors. |
 | `creator` | `string` | Application attribution in `/Creator`; omitted when unset. |
 | `producer` | `string` | `/Producer`; defaults to `ngpdf` instead of PDFKit. |
-| `pageMode` | `PageMode` | Initial viewer mode: `UseNone`, `UseThumbs` or `FullScreen`. |
+| `pageMode` | `PageMode` | Initial viewer mode: `UseNone`, `UseOutlines` (the bookmarks panel), `UseThumbs` or `FullScreen`. |
 | `pageLayout` | `PageLayout` | Initial layout: `SinglePage`, `OneColumn`, `TwoColumnLeft`, `TwoColumnRight`, `TwoPageLeft` or `TwoPageRight`. |
 
 Unset metadata inputs are omitted, except `producer`, which defaults to `ngpdf`, and `creationDate`, which defaults to the time of the render. Pass a fixed `creationDate` when you need the same bytes for the same data, for example in snapshot tests: it is the only time source in a render.
@@ -59,6 +59,27 @@ Rules for the document:
 - Only `pdf-page` children of the document are rendered. Anything else directly inside `pdf-document` is ignored.
 - A `pdf-document` without a `pdf-page` fails with `ngpdf: pdf-document has no pdf-page`. A component without a `pdf-document` fails with `ngpdf: no pdf-document in the rendered component`.
 - Text styles on `pdf-document`, such as `font-size` or `color`, are inherited by every page. Box styles on it are not used.
+
+## Bookmarks
+
+A `bookmark` title on an element adds an entry to the PDF's bookmarks, the outline that PDF viewers show in a side panel. Clicking the entry jumps to the element.
+
+```html
+<pdf-document pageMode="UseOutlines">
+  <pdf-page>
+    <pdf-view bookmark="1. Summary">
+      <pdf-text bookmark="1.1 Totals">…</pdf-text>
+    </pdf-view>
+    <pdf-table bookmark="2. Line items" [columns]="['1fr', 80]">…</pdf-table>
+  </pdf-page>
+</pdf-document>
+```
+
+- `pdf-view`, `pdf-text`, `pdf-image`, `pdf-table`, `pdf-row` and `pdf-cell` take `bookmark`. It needs no `anchor`.
+- Entries keep the order of the template. A bookmarked element inside another bookmarked element becomes its child entry, so the levels follow the nesting. Entries open expanded.
+- An entry jumps where a link to the element's `anchor` would: the top left of its first piece, at the reader's zoom.
+- Titles are trimmed, and an empty title adds no entry. Without any entry, the PDF has no outline.
+- Viewers open the bookmarks panel only when the document asks for it with `pageMode="UseOutlines"`.
 
 ## Page size and orientation
 

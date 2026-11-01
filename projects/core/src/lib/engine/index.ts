@@ -4,6 +4,7 @@
 // eslint-disable-next-line @typescript-eslint/triple-slash-reference
 /// <reference path="./linebreak.d.ts" />
 import { elementChildren, propsOf, type PdfNode } from '../tree/node';
+import { collectAnchors } from './anchors';
 import { displayList } from './display-list';
 export { loadFont } from './font-loading';
 import { parseFontFamily, type FontRegistry, type RegisteredFace } from './fonts';
@@ -24,7 +25,12 @@ import type { Yoga } from 'yoga-layout/load';
 
 import type { PageLayout, PageMode } from '../tree/viewer-preferences';
 
-const PAGE_MODES = ['UseNone', 'UseThumbs', 'FullScreen'] as const satisfies readonly PageMode[];
+const PAGE_MODES = [
+  'UseNone',
+  'UseOutlines',
+  'UseThumbs',
+  'FullScreen',
+] as const satisfies readonly PageMode[];
 const PAGE_LAYOUTS = [
   'SinglePage',
   'OneColumn',
@@ -204,6 +210,8 @@ export async function renderDocument(
     // Component hosts are transparent: the stages below see only pdf-* elements.
     const tree = dissolveHosts(document, warn);
     const styles = resolveStyles(tree, warn);
+    // Before layout: a link to "#name" is checked against every name in the document.
+    const anchors = collectAnchors(tree, warn);
     const [images, fonts] = await Promise.all([
       loadImages(tree, writer),
       registerUsedFonts(options.fonts ?? [], styles, writer),
@@ -219,6 +227,7 @@ export async function renderDocument(
       textCache,
       fonts,
       warnMissing,
+      anchors,
     };
 
     const layouts = elementChildren(tree)
@@ -234,7 +243,9 @@ export async function renderDocument(
         warnMissing,
       }),
     }));
-    return await writer.write(pages, infoOf(document, now));
+    const info = infoOf(document, now);
+    const { outline } = anchors;
+    return await writer.write(pages, outline.length > 0 ? { ...info, outline } : info);
   } finally {
     // Also on failure: a warning often explains why the render broke.
     if (replaced.size > 0) {
