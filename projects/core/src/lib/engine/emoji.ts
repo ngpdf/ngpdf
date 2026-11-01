@@ -46,7 +46,7 @@ export function isEmoji(cluster: string): boolean {
 
 /**
  * The code points of an emoji in lower-case hex joined by `-`, without U+FE0F: `1f44d-1f3fd` for
- * 👍🏽, the file naming of Twemoji and Noto.
+ * 👍🏽. Image sets name files their own way, so an exact vendor naming needs a function source.
  */
 export function emojiCodepoints(cluster: string): string {
   const out: string[] = [];

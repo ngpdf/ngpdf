@@ -5,9 +5,9 @@ export type PdfEmojiImage = string | Uint8Array | Blob | ArrayBuffer;
 
 /**
  * Where emoji images come from. A string is a URL template whose `{codepoints}` is filled with the
- * emoji's code points in lower-case hex joined by `-`, without U+FE0F (`1f44d-1f3fd` for 👍🏽, the
- * file naming of Twemoji and Noto). A function gets the emoji and those code points, and returns
- * its image, or null to draw that emoji as text.
+ * emoji's code points in lower-case hex joined by `-`, without U+FE0F (`1f44d-1f3fd` for 👍🏽).
+ * A function gets the emoji and those code points, and returns its image, or null to draw that
+ * emoji as text; use one to match an image set's own file names.
  */
 export type PdfEmojiSource =
   | string
