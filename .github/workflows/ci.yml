@@ -186,6 +186,14 @@ jobs:
         working-directory: ${{ runner.temp }}
       - run: npx ng add "$RUNNER_TEMP"/ngpdf-core-*.tgz --skip-confirmation --interactive=false --demo-route
         working-directory: ${{ runner.temp }}/fresh-app
+      # The build below must depend on what ng add wrote, so check it is there first.
+      - name: Check the generated files and route
+        run: |
+          grep -q 'export class ExampleDocument' src/app/documents/example-document.ts
+          grep -q 'export class PdfDemo' src/app/documents/pdf-demo.ts
+          grep -q "path: 'pdf-demo'" src/app/app.routes.ts
+          grep -q "import('./documents/pdf-demo')" src/app/app.routes.ts
+        working-directory: ${{ runner.temp }}/fresh-app
       - run: npx ng build
         working-directory: ${{ runner.temp }}/fresh-app
 
