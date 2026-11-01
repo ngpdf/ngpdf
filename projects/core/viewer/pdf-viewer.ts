@@ -11,7 +11,7 @@ import {
   type Type,
 } from '@angular/core';
 import { DomSanitizer, type SafeResourceUrl } from '@angular/platform-browser';
-import { pdfResource, type PdfResourceRef } from '@ngpdf/core';
+import { pdfResource, ɵassertBrowser as assertBrowser, type PdfResourceRef } from '@ngpdf/core';
 
 type ViewerState = 'loading' | 'error' | 'shown';
 
@@ -86,6 +86,7 @@ export class PdfViewer {
   });
 
   constructor() {
+    assertBrowser('pdf-viewer', this.injector);
     // A new document or debounce needs a new resource; new inputs reach the current one. The old
     // one stays on screen until the new one has a PDF, unless it never had one itself.
     effect(() => {

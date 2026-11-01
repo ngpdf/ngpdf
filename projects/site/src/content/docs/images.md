@@ -70,6 +70,7 @@ The `data:` prefix and its `;base64` marker are matched in any case, so `DATA:im
 - A response that is not OK fails, for example with `HTTP 404`.
 - There is no size limit and no timeout: a very large image is downloaded in full.
 - All images of a document load in parallel before layout. The same string `src` used several times in one render is fetched once.
+- On the server, `renderToBuffer` reads an absolute URL only through your `fetchImage`, and refuses a relative one. See [Images and fonts on the server](/docs/server-rendering#images-and-fonts-on-the-server).
 
 ## Errors
 

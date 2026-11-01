@@ -108,7 +108,10 @@ invalidation would buy nothing here.
 
   Every caller would otherwise repeat them, and get the cleanup wrong.
 - **Decision.** Facade. `PdfRenderer.toBlob` and `.download` are the entry points.
-  `renderToBlob`/`downloadPdf` are the same facade for code outside an injection context.
+  `renderToBlob`/`downloadPdf` are the same facade for code outside an injection context, and
+  `renderToBuffer` in `@ngpdf/core/server` is the same facade for Node. It only adds the server's
+  injector and URL policy, and calls the render behind `renderToBlob`, which `@ngpdf/core` exports
+  as `ɵrenderPdf` for its entry points.
 - **Not a Singleton.** It is `providedIn: 'root'` for DI lifetime only. It holds no mutable state;
   each call builds its own pipeline.
 
@@ -203,6 +206,7 @@ projects/core/src/lib/render/     render-tree, PdfRenderer facade       (eager)
 projects/core/src/lib/engine/     hosts, color, style, anchors, fonts, text, images, layout,
                                   paginate, canvas-recorder, display-list, writer, index (lazy)
 projects/core/viewer/             pdf-viewer, entry point @ngpdf/core/viewer (own chunk)
+projects/core/server/             renderToBuffer, entry point @ngpdf/core/server (Node)
 projects/demo/                    the three reference documents
 projects/site/                    ngpdf.dev: landing, docs (Markdown), examples
 scripts/                          dev (Docker), e2e, bundle budget

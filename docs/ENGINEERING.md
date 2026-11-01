@@ -14,6 +14,7 @@ Tests are written first and must fail without the change they cover (see `AGENTS
 | Property | Invariants hold for any input, not only the examples | Vitest + `fast-check` | `engine/*.property.spec.ts` |
 | Component | Real templates (control flow, pipes, DI) build the right tree; the preview component | Vitest (jsdom) + Angular compiler (`@analogjs/vite-plugin-angular`) | `render/*.spec.ts`, `viewer/*.spec.ts` |
 | Integration | The whole engine, with a recording fake `PdfWriter` | Vitest | `engine/engine.spec.ts` |
+| Server | `renderToBuffer` renders with no DOM on pdfkit's Node build, and the server's URL policy | Vitest (node) | `server/*.spec.ts` |
 | End to end | The demo's PDFs in a real Chrome, compared as text with `pdftotext -layout`, and the demo's `pdf-viewer` showing its PDF in Chrome's PDF viewer | `puppeteer-core` + poppler (Docker) | `scripts/e2e.mjs`, `e2e/expected/` |
 | Performance | No regression on a 1,000-row table | `vitest bench` | `engine/*.bench.ts`, weekly CI job |
 | Mutation | The tests catch real faults in the engine | StrykerJS | weekly CI job |
@@ -36,7 +37,7 @@ These invariants are checked for any input:
 ### Coverage gates (Vitest `v8` provider)
 
 - `engine/`: 95% lines, 90% branches.
-- `tree/`, `elements/`, `render/`, `projects/core/viewer/`: 90% lines.
+- `tree/`, `elements/`, `render/`, `projects/core/viewer/`, `projects/core/server/`: 90% lines.
 - CI fails below these numbers. A drop needs a reason in the PR.
 
 ### Mutation testing (StrykerJS)
@@ -119,6 +120,10 @@ These invariants are checked for any input:
    file list of `npm pack --dry-run` and fails on a spec, bench or test helper, or a missing
    LICENSE or README.
 9. **Dependency scans:** OSV-Scanner and `npm audit` (see "Dependency vulnerabilities").
+10. **Server:** on Node 22 and 24, `npm run build:core`, then `node scripts/server-check.mjs`. It
+    packs `dist/core`, installs the tarball in an empty directory, renders a JIT-compiled document
+    with `@ngpdf/core/server` under plain `node` (no DOM), checks that a remote image is refused,
+    and checks the PDF's text with `pdftotext`.
 
 ### Scheduled jobs (weekly)
 
@@ -150,6 +155,7 @@ often comes from users or a server. The risks, and the answer to each:
 | Denial of service from data: huge or deeply nested content, or regex backtracking on a style value | Linear parsers, `regexp/no-super-linear-backtracking`, nesting and size limits (`docs/ARCHITECTURE.md`), fast-check timing properties |
 | Script in the output | ngpdf never writes PDF JavaScript, forms or embedded files, and no action other than the URI action of a link to a URL or the GoTo action of a link to a named destination in the same file. A `pdf-note` is a Text annotation with no action. Text is drawn as text, and pdfkit escapes strings. A test checks that the PDF bytes contain no `/JavaScript`, `/JS`, `/OpenAction` or `/Launch` |
 | Image URLs | Fetched with the browser's `fetch`, under the page's CORS and CSP, with `credentials: 'same-origin'`. ngpdf adds no headers and follows no redirects of its own |
+| Image and font URLs on the server (SSRF) | `renderToBuffer` fetches nothing itself: an absolute URL is read only through the app's `fetchImage` and refused without it, and a relative URL is refused. Tests in `engine/images.spec.ts`, `engine/font-loading.spec.ts` and `server/render-to-buffer.spec.ts` check both refusals |
 | Links (`pdf-link`) | Only absolute `http:`, `https:` and `mailto:` URLs are written, parsed with `URL` and in their normalized form, as a borderless Link annotation with a URI action. Any other scheme, a relative URL or one that does not parse writes no link: the content is drawn and a dev-mode warning names the URL. A link to `#name` is a GoTo action to the named destination of that anchor, and a name no anchor has writes no link. A test renders hostile `href`s and checks that every action in the bytes is a `/URI` to http, https or mailto, or a `/GoTo` to a named destination in the file |
 | A compromised dependency | Three runtime dependencies only (pdfkit, yoga-layout, linebreak), plus the scanning and update policy below |
 

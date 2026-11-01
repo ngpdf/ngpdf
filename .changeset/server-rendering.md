@@ -1,0 +1,5 @@
+---
+'@ngpdf/core': minor
+---
+
+Adds server rendering. `renderToBuffer` from the new entry point `@ngpdf/core/server` renders a document to PDF bytes in Node, with no DOM: in a plain Node script, or in an Angular SSR route, where you can pass the app's `injector` so the document uses its services. It takes the same `inputs` as `renderToBlob`, plus `providers` such as `providePdfFonts`, and returns a `Uint8Array` you can send with `res.end()` or write to a file. Each call is isolated, so renders can run at the same time. On the server ngpdf fetches nothing by itself: an image or font URL is read only through the `fetchImage` function you pass, where you can allow only your own hosts, and is refused without it, so a URL from user data cannot make your server request internal addresses. Relative URLs are refused on the server. Data URLs and bytes work as before. `downloadPdf`, `PdfDownload`, `pdfResource` and `pdf-viewer` now throw `ngpdf: … needs a browser` when they run on the server instead of failing later; in an SSR app, put a `pdf-viewer` or a component that uses `pdfResource` in a `@defer` block.

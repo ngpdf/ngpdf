@@ -7,7 +7,8 @@
     // yet (a fresh clone, or mid-rebuild), so the editor still resolves the import.
     "paths": {
       "@ngpdf/core": ["./dist/core", "./projects/core/src/public-api.ts"],
-      "@ngpdf/core/viewer": ["./dist/core/viewer", "./projects/core/viewer/public-api.ts"]
+      "@ngpdf/core/viewer": ["./dist/core/viewer", "./projects/core/viewer/public-api.ts"],
+      "@ngpdf/core/server": ["./dist/core/server", "./projects/core/server/public-api.ts"]
     },
     "strict": true,
     "noUncheckedIndexedAccess": true,

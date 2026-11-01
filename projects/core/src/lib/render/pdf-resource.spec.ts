@@ -3,6 +3,7 @@ import {
   ApplicationRef,
   Component,
   EnvironmentInjector,
+  PLATFORM_ID,
   createEnvironmentInjector,
   signal,
 } from '@angular/core';
@@ -197,6 +198,17 @@ describe('pdfResource', () => {
     await settle();
 
     expect(pdf.status()).toBe('resolved');
+  });
+
+  it('throws under a server platform, before any render', () => {
+    const injector = createEnvironmentInjector(
+      [{ provide: PLATFORM_ID, useValue: 'server' }],
+      TestBed.inject(EnvironmentInjector),
+    );
+    expect(() => pdfResource(TestDocument, { injector })).toThrow(
+      'ngpdf: pdfResource needs a browser; on the server, use renderToBuffer from @ngpdf/core/server',
+    );
+    expect(renders.calls).toEqual([]);
   });
 
   it('throws outside an injection context when no injector is given', () => {

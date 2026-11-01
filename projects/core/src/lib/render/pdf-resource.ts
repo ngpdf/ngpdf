@@ -10,6 +10,7 @@ import {
   type Signal,
   type Type,
 } from '@angular/core';
+import { assertBrowser } from './browser-only';
 import { renderToBlob } from './pdf-renderer';
 
 export interface PdfResourceOptions {
@@ -46,6 +47,7 @@ export function pdfResource<T>(
 ): PdfResourceRef {
   if (!options.injector) assertInInjectionContext(pdfResource);
   const injector = options.injector ?? inject(Injector);
+  assertBrowser('pdfResource', injector);
   const environment = injector.get(EnvironmentInjector);
   const debounce = options.debounce ?? 0;
   const inputs = options.inputs ?? (() => ({}));

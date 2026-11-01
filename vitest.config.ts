@@ -7,7 +7,7 @@ export default defineConfig({
   plugins: [angular({ tsconfig: 'projects/core/tsconfig.spec.json' })],
   resolve: {
     alias: [
-      // The viewer entry point imports the primary one by its package name, as ng-packagr needs.
+      // The viewer and server entry points import the primary one by its package name, as ng-packagr needs.
       {
         find: /^@ngpdf\/core$/,
         replacement: fileURLToPath(new URL('./projects/core/src/public-api.ts', import.meta.url)),
@@ -28,11 +28,16 @@ export default defineConfig({
     include: [
       'projects/core/src/**/*.spec.ts',
       'projects/core/viewer/**/*.spec.ts',
+      'projects/core/server/**/*.spec.ts',
       'scripts/**/*.spec.mjs',
     ],
     coverage: {
       provider: 'v8',
-      include: ['projects/core/src/lib/**/*.ts', 'projects/core/viewer/**/*.ts'],
+      include: [
+        'projects/core/src/lib/**/*.ts',
+        'projects/core/viewer/**/*.ts',
+        'projects/core/server/**/*.ts',
+      ],
       exclude: ['**/*.spec.ts', '**/*.bench.ts', '**/*.d.ts'],
       reporter: ['text-summary', 'lcov'],
       // Per-folder gates from docs/ENGINEERING.md.
@@ -42,6 +47,7 @@ export default defineConfig({
         'projects/core/src/lib/elements/**': { lines: 90 },
         'projects/core/src/lib/render/**': { lines: 90 },
         'projects/core/viewer/**': { lines: 90 },
+        'projects/core/server/**': { lines: 90 },
       },
     },
   },
