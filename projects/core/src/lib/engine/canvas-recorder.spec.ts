@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { PdfCanvasContext, PdfCanvasPaint } from '../tree/canvas-context';
 import { MAX_CANVAS_CALLS, recordCanvas } from './canvas-recorder';
 import type { PathSegment } from './writer';
@@ -448,6 +448,43 @@ describe('recordCanvas', () => {
       expect(fails((ctx) => ctx.lineTo(Number.NaN, 0))).toThrow(
         /^ngpdf: pdf-canvas lineTo got a non-finite number$/,
       );
+    });
+
+    it('keeps the error thrown by paint as the cause', () => {
+      const original = new Error('no data');
+      let caught: unknown;
+      try {
+        record(() => {
+          throw original;
+        });
+      } catch (error) {
+        caught = error;
+      }
+      expect(caught).toBeInstanceOf(Error);
+      expect((caught as Error).cause).toBe(original);
+    });
+
+    it('rejects an async paint, whose drawing would come after the render', async () => {
+      // The plainest async paint: it returns a promise and nothing else.
+      // eslint-disable-next-line @typescript-eslint/require-await
+      const paint = (async () => undefined) as unknown as PdfCanvasPaint;
+      expect(() => record(paint)).toThrow('ngpdf: pdf-canvas paint must be synchronous');
+      const thenable = (() => ({ then: () => undefined })) as unknown as PdfCanvasPaint;
+      expect(() => record(thenable)).toThrow('ngpdf: pdf-canvas paint must be synchronous');
+      // A rejected promise is handled here, so it cannot surface as an unhandled rejection.
+      const unhandled = vi.fn();
+      process.on('unhandledRejection', unhandled);
+      try {
+        const failing = (async () => {
+          await Promise.resolve();
+          throw new Error('late');
+        }) as unknown as PdfCanvasPaint;
+        expect(() => record(failing)).toThrow('ngpdf: pdf-canvas paint must be synchronous');
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        expect(unhandled).not.toHaveBeenCalled();
+      } finally {
+        process.off('unhandledRejection', unhandled);
+      }
     });
 
     it('throws when the context is used after paint returned', () => {

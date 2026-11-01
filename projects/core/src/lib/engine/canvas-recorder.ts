@@ -63,6 +63,14 @@ function shown(value: unknown): string {
   return typeof value === 'string' ? value : typeof value;
 }
 
+function isThenable(value: unknown): value is PromiseLike<unknown> {
+  return (
+    (typeof value === 'object' || typeof value === 'function') &&
+    value !== null &&
+    typeof (value as { then?: unknown }).then === 'function'
+  );
+}
+
 function fail(message: string): never {
   throw new Error(`ngpdf: pdf-canvas ${message}`);
 }
@@ -396,14 +404,19 @@ export function recordCanvas(paint: unknown, size: PdfCanvasSize): readonly Shap
   };
 
   try {
-    (paint as (ctx: PdfCanvasContext, size: PdfCanvasSize) => unknown)(ctx, {
+    const result = (paint as (ctx: PdfCanvasContext, size: PdfCanvasSize) => unknown)(ctx, {
       width: size.width,
       height: size.height,
     });
+    if (isThenable(result)) {
+      // Its later calls throw, since the context closes below; nobody else would handle that.
+      result.then(undefined, () => undefined);
+      check(false, 'paint must be synchronous; it returned a promise');
+    }
   } catch (error) {
     if (error instanceof Error && own.has(error)) throw error;
     const message = error instanceof Error ? error.message : String(error);
-    fail(`paint failed: ${message}`);
+    throw new Error(`ngpdf: pdf-canvas paint failed: ${message}`, { cause: error });
   } finally {
     open = false;
   }
