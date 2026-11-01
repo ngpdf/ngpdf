@@ -113,11 +113,13 @@ NGPDF_APT=poppler-utils ./scripts/dev node scripts/server-check.mjs   # packed d
   - `ɵINJECTOR_SCOPE` is private: it is read from the `@angular/core` namespace when a render
     needs it, and a missing one throws `ngpdf: this @angular/core has no ɵINJECTOR_SCOPE, …`. CI
     runs the server check against the lowest `@angular/core` of the peer range too.
-  - With `renderToBuffer`, an absolute image or font URL is read only through the app's
-    `fetchImage`, and refused without it: `ngpdf: remote image "<url>" refused on the server;
-    pass fetchImage` (`remote font` for fonts). A relative URL throws `ngpdf: relative image URL
-    "<url>" on the server`. Data URLs and bytes always work. Font URLs are cached per render, never
-    in the injector's font set, so one render never gets bytes another's `fetchImage` read.
+  - With `renderToBuffer`, an `http:` or `https:` image or font URL is read only through the
+    app's `fetchImage`, and refused without it: `ngpdf: remote image "<url>" refused on the
+    server; pass fetchImage` (`remote font` for fonts). A relative URL throws `ngpdf: relative
+    image URL "<url>" on the server`, and any other scheme throws `ngpdf: image URL "<url>" is not
+    http or https; …`; neither reaches `fetchImage`. Data URLs and bytes always work. Font URLs
+    are cached per render, never in the injector's font set, so one render never gets bytes
+    another's `fetchImage` read.
   - On the server (no global `document`, or the `server` platform), `downloadPdf` and
     `pdfResource` given an `injector` throw `ngpdf: <name> needs a browser; …` before any render.
     `pdfResource` made in an injection context stays `idle`, and `pdf-viewer` shows its loading

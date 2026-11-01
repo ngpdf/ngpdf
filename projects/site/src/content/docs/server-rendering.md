@@ -80,7 +80,7 @@ await writeFile('invoice.pdf', await renderToBuffer(Invoice, { inputs: { number:
 
 ## In an Angular SSR app
 
-In an app with Angular SSR, a PDF is one more route of the Express server in `server.ts`:
+In an app with Angular SSR, a PDF is one more route of the Express server in `server.ts`. The id in the URL comes from the caller, so check that the signed-in user may see that invoice before rendering it, and keep the PDF out of caches:
 
 ```ts
 import { providePdfFonts } from '@ngpdf/core';
@@ -92,12 +92,19 @@ const notoSans = new Uint8Array(await readFile('fonts/NotoSans-Regular.ttf'));
 
 app.get('/invoices/:id.pdf', async (req, res, next) => {
   try {
-    const invoice = await invoices.find(req.params.id);
+    // Your own authentication and data access: a user may read only their own invoices.
+    const user = await currentUser(req);
+    const invoice = user && (await invoices.find(req.params.id));
+    if (!invoice || invoice.customerId !== user.customerId) {
+      res.sendStatus(404);
+      return;
+    }
     const pdf = await renderToBuffer(Invoice, {
       inputs: { invoice },
       providers: [providePdfFonts([{ family: 'Noto Sans', src: notoSans }])],
     });
-    res.type('application/pdf').end(pdf);
+    // An invoice is personal: no browser or shared cache may keep a copy.
+    res.set('Cache-Control', 'private, no-store').type('application/pdf').end(pdf);
   } catch (error) {
     next(error);
   }
@@ -127,7 +134,8 @@ A server that fetched any URL found in a document could be made to fetch interna
 - `data:` URLs and bytes (`Blob`, `ArrayBuffer`, or a `Uint8Array` such as a Node `Buffer`) always work, for images and fonts.
 - An absolute URL, such as `https://…`, is read only through `fetchImage`. Without it, the render rejects with `ngpdf: remote image "<url>" refused on the server; pass fetchImage`.
 - A relative URL, such as `/assets/logo.png`, has no page to resolve against. It rejects with `ngpdf: relative image URL "<url>" on the server`, with or without `fetchImage`.
-- Font URLs in `providePdfFonts` follow the same rules through the same `fetchImage`, with `remote font` and `relative font URL` in the messages.
+- Only `http:` and `https:` URLs reach `fetchImage`. Any other scheme, such as `file:///etc/passwd`, `ftp://…`, or `localhost:3000/a.png` and `C:\logo.png` (which parse as the schemes `localhost:` and `c:`), rejects with `ngpdf: image URL "<url>" is not http or https; the server reads no other scheme`.
+- Font URLs in `providePdfFonts` follow the same rules through the same `fetchImage`, with `font` in place of `image` in the messages.
 - `<url>` is shown without its query string and fragment, which often carry a token. `fetchImage` gets the whole URL.
 - If `fetchImage` rejects, the render rejects with `ngpdf: could not load image "<url>": <reason>` (or `font`).
 
@@ -182,6 +190,6 @@ const pdf = await renderToBuffer(Invoice, { inputs: { invoice }, fetchImage });
 
 ## Limits
 
-- Node versions: those Angular 22 supports (`^22.22.3`, `^24.15.0` or `>=26.0.0`). The check in CI runs Node 22 and 24, with `@angular/core` 22.0.0 as well as the version this repository builds with.
+- Node versions: those Angular 22 supports, `^22.22.3`, `^24.15.0` or `^26.0.0` in its [version table](https://angular.dev/reference/versions). The check in CI runs Node 22 and 24, with `@angular/core` 22.0.0 as well as the version this repository builds with.
 - Nothing that needs a DOM: the APIs in "What needs a browser", and anything in your document that uses `DOCUMENT`, `window` or browser APIs. A document's injector without `injector` has a placeholder `DOCUMENT` with nothing in it.
 - The engine uses pdfkit's Node build, which Node picks through pdfkit's package exports, with its own standard font metrics. Yoga's WebAssembly is compiled once per process.

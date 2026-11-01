@@ -43,7 +43,7 @@ Values interpolated into a document are drawn as text. They are not parsed as HT
 
 ## On the server
 
-A server that fetched every URL found in a document could be pointed at internal addresses (server-side request forgery). `renderToBuffer` from `@ngpdf/core/server` therefore refuses absolute image and font URLs unless you pass `fetchImage`, which reads them for it, and it refuses relative URLs. This holds for `renderToBuffer` only: on a server, render with it rather than with `renderToBlob` or `PdfRenderer.toBlob`. In `fetchImage`, allow only the hosts you expect, refuse redirects, and set a timeout and a size limit. See [Images and fonts on the server](/docs/server-rendering#images-and-fonts-on-the-server).
+A server that fetched every URL found in a document could be pointed at internal addresses (server-side request forgery). `renderToBuffer` from `@ngpdf/core/server` therefore refuses `http:` and `https:` image and font URLs unless you pass `fetchImage`, which reads them for it. It refuses relative URLs and every other scheme, such as `file:`, without calling `fetchImage`. The guarantee depends on your `fetchImage`: restrict it to the hosts you expect. This holds for `renderToBuffer` only: on a server, render with it rather than with `renderToBlob` or `PdfRenderer.toBlob`. In `fetchImage`, allow only the hosts you expect, refuse redirects, and set a timeout and a size limit. See [Images and fonts on the server](/docs/server-rendering#images-and-fonts-on-the-server).
 
 The layout engine, Yoga, is WebAssembly that ngpdf compiles in the browser. If your site sets a Content-Security-Policy with a `script-src` directive, it needs `'wasm-unsafe-eval'` for WebAssembly to compile in browsers that enforce that rule.
 
