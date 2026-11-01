@@ -62,6 +62,20 @@ async function formatted(tree: UnitTestTree, ...paths: string[]): Promise<boolea
   );
 }
 
+/** The values of the string literals passed to `import()` in `source`, as TypeScript reads them. */
+function importSpecifiers(source: string): string[] {
+  const specifiers: string[] = [];
+  const visit = (node: ts.Node): void => {
+    if (ts.isCallExpression(node) && node.expression.kind === ts.SyntaxKind.ImportKeyword) {
+      const [argument] = node.arguments;
+      if (argument && ts.isStringLiteral(argument)) specifiers.push(argument.text);
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(ts.createSourceFile('routes.ts', source, ts.ScriptTarget.Latest, true));
+  return specifiers;
+}
+
 /**
  * Writes the tree to disk and compiles the project with the Angular compiler and the workspace's
  * own tsconfig (strict, strictTemplates), with `@ngpdf/core` mapped to this repository's sources.
@@ -289,22 +303,27 @@ export const routes: Routes = [
       expect(routes).toContain(
         `loadComponent: () => import("./client's-documents/pdf-demo").then((m) => m.PdfDemo),`,
       );
+      expect(importSpecifiers(routes)).toEqual([`./client's-documents/pdf-demo`]);
       const { diagnostics } = ts.transpileModule(routes, { reportDiagnostics: true });
       expect(diagnostics).toEqual([]);
       expect(await formatted(tree, routesPath)).toEqual([true]);
       expect(await compile(tree, 'projects/app')).toEqual([]);
     }, 120_000);
 
-    it('escapes a control character in --path instead of breaking the import', async () => {
+    it.each([
+      ['a newline', 'odd\nname'],
+      ['a backtick and ${', 'a`b${c}'],
+      ['</script>', 'x</script>y'],
+    ])('writes %s in --path as an inert string literal', async (_, folder) => {
       const tree = await ngAdd(await application(await workspace(), 'app'), {
         demoRoute: true,
-        path: 'projects/app/src/app/odd\nname',
+        path: `projects/app/src/app/${folder}`,
       });
 
       const routes = tree.readContent(routesPath);
-      expect(routes).toContain(`import("./odd\\nname/pdf-demo")`);
       const { diagnostics } = ts.transpileModule(routes, { reportDiagnostics: true });
       expect(diagnostics).toEqual([]);
+      expect(importSpecifiers(routes)).toEqual([`./${folder}/pdf-demo`]);
     });
 
     it('finds a routes array behind satisfies', async () => {
