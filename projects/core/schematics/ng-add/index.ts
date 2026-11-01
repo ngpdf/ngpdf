@@ -38,13 +38,17 @@ export function ngAdd(options: Schema): Rule {
           `${documentFile} was already there, so it may not export it.`,
       );
     } else if (options.demoRoute) {
-      rules.push(
-        template('demo', folder, 'pdf-demo.ts', prefix),
-        addDemoRoute(
-          posix.join(sourceRoot, 'app/app.routes.ts'),
-          posix.join(folder, 'pdf-demo.ts'),
-        ),
-      );
+      const demoFile = posix.join(folder, 'pdf-demo.ts');
+      rules.push(template('demo', folder, 'pdf-demo.ts', prefix));
+      if (tree.exists(demoFile)) {
+        // The route imports PdfDemo, which a file of the user's may not export.
+        context.logger.warn(
+          `ngpdf: no pdf-demo route added: it imports PdfDemo, and ` +
+            `${demoFile} was already there, so it may not export it.`,
+        );
+      } else {
+        rules.push(addDemoRoute(posix.join(sourceRoot, 'app/app.routes.ts'), demoFile));
+      }
     }
     return chain(rules);
   };
