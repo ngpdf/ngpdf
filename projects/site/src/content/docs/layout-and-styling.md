@@ -28,7 +28,7 @@ What has no effect:
 
 - `class` and `[class.*]` bindings, and the component's `styles` or `styleUrl`. They are CSS for the DOM, and a document has no DOM.
 - Styles on the host element of your own components. ngpdf ignores them with a dev-mode warning. See [Components in documents](/docs/components-in-documents).
-- Properties ngpdf does not know, such as `display`, `position`, `top`, `flex-wrap`, `font` or `background`. They are ignored without a warning.
+- Properties ngpdf does not know, such as `display`, `flex-wrap`, `font`, `z-index` or `box-shadow`. They are ignored without a warning.
 
 The style attribute is split on `;` outside quotes and parentheses, so a value such as `url(data:image/png;base64,...)` or `"A;B"` stays whole. Keywords are matched in any case, as in CSS: `text-align: CENTER` is `center` and `font-weight: BOLD` is `bold`. `!important` and `var()` are not supported.
 
@@ -107,7 +107,7 @@ Anything else, such as `hsl()`, `currentColor` or `var(--brand)`, throws `ngpdf:
 - `border: <width> <style> <color>`, in any order, with every part optional. The width defaults to 1 and the color to black. `none` and `hidden` remove the border.
 - Per side: `border-top`, `border-right`, `border-bottom`, `border-left`, and `border-<side>-width`, `border-<side>-color`. `border-width` and `border-color` take one to four values.
 - Only solid lines are drawn. `dashed`, `dotted`, `double`, `groove`, `ridge`, `inset` and `outset` are drawn solid, with a dev-mode warning. `border-style` on its own is ignored.
-- `thin`, `medium` and `thick` are not supported as widths.
+- `thin`, `medium` and `thick` are accepted as border widths (1pt, 3pt and 5pt).
 - `border-radius` takes one to four lengths, from the top-left corner clockwise, as in CSS. `border-top-left-radius`, `border-top-right-radius`, `border-bottom-right-radius` and `border-bottom-left-radius` set one corner. The background and the borders both follow the rounded corners. When the radii on a side add up to more than its length, all four are scaled down together.
 - Where two border sides of different widths or colors meet at a rounded corner, each keeps its own up to the middle of the arc.
 - A view split across pages keeps square corners where the page cuts it.
@@ -250,7 +250,7 @@ What debug does and does not change:
 
 ## Inheritance
 
-Text styles are inherited from parent to child: `color`, `font-family`, `font-size`, `font-weight`, `font-style`, `line-height`, `text-align`, `text-decoration`, `letter-spacing`, `text-transform` and `hyphens`. Set them on a `pdf-page`, a `pdf-view` or a `pdf-cell` and every text inside follows. No other property is inherited.
+Text styles are inherited from parent to child: `color`, `font-family`, `font-size`, `font-weight`, `font-style`, `line-height`, `text-align`, `text-decoration`, `letter-spacing`, `text-transform`, `hyphens`, `orphans` and `widows`. Set them on a `pdf-page`, a `pdf-view` or a `pdf-cell` and every text inside follows. No other property is inherited.
 
 ## What throws
 
