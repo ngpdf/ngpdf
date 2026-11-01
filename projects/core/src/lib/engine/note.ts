@@ -1,5 +1,5 @@
 import { propsOf, type PdfNode } from '../tree/node';
-import type { NoteIcon } from '../tree/note-icon';
+import { NOTE_ICONS, type NoteIcon } from '../tree/note-icon';
 import { show } from './style';
 import { collapseWhitespace } from './text';
 
@@ -13,18 +13,8 @@ export interface NoteContent {
   readonly open: boolean;
 }
 
-const ICONS: ReadonlySet<string> = new Set<NoteIcon>([
-  'comment',
-  'note',
-  'help',
-  'key',
-  'insert',
-  'paragraph',
-  'new-paragraph',
-]);
-
 function isIcon(value: unknown): value is NoteIcon {
-  return typeof value === 'string' && ICONS.has(value);
+  return typeof value === 'string' && (NOTE_ICONS as readonly string[]).includes(value);
 }
 
 /**

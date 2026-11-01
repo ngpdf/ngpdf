@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createNode, type PdfNode } from '../tree/node';
+import { NOTE_ICONS } from '../tree/note-icon';
 import { noteOf } from './note';
 
 function note(texts: string[], props: Record<string, unknown> = {}): PdfNode {
@@ -41,12 +42,29 @@ describe('noteOf', () => {
     }
   });
 
+  it('takes its icons from one frozen list', () => {
+    expect(Object.isFrozen(NOTE_ICONS)).toBe(true);
+    expect([...NOTE_ICONS]).toEqual([
+      'comment',
+      'note',
+      'help',
+      'key',
+      'insert',
+      'paragraph',
+      'new-paragraph',
+    ]);
+    for (const icon of NOTE_ICONS) expect(noteOf(note(['x'], { icon })).icon).toBe(icon);
+  });
+
   it('throws on an unknown icon', () => {
     expect(() => noteOf(note(['x'], { icon: 'star' }))).toThrow(
       'ngpdf: unknown icon "star" on pdf-note',
     );
     expect(() => noteOf(note(['x'], { icon: 'toString' }))).toThrow(
       'ngpdf: unknown icon "toString" on pdf-note',
+    );
+    expect(() => noteOf(note(['x'], { icon: '__proto__' }))).toThrow(
+      'ngpdf: unknown icon "__proto__" on pdf-note',
     );
   });
 });
