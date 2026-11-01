@@ -1,4 +1,5 @@
-import type { PdfNode } from '../tree/node';
+import { propsOf, type PdfNode } from '../tree/node';
+import { recordCanvas, type ShapeOp } from './canvas-recorder';
 import { toHex, type Color } from './color';
 import { fontChain, fontFor, shapeText, type FontRegistry } from './fonts';
 import { graphemeCount } from './graphemes';
@@ -13,7 +14,7 @@ import {
   type DrawOp,
   type FontMetrics,
   type Matrix,
-  type PathSegment,
+  type OpenSegment,
   type Point,
 } from './writer';
 
@@ -28,6 +29,8 @@ export interface DisplayListOptions {
   readonly warnMissing?: (chars: string[]) => void;
   /** Outlines every box, the page's content area and each text line, after the sheet's ops. */
   readonly debug?: boolean;
+  /** The shapes of each pdf-canvas, from `paintCanvases`; a canvas not in it draws nothing. */
+  readonly canvases?: ReadonlyMap<Box, readonly ShapeOp[]>;
 }
 
 /** The op color and opacity for `color`; null when its alpha leaves nothing to paint. */
@@ -367,6 +370,23 @@ function drawBox(
     }
   }
 
+  const shapes = numbering.options.canvases?.get(box);
+  if (shapes && shapes.length > 0) {
+    const clipHeight = Math.min(contentTop + contentHeight, limit) - contentTop;
+    if (clipHeight > 0 && contentWidth > 0) {
+      out.push({
+        op: 'clip',
+        x: contentLeft,
+        y: contentTop,
+        w: contentWidth,
+        h: clipHeight,
+        radii: NOT_ROUNDED,
+      });
+      for (const shape of shapes) out.push(placeShape(shape, contentLeft, contentTop));
+      out.push({ op: 'unclip' });
+    }
+  }
+
   if (contains) drawDeferred(absolutes, limit, numbering, out);
 
   if (clips) out.push({ op: 'unclip' });
@@ -403,6 +423,55 @@ function innerRadii(radii: Corners<number>, border: Box['border']): Corners<numb
 }
 
 const NOT_CUT = { top: false, bottom: false } as const;
+
+const NOT_ROUNDED: Corners<number> = { topLeft: 0, topRight: 0, bottomRight: 0, bottomLeft: 0 };
+
+/** A recorded canvas shape moved to the canvas's content box; a faded canvas's group fades it. */
+function placeShape(shape: ShapeOp, dx: number, dy: number): ShapeOp {
+  const move = (point: Point): Point => ({ x: point.x + dx, y: point.y + dy });
+  return {
+    ...shape,
+    segments: shape.segments.map((segment) => {
+      switch (segment.kind) {
+        case 'curve':
+          return { ...segment, c1: move(segment.c1), c2: move(segment.c2), to: move(segment.to) };
+        case 'close':
+          return segment;
+        default:
+          return { ...segment, to: move(segment.to) };
+      }
+    }),
+  };
+}
+
+/**
+ * Runs the paint function of every pdf-canvas on the pages once, with its content box size, and
+ * keeps its shapes for the display list. A canvas drawn on several sheets, in a fixed view or a
+ * repeated header row, is the same box on each, so it is painted once.
+ */
+export function paintCanvases(pages: readonly PageLayout[]): ReadonlyMap<Box, readonly ShapeOp[]> {
+  const painted = new Map<Box, readonly ShapeOp[]>();
+  const visit = (box: Box): void => {
+    if (box.node.tag === 'pdf-canvas' && !painted.has(box)) {
+      const { padding, border } = box;
+      const width = box.w - padding.left - border.left - padding.right - border.right;
+      const height = box.h - padding.top - border.top - padding.bottom - border.bottom;
+      painted.set(
+        box,
+        recordCanvas(propsOf(box.node)['paint'], {
+          width: Math.max(0, width),
+          height: Math.max(0, height),
+        }),
+      );
+    }
+    for (const child of box.children) visit(child);
+  };
+  for (const page of pages) {
+    for (const placed of [...page.decorations, ...page.placed]) visit(placed.box);
+    if (page.pageNumber) visit(page.pageNumber.box);
+  }
+  return painted;
+}
 
 function offsetIn(offset: Offset, size: number): number {
   return typeof offset === 'number' ? offset : (offset.percent / 100) * size;
@@ -486,7 +555,7 @@ interface Rect {
 
 interface OpenPath {
   readonly from: Point;
-  readonly segments: readonly PathSegment[];
+  readonly segments: readonly OpenSegment[];
 }
 
 /** A corner's key, where it sits in the rect, and which way its arc's center lies from there. */
@@ -521,7 +590,7 @@ function polar(center: Point, radius: number, degrees: number): Point {
 }
 
 /** A 45 degree arc as one cubic curve. */
-function arc(center: Point, radius: number, from: number, to: number): PathSegment {
+function arc(center: Point, radius: number, from: number, to: number): OpenSegment {
   const a = (from * Math.PI) / 180;
   const b = (to * Math.PI) / 180;
   const k = (4 / 3) * Math.tan((b - a) / 4) * radius;
@@ -556,7 +625,7 @@ function roundedSide(
   });
   const c1 = center(first, r1);
   const c2 = center(second, r2);
-  const segments: PathSegment[] = [];
+  const segments: OpenSegment[] = [];
   const from = polar(c1, r1 - half, r1 > 0 ? angle - 45 : angle);
   if (r1 > 0) segments.push(arc(c1, r1 - half, angle - 45, angle));
   segments.push({ kind: 'line', to: polar(c2, r2 - half, angle) });

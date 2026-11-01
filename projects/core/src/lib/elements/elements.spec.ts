@@ -11,8 +11,10 @@ import { TestBed } from '@angular/core/testing';
 import { afterEach, beforeAll, describe, expect, expectTypeOf, it } from 'vitest';
 import { elementChildren, propsOf, textContent, type PdfNode } from '../tree/node';
 import { PdfRendererFactory } from '../tree/pdf-renderer-factory';
+import type { PdfCanvasContext, PdfCanvasPaint, PdfCanvasSize } from '../tree/canvas-context';
 import {
   PDF_ELEMENTS,
+  type PdfCanvas,
   type PdfCell,
   type PdfDocument,
   type PdfImage,
@@ -166,6 +168,21 @@ class NotesDocument {
   readonly reviewer: string | null = null;
 }
 
+@Component({
+  selector: 'pdf-test-canvas',
+  imports: [PDF_ELEMENTS],
+  template: `
+    <pdf-document>
+      <pdf-canvas [paint]="draw" style="height: 40px">ignored text</pdf-canvas>
+    </pdf-document>
+  `,
+})
+class CanvasDocument {
+  readonly draw: PdfCanvasPaint = (ctx: PdfCanvasContext, size: PdfCanvasSize) => {
+    ctx.moveTo(0, 0).lineTo(size.width, 0).stroke();
+  };
+}
+
 function at<T>(items: readonly T[], index: number): T {
   const item = items[index];
   if (item === undefined) throw new Error(`no item at ${String(index)}`);
@@ -192,7 +209,8 @@ describe('pdf-* elements', () => {
       | typeof LinksDocument
       | typeof AnchorsDocument
       | typeof SecureDocument
-      | typeof NotesDocument,
+      | typeof NotesDocument
+      | typeof CanvasDocument,
   ): PdfNode {
     const environmentInjector = createEnvironmentInjector(
       [{ provide: RendererFactory2, useFactory: () => new PdfRendererFactory() }],
@@ -314,6 +332,17 @@ describe('pdf-* elements', () => {
     expect(propsOf(bound!)).toEqual({ author: null, icon: 'comment', open: false });
   });
 
+  it('renders pdf-canvas with no content, exposing paint through pdfProps', () => {
+    const canvas = at(elementChildren(render(CanvasDocument)), 0);
+    expect(canvas.tag).toBe('pdf-canvas');
+    expect(canvas.owner).not.toBeNull();
+    expect(canvas.children).toEqual([]);
+    expect(canvas.rawStyle).toEqual({ height: '40px' });
+    const paint = propsOf(canvas)['paint'];
+    expect(typeof paint).toBe('function');
+    expect(Object.keys(propsOf(canvas))).toEqual(['paint']);
+  });
+
   it('passes a missing data-bound href through, for the engine to refuse', () => {
     const link = at(elementChildren(render(MissingLinkDocument)), 0);
     expect(propsOf(link)).toEqual({ href: undefined });
@@ -338,5 +367,7 @@ describe('element input types', () => {
     // A data-bound author may be missing too: the note then has no title.
     expectTypeOf<string | null | undefined>().toExtend<ReturnType<PdfNote['author']>>();
     expectTypeOf<'comment' | 'new-paragraph'>().toExtend<ReturnType<PdfNote['icon']>>();
+    // A paint function is a plain function of the context and the size.
+    expectTypeOf<ReturnType<PdfCanvas['paint']>>().toEqualTypeOf<PdfCanvasPaint>();
   });
 });

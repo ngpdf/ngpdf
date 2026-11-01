@@ -14,6 +14,7 @@ const PDF_ELEMENTS = new Set([
   'pdf-row',
   'pdf-cell',
   'pdf-page-number',
+  'pdf-canvas',
 ]);
 
 /** A user component's host (or any element that is not one of the pdf-* elements). */

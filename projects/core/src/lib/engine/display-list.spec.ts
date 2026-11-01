@@ -2,7 +2,8 @@ import { beforeAll, describe, expect, it, vi } from 'vitest';
 import type { Yoga } from 'yoga-layout/load';
 import { createNode, type PdfNode } from '../tree/node';
 import { collectAnchors } from './anchors';
-import { displayList, type DisplayListOptions } from './display-list';
+import type { PdfCanvasContext, PdfCanvasSize } from '../tree/canvas-context';
+import { displayList, paintCanvases, type DisplayListOptions } from './display-list';
 import type { ImageAsset } from './images';
 import type { LayoutContext } from './layout';
 import { pageSize, paginatePage, type PageLayout } from './paginate';
@@ -2065,6 +2066,21 @@ describe('debug outlines', () => {
     expect(labels(ops)).toEqual([]);
   });
 
+  it('outlines a pdf-canvas like any box, over its shapes', () => {
+    const paint = (ctx: PdfCanvasContext): unknown => ctx.rect(0, 0, 10, 10).fill('red');
+    const root = page([
+      el('pdf-canvas', { width: '100', height: '50', padding: '5' }, [], { paint }),
+    ]);
+    const pages = debugLayout(root);
+    const ops = list(pages[0]!, 0, 1, undefined, { debug: true, canvases: paintCanvases(pages) });
+    const shape = ops.findIndex((op) => op.op === 'shape');
+    const outlined = ops.slice(shape + 1);
+    expect(shape).toBeGreaterThan(-1);
+    expect(outlines(outlined, RED)).toContainEqual({ x: 36, y: 36, w: 100, h: 50 });
+    expect(outlines(outlined, BLUE)).toEqual([{ x: 41, y: 41, w: 90, h: 40 }]);
+    expect(labels(outlined)).toEqual(['canvas 100×50']);
+  });
+
   it('adds nothing with debug off', () => {
     const root = page([el('pdf-view', { padding: '4', height: '40' }, [text('Hi')])]);
     const ops = list(debugLayout(root)[0]!, 0, 1);
@@ -2181,5 +2197,152 @@ describe('notes', () => {
     expect(only(ops, 'note')).toHaveLength(1);
     const cross = only(ops, 'line').filter((line) => line.x1 === 34 && line.x2 === 38);
     expect(cross).toHaveLength(2);
+  });
+});
+
+describe('pdf-canvas', () => {
+  type Paint = (ctx: PdfCanvasContext, size: PdfCanvasSize) => void;
+
+  function canvas(paint: Paint, style: Record<string, string> = { height: '50' }): PdfNode {
+    return el('pdf-canvas', style, [], { paint });
+  }
+
+  /** Every page's ops, with the canvases painted once for the whole document. */
+  function draw(pages: readonly PageLayout[]): DrawOp[][] {
+    const canvases = paintCanvases(pages);
+    return pages.map((laid, index) => list(laid, index, pages.length, undefined, { canvases }));
+  }
+
+  const square: Paint = (ctx) => ctx.rect(0, 0, 10, 10).fill('red');
+
+  it('paints with the size of the content box and draws its shapes there, clipped to it', () => {
+    const sizes: PdfCanvasSize[] = [];
+    const paint: Paint = (ctx, size) => {
+      sizes.push(size);
+      square(ctx, size);
+    };
+    const style = { height: '50', width: '100', padding: '5', border: '1 solid #000' };
+    const [ops] = draw(layout(page([canvas(paint, style)])));
+    expect(sizes).toEqual([{ width: 88, height: 38 }]);
+    expect(ops!.map((op) => op.op)).toEqual([
+      'line',
+      'line',
+      'line',
+      'line',
+      'clip',
+      'shape',
+      'unclip',
+    ]);
+    expect(only(ops!, 'clip')[0]).toEqual({
+      op: 'clip',
+      x: 42,
+      y: 42,
+      w: 88,
+      h: 38,
+      radii: SQUARE,
+    });
+    expect(only(ops!, 'shape')[0]).toEqual({
+      op: 'shape',
+      segments: [
+        { kind: 'move', to: { x: 42, y: 42 } },
+        { kind: 'line', to: { x: 52, y: 42 } },
+        { kind: 'line', to: { x: 52, y: 52 } },
+        { kind: 'line', to: { x: 42, y: 52 } },
+        { kind: 'close' },
+      ],
+      fill: { color: '#ff0000', opacity: 1, rule: 'nonzero' },
+    });
+  });
+
+  it('draws nothing for a canvas that painted nothing, or that has no height', () => {
+    const [empty] = draw(layout(page([canvas(() => undefined)])));
+    expect(empty).toEqual([]);
+    const paint = vi.fn(square);
+    const [flat] = draw(layout(page([canvas(paint, {})])));
+    expect(flat).toEqual([]);
+    const size = paint.mock.calls[0]?.[1];
+    expect(size?.width).toBeCloseTo(595.28 - 72, 3);
+    expect(size?.height).toBe(0);
+  });
+
+  it('draws a faded canvas in the groups of its faded boxes, keeping its own alpha', () => {
+    const paint: Paint = (ctx) =>
+      ctx.opacity(0.5).rect(0, 0, 10, 10).fillAndStroke('red', 'rgba(0, 0, 255, 0.5)');
+    const view = el('pdf-view', { opacity: '0.5' }, [
+      canvas(paint, { height: '20', opacity: '0.8' }),
+    ]);
+    const [ops] = draw(layout(page([view])));
+    expect(ops!.map((op) => (op.op === 'group' ? `group ${String(op.opacity)}` : op.op))).toEqual([
+      'group 0.5',
+      'group 0.8',
+      'clip',
+      'shape',
+      'unclip',
+      'ungroup',
+      'ungroup',
+    ]);
+    const [shape] = only(ops!, 'shape');
+    expect(shape?.fill?.opacity).toBe(0.5);
+    expect(shape?.stroke?.opacity).toBe(0.25);
+  });
+
+  it('draws the canvas inside its own transform', () => {
+    const style = { height: '20', transform: 'rotate(90deg)' };
+    const [ops] = draw(layout(page([canvas(square, style)])));
+    expect(ops!.map((op) => op.op)).toEqual([
+      'transform',
+      'clip',
+      'shape',
+      'unclip',
+      'untransform',
+    ]);
+  });
+
+  it('cuts the clip at the bottom of the content area for a canvas taller than a page', () => {
+    const [ops] = draw(layout(page([canvas(square, { height: '2000' })])));
+    expect(only(ops!, 'clip')[0]).toMatchObject({ y: 36, h: 841.89 - 72 });
+  });
+
+  it('paints a canvas in a fixed view once and draws it on every sheet', () => {
+    const paint = vi.fn(square);
+    const header = el('pdf-view', {}, [canvas(paint, { height: '20' })], { fixed: 'top' });
+    const blocks = Array.from({ length: 3 }, () => el('pdf-view', { height: '500' }));
+    const pages = layout(page([header, ...blocks]));
+    expect(pages).toHaveLength(3);
+    const all = draw(pages);
+    expect(paint).toHaveBeenCalledTimes(1);
+    for (const ops of all) expect(only(ops, 'shape')).toHaveLength(1);
+  });
+
+  it('paints a canvas in a repeated header row once and draws it on every sheet', () => {
+    const paint = vi.fn(square);
+    const head = el('pdf-row', { height: '20' }, [el('pdf-cell', {}, [canvas(paint)])], {
+      header: true,
+    });
+    const rows = Array.from({ length: 4 }, () =>
+      el('pdf-row', { height: '300' }, [el('pdf-cell', {}, [text('row')])]),
+    );
+    const table = el('pdf-table', {}, [head, ...rows], { columns: ['1fr'] });
+    const pages = layout(page([table]));
+    expect(pages.length).toBeGreaterThan(1);
+    const all = draw(pages);
+    expect(paint).toHaveBeenCalledTimes(1);
+    for (const ops of all) expect(only(ops, 'shape')).toHaveLength(1);
+  });
+
+  it('draws no shapes for a canvas that was not painted', () => {
+    const ops = list(layout(page([canvas(square)]))[0]!, 0, 1);
+    expect(ops).toEqual([]);
+  });
+
+  it('rejects with the error thrown by paint', () => {
+    const pages = layout(
+      page([
+        canvas(() => {
+          throw new Error('no data');
+        }),
+      ]),
+    );
+    expect(() => paintCanvases(pages)).toThrow('ngpdf: pdf-canvas paint failed: no data');
   });
 });

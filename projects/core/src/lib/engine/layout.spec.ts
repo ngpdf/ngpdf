@@ -908,3 +908,38 @@ describe('layoutBox: pdf-note', () => {
     expect(laid.children[0]).toMatchObject({ x: 100, y: 4, w: 0, h: 0 });
   });
 });
+
+describe('pdf-canvas', () => {
+  const paint = (): void => undefined;
+
+  it('takes its size from width and height, padding and border included', () => {
+    const canvas = el('pdf-canvas', { width: '120', height: '40', padding: '4' }, [], { paint });
+    const box = lay(el('pdf-view', {}, [canvas]), 300).children[0]!;
+    expect(box).toMatchObject({ w: 120, h: 40, children: [] });
+    expect(box.padding).toEqual({ top: 4, right: 4, bottom: 4, left: 4 });
+  });
+
+  it('stretches across a column and grows with flex', () => {
+    const canvas = el('pdf-canvas', { flex: '1' }, [], { paint });
+    const box = lay(el('pdf-view', { height: '90' }, [canvas]), 300).children[0]!;
+    expect(box).toMatchObject({ w: 300, h: 90 });
+  });
+
+  it('is 0 tall without a height, and warns', () => {
+    const warn = vi.fn();
+    const canvas = el('pdf-canvas', {}, [], { paint });
+    const box = lay(el('pdf-view', {}, [canvas]), 300, warn).children[0]!;
+    expect(box.h).toBe(0);
+    expect(warn).toHaveBeenCalledWith('ngpdf: a pdf-canvas has no height; set its height or flex');
+    const sized = vi.fn();
+    lay(el('pdf-view', {}, [el('pdf-canvas', { height: '10' }, [], { paint })]), 300, sized);
+    expect(sized).not.toHaveBeenCalled();
+  });
+
+  it('ignores text inside it', () => {
+    const canvas = el('pdf-canvas', { height: '10' }, [textNode('alt')], { paint });
+    const box = lay(el('pdf-view', {}, [canvas]), 300).children[0]!;
+    expect(box.children).toEqual([]);
+    expect(box.text).toBeUndefined();
+  });
+});

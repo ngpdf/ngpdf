@@ -1,11 +1,11 @@
 ---
 title: Elements
-description: Reference for the twelve pdf-* elements of @ngpdf/core, with every input, its type, its default value and what it does in the rendered PDF.
+description: Reference for the thirteen pdf-* elements of @ngpdf/core, with every input, its type, its default value and what it does in the rendered PDF.
 section: Reference
 order: 9
 ---
 
-All twelve elements are standalone components exported from `@ngpdf/core`. Import them all at once with `PDF_ELEMENTS`, or one by one by class name.
+All thirteen elements are standalone components exported from `@ngpdf/core`. Import them all at once with `PDF_ELEMENTS`, or one by one by class name.
 
 ```ts
 import { PDF_ELEMENTS } from '@ngpdf/core';
@@ -32,6 +32,7 @@ export class Report {}
 | `pdf-row` | `PdfRow` |
 | `pdf-cell` | `PdfCell` |
 | `pdf-page-number` | `PdfPageNumber` |
+| `pdf-canvas` | `PdfCanvas` |
 
 Every element also takes a `style` attribute and `[style.*]` bindings. See [Style properties](/docs/style-properties).
 
@@ -201,3 +202,13 @@ The sheet number. As a direct child of `pdf-page`, it sits at the bottom of the 
 | `format` | `string` | `'{page} / {total}'` | `{page}` is replaced with the sheet number and `{total}` with the number of sheets in the document. |
 
 As a direct child of `pdf-page`, it is right-aligned unless it or an ancestor sets `text-align`, and it reserves one line of height on every sheet. Elsewhere, for example in a [fixed header](/docs/pagination#fixed-headers-and-footers), its box is measured with three-digit numbers and the text is aligned in it by `text-align`. Content inside it is ignored. See [Pagination](/docs/pagination#page-numbers).
+
+## pdf-canvas
+
+A box drawn by a function, where a `pdf-view` can go.
+
+| Input | Type | Default | Description |
+| --- | --- | --- | --- |
+| `paint` | `PdfCanvasPaint` | required | `(ctx: PdfCanvasContext, size: { width: number; height: number }) => void`. Called once per render, after layout, with the size of the content box. |
+
+It has no content, so its size comes from `width` and `height`, or from flex. The drawing is clipped to the content box. See [Lines and shapes](/docs/lines-and-shapes).

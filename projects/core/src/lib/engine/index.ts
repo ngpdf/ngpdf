@@ -5,7 +5,7 @@
 /// <reference path="./linebreak.d.ts" />
 import { elementChildren, propsOf, type PdfNode } from '../tree/node';
 import { collectAnchors } from './anchors';
-import { displayList } from './display-list';
+import { displayList, paintCanvases } from './display-list';
 export { loadFont } from './font-loading';
 import { parseFontFamily, type FontRegistry, type RegisteredFace } from './fonts';
 import { dissolveHosts } from './hosts';
@@ -247,6 +247,8 @@ export async function renderDocument(
     const layouts = elementChildren(tree)
       .filter((child) => child.tag === 'pdf-page')
       .flatMap((child) => paginatePage(child, styles, ctx));
+    // Once for the whole document: a canvas drawn on several sheets reuses its shapes.
+    const canvases = paintCanvases(layouts);
     const pages: PageOps[] = layouts.map((layout, index) => ({
       width: layout.width,
       height: layout.height,
@@ -256,6 +258,7 @@ export async function renderDocument(
         fonts,
         warnMissing,
         debug,
+        canvases,
       }),
     }));
     const info = infoOf(document, now);

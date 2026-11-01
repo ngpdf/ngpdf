@@ -338,7 +338,7 @@ export function pageNumberFormat(node: PdfNode): string {
 }
 
 // Elements whose text is their own content (or that hold none), never wrapped in anonymous boxes.
-const LEAVES = new Set(['pdf-text', 'pdf-image', 'pdf-page-number']);
+const LEAVES = new Set(['pdf-text', 'pdf-image', 'pdf-page-number', 'pdf-canvas']);
 
 /**
  * The children of `node` as boxes: its elements, and each maximal run of text nodes between them
@@ -683,6 +683,10 @@ export function layoutBox(
           }
         : undefined;
     const content = { w: contentWidthOf(yogaNode), h: contentHeightOf(yogaNode) };
+    // A canvas has no content to size it, so without a height or flex it is 0 tall.
+    if (current.tag === 'pdf-canvas' && content.h <= 0) {
+      ctx.warn?.('ngpdf: a pdf-canvas has no height; set its height or flex');
+    }
     // A note has no size; one in the flow was never laid out, and `placeNotes` puts it once its
     // siblings are read.
     const isNote = current.tag === 'pdf-note';

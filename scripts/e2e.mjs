@@ -108,6 +108,11 @@ const DOCUMENTS = [
       },
     ],
   },
+  {
+    name: 'canvas-sample',
+    pages: 1,
+    contains: ['Orders by month', 'Jan', 'Jun', 'Approved by', 'Field manager'],
+  },
 ];
 
 const update = process.argv.includes('--update');

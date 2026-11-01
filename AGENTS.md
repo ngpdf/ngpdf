@@ -81,15 +81,16 @@ The site (`projects/site`) is a prerendered Angular app. Its docs are the Markdo
   discriminated union with exhaustive `switch`es. Do not add a pattern without a pressure that
   calls for it and an entry in that file.
 - **Data between stages is readonly.** A stage returns new data and never mutates its input.
-- **Bounded work.** Parsers are linear (no super-linear regex). Nesting deeper than 64 elements
-  and a text node longer than 1 MB throw an `ngpdf:` error.
+- **Bounded work.** Parsers are linear (no super-linear regex). Nesting deeper than 64 elements,
+  a text node longer than 1 MB and a pdf-canvas with more than 100,000 calls or a non-finite
+  number throw an `ngpdf:` error.
 
 ## Product rules
 
 - **Selectors:** `pdf-document`, `pdf-page`, `pdf-view`, `pdf-text`, `pdf-span`, `pdf-link`,
-  `pdf-note`, `pdf-image`, `pdf-table`, `pdf-row`, `pdf-cell`, `pdf-page-number`, and `pdf-viewer`, the
-  preview component (an HTML component in the app, not a document element). The `pdf-` prefix
-  is mandatory: `table`, `image` and `text` exist in HTML and SVG.
+  `pdf-note`, `pdf-image`, `pdf-canvas`, `pdf-table`, `pdf-row`, `pdf-cell`, `pdf-page-number`,
+  and `pdf-viewer`, the preview component (an HTML component in the app, not a document
+  element). The `pdf-` prefix is mandatory: `table`, `image` and `text` exist in HTML and SVG.
 - **Preview:** `pdf-viewer` comes from its own entry point, `@ngpdf/core/viewer`, and never
   reaches an app that imports `@ngpdf/core` alone; `scripts/bundle-budget.mjs` checks it. It is
   built on `pdfResource` and shows the PDF in an `<iframe>` whose only trusted source is the
@@ -223,6 +224,14 @@ The site (`projects/site`) is a prerendered Angular app. Its docs are the Markdo
   label with the tag and size), the page's content area and each text line, after everything
   else on the sheet. It never changes layout or pagination, and each render with it on gives one
   dev-mode warning, `ngpdf: debug outlines are on`.
+- **Lines and shapes:** `<pdf-canvas [paint]="fn">` is a box with no content where a `pdf-view`
+  can go, sized by `width`, `height` or flex (0 tall with a dev-mode warning otherwise).
+  - `paint(ctx, size)` runs once per render, after layout, with the content box size; a canvas in
+    a fixed view or a repeated header reuses its shapes on each sheet. Points are from the top
+    left of the content box, and the drawing is clipped to it. A canvas is one unit.
+  - A non-finite number, an unknown option or more than 100,000 calls on one canvas throws
+    `ngpdf: pdf-canvas …`; an error thrown by `paint` rejects the render with
+    `ngpdf: pdf-canvas paint failed: <message>`.
 - **Out of v0.1:**
   - server rendering;
   - SVG;
