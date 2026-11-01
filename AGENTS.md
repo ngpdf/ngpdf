@@ -136,6 +136,12 @@ The site (`projects/site`) is a prerendered Angular app. Its docs are the Markdo
     out once and drawn on every sheet; the flow gets the space between them. Bottom views sit
     above the page number.
   - A unit taller than a page goes on a page of its own, is clipped, and gets a dev-mode warning.
+  - An element with `position: absolute` is never a unit, and never moves, splits or pushes one.
+    It is placed against its nearest relative, absolute or transformed ancestor, or the page's
+    content area. When that containing block is one unit, it is drawn with that unit. Otherwise it
+    goes on the sheet where its own top lands, moved like the units around it, and one taller than
+    what is left of the sheet is cut at the bottom. Inside a fixed view it repeats with the view.
+  - `position: relative` offsets only move an element when it is drawn; pagination ignores them.
   - Wrapper backgrounds and borders are sliced per page; a gradient runs over the whole wrapper,
     so each sheet shows its part.
 - **Text wrapping:** text wraps at Unicode line-break opportunities. A word wider than its box breaks

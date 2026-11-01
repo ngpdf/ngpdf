@@ -30,6 +30,11 @@ export interface Box {
   readonly image?: ImageAsset;
   /** The checked URL of a block pdf-link. */
   readonly link?: string;
+  /**
+   * A relative box's offsets in points. It is drawn moved by them, with what it holds, while `x`
+   * and `y` stay where the flow put it.
+   */
+  readonly shift?: { readonly x: number; readonly y: number };
   readonly children: readonly Box[];
 }
 
@@ -227,6 +232,39 @@ function applyStyle(yoga: Yoga, node: YogaNode, style: ResolvedStyle): void {
   if (border.left !== 0) node.setBorder(yoga.EDGE_LEFT, border.left);
 }
 
+/**
+ * Static by default, so an absolute box is placed against its nearest relative, absolute or
+ * transformed ancestor, as in CSS. A relative box is laid out where it stands: its offsets are
+ * applied when it is drawn.
+ */
+function applyPosition(yoga: Yoga, node: YogaNode, style: ResolvedStyle): void {
+  if (style.position === 'absolute') {
+    node.setPositionType(yoga.POSITION_TYPE_ABSOLUTE);
+    applyEdges(yoga, style.inset, (edge, value) => {
+      if (value !== 'auto') node.setPosition(edge, yogaLimit(value));
+    });
+  } else if (style.position === 'static' && style.transform.length === 0) {
+    node.setPositionType(yoga.POSITION_TYPE_STATIC);
+  }
+}
+
+/** The offset of a relative box along one axis: `start` wins over `end`, a percent is of `base`. */
+function relativeOffset(start: Length, end: Length, base: number): number {
+  const resolve = (length: Length): number =>
+    typeof length === 'object' ? (length.percent / 100) * base : length === 'auto' ? 0 : length;
+  if (start !== 'auto') return resolve(start);
+  return end === 'auto' ? 0 : -resolve(end);
+}
+
+function hasAbsolute(node: PdfNode, styles: ReadonlyMap<PdfNode, ResolvedStyle>): boolean {
+  const stack = [node];
+  for (let current = stack.pop(); current; current = stack.pop()) {
+    if (styles.get(current)?.position === 'absolute') return true;
+    for (const child of current.children) if (child.kind === 'element') stack.push(child);
+  }
+  return false;
+}
+
 function styleOf(styles: ReadonlyMap<PdfNode, ResolvedStyle>, node: PdfNode): ResolvedStyle {
   const style = styles.get(node);
   if (!style) throw new Error(`ngpdf: no resolved style for <${node.tag}>`);
@@ -384,6 +422,7 @@ export function layoutBox(
   const effective = new Map<PdfNode, ResolvedStyle>();
   // Built once per node, so anonymous text keeps its identity (and measure cache) across passes.
   const childrenOf = new Map<PdfNode, PdfNode[]>();
+  const positioned = hasAbsolute(node, styles);
 
   const styleFor = (current: PdfNode): ResolvedStyle => {
     let style = effective.get(current);
@@ -473,6 +512,9 @@ export function layoutBox(
     const yogaNode = yoga.Node.create(config);
     created.push(yogaNode);
     applyStyle(yoga, yogaNode, style);
+    // Yoga's default, relative, gives the same layout when no box is absolute, for fewer calls.
+    // The root stays relative: it is laid out where it is asked to be.
+    if (positioned && current !== node) applyPosition(yoga, yogaNode, style);
     const asset = current.tag === 'pdf-image' ? ctx.images.get(current) : undefined;
     if (asset) {
       sizeImage(
@@ -585,6 +627,12 @@ export function layoutBox(
     return yogaNode.getComputedWidth() - inset(yoga.EDGE_LEFT) - inset(yoga.EDGE_RIGHT);
   };
 
+  const contentHeightOf = (yogaNode: YogaNode): number => {
+    const inset = (edge: Edge): number =>
+      yogaNode.getComputedPadding(edge) + yogaNode.getComputedBorder(edge);
+    return yogaNode.getComputedHeight() - inset(yoga.EDGE_TOP) - inset(yoga.EDGE_BOTTOM);
+  };
+
   // Only the final pass reads boxes, so text is wrapped once per node.
   const edgesOf = (get: (edge: Edge) => number): Edges<number> => ({
     top: get(yoga.EDGE_TOP),
@@ -593,11 +641,21 @@ export function layoutBox(
     left: get(yoga.EDGE_LEFT),
   });
 
-  const read = (built: Built): Box => {
+  // `base` is the parent's content box, for a relative box's percentages.
+  const read = (built: Built, base: { w: number; h: number }): Box => {
     const { node: current, yoga: yogaNode } = built;
     const style = styleFor(current);
     const image = ctx.images.get(current);
     const link = current.tag === 'pdf-link' ? linkUrl(current, ctx.warn) : undefined;
+    const { inset } = style;
+    const shift =
+      style.position === 'relative'
+        ? {
+            x: relativeOffset(inset.left, inset.right, base.w),
+            y: relativeOffset(inset.top, inset.bottom, base.h),
+          }
+        : undefined;
+    const content = { w: contentWidthOf(yogaNode), h: contentHeightOf(yogaNode) };
     return {
       node: current,
       style,
@@ -621,7 +679,8 @@ export function layoutBox(
         : {}),
       ...(image ? { image } : {}),
       ...(link !== undefined && { link }),
-      children: built.children.map(read),
+      ...(shift && (shift.x !== 0 || shift.y !== 0) ? { shift } : {}),
+      children: built.children.map((child) => read(child, content)),
     };
   };
 
@@ -636,7 +695,7 @@ export function layoutBox(
       const settled = sameWidths(known, found);
       if (settled || pass === MAX_PASSES) {
         if (!settled) ctx.warn?.('ngpdf: table columns did not settle');
-        const box = read(root);
+        const box = read(root, { w: width, h: 0 });
         if (ignored.size > 0) {
           ctx.warn?.(`ngpdf: ignored inside tables: ${[...ignored].join(', ')}`);
         }

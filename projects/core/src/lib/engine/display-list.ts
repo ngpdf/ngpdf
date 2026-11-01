@@ -72,10 +72,20 @@ function pushLink(out: DrawOp[], matrix: Matrix, rect: Rect, url: string): void 
   out.push({ op: 'link', x, y, w: Math.max(...xs) - x, h: Math.max(...ys) - y, url });
 }
 
+/** A positioned box waiting to be drawn at the end of its containing block. */
+interface Deferred {
+  readonly box: Box;
+  readonly x: number;
+  readonly y: number;
+  readonly opacity: number;
+  /** The page-space matrix around the box, for link areas. */
+  readonly matrix: Matrix;
+}
+
 function drawBox(
   box: Box,
-  x: number,
-  y: number,
+  boxX: number,
+  boxY: number,
   limit: number,
   cuts: Cuts,
   inherited: number,
@@ -83,11 +93,19 @@ function drawBox(
   outer: Matrix,
   numbering: Numbering,
   out: DrawOp[],
+  deferred: Deferred[],
+  // Whether a static clip lies between this box and the owner of `deferred`.
+  clipped = false,
 ): void {
   const { style } = box;
+  const x = boxX + (box.shift?.x ?? 0);
+  const y = boxY + (box.shift?.y ?? 0);
   // Opacity multiplies down the tree, so a faded view fades what it holds.
   const opacity = inherited * style.opacity;
   const transformed = style.transform.length > 0;
+  // A containing block draws its absolute descendants last, inside its own clip and transform;
+  // a static box hands them up, so its clip does not cut them, as in CSS.
+  const absolutes = style.position !== 'static' || transformed ? [] : deferred;
   const firstOp = out.length;
   let matrix = outer;
   if (transformed) {
@@ -199,10 +217,37 @@ function drawBox(
     });
   }
 
-  for (const child of box.children) {
+  // In-flow children first. Positioned ones go over them in tree order, in the containing
+  // block's queue, which positioned boxes deeper down join as their static parents are drawn. A
+  // relative box under a static clip stays in place instead, so the clip still cuts it.
+  const ownQueue = absolutes !== deferred;
+  const inClip = !ownQueue && (clipped || clips);
+  const draw = (child: Box): void => {
+    const [childX, childY] = [x + child.x, y + child.y];
     const nested = { top: false, bottom: false };
-    drawBox(child, x + child.x, y + child.y, limit, nested, opacity, matrix, numbering, out);
+    drawBox(
+      child,
+      childX,
+      childY,
+      limit,
+      nested,
+      opacity,
+      matrix,
+      numbering,
+      out,
+      absolutes,
+      inClip,
+    );
+  };
+  const relatives: Box[] = [];
+  for (const child of box.children) {
+    const { position } = child.style;
+    if (position === 'static') draw(child);
+    else if (position === 'absolute' || !inClip) {
+      absolutes.push({ box: child, x: x + child.x, y: y + child.y, opacity, matrix });
+    } else relatives.push(child);
   }
+  for (const child of relatives) draw(child);
 
   if (box.text) {
     for (const textLine of box.text.lines) {
@@ -279,6 +324,8 @@ function drawBox(
       });
     }
   }
+
+  if (ownQueue) drawDeferred(absolutes, limit, numbering, out);
 
   if (clips) out.push({ op: 'unclip' });
 
@@ -502,18 +549,36 @@ function alignedX(
   return left;
 }
 
+/** Draws positioned boxes in tree order; each one is the containing block of what it holds. */
+function drawDeferred(
+  boxes: readonly Deferred[],
+  limit: number,
+  numbering: Numbering,
+  out: DrawOp[],
+): void {
+  const cuts = { top: false, bottom: false };
+  for (const { box, x, y, opacity, matrix } of boxes) {
+    drawBox(box, x, y, limit, cuts, opacity, matrix, numbering, out, []);
+  }
+}
+
 function drawPlaced(placed: PlacedBox, numbering: Numbering, out: DrawOp[]): void {
+  const limit = placed.clipBottom ?? Infinity;
+  const absolutes: Deferred[] = [];
   drawBox(
     placed.box,
     placed.x,
     placed.y,
-    placed.clipBottom ?? Infinity,
+    limit,
     { top: placed.sliceTop === true, bottom: placed.sliceBottom === true, slice: placed.slice },
     placed.opacity ?? 1,
     IDENTITY,
     numbering,
     out,
+    absolutes,
   );
+  // Those of a static unit, such as a fixed view: over the unit, outside its clip.
+  drawDeferred(absolutes, limit, numbering, out);
 }
 
 /** A page number's text, filled in for the sheet and aligned in its content box on one line. */
@@ -574,9 +639,10 @@ function drawPageNumber(
 
 /**
  * The draw operations of one page, in paint order: decorations, then the placed units, then the
- * page number. Within a box: background, borders, then children and its own text and image,
- * clipped to the padding box with `overflow: hidden`, all between a `transform` and an
- * `untransform` op when the box has a `transform`.
+ * page number. Within a box: background, borders, then in-flow children, relative children and
+ * its own text and image, then the absolute boxes it is the containing block of, clipped to the
+ * padding box with `overflow: hidden`, all between a `transform` and an `untransform` op when the
+ * box has a `transform`.
  */
 export function displayList(
   page: PageLayout,
@@ -592,7 +658,7 @@ export function displayList(
   if (page.pageNumber) {
     const { box, x, y } = page.pageNumber;
     const cuts = { top: false, bottom: false };
-    drawBox(box, x, y, Infinity, cuts, page.pageNumber.opacity ?? 1, IDENTITY, numbering, out);
+    drawBox(box, x, y, Infinity, cuts, page.pageNumber.opacity ?? 1, IDENTITY, numbering, out, []);
   }
   return out;
 }

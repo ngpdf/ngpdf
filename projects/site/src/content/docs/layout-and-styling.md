@@ -183,6 +183,30 @@ These throw an `ngpdf:` error: `repeating-linear-gradient()`, `repeating-radial-
 - Neither property is inherited. `transform` is ignored on a `pdf-page` and on a `pdf-table`, which keeps breaking between its rows; its value is still checked.
 - `skew()`, `matrix()` and the 3D functions throw, like any unknown function.
 
+## Positioning
+
+`position` takes an element out of its place in the flow, as in CSS. A stamp in the corner of a card:
+
+```html
+<pdf-view style="position: relative; padding: 16; border: 1 solid #ccc">
+  <pdf-text>Invoice 2026-114</pdf-text>
+  <pdf-view
+    style="position: absolute; top: 8; right: 8; padding: 2 6; background-color: #2e7d32"
+  >
+    <pdf-text style="color: white; font-size: 8; font-weight: bold">PAID</pdf-text>
+  </pdf-view>
+</pdf-view>
+```
+
+- `position` is `static` (the default), `relative` or `absolute`. `fixed` and `sticky` throw: for a header or footer on every sheet, use a [fixed view](/docs/pagination#fixed-headers-and-footers).
+- `top`, `right`, `bottom` and `left` take a length, a percentage or `auto` (the default). They do nothing on a `static` element.
+- A `relative` element is drawn moved by its offsets, with everything it holds. The layout does not change: its siblings stay where they were. `top` wins over `bottom` and `left` over `right`, and a percentage is of the parent's content box.
+- An `absolute` element leaves the flow: it takes no space, and its parent's size ignores it. It is placed against the padding box of its nearest `relative`, `absolute` or transformed ancestor, its containing block, or against the content area of its `pdf-page` when there is none. A percentage is of that padding box.
+- With `left` and `right` both set and `width: auto`, an absolute element stretches between them, and the same goes for `top`, `bottom` and the height. Otherwise it takes its `width` and `height`, or the size of its content.
+- Positioned elements are drawn after the in-flow ones, so they sit on top of them. Positioned elements of the same containing block, at any depth, are drawn in template order. The exception is a `relative` element inside a static element with an [`overflow`](#overflow) clip: it is drawn with that element, inside its clip, before any absolute element that escapes the clip. An absolute element is drawn with its containing block: inside its [`overflow`](#overflow) clip and its [transform](#transforms). A static clipping element between them does not clip it, as in CSS.
+- An absolute element is never split across sheets; [Pagination](/docs/pagination#positioned-elements) says where it goes.
+- `z-index` is not supported. None of these properties is inherited. They are ignored on `pdf-page`, `pdf-row` and `pdf-cell`, whose values are still checked, and have no effect on a `pdf-span`.
+
 ## Inheritance
 
 Text styles are inherited from parent to child: `color`, `font-family`, `font-size`, `font-weight`, `font-style`, `line-height`, `text-align`, `text-decoration`, `letter-spacing` and `text-transform`. Set them on a `pdf-page`, a `pdf-view` or a `pdf-cell` and every text inside follows. No other property is inherited.

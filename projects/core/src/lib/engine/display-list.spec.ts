@@ -1384,3 +1384,171 @@ describe('gradient backgrounds', () => {
     expect(rect!.gradient).toMatchObject({ y1: 36, y2: 1036 });
   });
 });
+
+describe('position', () => {
+  const fill = (color: string, style: Record<string, string> = {}, children: PdfNode[] = []) =>
+    el('pdf-view', { height: '20', 'background-color': color, ...style }, children);
+  const kinds = (ops: readonly DrawOp[]): string[] =>
+    ops.map((op) => (op.op === 'rect' ? (op.fill ?? 'rect') : op.op));
+
+  it('draws a relative box and what it holds moved by its offsets', () => {
+    const inner = fill('#222222', { height: '5' });
+    const moved = fill('#111111', { position: 'relative', top: '10', left: '5' }, [inner]);
+    const rects = only(list(layout(page([moved]))[0]!, 0, 1), 'rect');
+    expect(rects[0]).toMatchObject({ x: 41, y: 46 });
+    expect(rects[1]).toMatchObject({ x: 41, y: 46 });
+  });
+
+  /** The text ops of every sheet, as [x, y, text]. */
+  const textsOf = (root: PdfNode): [number, number, string][][] => {
+    const pages = layout(root);
+    return pages.map((laid, index) =>
+      only(list(laid, index, pages.length), 'text').map((op) => [op.x, op.y, op.text]),
+    );
+  };
+  const expectShiftedOnce = (
+    plain: [number, number, string][][],
+    moved: [number, number, string][][],
+    dx: number,
+    dy: number,
+  ): void => {
+    expect(moved.map((ops) => ops.map(([, , text]) => text))).toEqual(
+      plain.map((ops) => ops.map(([, , text]) => text)),
+    );
+    for (const [i, ops] of moved.entries()) {
+      for (const [j, [x, y]] of ops.entries()) {
+        const [px, py] = plain[i]![j]!;
+        expect(x - px).toBeCloseTo(dx, 4);
+        expect(y - py).toBeCloseTo(dy, 4);
+      }
+    }
+  };
+
+  it('moves a split relative text by its offsets once, on every sheet', () => {
+    const words = Array.from({ length: 200 }, (_, i) => `w${String(i)}`).join(' ');
+    const style = { width: '25', 'font-size': '10', 'line-height': '1' };
+    const plain = textsOf(page([text(words, style)]));
+    const moved = textsOf(
+      page([text(words, { ...style, position: 'relative', top: '7', left: '3' })]),
+    );
+    expect(plain.length).toBeGreaterThan(1);
+    expectShiftedOnce(plain, moved, 3, 7);
+  });
+
+  it('moves the repeated header of a table in a relative view by its offsets once', () => {
+    const cell = (label: string) => el('pdf-cell', {}, [text(label)]);
+    const rows = (): PdfNode[] => [
+      el('pdf-row', { height: '20' }, [cell('Head')], { header: true }),
+      ...Array.from({ length: 60 }, (_, i) =>
+        el('pdf-row', { height: '20' }, [cell(`r${String(i)}`)]),
+      ),
+    ];
+    const tableOf = () => el('pdf-table', {}, rows(), { columns: ['1fr'] });
+    const plain = textsOf(page([el('pdf-view', {}, [tableOf()])]));
+    const moved = textsOf(
+      page([el('pdf-view', { position: 'relative', top: '7', left: '3' }, [tableOf()])]),
+    );
+    expect(plain.length).toBeGreaterThan(1);
+    // The header is repeated on every sheet, moved like the rows.
+    for (const ops of moved) expect(ops[0]![2]).toBe('Head');
+    expectShiftedOnce(plain, moved, 3, 7);
+  });
+
+  it('draws positioned children after their in-flow siblings, in tree order', () => {
+    const row = el('pdf-view', { 'flex-direction': 'row', position: 'relative' }, [
+      fill('#333333', { position: 'absolute', width: '5' }),
+      fill('#111111', { position: 'relative', width: '5' }),
+      fill('#222222', { width: '5' }),
+    ]);
+    const ops = list(layout(page([row]))[0]!, 0, 1);
+    expect(kinds(ops)).toEqual(['#222222', '#333333', '#111111']);
+  });
+
+  it('keeps tree order between an absolute box deeper down and a later relative sibling', () => {
+    const row = el('pdf-view', { 'flex-direction': 'row', position: 'relative' }, [
+      el('pdf-view', { width: '20' }, [fill('#111111'), fill('#555555', { position: 'absolute' })]),
+      fill('#666666', { position: 'relative', width: '5' }),
+    ]);
+    const ops = list(layout(page([row]))[0]!, 0, 1);
+    expect(kinds(ops)).toEqual(['#111111', '#555555', '#666666']);
+  });
+
+  it('keeps tree order between an absolute and a later relative box inside a static child', () => {
+    const row = el('pdf-view', { 'flex-direction': 'row', position: 'relative' }, [
+      el('pdf-view', { width: '20' }, [
+        fill('#111111'),
+        fill('#555555', { position: 'absolute' }),
+        fill('#666666', { position: 'relative' }),
+      ]),
+    ]);
+    const ops = list(layout(page([row]))[0]!, 0, 1);
+    expect(kinds(ops)).toEqual(['#111111', '#555555', '#666666']);
+  });
+
+  it('maps a deferred link through the transform of its containing block', () => {
+    const linkOf = (style: Record<string, string>) => {
+      const link = el('pdf-link', { width: '30', height: '10', ...style }, [], {
+        href: 'https://example.com/',
+      });
+      const turned = el('pdf-view', { width: '100', height: '60', transform: 'rotate(30deg)' }, [
+        link,
+      ]);
+      return only(list(layout(page([turned]))[0]!, 0, 1), 'link');
+    };
+    const [placed] = linkOf({ position: 'absolute', top: '0', left: '0' });
+    const [flow] = linkOf({});
+    expect(placed).toBeDefined();
+    expect(placed!.x).toBeCloseTo(flow!.x, 4);
+    expect(placed!.y).toBeCloseTo(flow!.y, 4);
+    expect(placed!.w).toBeCloseTo(flow!.w, 4);
+    expect(placed!.h).toBeCloseTo(flow!.h, 4);
+  });
+
+  it('keeps a relative box under a static clip inside that clip', () => {
+    const row = el('pdf-view', { 'flex-direction': 'row', position: 'relative' }, [
+      el('pdf-view', { width: '20', overflow: 'hidden' }, [
+        fill('#111111'),
+        fill('#555555', { position: 'absolute' }),
+        fill('#666666', { position: 'relative' }),
+      ]),
+    ]);
+    const ops = list(layout(page([row]))[0]!, 0, 1);
+    // The absolute box escapes the static clip; the relative one is cut by it.
+    expect(kinds(ops)).toEqual(['clip', '#111111', '#666666', 'unclip', '#555555']);
+  });
+
+  it('draws an absolute box at the end of its containing block, outside static clips', () => {
+    const escaped = fill('#333333', { position: 'absolute', width: '5' });
+    const clipped = fill('#444444', { position: 'absolute', width: '5' });
+    const row = el('pdf-view', { 'flex-direction': 'row', position: 'relative' }, [
+      el('pdf-view', { overflow: 'hidden', width: '50' }, [fill('#111111'), escaped]),
+      el('pdf-view', { overflow: 'hidden', position: 'relative', width: '50' }, [
+        fill('#222222'),
+        clipped,
+      ]),
+    ]);
+    const ops = list(layout(page([row]))[0]!, 0, 1);
+    // The escaped box comes before the second, relative view in the tree, so it is drawn first.
+    expect(kinds(ops)).toEqual([
+      'clip',
+      '#111111',
+      'unclip',
+      '#333333',
+      'clip',
+      '#222222',
+      '#444444',
+      'unclip',
+    ]);
+  });
+
+  it('draws an absolute box of a static fixed view right after the view, unclipped', () => {
+    const header = el(
+      'pdf-view',
+      { overflow: 'hidden', height: '20' },
+      [fill('#333333', { position: 'absolute', width: '5' }), fill('#111111')],
+      { fixed: 'top' },
+    );
+    const ops = list(layout(page([header]))[0]!, 0, 1);
+    expect(kinds(ops)).toEqual(['clip', '#111111', 'unclip', '#333333']);
+  });
+});
