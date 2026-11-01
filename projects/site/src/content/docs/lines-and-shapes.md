@@ -121,6 +121,7 @@ A canvas is one unit: it is never split across pages. One taller than a page goe
 
 These reject the render:
 
+- an element inside the canvas: `ngpdf: pdf-canvas cannot have children (found <pdf-view>)`, naming the first one; text inside it is ignored;
 - a number that is `NaN` or infinite: `ngpdf: pdf-canvas lineTo got a non-finite number`, naming the method;
 - an unknown option, such as `lineCap('flat')`: `ngpdf: pdf-canvas unknown lineCap "flat"`;
 - a color the `color` style would refuse: `ngpdf: invalid color "…" on pdf-canvas`;
