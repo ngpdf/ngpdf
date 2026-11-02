@@ -17,6 +17,7 @@ import { TestBed } from '@angular/core/testing';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { PDF_ELEMENTS } from '../elements';
 import { elementChildren, propsOf, textContent, type PdfNode } from '../tree/node';
+import { resolveStyles } from '../engine/style';
 import { renderTree } from './render-tree';
 
 registerLocaleData(localePt);
@@ -55,6 +56,13 @@ class TestDocument {
     inject(DestroyRef).onDestroy(() => destroyed.push('test-document'));
   }
 }
+
+@Component({
+  selector: 'pdf-test-style-precedence',
+  imports: [PDF_ELEMENTS],
+  template: `<pdf-document><pdf-page><pdf-view style="margin-top: 5; margin: 10" [style.margin-top.pt]="20" /></pdf-page></pdf-document>`,
+})
+class StylePrecedenceDocument {}
 
 function find(node: PdfNode, tag: string): PdfNode[] {
   return [
@@ -178,6 +186,13 @@ describe('renderTree', () => {
   beforeAll(async () => {
     parent = TestBed.inject(EnvironmentInjector);
     await TestBed.inject(ApplicationRef).whenStable();
+  });
+
+  it('applies bound longhands after static shorthand styles (#236)', () => {
+    const result = render(StylePrecedenceDocument);
+    const view = at(find(result.root, 'pdf-view'), 0);
+    expect(Object.keys(view.rawStyle)).toEqual(['margin', 'margin-top']);
+    expect(resolveStyles(result.root).get(view)?.margin.top).toBe(20);
   });
 
   it('builds document > page > table > rows with props', () => {
