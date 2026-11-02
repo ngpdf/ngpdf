@@ -39,7 +39,7 @@ Values interpolated into a document are drawn as text. They are not parsed as HT
 
 - Images are fetched with `fetch(src, { credentials: 'same-origin' })`, so cookies go only to your own origin.
 - Requests run under your page's CORS rules and Content-Security-Policy, like any other `fetch` from your app. An `img-src` directive does not apply to `fetch`; `connect-src` does.
-- Error messages show an image URL without its query string and fragment, which often carry a token.
+- Error messages show an image or font URL without its query string and fragment, which often carry a token. Where the reason for a failure repeats the URL, as an error from `fetch` or your `fetchImage` may, ngpdf shortens it the same way. Any other text in the reason is passed through as it is, so keep secrets out of the errors your `fetchImage` throws. The original error stays unchanged on the thrown error's `cause`.
 
 ## On the server
 

@@ -72,7 +72,7 @@ The first image that fails rejects the whole render with:
 
 `ngpdf: could not load image "<source>": <reason>`
 
-`<source>` is the URL without its query string and fragment (they often carry a token), or `data URL`, `Blob`, `ArrayBuffer` or `Uint8Array`. `<reason>` is the cause, such as `HTTP 404`, the browser's network error, or `ngpdf: image is neither PNG nor JPEG`. Nothing is downloaded on failure, and the document component is destroyed.
+`<source>` is the URL without its query string and fragment (they often carry a token), or `data URL`, `Blob`, `ArrayBuffer` or `Uint8Array`. `<reason>` is the cause, such as `HTTP 404`, the browser's network error, or `ngpdf: image is neither PNG nor JPEG`; where it repeats the URL, the URL is shortened the same way. Nothing is downloaded on failure, and the document component is destroyed.
 
 ## Size
 
