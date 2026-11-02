@@ -404,6 +404,27 @@ export const routes: Routes = [
       );
     });
 
+    it('prints the route to add by hand when the routes array spreads other routes', async () => {
+      const tree = await application(await workspace(), 'app');
+      const custom = `import { Routes } from '@angular/router';
+import { fallbackRoutes } from './fallback';
+
+export const routes: Routes = [{ path: '', redirectTo: 'home' }, ...fallbackRoutes];
+`;
+      tree.overwrite(routesPath, custom);
+      const lines = logs();
+
+      const result = await ngAdd(tree, { demoRoute: true });
+
+      expect(result.readContent(routesPath)).toBe(custom);
+      expect(result.exists(demoPath)).toBe(true);
+      expect(lines).toContain(
+        `ngpdf: the routes array in ${routesPath.slice(1)} spreads other routes, which may end ` +
+          `in a wildcard. Add this route by hand, before any wildcard: ` +
+          `{ path: 'pdf-demo', loadComponent: () => import('./documents/pdf-demo').then((m) => m.PdfDemo) }`,
+      );
+    });
+
     it('prints the route to add by hand when app.routes.ts has no routes array', async () => {
       const tree = await application(await workspace(), 'app');
       const custom = `import { Routes } from '@angular/router';\n\nexport default [] satisfies Routes;\n`;
