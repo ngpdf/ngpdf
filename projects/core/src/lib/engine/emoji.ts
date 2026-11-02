@@ -48,6 +48,15 @@ export function isEmoji(cluster: string): boolean {
   return /^\p{Emoji_Presentation}/u.test(cluster);
 }
 
+// Every emoji holds one of these: U+FE0F, U+20E3, a pictographic character or a regional
+// indicator (Emoji_Presentation). A text with none skips grapheme segmentation.
+const EMOJI_CANDIDATE = /[\uFE0F\u20E3\p{Extended_Pictographic}\p{Emoji_Presentation}]/u;
+
+/** Whether `text` may hold an emoji: false only when no cluster of it can pass `isEmoji`. */
+export function mayHoldEmoji(text: string): boolean {
+  return !isSimple(text) && EMOJI_CANDIDATE.test(text);
+}
+
 /**
  * The code points of an emoji in lower-case hex joined by `-`, without U+FE0F: `1f44d-1f3fd` for
  * 👍🏽. Image sets name files their own way, so an exact vendor naming needs a function source.
@@ -69,7 +78,7 @@ function emojiIn(root: PdfNode): string[] {
     if (node.kind === 'text') {
       // Every emoji has a code unit at U+0300 or above: U+FE0F, a surrogate or a symbol. A text
       // over the limit is not segmented: layout rejects the render for it anyway.
-      if (node.text.length > MAX_TEXT_LENGTH || isSimple(node.text)) return;
+      if (node.text.length > MAX_TEXT_LENGTH || !mayHoldEmoji(node.text)) return;
       for (const { segment } of segmenter.segment(node.text)) {
         if (isEmoji(segment)) found.add(segment);
       }

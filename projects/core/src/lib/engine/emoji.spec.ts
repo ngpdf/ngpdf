@@ -7,6 +7,7 @@ import {
   emojiCodepoints,
   isEmoji,
   loadEmoji,
+  mayHoldEmoji,
   type EmojiSource,
 } from './emoji';
 
@@ -72,6 +73,24 @@ describe('isEmoji', () => {
     ['a text-default modifier base alone', '✌'],
   ])('leaves %s as text', (_, cluster) => {
     expect(isEmoji(cluster)).toBe(false);
+  });
+});
+
+describe('mayHoldEmoji', () => {
+  it('is true for every single character and sequence isEmoji accepts', () => {
+    const sequences = ['👍🏽', '✌🏽', '#️⃣', '1⃣', '🇧🇷', '👨‍👩‍👧‍👦', '⛹‍♀', '©️', '🏴󠁧󠁢󠁳󠁣󠁴󠁿'];
+    for (const cluster of sequences) expect(mayHoldEmoji(`a ${cluster}`)).toBe(true);
+    for (let point = 0; point <= 0x10ffff; point++) {
+      if (point >= 0xd800 && point <= 0xdfff) continue;
+      const char = String.fromCodePoint(point);
+      if (isEmoji(char) && !mayHoldEmoji(char)) expect.fail(`U+${point.toString(16)}`);
+    }
+  });
+
+  it('is false for text with no candidate, such as Cyrillic or CJK', () => {
+    expect(mayHoldEmoji('Привет, мир')).toBe(false);
+    expect(mayHoldEmoji('你好，世界')).toBe(false);
+    expect(mayHoldEmoji('plain')).toBe(false);
   });
 });
 

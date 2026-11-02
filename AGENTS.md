@@ -152,7 +152,8 @@ NGPDF_APT=poppler-utils ./scripts/dev node scripts/server-check.mjs   # packed d
     modifier sequence such as ✌🏽, or starts with an `Emoji_Presentation` character. Its bottom
     sits on the font's descent, or on the baseline when the metrics give no descent
     (`FontMetrics.descent` is optional; the pdfkit writer gives it). Each distinct emoji loads once
-    per render, at most 500 and 6 at a time, each with 10 s from the start of its own load. One
+    per render, at most 500 and 6 started at a time, each with 10 s from the start of its own
+    load; a timed-out source or server `fetchImage` is not stopped, only no longer awaited. One
     whose image is `null`, fails, is empty, is not a PNG or JPEG, is a cut-off PNG or runs out
     of time is drawn as text, with one dev-mode warning per render naming them; past 500, the
     rest are text, with one warning. A JPEG is checked only up to its frame header, so a cut-off

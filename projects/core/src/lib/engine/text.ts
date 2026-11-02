@@ -1,7 +1,8 @@
 import LineBreaker from 'linebreak';
 import type { Color } from './color';
+import { mayHoldEmoji } from './emoji';
 import { covers, fontFor, normalizeText, shapeText, SOFT_HYPHEN, type ShapedText } from './fonts';
-import { graphemeCount, graphemeStarts, isSimple } from './graphemes';
+import { graphemeCount, graphemeStarts } from './graphemes';
 import { MAX_TEXT_LENGTH } from './limits';
 import type { ImageAsset } from './images';
 import type { TextStyle } from './style';
@@ -427,7 +428,7 @@ function splitEmoji(
   text: string,
   emoji: ReadonlyMap<string, ImageAsset> | undefined,
 ): (string | { readonly emoji: string; readonly image: ImageAsset })[] {
-  if (!emoji?.size || isSimple(text)) return [text];
+  if (!emoji?.size || !mayHoldEmoji(text)) return [text];
   const parts: (string | { emoji: string; image: ImageAsset })[] = [];
   let pending = '';
   const segmenter = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
