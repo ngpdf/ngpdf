@@ -145,6 +145,8 @@ providePdfEmoji((_emoji, codepoints) => {
 That folder has no flags: the Noto Emoji repository keeps them apart, in `third_party/region-flags/png`, named by region code (`BR.png`) or, for England, Scotland and Wales, by subdivision (`GB-SCT.png`). Copy those too and send each regional-indicator pair and each 🏴 tag sequence there:
 
 ```ts
+const SUBDIVISIONS = new Set(['gbeng', 'gbsct', 'gbwls']);
+
 providePdfEmoji((_emoji, codepoints) => {
   const points = codepoints.split('-').map((hex) => parseInt(hex, 16));
   if (points.length === 2 && points.every((point) => point >= 0x1f1e6 && point <= 0x1f1ff)) {
@@ -152,9 +154,10 @@ providePdfEmoji((_emoji, codepoints) => {
     return `/assets/flags/${region}.png`;
   }
   // 🏴 followed by tag letters and a cancel tag, such as 🏴󠁧󠁢󠁳󠁣󠁴󠁿 (gbsct): GB-SCT.png.
-  if (points[0] === 0x1f3f4 && points.length > 2 && points.at(-1) === 0xe007f) {
-    const tag = String.fromCharCode(...points.slice(1, -1).map((point) => point - 0xe0000)).toUpperCase();
-    return `/assets/flags/${tag.slice(0, 2)}-${tag.slice(2)}.png`;
+  if (points[0] === 0x1f3f4 && points.at(-1) === 0xe007f) {
+    const tag = String.fromCharCode(...points.slice(1, -1).map((point) => point - 0xe0000));
+    // Only the files Noto has: any other tag, which could hold "/" or "..", is drawn as text.
+    return SUBDIVISIONS.has(tag) ? `/assets/flags/GB-${tag.slice(2).toUpperCase()}.png` : null;
   }
   return `/assets/noto/emoji_u${points.map((point) => point.toString(16).padStart(4, '0')).join('_')}.png`;
 });

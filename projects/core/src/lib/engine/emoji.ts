@@ -75,6 +75,8 @@ function emojiIn(root: PdfNode): string[] {
       }
       return;
     }
+    // Layout never lays out a note's children, so an emoji there would never be drawn.
+    if (node.tag === 'pdf-note') return;
     node.children.forEach(visit);
   };
   visit(root);

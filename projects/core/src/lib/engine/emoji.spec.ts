@@ -365,4 +365,19 @@ describe('loadEmoji', () => {
     await load(root, source).loading;
     expect(source.mock.calls).toEqual([['🎉', '1f389']]);
   });
+
+  it('skips the text of a pdf-note, which is never drawn', async () => {
+    const root = doc('plain');
+    const note = createNode('element', 'pdf-note');
+    const inner = createNode('text', '', 'note 🎉');
+    inner.parent = note;
+    note.children.push(inner);
+    note.parent = root;
+    root.children.push(note);
+    const source = vi.fn(() => PNG);
+    const { loading, warnings } = load(root, source);
+    expect((await loading).size).toBe(0);
+    expect(source).not.toHaveBeenCalled();
+    expect(warnings).toEqual([]);
+  });
 });
