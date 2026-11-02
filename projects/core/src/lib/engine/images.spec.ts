@@ -206,6 +206,15 @@ describe('loadImages', () => {
     });
   });
 
+  it('strips the query string from the URL where the reason repeats it', async () => {
+    const url = 'https://cdn.example.com/a.png?token=secret#top';
+    const fetchFn = vi.fn(() => Promise.reject(new TypeError(`fetch failed for ${url} (${url})`)));
+    const load = loadImages(root(imageNode(url)), writer, fetchFn);
+    await expect(load).rejects.toThrow(
+      /^ngpdf: could not load image "https:\/\/cdn\.example\.com\/a\.png": fetch failed for https:\/\/cdn\.example\.com\/a\.png \(https:\/\/cdn\.example\.com\/a\.png\)$/,
+    );
+  });
+
   it('rejects a failed fetch with the reason', async () => {
     const fetchFn = vi.fn(() => Promise.reject(new TypeError('Failed to fetch')));
     await expect(
@@ -341,6 +350,15 @@ describe('loadImages on the server', () => {
     );
     expect(fetchImage).toHaveBeenCalledWith('http://cdn.example.com/a.png');
     expect(fetchImage).toHaveBeenCalledWith('HTTPS://cdn.example.com/b.png');
+  });
+
+  it('strips the query string from the URL where a fetchImage error repeats it', async () => {
+    const url = 'https://cdn.example.com/a.png?token=secret';
+    const fetchImage = vi.fn(() => Promise.reject(new Error(`HTTP 403 for ${url}`)));
+    const load = loadImages(root(imageNode(url)), writer, undefined, { fetchImage });
+    await expect(load).rejects.toThrow(
+      /^ngpdf: could not load image "https:\/\/cdn\.example\.com\/a\.png": HTTP 403 for https:\/\/cdn\.example\.com\/a\.png$/,
+    );
   });
 
   it('still loads data URLs, Blobs and ArrayBuffers', async () => {

@@ -12,7 +12,7 @@ export async function loadFont(
     if (!source) throw new Error('src must be a string, Blob, ArrayBuffer or Uint8Array');
     return { label, data: await source.read() };
   } catch (error) {
-    throw new Error(`ngpdf: could not load font "${label}": ${describeError(error)}`, {
+    throw new Error(`ngpdf: could not load font "${label}": ${describeError(error, src, label)}`, {
       cause: error,
     });
   }
