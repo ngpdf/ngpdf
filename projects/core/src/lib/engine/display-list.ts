@@ -4,11 +4,11 @@ import { toHex, type Color } from './color';
 import { fontChain, fontFor, shapeText, type FontRegistry } from './fonts';
 import { graphemeCount } from './graphemes';
 import { gradientFill } from './gradient';
-import { fitImage } from './images';
+import { fitImage, type ImageAsset } from './images';
 import { pageNumberFormat, type Box } from './layout';
 import type { OpacityGroup, PageLayout, PlacedBox } from './paginate';
 import type { Corners, Offset, ResolvedStyle, TransformFunction } from './style';
-import { wordGaps, type TextLine } from './text';
+import { wordGaps, type TextLine, type TextRun } from './text';
 import {
   NOTE_SIZE,
   type DrawOp,
@@ -325,6 +325,10 @@ function drawBox(
         } else {
           closeLink();
           if (run.link !== undefined) linked = { url: run.link, left: x, right };
+        }
+        if (run.emoji) {
+          drawEmoji(run, run.emoji, x, lineTop + textLine.ascent, numbering.options.metrics, out);
+          continue;
         }
         const ink = paint(run.color);
         if (!ink) continue;
@@ -741,6 +745,53 @@ function flatten(layer: Layer, out: DrawOp[]): void {
     else flatten(part, out);
   }
   fade(out, from, layer.opacity);
+}
+
+/**
+ * A run of emoji: each cluster an image in a 1 em square, `letter-spacing` after it, its top
+ * `run.ascent` above the baseline. Its color is not used, except by its decoration: that is drawn
+ * by the text op of one space in the run's font, letter-spaced to the run's width, so it lines
+ * up with the decoration of the text around it.
+ */
+function drawEmoji(
+  run: TextRun,
+  image: ImageAsset,
+  x: number,
+  baseline: number,
+  metrics: FontMetrics,
+  out: DrawOp[],
+): void {
+  const top = baseline - run.ascent;
+  const count = graphemeCount(run.text);
+  // An image that is not square is fitted inside the square, as pdf-image does with `contain`.
+  const fitted = fitImage(image, { w: run.size, h: run.size }, 'contain');
+  for (let k = 0; k < count; k++) {
+    const rect = { x: x + k * (run.size + run.letterSpacing), y: top, w: run.size, h: run.size };
+    out.push({
+      op: 'image',
+      x: rect.x + fitted.x,
+      y: rect.y + fitted.y,
+      w: fitted.w,
+      h: fitted.h,
+      clip: rect,
+      data: image.data,
+    });
+  }
+  const ink = paint(run.color);
+  if (run.decoration === 'none' || !ink) return;
+  const space = metrics.widthOf(' ', run.font, run.size, false);
+  out.push({
+    op: 'text',
+    x,
+    y: baseline - metrics.ascent(run.font, run.size),
+    text: ' ',
+    font: run.font,
+    size: run.size,
+    ...ink,
+    underline: run.decoration === 'underline',
+    strike: run.decoration === 'line-through',
+    letterSpacing: run.width - space,
+  });
 }
 
 /** A page number's text, filled in for the sheet and aligned in its content box on one line. */
