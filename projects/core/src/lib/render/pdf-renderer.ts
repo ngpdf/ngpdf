@@ -1,5 +1,6 @@
 import { DOCUMENT, EnvironmentInjector, Service, inject, type Type } from '@angular/core';
 import { assertBrowser } from './browser-only';
+import { PDF_EMOJI } from './pdf-emoji';
 import { PDF_FONT_SET } from './pdf-fonts';
 import { PDF_HYPHENATE } from './pdf-hyphenation';
 import { renderTree } from './render-tree';
@@ -55,10 +56,12 @@ export async function renderPdf<T>(
       // A server render reads URLs with its own fetchImage, so it gets its own cache too.
       ?.sources((src) => loaded.loadFont(src, undefined, server), server && new Map());
     const hyphenate = injector.get(PDF_HYPHENATE, null);
+    const emoji = injector.get(PDF_EMOJI, null);
     return await loaded.renderDocument(tree.root, {
       fonts: fonts ?? [],
       ...(hyphenate && { hyphenate }),
       ...(server && { server }),
+      ...(emoji !== null && { emoji }),
     });
   } finally {
     tree.destroy();

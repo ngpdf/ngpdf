@@ -31,6 +31,8 @@ export { PdfRenderer, downloadPdf, renderToBlob } from './lib/render/pdf-rendere
 export { renderPdf as ɵrenderPdf } from './lib/render/pdf-renderer';
 export { isBrowser as ɵisBrowser } from './lib/render/browser-only';
 export { PdfDownload } from './lib/render/pdf-download';
+export { providePdfEmoji } from './lib/render/pdf-emoji';
+export type { PdfEmojiImage, PdfEmojiSource } from './lib/render/pdf-emoji';
 export { providePdfFonts } from './lib/render/pdf-fonts';
 export type { PdfFont } from './lib/render/pdf-fonts';
 export { providePdfHyphenation } from './lib/render/pdf-hyphenation';

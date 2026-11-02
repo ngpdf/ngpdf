@@ -1,0 +1,9 @@
+Team news
+The Example family    joined the club.
+Their entry was approved    today.
+The next match is in   Brazil.
+Press    on the phone menu to hear the results again.
+© 2026 Example Club stays text.
+
+Small print   in 9pt, justified: the emoji keep to the size of the text around them and
+move with the word gaps, and the second line is cut     with an ellipsis after the last…

@@ -138,6 +138,7 @@ A server that fetched any URL found in a document could be made to fetch interna
 - A relative URL, such as `/assets/logo.png`, has no page to resolve against. It rejects with `ngpdf: relative image URL "<url>" on the server`, with or without `fetchImage`.
 - Only `http:` and `https:` URLs reach `fetchImage`. Any other scheme, such as `file:///etc/passwd`, `ftp://…`, or `localhost:3000/a.png` and `C:\logo.png` (which parse as the schemes `localhost:` and `c:`), rejects with `ngpdf: image URL "<url>" is not http or https; the server reads no other scheme`.
 - Font URLs in `providePdfFonts` follow the same rules through the same `fetchImage`, with `font` in place of `image` in the messages.
+- Emoji image URLs from `providePdfEmoji` follow them too. A refused or failed emoji does not reject the render: it is drawn as text, as in the browser.
 - `<url>` is shown without its query string and fragment, which often carry a token, and so is the URL where a `fetchImage` error repeats it. `fetchImage` gets the whole URL.
 - If `fetchImage` rejects, the render rejects with `ngpdf: could not load image "<url>": <reason>` (or `font`).
 
