@@ -337,10 +337,12 @@ export function parseEdges(value: string, tag?: string): Edges<Length> {
 export function parseBorder(value: string, tag?: string): BorderParts {
   let width: number | null = null;
   let color: Color | null = null;
+  let styleSeen = false;
   let none = false;
   let unsupportedStyle: string | null = null;
   const tokens = tokenize(value);
   if (tokens.length > 3) return fail(`too many values in "${show(value)}"`, tag);
+  const duplicate = (): never => fail(`invalid value "${show(value)}"`, tag);
   for (const token of tokens) {
     const code = token.charCodeAt(0);
     if (
@@ -350,12 +352,16 @@ export function parseBorder(value: string, tag?: string): BorderParts {
       code === 45 ||
       BORDER_WIDTHS.has(token.toLowerCase())
     ) {
+      if (width !== null) return duplicate();
       width = parseBorderWidth(token, tag);
     } else if (BORDER_STYLES.has(token.toLowerCase())) {
+      if (styleSeen) return duplicate();
+      styleSeen = true;
       const style = token.toLowerCase();
       if (style === 'none' || style === 'hidden') none = true;
       else if (style !== 'solid') unsupportedStyle = style;
     } else {
+      if (color !== null) return duplicate();
       color = parseColor(token, tag);
     }
   }

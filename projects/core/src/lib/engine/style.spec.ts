@@ -917,6 +917,18 @@ describe('resolveStyles property coverage', () => {
     expect(() => styleOf({ border: '1 solid red blue' })).toThrow(/^ngpdf: too many values/);
   });
 
+  it('rejects a second width, style or color in a border shorthand', () => {
+    expect(() => styleOf({ border: 'red blue' })).toThrow(
+      'ngpdf: invalid value "red blue" on pdf-view',
+    );
+    expect(() => styleOf({ border: '1 2 red' })).toThrow(
+      'ngpdf: invalid value "1 2 red" on pdf-view',
+    );
+    expect(() => styleOf({ 'border-top': 'solid dashed' })).toThrow(
+      'ngpdf: invalid value "solid dashed" on pdf-view',
+    );
+  });
+
   it('supports CSS border width keywords', () => {
     expect(styleOf({ border: 'thin solid red' }).borderWidth.top).toBe(1);
     expect(styleOf({ 'border-top': 'medium solid red' }).borderWidth.top).toBe(3);
