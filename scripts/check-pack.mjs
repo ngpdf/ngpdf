@@ -1,17 +1,32 @@
-// Checks the files `npm pack` would publish from dist/core: a LICENSE and a README, and no
-// specs, benches or test helpers. Runs in CI after `npm run build:core`.
+// Checks the files `npm pack` would publish from dist/core: a LICENSE, a README and the compiled
+// ng add schematic, and no specs, benches or test helpers. Runs in CI after `npm run build:core`.
 // Usage: node scripts/check-pack.mjs [package directory, default dist/core]
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 const TEST_FILE = /(?:^|\/)(?:testing\/|[^/]*\.(?:spec|bench)\.)/;
+const REQUIRED = [
+  'LICENSE',
+  'README.md',
+  // The ng add schematic: the CommonJS marker, the collection, the compiled factory and its
+  // helpers, the options and the file templates.
+  'schematics/package.json',
+  'schematics/collection.json',
+  'schematics/ng-add/index.js',
+  'schematics/ng-add/demo-route.js',
+  'schematics/ng-add/typescript.js',
+  'schematics/ng-add/schema.json',
+  'schematics/ng-add/files/document/example-document.ts.template',
+  'schematics/ng-add/files/demo/pdf-demo.ts.template',
+];
 
 export function checkPackFiles(paths) {
   const problems = paths
     .filter((path) => TEST_FILE.test(path))
     .map((path) => `test file in the package: ${path}`);
-  if (!paths.includes('LICENSE')) problems.push('LICENSE is missing');
-  if (!paths.includes('README.md')) problems.push('README.md is missing');
+  for (const path of REQUIRED) {
+    if (!paths.includes(path)) problems.push(`${path} is missing`);
+  }
   return problems;
 }
 
@@ -25,5 +40,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const problems = checkPackFiles(paths);
   for (const problem of problems) console.error(`${directory}: ${problem}`);
   if (problems.length > 0) process.exit(1);
-  console.log(`${directory}: ${String(paths.length)} files, LICENSE and README, no test files`);
+  console.log(
+    `${directory}: ${String(paths.length)} files, LICENSE, README and schematics, no test files`,
+  );
 }

@@ -1,0 +1,21 @@
+import { Component } from '@angular/core';
+import { PdfDownload } from '@ngpdf/core';
+import { ExampleDocument } from './example-document';
+
+@Component({
+  selector: '<%= prefix %>-pdf-demo',
+  imports: [PdfDownload],
+  template: `
+    <button
+      type="button"
+      [pdfDownload]="exampleDocument"
+      [pdfInputs]="{ name: 'Ada' }"
+      pdfFileName="example.pdf"
+    >
+      Download PDF
+    </button>
+  `,
+})
+export class PdfDemo {
+  protected readonly exampleDocument = ExampleDocument;
+}

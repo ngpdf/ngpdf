@@ -1,0 +1,47 @@
+import { Component, input } from '@angular/core';
+import { PDF_ELEMENTS } from '@ngpdf/core';
+
+interface Line {
+  readonly item: string;
+  readonly quantity: number;
+}
+
+@Component({
+  selector: '<%= prefix %>-example-document',
+  imports: [PDF_ELEMENTS],
+  template: `
+    <pdf-document title="Example document">
+      <pdf-page size="A4" style="padding: 48; font-size: 11">
+        <pdf-text style="font-size: 20; font-weight: bold; margin-bottom: 16">
+          Hello, {{ name() }}
+        </pdf-text>
+        <pdf-table [columns]="['3fr', '1fr']">
+          <pdf-row header style="padding-bottom: 4; font-weight: bold">
+            <pdf-cell><pdf-text>Item</pdf-text></pdf-cell>
+            <pdf-cell style="text-align: right"><pdf-text>Quantity</pdf-text></pdf-cell>
+          </pdf-row>
+          @for (line of lines; track line.item) {
+            <pdf-row style="padding-top: 4; padding-bottom: 4">
+              <pdf-cell>
+                <pdf-text>{{ line.item }}</pdf-text>
+              </pdf-cell>
+              <pdf-cell style="text-align: right">
+                <pdf-text>{{ line.quantity }}</pdf-text>
+              </pdf-cell>
+            </pdf-row>
+          }
+        </pdf-table>
+        <pdf-page-number format="Page {page} of {total}" style="text-align: right" />
+      </pdf-page>
+    </pdf-document>
+  `,
+})
+export class ExampleDocument {
+  readonly name = input.required<string>();
+
+  protected readonly lines: readonly Line[] = [
+    { item: 'Notebook', quantity: 2 },
+    { item: 'Pencil', quantity: 12 },
+    { item: 'Eraser', quantity: 3 },
+  ];
+}
