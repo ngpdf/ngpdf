@@ -426,13 +426,13 @@ export const routes: Routes = [
       );
     });
 
-    it('prints the route to add by hand when the routes array spreads other routes', async () => {
+    it.each([
+      ['a spread', `[{ path: '', redirectTo: 'home' }, ...fallbackRoutes]`],
+      ['a variable', `[{ path: '', redirectTo: 'home' }, fallback]`],
+      ['a call', `[{ path: '', redirectTo: 'home' }, notFound()]`],
+    ])('prints the route to add by hand when the routes array holds %s', async (_, array) => {
       const tree = await application(await workspace(), 'app');
-      const custom = `import { Routes } from '@angular/router';
-import { fallbackRoutes } from './fallback';
-
-export const routes: Routes = [{ path: '', redirectTo: 'home' }, ...fallbackRoutes];
-`;
+      const custom = `import { Routes } from '@angular/router';\n\nexport const routes: Routes = ${array};\n`;
       tree.overwrite(routesPath, custom);
       const lines = logs();
 
@@ -441,8 +441,8 @@ export const routes: Routes = [{ path: '', redirectTo: 'home' }, ...fallbackRout
       expect(result.readContent(routesPath)).toBe(custom);
       expect(result.exists(demoPath)).toBe(true);
       expect(lines).toContain(
-        `ngpdf: the routes array in ${routesPath.slice(1)} spreads other routes, which may end ` +
-          `in a wildcard. Add this route by hand, before any wildcard: ` +
+        `ngpdf: the routes array in ${routesPath.slice(1)} has entries that are not object ` +
+          `literals, and one may be a wildcard. Add this route by hand, before any wildcard: ` +
           `{ path: 'pdf-demo', loadComponent: () => import('./documents/pdf-demo').then((m) => m.PdfDemo) }`,
       );
     });

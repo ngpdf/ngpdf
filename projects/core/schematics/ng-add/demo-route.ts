@@ -22,11 +22,11 @@ export function addDemoRoute(routesFile: string, demoFile: string): Rule {
       return;
     }
     const elements = routes.elements;
-    if (elements.some(ts.isSpreadElement)) {
-      // A wildcard in the spread routes would be invisible here, and catch pdf-demo first.
+    if (!elements.every(ts.isObjectLiteralExpression)) {
+      // A spread, a variable or a call may hold a wildcard that would catch pdf-demo first.
       context.logger.warn(
-        `ngpdf: the routes array in ${routesFile} spreads other routes, which may end in a ` +
-          `wildcard. Add this route by hand, before any wildcard: ` +
+        `ngpdf: the routes array in ${routesFile} has entries that are not object literals, and ` +
+          `one may be a wildcard. Add this route by hand, before any wildcard: ` +
           `{ path: 'pdf-demo', loadComponent: ${load} }`,
       );
       return;
