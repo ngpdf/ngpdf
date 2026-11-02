@@ -78,7 +78,8 @@ export function wordGaps(text: string): number {
   return text.match(/[ \u00a0]+/g)?.length ?? 0;
 }
 
-const MAX_TEXT_LENGTH = 1_048_576;
+/** The longest text one node may hold; layout throws past it. */
+export const MAX_TEXT_LENGTH = 1_048_576;
 // yoga-layout's MeasureMode.Undefined: no width constraint.
 const MEASURE_MODE_UNDEFINED = 0;
 // How far over `maxWidth` the summed character widths may be and still be tried by measuring.

@@ -1,6 +1,7 @@
 import type { PdfNode } from '../tree/node';
 import { isSimple } from './graphemes';
 import { readSource, type ImageAsset } from './images';
+import { MAX_TEXT_LENGTH } from './text';
 import type { PdfWriter } from './writer';
 
 /** An emoji image: a URL, a data URL or the bytes of a PNG or JPEG. */
@@ -18,6 +19,9 @@ export const MAX_EMOJI = 500;
 
 /** How long one emoji's image may take, from asking the source to reading the bytes. */
 export const EMOJI_TIMEOUT_MS = 10_000;
+
+/** How many emoji images load at once, as a browser fetches about this many from one host. */
+export const EMOJI_CONCURRENCY = 6;
 
 const VS15 = 0xfe0e;
 const VS16 = 0xfe0f;
@@ -63,8 +67,9 @@ function emojiIn(root: PdfNode): string[] {
   const segmenter = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
   const visit = (node: PdfNode): void => {
     if (node.kind === 'text') {
-      // Every emoji has a code unit at U+0300 or above: U+FE0F, a surrogate or a symbol.
-      if (isSimple(node.text)) return;
+      // Every emoji has a code unit at U+0300 or above: U+FE0F, a surrogate or a symbol. A text
+      // over the limit is not segmented: layout rejects the render for it anyway.
+      if (node.text.length > MAX_TEXT_LENGTH || isSimple(node.text)) return;
       for (const { segment } of segmenter.segment(node.text)) {
         if (isEmoji(segment)) found.add(segment);
       }
@@ -95,6 +100,7 @@ async function loadOne(
   if (!read) throw new Error('not a string, Blob, ArrayBuffer or Uint8Array');
   const data = await read.read();
   const size = writer.imageSize(data);
+  if (!(size.width > 0 && size.height > 0)) throw new Error('empty image');
   // A file cut off after its header still has a size; the writer would fail on it later.
   if (writer.checkImage && !(await writer.checkImage(data))) throw new Error('unreadable image');
   return { data, ...size };
@@ -144,18 +150,24 @@ export async function loadEmoji(
   if (found.length > MAX_EMOJI) {
     warn(`ngpdf: more than ${String(MAX_EMOJI)} distinct emoji; the rest are drawn as text`);
   }
-  const loaded = await Promise.all(
-    found.slice(0, MAX_EMOJI).map(async (emoji) => {
+  const wanted = found.slice(0, MAX_EMOJI);
+  const loaded: (ImageAsset | null)[] = [];
+  // A few workers share one queue; each emoji's deadline starts when a worker takes it.
+  const queue = wanted.entries();
+  const worker = async (): Promise<void> => {
+    for (const [index, emoji] of queue) {
       try {
-        return [emoji, await loadInTime(emoji, source, writer, fetchFn)] as const;
+        loaded[index] = await loadInTime(emoji, source, writer, fetchFn);
       } catch {
-        return [emoji, null] as const;
+        loaded[index] = null;
       }
-    }),
-  );
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(EMOJI_CONCURRENCY, wanted.length) }, worker));
   const images = new Map<string, ImageAsset>();
   const failed: string[] = [];
-  for (const [emoji, asset] of loaded) {
+  for (const [index, emoji] of wanted.entries()) {
+    const asset = loaded[index];
     if (asset) images.set(emoji, asset);
     else failed.push(emoji);
   }

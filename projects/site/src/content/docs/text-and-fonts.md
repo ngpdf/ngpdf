@@ -142,17 +142,30 @@ providePdfEmoji((_emoji, codepoints) => {
 });
 ```
 
+That folder has no flags: the Noto Emoji repository keeps them apart, in `third_party/region-flags/png`, named by region code (`BR.png`). Copy those too and send each regional-indicator pair there:
+
+```ts
+providePdfEmoji((_emoji, codepoints) => {
+  const points = codepoints.split('-').map((hex) => parseInt(hex, 16));
+  if (points.length === 2 && points.every((point) => point >= 0x1f1e6 && point <= 0x1f1ff)) {
+    const region = String.fromCharCode(...points.map((point) => point - 0x1f1e6 + 65));
+    return `/assets/flags/${region}.png`;
+  }
+  return `/assets/noto/emoji_u${points.map((point) => point.toString(16).padStart(4, '0')).join('_')}.png`;
+});
+```
+
 ### What counts as an emoji
 
 A character as you see it (a grapheme cluster) is an emoji when:
 
 - it contains U+FE0F (the emoji variation selector);
-- or it is a ZWJ sequence, such as 👨‍👩‍👧‍👦;
-- or it is a keycap, such as `#️⃣`;
-- or it is a modifier sequence, a character such as ✌ followed by a skin tone, as in ✌🏽;
+- or it is a ZWJ sequence that starts with a pictographic character (`Extended_Pictographic`), such as 👨‍👩‍👧‍👦 or ⛹‍♀;
+- or it is a keycap: a digit, `#` or `*` followed by U+20E3, with or without U+FE0F, such as `#️⃣` or `1⃣`;
+- or it is a modifier sequence: a character that takes a skin tone (`Emoji_Modifier_Base`) followed by one, such as ✌🏽;
 - or it starts with a character that shows as an emoji by default, which covers 😀, a skin tone such as 👍🏽, flags such as 🇧🇷 and tag sequences such as 🏴󠁧󠁢󠁳󠁣󠁴󠁿.
 
-`©`, `®`, `™`, the digits and other characters that show as text by default stay text unless U+FE0F follows them. An emoji followed by U+FE0E (the text variation selector) stays text.
+`©`, `®`, `™`, the digits and other characters that show as text by default stay text on their own. They become emoji with U+FE0F after them, in a keycap (the digits, `#` and `*`), or, for a pictographic character, in a ZWJ sequence or with a skin tone, as above. A cluster whose second character is U+FE0E (the text variation selector) always stays text.
 
 ### Layout
 
@@ -164,10 +177,10 @@ A character as you see it (a grapheme cluster) is an emoji when:
 
 ### Loading
 
-- Each distinct emoji is loaded once per render, together with the document's images and before layout. The PDF embeds each image once, however often the emoji appears.
+- Each distinct emoji is loaded once per render, together with the document's images and before layout, at most 6 at a time. The PDF embeds each image once, however often the emoji appears.
 - URLs are fetched like [images](/docs/images), with same-origin credentials only.
 - A render loads at most 500 distinct emoji. The rest are drawn as text, with one warning in development mode: `ngpdf: more than 500 distinct emoji; the rest are drawn as text`.
-- An emoji whose image fails to load, is not a whole PNG or JPEG (a file cut off after its header counts as broken), is `null`, or takes more than 10 seconds is drawn as text. A fetch that runs out of time is aborted. Emoji often come from user data, so a missing one does not fail the render. In development mode ngpdf logs one warning per render listing them: `ngpdf: emoji without an image, drawn as text: 🦤`.
+- An emoji whose image fails to load, is not a whole PNG or JPEG (a file cut off after its header counts as broken), is `null`, has no width or height, or takes more than 10 seconds from the start of its load is drawn as text. A fetch that runs out of time is aborted. The 10 seconds cannot interrupt a source function while it runs synchronously: they only cut off waiting for its promise or for a fetch. Emoji often come from user data, so a missing one does not fail the render. In development mode ngpdf logs one warning per render listing them: `ngpdf: emoji without an image, drawn as text: 🦤`.
 
 ### Limits
 

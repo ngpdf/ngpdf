@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createNode, type PdfNode } from '../tree/node';
 import {
+  EMOJI_CONCURRENCY,
   EMOJI_TIMEOUT_MS,
   MAX_EMOJI,
   emojiCodepoints,
@@ -177,6 +178,89 @@ describe('loadEmoji', () => {
     expect([...images.keys()]).toEqual(['😃']);
     expect(checkImage).toHaveBeenCalledTimes(2);
     expect(seen).toEqual(['ngpdf: emoji without an image, drawn as text: 😀']);
+  });
+
+  it('leaves out an image with no width or no height', async () => {
+    const seen: string[] = [];
+    const images = await loadEmoji(
+      doc('😀 😃 😄'),
+      () => new Uint8Array([1]),
+      {
+        imageSize: () => ({ width: 0, height: 0 }),
+      },
+      (message) => seen.push(message),
+    );
+    expect(images.size).toBe(0);
+    expect(seen).toEqual(['ngpdf: emoji without an image, drawn as text: 😀 😃 😄']);
+    const sizes = [
+      { width: 0, height: 5 },
+      { width: 5, height: 0 },
+      { width: 5, height: 5 },
+    ];
+    const order = ['😀', '😃', '😄'];
+    const some = await loadEmoji(
+      doc(order.join(' ')),
+      (emoji) => new Uint8Array([order.indexOf(emoji)]),
+      { imageSize: (data) => sizes[data[0] ?? 0] ?? { width: 0, height: 0 } },
+      () => undefined,
+    );
+    expect([...some.keys()]).toEqual(['😄']);
+  });
+
+  it(`loads at most ${String(EMOJI_CONCURRENCY)} emoji at a time, each with its full time`, async () => {
+    vi.useFakeTimers();
+    const all = Array.from({ length: EMOJI_CONCURRENCY + 2 }, (_, n) =>
+      String.fromCodePoint(0x1f600 + n),
+    );
+    const late = all.slice(EMOJI_CONCURRENCY);
+    const asked: string[] = [];
+    // The first ones never settle; the last two answer at once, but only once they are asked.
+    const source = (emoji: string) => {
+      asked.push(emoji);
+      return late.includes(emoji) ? PNG : new Promise<null>(() => undefined);
+    };
+    const { loading, warnings } = load(doc(all.join(' ')), source);
+    let images: ReadonlyMap<string, unknown> | undefined;
+    void loading.then((loaded) => (images = loaded));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(EMOJI_CONCURRENCY).toBe(6);
+    expect(asked).toEqual(all.slice(0, EMOJI_CONCURRENCY));
+    await vi.advanceTimersByTimeAsync(EMOJI_TIMEOUT_MS);
+    expect(asked).toEqual(all);
+    expect([...(images?.keys() ?? [])]).toEqual(late);
+    expect(warnings).toEqual([
+      `ngpdf: emoji without an image, drawn as text: ${all.slice(0, EMOJI_CONCURRENCY).join(' ')}`,
+    ]);
+  });
+
+  it('starts the time of a queued emoji when its load starts', async () => {
+    vi.useFakeTimers();
+    const all = Array.from({ length: EMOJI_CONCURRENCY + 1 }, (_, n) =>
+      String.fromCodePoint(0x1f600 + n),
+    );
+    // Each takes 9 s. The last one waits for a free slot, starts at 9 s and is done at 18 s.
+    const source = () =>
+      new Promise<string>((resolve) =>
+        setTimeout(() => {
+          resolve(PNG);
+        }, 9_000),
+      );
+    const { loading, warnings } = load(doc(all.join(' ')), source);
+    await vi.advanceTimersByTimeAsync(18_000);
+    expect((await loading).size).toBe(all.length);
+    expect(warnings).toEqual([]);
+  });
+
+  it('skips a text longer than 1 MB, which layout rejects anyway', async () => {
+    const source = vi.fn(() => PNG);
+    const long = `🎉${'a'.repeat(1_048_576)}`;
+    await load(doc(long, 'fine 😀'), source).loading;
+    expect(source.mock.calls).toEqual([['😀', '1f600']]);
+    const exact = `🎉${'a'.repeat(1_048_574)}`;
+    expect(exact.length).toBe(1_048_576);
+    source.mockClear();
+    await load(doc(exact), source).loading;
+    expect(source.mock.calls).toEqual([['🎉', '1f389']]);
   });
 
   it('leaves out an image of a type it cannot read', async () => {
