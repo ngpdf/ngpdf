@@ -34,6 +34,14 @@ describe('loadFont', () => {
       expect(fetchImage).not.toHaveBeenCalled();
     });
 
+    it('strips the query string from the URL where a fetchImage error repeats it', async () => {
+      const url = 'https://fonts.example.com/a.ttf?key=secret';
+      const fetchImage = vi.fn(() => Promise.reject(new Error(`HTTP 403 for ${url}`)));
+      await expect(loadFont(url, undefined, { fetchImage })).rejects.toThrow(
+        /^ngpdf: could not load font "https:\/\/fonts\.example\.com\/a\.ttf": HTTP 403 for https:\/\/fonts\.example\.com\/a\.ttf$/,
+      );
+    });
+
     it('refuses a relative URL', async () => {
       const fetchImage = vi.fn(() => Promise.resolve(bytes));
       await expect(loadFont('/fonts/a.ttf', undefined, { fetchImage })).rejects.toThrow(

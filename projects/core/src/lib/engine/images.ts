@@ -7,8 +7,14 @@ export interface ImageAsset {
   readonly height: number;
 }
 
-export function describeError(reason: unknown): string {
-  return reason instanceof Error ? reason.message : String(reason);
+/**
+ * Why a load failed, for the message. A reason that repeats the source URL (a `fetchImage` or
+ * runtime error often does) gets the URL's label in its place, so the query string and fragment,
+ * which often carry a token, stay out of the message as they do in the label.
+ */
+export function describeError(reason: unknown, src: unknown, label: string): string {
+  const text = reason instanceof Error ? reason.message : String(reason);
+  return typeof src === 'string' ? text.replaceAll(src, label) : text;
 }
 
 /**
@@ -129,7 +135,7 @@ async function loadOne(
     const data = await source.read();
     return { data, ...writer.imageSize(data) };
   } catch (error) {
-    throw new Error(`ngpdf: could not load image "${label}": ${describeError(error)}`, {
+    throw new Error(`ngpdf: could not load image "${label}": ${describeError(error, src, label)}`, {
       cause: error,
     });
   }
