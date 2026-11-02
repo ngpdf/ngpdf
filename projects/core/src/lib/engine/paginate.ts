@@ -1005,6 +1005,9 @@ export function paginatePage(
   const contentStyles = new Map(styles).set(content, contentStyle);
   const laid = layoutBox(content, contentStyles, frame.contentWidth, ctx);
   const contentHeight = frame.bottom - frame.top;
+  // Yoga uses float32 positions. At A4 scale one ULP is around 6e-5pt;
+  // a fixed 1e-6pt tolerance moves exact-fit units onto another sheet.
+  const fitEpsilon = Math.max(EPSILON, Math.abs(frame.bottom) * 2 ** -23);
   const { units, wrappers, texts, floats, notes } = collectUnits(laid, contentHeight, pageGroups);
 
   // Per unit: the outermost wrapper top opening at it, the outermost wrapper bottom closing at
@@ -1141,7 +1144,7 @@ export function paginatePage(
   ): void => {
     const { box } = at;
     const drawn = { box, x: x + at.dx, y: y + at.dy, ...grouped(groups) };
-    if (y + box.h > frame.bottom + EPSILON) {
+    if (y + box.h > frame.bottom + Math.max(EPSILON, Math.abs(frame.bottom) * 2 ** -23)) {
       const what = isHeaderRow(box.node) ? `${box.node.tag} header` : box.node.tag;
       warn(`ngpdf: ${what} is taller than a page and is cut at the bottom`);
       on.placed.push({ ...drawn, clipBottom: frame.bottom });
@@ -1370,7 +1373,7 @@ export function paginatePage(
     }
     const planned = index <= textLast ? textBreaks : null;
     const trail = Math.max(0, (closesAt.get(index) ?? unit.bottom) - unit.bottom);
-    const overflows = next.top + unit.box.h + trail > frame.bottom + EPSILON;
+    const overflows = next.top + unit.box.h + trail > frame.bottom + fitEpsilon;
     if ((planned ? planned.has(index) : overflows) && current.units > 0) {
       startPage();
       previousBottom = null;

@@ -1998,3 +1998,24 @@ describe('paginatePage: pdf-note', () => {
     expect(placedOf(pages, marked).y).toBeCloseTo(CONTENT_TOP + 20 + 30, 6);
   });
 });
+
+describe('paginatePage: float32-fit regression (#239)', () => {
+  it.each([2, 3, 17])('keeps %i exactly fitting units on one sheet', (count) => {
+    const area = A4_HEIGHT - 2 * PADDING;
+    const views = Array.from({ length: count }, () =>
+      el('pdf-view', { height: String(area / count) }),
+    );
+    const pages = paginate(page(views));
+    expect(pages).toHaveLength(1);
+    expect(pages[0]!.placed.map((p) => p.box.node)).toEqual(views);
+  });
+
+  it('does not tolerate a real 0.01pt overflow', () => {
+    const area = A4_HEIGHT - 2 * PADDING;
+    const views = [
+      el('pdf-view', { height: String(area / 2) }),
+      el('pdf-view', { height: String(area / 2 + 0.01) }),
+    ];
+    expect(paginate(page(views))).toHaveLength(2);
+  });
+});
