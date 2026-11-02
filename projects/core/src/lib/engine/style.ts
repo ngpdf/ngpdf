@@ -913,12 +913,13 @@ function apply(
   tag: string,
   warn: Warn,
 ): void {
+  // Only an exact longhand sets a side: `margin-top-x` is unknown, so it is ignored.
   const side = SIDES.find((s) => property.includes(`-${s}`));
-  if (side && property.startsWith('margin-')) {
+  if (side && property === `margin-${side}`) {
     style.margin = withSide(style.margin, side, parseLength(value, tag));
     return;
   }
-  if (side && property.startsWith('padding-')) {
+  if (side && property === `padding-${side}`) {
     style.padding = withSide(style.padding, side, parsePadding(value, tag));
     return;
   }
