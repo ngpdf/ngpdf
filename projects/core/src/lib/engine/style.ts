@@ -273,7 +273,7 @@ export function parseLength(value: string, tag?: string): Length {
   const end = scanNumber(text);
   if (end === 0) return fail(`invalid length "${show(value)}"`, tag);
   const amount = Number(text.slice(0, end));
-  if (!Number.isFinite(amount)) return fail(`invalid length "${show(value)}"`, tag);
+  if (!Number.isFinite(amount)) return fail(`non-finite length "${show(value)}"`, tag);
   const unit = text.slice(end).toLowerCase();
   if (unit === '%') return { percent: amount };
   const factor = UNIT_FACTORS.get(unit);
@@ -415,7 +415,7 @@ function parseAngle(token: string, fn: string, tag?: string): number {
     end > 0 && Number.isFinite(amount)
       ? ANGLE_UNITS.get(token.slice(end).toLowerCase())
       : undefined;
-  if (factor !== undefined) return amount * factor;
+  if (factor !== undefined && Number.isFinite(amount * factor)) return amount * factor;
   if (parseNumber(token) === 0) return 0;
   return fail(`invalid angle "${show(token)}" in "${show(fn)}"`, tag);
 }
@@ -626,7 +626,9 @@ function angleOf(token: string, tag?: string): number | null {
   if (end === 0 || factor === undefined || !Number.isFinite(amount)) {
     return fail(`invalid gradient angle "${show(token)}"`, tag);
   }
-  return amount * factor;
+  const degrees = amount * factor;
+  if (!Number.isFinite(degrees)) return fail(`invalid gradient angle "${show(token)}"`, tag);
+  return degrees;
 }
 
 /** `to <side>` or `to <side> <side>`, one side per axis. */

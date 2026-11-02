@@ -1001,11 +1001,14 @@ describe('resolveStyles property coverage', () => {
     expect(parseLength('1.2246467991473533e-15pt')).toBeCloseTo(1.2246467991473533e-15, 18);
     expect(styleOf({ opacity: '1e-7' }).opacity).toBeCloseTo(1e-7, 10);
     expect(styleOf({ left: '1.2246467991473533e-15pt' }).inset.left).toBeCloseTo(1.2246467991473533e-15, 18);
-    expect(() => parseLength('1e999')).toThrow('ngpdf: invalid length');
+    expect(() => parseLength('1e999')).toThrow('ngpdf: non-finite length');
+    expect(() => parseLength('1e308cm')).toThrow('ngpdf: invalid length');
+    expect(() => styleOf({ transform: 'rotate(1e308turn)' })).toThrow('ngpdf: invalid angle');
+    expect(() => styleOf({ 'background-image': 'linear-gradient(1e308turn,red,blue)' })).toThrow('ngpdf: invalid gradient angle');
   });
 
   it('rejects non-finite numbers and truncates long values in errors', () => {
-    expect(() => parseLength('1e999')).toThrow(/^ngpdf: invalid length/);
+    expect(() => parseLength('1e999')).toThrow(/^ngpdf: non-finite length/);
     expect(() => parseLength('9'.repeat(400))).toThrow(/^ngpdf: invalid length "9{60}\.\.\."/);
     expect(() => styleOf({ opacity: '9'.repeat(400) })).toThrow(/^ngpdf: invalid value/);
   });
