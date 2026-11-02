@@ -1,6 +1,7 @@
 // Public API surface of @ngpdf/core. The engine is not exported: it loads on the first render.
 export {
   PDF_ELEMENTS,
+  PdfCanvas,
   PdfCell,
   PdfDocument,
   PdfImage,
@@ -15,6 +16,14 @@ export {
   PdfView,
 } from './lib/elements';
 export type { NoteIcon, TableColumn } from './lib/elements';
+export type {
+  PdfCanvasContext,
+  PdfCanvasFillRule,
+  PdfCanvasLineCap,
+  PdfCanvasLineJoin,
+  PdfCanvasPaint,
+  PdfCanvasSize,
+} from './lib/tree/canvas-context';
 export type { PageOrientation, PageSize } from './lib/elements/page';
 export type { PageLayout, PageMode, PdfSecurity } from './lib/elements/document';
 export { PdfRenderer, downloadPdf, renderToBlob } from './lib/render/pdf-renderer';

@@ -1247,12 +1247,15 @@ interface Pending {
 
 /**
  * A `pdf-image` is measured by Yoga, and a measured node cannot have children: without this check
- * Yoga fails deep in layout with an unclear error. Its text is ignored, so only elements count.
+ * Yoga fails deep in layout with an unclear error. A `pdf-canvas` has no content: a child would
+ * size it and be drawn. Their text is ignored, so only elements count.
  */
-function checkImageChildren(node: PdfNode): void {
-  if (node.tag !== 'pdf-image') return;
+const CHILDLESS = new Set(['pdf-image', 'pdf-canvas']);
+
+function checkLeafChildren(node: PdfNode): void {
+  if (!CHILDLESS.has(node.tag)) return;
   const child = node.children.find((candidate) => candidate.kind === 'element');
-  if (child) fail(`pdf-image cannot have children (found <${child.tag}>)`);
+  if (child) fail(`${node.tag} cannot have children (found <${child.tag}>)`);
 }
 
 const INLINE = new Set(['pdf-text', 'pdf-span']);
@@ -1317,7 +1320,7 @@ export function resolveStyles(
     if (item.depth > MAX_NESTING) fail(`nesting deeper than ${String(MAX_NESTING)}`);
     const isLink = item.node.tag === 'pdf-link';
     if (isLink && item.inLink) fail('pdf-link inside a pdf-link');
-    checkImageChildren(item.node);
+    checkLeafChildren(item.node);
     checkInline(item.node, warn);
     checkNote(item.node);
     const style = resolveOne(item.node, item.inherited, warn);

@@ -588,6 +588,80 @@ describe('createPdfkitWriter', () => {
       }
     });
 
+    it('draws a shape with path operators, its fill rule, line settings and dash', async () => {
+      const segments = [
+        { kind: 'move', to: { x: 10, y: 20 } },
+        { kind: 'line', to: { x: 30, y: 20 } },
+        { kind: 'curve', c1: { x: 40, y: 20 }, c2: { x: 40, y: 40 }, to: { x: 30, y: 40 } },
+        { kind: 'close' },
+      ] as const;
+      const content = contentOf(
+        await pdfText([
+          {
+            op: 'shape',
+            segments,
+            fill: { color: '#ff0000', opacity: 0.5, rule: 'evenodd' },
+          },
+          {
+            op: 'shape',
+            segments,
+            stroke: {
+              color: '#0000ff',
+              opacity: 1,
+              width: 3,
+              cap: 'round',
+              join: 'bevel',
+              dash: { pattern: [4, 2], phase: 1 },
+            },
+          },
+          {
+            op: 'shape',
+            segments,
+            fill: { color: '#00ff00', opacity: 1, rule: 'nonzero' },
+            stroke: { color: '#000000', opacity: 1, width: 1, cap: 'square', join: 'miter' },
+          },
+        ]),
+      );
+      const path = '10 20 m\n30 20 l\n40 20 40 40 30 40 c\nh\n';
+      expect(content).toContain(`${path}f*\nQ`);
+      expect(content).toMatch(/\n3 w\n1 J\n2 j\n[\s\S]*\[4 2\] 1 d\n/);
+      expect(content).toContain(`${path}S\nQ`);
+      expect(content).toMatch(/\n1 w\n2 J\n0 j\n/);
+      expect(content).toContain(`${path}B\nQ`);
+      const both = contentOf(
+        await pdfText([
+          {
+            op: 'shape',
+            segments,
+            fill: { color: '#00ff00', opacity: 1, rule: 'evenodd' },
+            stroke: { color: '#000000', opacity: 1, width: 1, cap: 'butt', join: 'miter' },
+          },
+        ]),
+      );
+      expect(both).toContain(`${path}B*\nQ`);
+      // The second shape's dash is restored with its state, so the third is solid.
+      expect(count(content, / d\n/g)).toBe(1);
+      expect(count(content, /\nq\n/g) + (content.startsWith('q\n') ? 1 : 0)).toBe(
+        count(content, /\nQ(?:\n|$)/g),
+      );
+    });
+
+    it('fills a shape with the nonzero rule as plain f', async () => {
+      const content = contentOf(
+        await pdfText([
+          {
+            op: 'shape',
+            segments: [
+              { kind: 'move', to: { x: 0, y: 0 } },
+              { kind: 'line', to: { x: 5, y: 5 } },
+            ],
+            fill: { color: '#000000', opacity: 1, rule: 'nonzero' },
+          },
+        ]),
+      );
+      expect(content).toContain('0 0 m\n5 5 l\nf\nQ');
+    });
+
     it('draws a rounded rect with curve operators and a square one without', async () => {
       const rect = { op: 'rect', x: 10, y: 10, w: 80, h: 40, fill: '#ff0000', opacity: 1 } as const;
       const rounded = contentOf(

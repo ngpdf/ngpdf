@@ -8,6 +8,7 @@ import gettingStarted from '../../content/docs/getting-started.md';
 import howItWorks from '../../content/docs/how-it-works.md';
 import images from '../../content/docs/images.md';
 import layoutAndStyling from '../../content/docs/layout-and-styling.md';
+import linesAndShapes from '../../content/docs/lines-and-shapes.md';
 import limitationsAndRoadmap from '../../content/docs/limitations-and-roadmap.md';
 import pagination from '../../content/docs/pagination.md';
 import renderingApi from '../../content/docs/rendering-api.md';
@@ -25,6 +26,7 @@ const SOURCES: Readonly<Record<string, string>> = {
   tables,
   pagination,
   images,
+  'lines-and-shapes': linesAndShapes,
   'components-in-documents': componentsInDocuments,
   elements,
   'rendering-api': renderingApi,

@@ -384,6 +384,18 @@ describe('resolveStyles', () => {
     );
   });
 
+  it('throws a clear error for a pdf-canvas with an element child, which would size and draw it', () => {
+    const canvas = el('pdf-canvas', {}, [el('pdf-view', { height: '40' })]);
+    expect(() => resolveStyles(el('pdf-document', {}, [canvas]))).toThrow(
+      'ngpdf: pdf-canvas cannot have children (found <pdf-view>)',
+    );
+  });
+
+  it('lets a pdf-canvas hold text, which is ignored', () => {
+    const canvas = el('pdf-canvas', {}, [createNode('text', '', 'alt')]);
+    expect(() => resolveStyles(el('pdf-document', {}, [canvas]))).not.toThrow();
+  });
+
   it('lets a pdf-image hold text, which is ignored', () => {
     const image = el('pdf-image', {}, [createNode('text', '', 'alt')]);
     expect(() => resolveStyles(el('pdf-document', {}, [image]))).not.toThrow();
