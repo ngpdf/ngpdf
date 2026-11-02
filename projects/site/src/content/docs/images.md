@@ -1,6 +1,6 @@
 ---
 title: Images
-description: Add PNG and JPEG images with pdf-image from a data URL, a URL, a Blob or an ArrayBuffer, and control their size with width, height and object-fit.
+description: Add PNG and JPEG images with pdf-image from a data URL, a URL, a Blob, an ArrayBuffer or a Uint8Array, and control their size with width, height and object-fit.
 section: Guide
 order: 7
 ---
@@ -33,7 +33,7 @@ export class BadgeDocument {
 
 ## Sources
 
-`src` is a `string`, a `Blob` or an `ArrayBuffer`.
+`src` is a `string`, a `Blob`, an `ArrayBuffer` or a `Uint8Array`.
 
 | Source | How ngpdf reads it |
 | --- | --- |
@@ -41,6 +41,7 @@ export class BadgeDocument {
 | any other string | downloaded with the browser's `fetch` |
 | a `Blob` (or a `File`) | read with `blob.arrayBuffer()` |
 | an `ArrayBuffer` | used as it is |
+| a `Uint8Array`, such as a Node `Buffer` | its bytes, as it is (a view into a larger buffer reads only its own bytes) |
 
 The format is detected from the bytes, not from the URL, the file name or the MIME type. PNG and JPEG are supported. SVG, GIF, WebP and other formats fail with `image is neither PNG nor JPEG`. To use them, draw them on a `<canvas>` and pass `canvas.toBlob(…, 'image/png')`:
 
@@ -52,14 +53,7 @@ export function canvasToPng(canvas: HTMLCanvasElement): Promise<Blob> {
 }
 ```
 
-A typed array such as `Uint8Array` is not accepted. Pass its bytes as an `ArrayBuffer`:
-
-```ts
-export function toImageSource(bytes: Uint8Array): ArrayBuffer {
-  // pdf-image takes an ArrayBuffer, not a typed array; slice() copies just this view's bytes.
-  return bytes.slice().buffer;
-}
-```
+Other typed arrays, such as `Uint16Array`, are not accepted.
 
 The `data:` prefix and its `;base64` marker are matched in any case, so `DATA:image/png;BASE64,…` is decoded in place too.
 
@@ -70,6 +64,7 @@ The `data:` prefix and its `;base64` marker are matched in any case, so `DATA:im
 - A response that is not OK fails, for example with `HTTP 404`.
 - There is no size limit and no timeout: a very large image is downloaded in full.
 - All images of a document load in parallel before layout. The same string `src` used several times in one render is fetched once.
+- On the server, `renderToBuffer` reads an absolute URL only through your `fetchImage`, and refuses a relative one. See [Images and fonts on the server](/docs/server-rendering#images-and-fonts-on-the-server).
 
 ## Errors
 
@@ -77,7 +72,7 @@ The first image that fails rejects the whole render with:
 
 `ngpdf: could not load image "<source>": <reason>`
 
-`<source>` is the URL without its query string and fragment (they often carry a token), or `data URL`, `Blob` or `ArrayBuffer`. `<reason>` is the cause, such as `HTTP 404`, the browser's network error, or `ngpdf: image is neither PNG nor JPEG`. Nothing is downloaded on failure, and the document component is destroyed.
+`<source>` is the URL without its query string and fragment (they often carry a token), or `data URL`, `Blob`, `ArrayBuffer` or `Uint8Array`. `<reason>` is the cause, such as `HTTP 404`, the browser's network error, or `ngpdf: image is neither PNG nor JPEG`; where it repeats the URL, the URL is shortened the same way. Nothing is downloaded on failure, and the document component is destroyed.
 
 ## Size
 

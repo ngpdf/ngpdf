@@ -3,7 +3,9 @@ import {
   ApplicationRef,
   Component,
   EnvironmentInjector,
+  PLATFORM_ID,
   createEnvironmentInjector,
+  runInInjectionContext,
   signal,
 } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
@@ -197,6 +199,32 @@ describe('pdfResource', () => {
     await settle();
 
     expect(pdf.status()).toBe('resolved');
+  });
+
+  it('stays idle on a server platform when made in an injection context', async () => {
+    const injector = createEnvironmentInjector(
+      [{ provide: PLATFORM_ID, useValue: 'server' }],
+      TestBed.inject(EnvironmentInjector),
+    );
+    const pdf = runInInjectionContext(injector, () =>
+      pdfResource(TestDocument, { inputs: () => ({ customer: 'ACME' }) }),
+    );
+    await settle();
+
+    expect(pdf.status()).toBe('idle');
+    expect(pdf.url()).toBeUndefined();
+    expect(renders.calls).toEqual([]);
+  });
+
+  it('throws on a server platform when given an injector, before any render', () => {
+    const injector = createEnvironmentInjector(
+      [{ provide: PLATFORM_ID, useValue: 'server' }],
+      TestBed.inject(EnvironmentInjector),
+    );
+    expect(() => pdfResource(TestDocument, { injector })).toThrow(
+      'ngpdf: pdfResource needs a browser; on the server, use renderToBuffer from @ngpdf/core/server',
+    );
+    expect(renders.calls).toEqual([]);
   });
 
   it('throws outside an injection context when no injector is given', () => {

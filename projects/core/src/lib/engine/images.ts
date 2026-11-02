@@ -7,8 +7,14 @@ export interface ImageAsset {
   readonly height: number;
 }
 
-export function describeError(reason: unknown): string {
-  return reason instanceof Error ? reason.message : String(reason);
+/**
+ * Why a load failed, for the message. A reason that repeats the source URL (a `fetchImage` or
+ * runtime error often does) gets the URL's label in its place, so the query string and fragment,
+ * which often carry a token, stay out of the message as they do in the label.
+ */
+export function describeError(reason: unknown, src: unknown, label: string): string {
+  const text = reason instanceof Error ? reason.message : String(reason);
+  return typeof src === 'string' ? text.replaceAll(src, label) : text;
 }
 
 /**
@@ -56,20 +62,57 @@ async function fetchBytes(url: string, fetchFn: typeof fetch): Promise<Uint8Arra
   return new Uint8Array(await response.arrayBuffer());
 }
 
-/** Where a source's bytes come from: a label for messages and a reader. Undefined for other types. */
+/**
+ * How a server render reads URLs. A server that fetched any URL from a document's data could be
+ * pointed at its own internal services (SSRF), so only the app's `fetchImage` reads one.
+ */
+export interface ServerSources {
+  readonly fetchImage?: (url: string) => Promise<Uint8Array>;
+}
+
+/**
+ * The server's reader for an http or https URL. A relative one has no page to resolve against,
+ * and any other scheme (`file:`, `ftp:`, or `localhost:` and `C:` read as schemes) never reaches
+ * `fetchImage`, so a careless callback cannot be made to read one.
+ */
+function serverRead(
+  url: string,
+  label: string,
+  server: ServerSources,
+  kind: 'image' | 'font',
+): () => Promise<Uint8Array> {
+  if (!URL.canParse(url)) throw new Error(`ngpdf: relative ${kind} URL "${label}" on the server`);
+  const { protocol } = new URL(url);
+  if (protocol !== 'http:' && protocol !== 'https:') {
+    throw new Error(
+      `ngpdf: ${kind} URL "${label}" is not http or https; the server reads no other scheme`,
+    );
+  }
+  const { fetchImage } = server;
+  if (!fetchImage) {
+    throw new Error(`ngpdf: remote ${kind} "${label}" refused on the server; pass fetchImage`);
+  }
+  return () => fetchImage(url);
+}
+
+/**
+ * Where a source's bytes come from: a label for messages and a reader. Undefined for other types.
+ * With `server`, a URL the server may not read throws here, before any load starts.
+ */
 export function readSource(
   src: unknown,
   fetchFn: typeof fetch | undefined,
+  server?: ServerSources,
+  kind: 'image' | 'font' = 'image',
 ): { label: string; read: () => Promise<Uint8Array> | Uint8Array } | undefined {
   // URL schemes are case-insensitive, so `DATA:` and `Data:` are data URLs too.
   if (typeof src === 'string' && src.slice(0, 5).toLowerCase() === 'data:') {
     return { label: 'data URL', read: () => decodeDataUrl(src) };
   }
   if (typeof src === 'string') {
-    return {
-      label: withoutQuery(src),
-      read: () => fetchBytes(src, fetchFn ?? ((...args) => fetch(...args))),
-    };
+    const label = withoutQuery(src);
+    if (server) return { label, read: serverRead(src, label, server, kind) };
+    return { label, read: () => fetchBytes(src, fetchFn ?? ((...args) => fetch(...args))) };
   }
   if (src instanceof Blob) {
     return { label: 'Blob', read: async () => new Uint8Array(await src.arrayBuffer()) };
@@ -83,15 +126,16 @@ async function loadOne(
   src: unknown,
   writer: Pick<PdfWriter, 'imageSize'>,
   fetchFn: typeof fetch | undefined,
+  server: ServerSources | undefined,
 ): Promise<ImageAsset> {
-  const source = src instanceof Uint8Array ? undefined : readSource(src, fetchFn);
+  const source = readSource(src, fetchFn, server);
   const label = source?.label ?? typeof src;
   try {
-    if (!source) throw new Error('src must be a string, Blob or ArrayBuffer');
+    if (!source) throw new Error('src must be a string, Blob, ArrayBuffer or Uint8Array');
     const data = await source.read();
     return { data, ...writer.imageSize(data) };
   } catch (error) {
-    throw new Error(`ngpdf: could not load image "${label}": ${describeError(error)}`, {
+    throw new Error(`ngpdf: could not load image "${label}": ${describeError(error, src, label)}`, {
       cause: error,
     });
   }
@@ -102,6 +146,7 @@ export async function loadImages(
   root: PdfNode,
   writer: Pick<PdfWriter, 'imageSize'>,
   fetchFn?: typeof fetch,
+  server?: ServerSources,
 ): Promise<Map<PdfNode, ImageAsset>> {
   const nodes: PdfNode[] = [];
   const visit = (node: PdfNode): void => {
@@ -114,10 +159,10 @@ export async function loadImages(
   const shared = new Map<string, Promise<ImageAsset>>();
   const loadNode = (node: PdfNode): Promise<ImageAsset> => {
     const src = propsOf(node)['src'];
-    if (typeof src !== 'string') return loadOne(src, writer, fetchFn);
+    if (typeof src !== 'string') return loadOne(src, writer, fetchFn, server);
     let pending = shared.get(src);
     if (!pending) {
-      pending = loadOne(src, writer, fetchFn);
+      pending = loadOne(src, writer, fetchFn, server);
       shared.set(src, pending);
     }
     return pending;

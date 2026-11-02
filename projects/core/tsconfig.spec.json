@@ -5,5 +5,11 @@
     "rootDir": ".",
     "types": []
   },
-  "include": ["src/**/*.d.ts", "src/**/*.spec.ts", "src/**/*.bench.ts", "viewer/**/*.spec.ts"]
+  "include": [
+    "src/**/*.d.ts",
+    "src/**/*.spec.ts",
+    "src/**/*.bench.ts",
+    "viewer/**/*.spec.ts",
+    "server/**/*.spec.ts"
+  ]
 }

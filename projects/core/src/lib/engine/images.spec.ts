@@ -206,6 +206,15 @@ describe('loadImages', () => {
     });
   });
 
+  it('strips the query string from the URL where the reason repeats it', async () => {
+    const url = 'https://cdn.example.com/a.png?token=secret#top';
+    const fetchFn = vi.fn(() => Promise.reject(new TypeError(`fetch failed for ${url} (${url})`)));
+    const load = loadImages(root(imageNode(url)), writer, fetchFn);
+    await expect(load).rejects.toThrow(
+      /^ngpdf: could not load image "https:\/\/cdn\.example\.com\/a\.png": fetch failed for https:\/\/cdn\.example\.com\/a\.png \(https:\/\/cdn\.example\.com\/a\.png\)$/,
+    );
+  });
+
   it('rejects a failed fetch with the reason', async () => {
     const fetchFn = vi.fn(() => Promise.reject(new TypeError('Failed to fetch')));
     await expect(
@@ -224,6 +233,21 @@ describe('loadImages', () => {
     await expect(
       loadImages(root(imageNode(`data:text/plain;base64,${base64(bad)}`)), writer),
     ).rejects.toThrow(/could not load image "data URL"/);
+  });
+
+  it('loads a Uint8Array, also a view into a larger buffer as a Node Buffer often is', async () => {
+    const pooled = new Uint8Array(png.length + 16);
+    pooled.set(png, 8);
+    const view = pooled.subarray(8, 8 + png.length);
+    const node = imageNode(view);
+    const assets = await loadImages(root(node), writer);
+    expect(assets.get(node)).toEqual({ data: png, width: 200, height: 100 });
+  });
+
+  it('names a Uint8Array that is not an image', async () => {
+    await expect(loadImages(root(imageNode(new Uint8Array([1, 2, 3]))), writer)).rejects.toThrow(
+      'ngpdf: could not load image "Uint8Array": ngpdf: image is neither PNG nor JPEG',
+    );
   });
 
   it('rejects a source of the wrong type', async () => {
@@ -247,5 +271,103 @@ describe('fitImage', () => {
 
   it('cover overflows the box on the short axis', () => {
     expect(fitImage(asset, { w: 100, h: 100 }, 'cover')).toEqual({ x: -50, y: 0, w: 200, h: 100 });
+  });
+});
+
+describe('loadImages on the server', () => {
+  const dataUrl = `data:image/png;base64,${base64(png)}`;
+
+  it('refuses a remote URL without fetchImage, and never calls fetch', async () => {
+    const fetchFn = vi.fn(() => Promise.resolve(new Response(png as BodyInit)));
+    const load = loadImages(root(imageNode('https://cdn.example.com/a.png')), writer, fetchFn, {});
+    await expect(load).rejects.toThrow(
+      /^ngpdf: remote image "https:\/\/cdn\.example\.com\/a\.png" refused on the server; pass fetchImage$/,
+    );
+    expect(fetchFn).not.toHaveBeenCalled();
+  });
+
+  it('leaves the query string out of the refusal', async () => {
+    const load = loadImages(
+      root(imageNode('https://cdn.example.com/a.png?token=secret')),
+      writer,
+      undefined,
+      {},
+    );
+    await expect(load).rejects.toThrow(
+      /^ngpdf: remote image "https:\/\/cdn\.example\.com\/a\.png" refused/,
+    );
+  });
+
+  it('reads a remote URL through fetchImage, with the whole URL', async () => {
+    const fetchImage = vi.fn(() => Promise.resolve(png));
+    const fetchFn = vi.fn(() => Promise.resolve(new Response(png as BodyInit)));
+    const node = imageNode('https://cdn.example.com/a.png?size=2');
+    const assets = await loadImages(root(node), writer, fetchFn, { fetchImage });
+    expect(fetchImage).toHaveBeenCalledWith('https://cdn.example.com/a.png?size=2');
+    expect(fetchFn).not.toHaveBeenCalled();
+    expect(assets.get(node)).toEqual({ data: png, width: 200, height: 100 });
+  });
+
+  it('rejects with the reason when fetchImage fails', async () => {
+    const fetchImage = vi.fn(() => Promise.reject(new Error('not on the allow-list')));
+    const load = loadImages(root(imageNode('https://evil.test/a.png')), writer, undefined, {
+      fetchImage,
+    });
+    await expect(load).rejects.toThrow(
+      'ngpdf: could not load image "https://evil.test/a.png": not on the allow-list',
+    );
+  });
+
+  it.each(['/logo.png', 'logo.png', '//cdn.example.com/a.png'])(
+    'refuses the relative URL %s, even with fetchImage',
+    async (src) => {
+      const fetchImage = vi.fn(() => Promise.resolve(png));
+      const load = loadImages(root(imageNode(src)), writer, undefined, { fetchImage });
+      await expect(load).rejects.toThrow(`ngpdf: relative image URL "${src}" on the server`);
+      expect(fetchImage).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(['file:///etc/passwd', 'ftp://host/a.png', 'localhost:3000/a.png', 'C:\\logo.png'])(
+    'refuses %s, which is not http or https, before fetchImage sees it',
+    async (src) => {
+      const fetchImage = vi.fn(() => Promise.resolve(png));
+      const load = loadImages(root(imageNode(src)), writer, undefined, { fetchImage });
+      await expect(load).rejects.toThrow(
+        `ngpdf: image URL "${src}" is not http or https; the server reads no other scheme`,
+      );
+      expect(fetchImage).not.toHaveBeenCalled();
+    },
+  );
+
+  it('passes an http URL and an upper-case HTTPS one to fetchImage', async () => {
+    const fetchImage = vi.fn(() => Promise.resolve(png));
+    await loadImages(
+      root(imageNode('http://cdn.example.com/a.png'), imageNode('HTTPS://cdn.example.com/b.png')),
+      writer,
+      undefined,
+      { fetchImage },
+    );
+    expect(fetchImage).toHaveBeenCalledWith('http://cdn.example.com/a.png');
+    expect(fetchImage).toHaveBeenCalledWith('HTTPS://cdn.example.com/b.png');
+  });
+
+  it('strips the query string from the URL where a fetchImage error repeats it', async () => {
+    const url = 'https://cdn.example.com/a.png?token=secret';
+    const fetchImage = vi.fn(() => Promise.reject(new Error(`HTTP 403 for ${url}`)));
+    const load = loadImages(root(imageNode(url)), writer, undefined, { fetchImage });
+    await expect(load).rejects.toThrow(
+      /^ngpdf: could not load image "https:\/\/cdn\.example\.com\/a\.png": HTTP 403 for https:\/\/cdn\.example\.com\/a\.png$/,
+    );
+  });
+
+  it('still loads data URLs, Blobs and ArrayBuffers', async () => {
+    const nodes = [
+      imageNode(dataUrl),
+      imageNode(new Blob([png as BlobPart])),
+      imageNode(png.buffer.slice(0)),
+    ];
+    const assets = await loadImages(root(...nodes), writer, undefined, {});
+    for (const node of nodes) expect(assets.get(node)?.width).toBe(200);
   });
 });

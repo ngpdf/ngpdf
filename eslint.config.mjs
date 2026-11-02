@@ -172,10 +172,10 @@ export default tseslint.config(
     },
   },
   {
-    // The viewer is its own entry point: ng-packagr builds it apart from @ngpdf/core, so it
-    // reaches the primary entry point by its package name only.
-    files: ['projects/core/viewer/**/*.ts'],
-    ignores: ['projects/core/viewer/**/*.spec.ts'],
+    // The viewer and the server are entry points of their own: ng-packagr builds them apart from
+    // @ngpdf/core, so they reach the primary entry point by its package name only.
+    files: ['projects/core/viewer/**/*.ts', 'projects/core/server/**/*.ts'],
+    ignores: ['projects/core/viewer/**/*.spec.ts', 'projects/core/server/**/*.spec.ts'],
     rules: {
       'no-restricted-imports': [
         'error',

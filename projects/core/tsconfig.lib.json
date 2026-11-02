@@ -9,6 +9,6 @@
     "declarationMap": true,
     "types": []
   },
-  "include": ["src/**/*.ts", "viewer/**/*.ts"],
+  "include": ["src/**/*.ts", "viewer/**/*.ts", "server/**/*.ts"],
   "exclude": ["**/*.spec.ts", "**/*.bench.ts"]
 }

@@ -5,7 +5,7 @@ section: Guide
 order: 1
 ---
 
-ngpdf renders Angular components to PDF, in the browser. A document is a normal standalone component whose template uses the `pdf-*` elements. ngpdf lays it out with flexbox, breaks it into pages and writes a PDF with selectable text.
+ngpdf renders Angular components to PDF, in the browser or in Node. A document is a normal standalone component whose template uses the `pdf-*` elements. ngpdf lays it out with flexbox, breaks it into pages and writes a PDF with selectable text.
 
 ## Install
 
@@ -17,7 +17,7 @@ Requirements:
 
 - `@angular/core` 22 or newer (the peer dependency is `^22.0.0`).
 - Zoneless or zone.js. ngpdf works with both.
-- A browser. Rendering uses `Blob`, `fetch` and WebAssembly. Server rendering is not supported in v0.1, so call ngpdf from browser code, such as a click handler.
+- A browser, or Node for `renderToBuffer` from `@ngpdf/core/server`. Rendering uses `Blob` and WebAssembly. See [Server rendering](/docs/server-rendering).
 
 The package adds at most 15 KB gzipped to your initial bundle. The layout and PDF engine is a separate chunk that loads on the first render. See [How it works](/docs/how-it-works).
 

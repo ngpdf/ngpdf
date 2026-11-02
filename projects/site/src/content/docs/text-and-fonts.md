@@ -75,7 +75,7 @@ function providePdfFonts(fonts: readonly PdfFont[]): EnvironmentProviders;
 ```
 
 - **Formats:** TrueType (`.ttf`), OpenType (`.otf`), WOFF and WOFF2. Font collections (`.ttc`) are not supported.
-- **Sources:** `src` is a URL, a data URL, or the bytes. A URL is fetched like an image (same-origin credentials only), on the first render whose document names its family. A font no document names is never fetched, so a broken font file fails only the documents that use it. It is fetched once per injector and reused by later renders. A failed fetch is not kept, so the next render tries again.
+- **Sources:** `src` is a URL, a data URL, or the bytes. A URL is fetched like an image (same-origin credentials only), on the first render whose document names its family. A font no document names is never fetched, so a broken font file fails only the documents that use it. It is fetched once per injector and reused by later renders. A failed fetch is not kept, so the next render tries again. With `renderToBuffer` from `@ngpdf/core/server`, a font URL is read only through its `fetchImage`, and kept for that render only; see [Server rendering](/docs/server-rendering#images-and-fonts-on-the-server). `renderToBlob` and `PdfRenderer.toBlob` fetch it as above, also on a server.
 - **Embedding:** each PDF embeds only the fonts its pages use, cut down to the characters it draws.
 - **Matching:** `family` is matched in any case. Each face is one `weight` and `style`; register one entry per face.
 - **Missing faces:** if a family has no face for the text's weight and style, ngpdf uses the closest one it has, keeping the weight first, then the regular face, and warns in development mode. It never makes a bold or italic face up.

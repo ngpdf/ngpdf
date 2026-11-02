@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { ApplicationRef, Component, signal, type Type } from '@angular/core';
+import { ApplicationRef, Component, PLATFORM_ID, signal, type Type } from '@angular/core';
 import { TestBed, type ComponentFixture } from '@angular/core/testing';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DomSanitizer } from '@angular/platform-browser';
@@ -338,5 +338,21 @@ describe('PdfViewer', () => {
     await settle();
 
     expect(iframeOf(fixture)).toBeNull();
+  });
+});
+
+describe('PdfViewer on the server', () => {
+  it('renders its loading content and starts no render', async () => {
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({ providers: [{ provide: PLATFORM_ID, useValue: 'server' }] });
+    const fixture = TestBed.createComponent(Host);
+    fixture.detectChanges();
+    await settle();
+    fixture.detectChanges();
+
+    expect(textOf(fixture, '[pdfViewerLoading]')).toBe('Rendering…');
+    expect(textOf(fixture, '[pdfViewerError]')).toBeUndefined();
+    expect(iframeOf(fixture)).toBeNull();
+    expect(renders.calls).toEqual([]);
   });
 });
