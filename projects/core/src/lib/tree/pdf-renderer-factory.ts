@@ -41,7 +41,13 @@ function parseStyle(source: string): Record<string, string> {
     const colon = declaration.indexOf(':');
     if (colon < 0) continue;
     const name = declaration.slice(0, colon).trim();
-    if (name) style[toKebab(name)] = declaration.slice(colon + 1).trim();
+    if (name) {
+      const key = toKebab(name);
+      // Repeated declarations take their final position, not just their value.
+      // eslint-disable-next-line @typescript-eslint/no-dynamic-delete
+      delete style[key];
+      style[key] = declaration.slice(colon + 1).trim();
+    }
   }
   return style;
 }
@@ -126,7 +132,11 @@ class PdfRenderer implements Renderer2 {
   }
 
   setStyle(el: PdfNode, style: string, value: unknown): void {
-    el.rawStyle[toKebab(style)] = String(value);
+    const key = toKebab(style);
+    // A later Angular style binding must override earlier shorthand declarations.
+    // eslint-disable-next-line @typescript-eslint/no-dynamic-delete
+    delete el.rawStyle[key];
+    el.rawStyle[key] = String(value);
   }
 
   removeStyle(el: PdfNode, style: string): void {

@@ -121,6 +121,23 @@ describe('PdfRendererFactory styles', () => {
     expect(el.rawStyle).toEqual({ color: 'blue' });
   });
 
+  it('moves a repeated declaration to its last position (#236)', () => {
+    const r = setup();
+    const el = r.createElement('pdf-view') as PdfNode;
+    r.setAttribute(el, 'style', 'margin-top: 20; margin: 0; margin-top: 5');
+    expect(Object.keys(el.rawStyle)).toEqual(['margin', 'margin-top']);
+    expect(el.rawStyle['margin-top']).toBe('5');
+  });
+
+  it('positions bound longhands after static shorthands (#236)', () => {
+    const r = setup();
+    const el = r.createElement('pdf-view') as PdfNode;
+    r.setAttribute(el, 'style', 'margin-top: 5; margin: 10');
+    r.setStyle(el, 'marginTop', '20pt');
+    expect(Object.keys(el.rawStyle)).toEqual(['margin', 'margin-top']);
+    expect(el.rawStyle['margin-top']).toBe('20pt');
+  });
+
   it('keeps colons inside values', () => {
     const r = setup();
     const el = r.createElement('x') as PdfNode;
