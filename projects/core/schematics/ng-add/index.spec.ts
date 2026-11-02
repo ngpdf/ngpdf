@@ -1,5 +1,5 @@
 import { SchematicTestRunner, type UnitTestTree } from '@angular-devkit/schematics/testing';
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { check } from 'prettier';
 import ts from 'typescript';
@@ -101,6 +101,28 @@ async function compile(tree: UnitTestTree, project: string): Promise<string[]> {
   });
   return diagnostics.length === 0 ? [] : [formatDiagnostics(diagnostics)];
 }
+
+describe('packaging', () => {
+  // Under pnpm without hoisting, @angular-devkit and @schematics do not resolve from @ngpdf/core:
+  // encapsulation makes the CLI hand the schematic its own copies, as for Angular's packages.
+  // typescript resolves from the app's own devDependency, up the tree.
+  it('loads @angular-devkit and @schematics from the CLI, with no new dependency', () => {
+    const collection = JSON.parse(
+      readFileSync(join(repo, 'projects/core/schematics/collection.json'), 'utf8'),
+    ) as { encapsulation?: unknown };
+    const manifest = JSON.parse(readFileSync(join(repo, 'projects/core/package.json'), 'utf8')) as {
+      dependencies: Record<string, string>;
+    };
+
+    expect(collection.encapsulation).toBe(true);
+    expect(Object.keys(manifest.dependencies)).toEqual([
+      'linebreak',
+      'pdfkit',
+      'tslib',
+      'yoga-layout',
+    ]);
+  });
+});
 
 describe('ng-add', () => {
   it('adds an example document to the only application, which compiles', async () => {

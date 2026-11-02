@@ -1,5 +1,6 @@
 {
   "$schema": "../../../node_modules/@angular-devkit/schematics/collection-schema.json",
+  "encapsulation": true,
   "schematics": {
     "ng-add": {
       "description": "Add @ngpdf/core to an application, with an example document.",

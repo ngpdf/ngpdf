@@ -192,6 +192,12 @@ jobs:
   ng-add:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        # pnpm with hoist=false resolves nothing from @ngpdf/core but its own dependencies, so the
+        # schematic must get @angular-devkit and @schematics from the CLI (encapsulation).
+        package-manager: [npm, pnpm]
     env:
       NG_CLI_ANALYTICS: 'false'
     steps:
@@ -209,10 +215,21 @@ jobs:
       # The app is made with the Angular CLI major this repository builds with.
       - id: cli
         run: echo "major=$(node -p "require('@angular/cli/package.json').version.split('.')[0]")" >> "$GITHUB_OUTPUT"
+      - if: matrix.package-manager == 'pnpm'
+        run: npm install --global pnpm@10.34.9
       - run: >-
           npx --yes @angular/cli@${{ steps.cli.outputs.major }} new fresh-app --defaults
           --interactive=false --skip-git --ai-config=none
+          --package-manager=${{ matrix.package-manager }}
         working-directory: ${{ runner.temp }}
+      - if: matrix.package-manager == 'pnpm'
+        name: Install without hoisting
+        run: |
+          printf 'hoist=false\n' > .npmrc
+          rm -rf node_modules
+          pnpm install
+          test ! -e node_modules/.pnpm/node_modules/@angular-devkit
+        working-directory: ${{ runner.temp }}/fresh-app
       - run: npx ng add "$RUNNER_TEMP"/ngpdf-core-*.tgz --skip-confirmation --interactive=false --demo-route
         working-directory: ${{ runner.temp }}/fresh-app
       # The build below must depend on what ng add wrote, so check it is there first.
