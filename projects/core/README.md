@@ -14,9 +14,9 @@ at most 15 KB gzipped to your initial bundle.
 ng add @ngpdf/core
 ```
 
-`ng add` installs the package and writes an example document to
-`src/app/documents/example-document.ts`. Add `--demo-route` for a `/pdf-demo` page with a Download
-PDF button, `--project <name>` to pick an application, or `--path <folder>` for another folder. It
+`ng add` installs the package and writes `example-document.ts` to `app/documents` under the
+application's source root, normally `src/app/documents`. Add `--demo-route` for a `/pdf-demo` page
+with a Download PDF button, `--project <name>` to pick an application, or `--path <folder>` for another folder. It
 never overwrites a file, and ngpdf needs no providers. To install the package alone, run
 `npm install @ngpdf/core`.
 

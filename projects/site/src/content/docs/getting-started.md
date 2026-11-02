@@ -13,12 +13,12 @@ ngpdf renders Angular components to PDF, in the browser or in Node. A document i
 ng add @ngpdf/core
 ```
 
-`ng add` installs the package with npm (or your package manager) and adds an example document to your application: `src/app/documents/example-document.ts`, a standalone component with a heading, a short table and a page number. It takes these options:
+`ng add` installs the package with npm (or your package manager) and adds an example document to your application: `example-document.ts` in `app/documents` under the application's source root, normally `src/app/documents`. It is a standalone component with a heading, a short table and a page number. It takes these options:
 
 | Option | What it does |
 | --- | --- |
 | `--project <name>` | The application to add the example to. Without it, `ng add` uses the workspace's only project or the project of the folder you run it in, and otherwise asks. Without a terminal to ask in, it takes the only application, or stops and asks for `--project`. A library is refused. |
-| `--path <folder>` | The folder for the example files, from the workspace root. The default is `src/app/documents` in the project. |
+| `--path <folder>` | The folder for the example files, from the workspace root. The default is `app/documents` under the application's source root, normally `src/app/documents`. |
 | `--demo-route` | Also adds `pdf-demo.ts`, a page with a Download PDF button that uses [`PdfDownload`](/docs/rendering-api#pdfdownload), and a lazy `pdf-demo` route in `app.routes.ts`. |
 
 Then run `ng serve` and open `/pdf-demo` if you added the demo route.
