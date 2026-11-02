@@ -1,9 +1,11 @@
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { graphemeCount } from './graphemes';
+import type { ImageAsset } from './images';
 import { ROOT_TEXT_STYLE, type TextStyle } from './style';
 import {
   layoutRanges,
   layoutText,
+  measureRanges,
   measureText,
   TextMeasureCache,
   type ParagraphStyle,
@@ -866,5 +868,138 @@ describe('layoutRanges with maxLines', () => {
       layoutRanges([{ text, style }], { ...style, maxLines }, 120, writer, undefined, cache);
     expect(lay(null).lines.length).toBeGreaterThan(2);
     expect(lay(2).lines).toHaveLength(2);
+  });
+});
+
+describe('layoutRanges with emoji images', () => {
+  const asset = (n: number): ImageAsset => ({ data: new Uint8Array([n]), width: 1, height: 1 });
+  const thumbs = asset(1);
+  const family = asset(2);
+  const emoji = new Map<string, ImageAsset>([
+    ['👍', thumbs],
+    ['👨‍👩‍👧‍👦', family],
+  ]);
+  // 10pt a code unit for text, so only the emoji size depends on the style.
+  const tens: FontMetrics = {
+    widthOf: (chunk) => 10 * chunk.length,
+    ascent: (_font, size) => size * 0.5,
+    descent: (_font, size) => size * 0.25,
+    hasGlyph: () => false,
+  };
+  const lay = (
+    content: string,
+    maxWidth = Infinity,
+    paragraph: Partial<ParagraphStyle> = {},
+    images: ReadonlyMap<string, ImageAsset> = emoji,
+  ) =>
+    layoutRanges(
+      [{ text: content, style: { ...style, ...paragraph }, emoji: images }],
+      { ...style, ...paragraph },
+      maxWidth,
+      tens,
+    );
+
+  it('makes each emoji a run of 1 em with its image, between the text runs', () => {
+    const [line] = lay('a👍b').lines;
+    expect(line?.runs.map((run) => [run.text, run.x, run.width, run.emoji])).toEqual([
+      ['a', 0, 10, undefined],
+      ['👍', 10, 9, thumbs],
+      ['b', 19, 10, undefined],
+    ]);
+    expect(line?.width).toBe(29);
+  });
+
+  it('keeps a ZWJ sequence as one emoji of 1 em', () => {
+    const [line] = lay('👨‍👩‍👧‍👦').lines;
+    expect(line?.runs).toHaveLength(1);
+    expect(line?.runs[0]).toMatchObject({ width: 9, emoji: family });
+  });
+
+  it('adds the letter spacing after each emoji', () => {
+    const [line] = lay('👍👍a', Infinity, { letterSpacing: 2 }).lines;
+    expect(line?.runs.map((run) => [run.text, run.width])).toEqual([
+      ['👍👍', 22],
+      ['a', 12],
+    ]);
+  });
+
+  it('draws a sequence with no image as text, as before', () => {
+    const [line] = lay('a😀', Infinity, {}, emoji).lines;
+    expect(line?.runs.map((run) => [run.text, run.emoji])).toEqual([['a?', undefined]]);
+    const [plain] = lay('a👍', Infinity, {}, new Map()).lines;
+    expect(plain?.text).toBe('a?');
+  });
+
+  it('sets the emoji 1 em tall, its bottom on the descent of its font', () => {
+    const [line] = lay('a👍').lines;
+    // 9pt: the text rises 4.5 and drops 2.25, so the emoji reaches 9 - 2.25 above the baseline.
+    expect(line?.runs.map((run) => run.ascent)).toEqual([4.5, 6.75]);
+    expect(line?.ascent).toBe(6.75);
+  });
+
+  it('sits on the baseline when the metrics give no descent', () => {
+    const noDescent: FontMetrics = { ...tens, descent: undefined } as unknown as FontMetrics;
+    const [line] = layoutRanges([{ text: 'a👍', style, emoji }], style, Infinity, noDescent).lines;
+    expect(line?.runs[1]?.ascent).toBe(9);
+    expect(line?.ascent).toBe(9);
+  });
+
+  it('breaks lines around emoji and never inside one', () => {
+    // "aa " is 30, each emoji 9, " bb" 30: a line may break between two emoji.
+    expect(lay('aa 👍👍 bb', 40).lines.map((line) => line.text)).toEqual(['aa 👍', '👍 bb']);
+    expect(lay('👨‍👩‍👧‍👦👨‍👩‍👧‍👦', 5).lines.map((line) => line.text)).toEqual(['👨‍👩‍👧‍👦', '👨‍👩‍👧‍👦']);
+  });
+
+  it('ends a cut line after an emoji with the ellipsis in the text font', () => {
+    // "ab " 30, two emoji 18, "…" 10: 58 fits in 60, a third emoji would not.
+    const [line] = lay('ab 👍👍👍 cd', 60, { maxLines: 1 }).lines;
+    expect(line?.text).toBe('ab 👍👍…');
+    const last = line?.runs.at(-1);
+    expect(last).toMatchObject({ text: '…', font: 'Helvetica', width: 10 });
+    expect(last?.emoji).toBeUndefined();
+  });
+
+  it('does not reuse a block cached without the emoji', () => {
+    const cache = new TextMeasureCache();
+    const one = (images?: ReadonlyMap<string, ImageAsset>) =>
+      layoutRanges(
+        [{ text: 'a👍', style, ...(images && { emoji: images }) }],
+        style,
+        Infinity,
+        tens,
+        undefined,
+        cache,
+      );
+    expect(one().lines[0]?.text).toBe('a?');
+    expect(one(emoji).lines[0]?.runs[1]?.emoji).toBe(thumbs);
+  });
+
+  it('draws the hyphen of a soft-hyphen break after an emoji as text, in its own run', () => {
+    const copyright = asset(3);
+    const images = new Map([...emoji, ['©️', copyright]]);
+    // The emoji is 9 and the hyphen-minus 10: only the break at the soft hyphen fits in 20.
+    const [line] = lay('©️\u00adfoobar', 20, {}, images).lines;
+    expect(line?.runs.map((run) => [run.text, run.x, run.width, run.emoji])).toEqual([
+      ['©️', 0, 9, copyright],
+      ['-', 9, 10, undefined],
+    ]);
+    expect(line?.runs[1]?.font).toBe('Helvetica');
+    expect(line?.width).toBe(19);
+  });
+
+  it('keeps the link of the range on its emoji', () => {
+    const link = 'https://example.com/';
+    const [line] = layoutRanges([{ text: 'a👍', style, emoji, link }], style, Infinity, tens).lines;
+    expect(line?.runs.map((run) => run.link)).toEqual([link, link]);
+  });
+
+  it('measures emoji the same way', () => {
+    const measure = measureRanges([{ text: 'a👍', style, emoji }], style, tens);
+    expect(measure(0, MEASURE_MODE_UNDEFINED).width).toBe(19);
+  });
+
+  it('upper-cases the text around an emoji and leaves the emoji', () => {
+    const [line] = lay('a👍b', Infinity, { textTransform: 'uppercase' }).lines;
+    expect(line?.runs.map((run) => run.text)).toEqual(['A', '👍', 'B']);
   });
 });

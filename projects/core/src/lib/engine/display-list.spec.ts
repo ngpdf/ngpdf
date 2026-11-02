@@ -2346,3 +2346,109 @@ describe('pdf-canvas', () => {
     expect(() => paintCanvases(pages)).toThrow('ngpdf: pdf-canvas paint failed: no data');
   });
 });
+
+describe('emoji', () => {
+  const thumbs: ImageAsset = { data: new Uint8Array([1]), width: 72, height: 72 };
+  const party: ImageAsset = { data: new Uint8Array([2]), width: 72, height: 72 };
+  const emoji = new Map([
+    ['👍', thumbs],
+    ['🎉', party],
+  ]);
+
+  function drawEmoji(box: PdfNode): DrawOp[] {
+    const root = page([box]);
+    const ctx: LayoutContext = { yoga, metrics: writer, images: new Map(), emoji };
+    return list(paginatePage(root, resolveStyles(root), ctx)[0]!, 0, 1);
+  }
+
+  it('draws each emoji as a 1 em image after the text before it', () => {
+    const ops = drawEmoji(text('a👍👍🎉b', { 'font-size': '10' }));
+    const a = writer.widthOf('a', 'Helvetica', 10);
+    expect(only(ops, 'text').map((op) => op.text)).toEqual(['a', 'b']);
+    const images = only(ops, 'image');
+    expect(images.map((op) => [op.w, op.h, op.data])).toEqual([
+      [10, 10, thumbs.data],
+      [10, 10, thumbs.data],
+      [10, 10, party.data],
+    ]);
+    for (const [k, op] of images.entries()) expect(op.x - 36).toBeCloseTo(a + 10 * k, 6);
+    for (const op of images) {
+      expect(op.clip).toEqual({ x: op.x, y: op.y, w: 10, h: 10 });
+      expect(op).not.toHaveProperty('opacity');
+    }
+    expect(only(ops, 'text')[1]!.x - 36).toBeCloseTo(a + 30, 6);
+  });
+
+  it('fits a non-square image inside its 1 em square, centered, without stretching it', () => {
+    const wide: ImageAsset = { data: new Uint8Array([3]), width: 72, height: 36 };
+    const root = page([text('🎉', { 'font-size': '10' })]);
+    const ctx: LayoutContext = {
+      yoga,
+      metrics: writer,
+      images: new Map(),
+      emoji: new Map([['🎉', wide]]),
+    };
+    const square = only(list(paginatePage(root, resolveStyles(root), ctx)[0]!, 0, 1), 'image')[0]!;
+    expect(square).toMatchObject({ w: 10, h: 5 });
+    expect(square.clip).toEqual({ x: square.x, y: square.y - 2.5, w: 10, h: 10 });
+  });
+
+  it('puts the bottom of the emoji on the descent of the line', () => {
+    const ops = drawEmoji(text('a👍', { 'font-size': '20' }));
+    const [word] = only(ops, 'text');
+    const [image] = only(ops, 'image');
+    const baseline = word!.y + writer.ascent('Helvetica', 20);
+    expect(image!.y + image!.h).toBeCloseTo(baseline + writer.descent!('Helvetica', 20), 6);
+  });
+
+  it('spaces emoji by the letter spacing', () => {
+    const ops = drawEmoji(text('👍👍', { 'font-size': '10', 'letter-spacing': '3' }));
+    expect(only(ops, 'image').map((op) => op.x - 36)).toEqual([0, 13]);
+  });
+
+  it('ignores the text color, and fades with its box as a group', () => {
+    const ops = drawEmoji(text('👍', { color: 'transparent', opacity: '0.5' }));
+    expect(ops.map((op) => (op.op === 'group' ? `group ${String(op.opacity)}` : op.op))).toEqual([
+      'group 0.5',
+      'image',
+      'ungroup',
+    ]);
+  });
+
+  it('runs an underline under the emoji in the text font, as a letter-spaced space', () => {
+    const ops = drawEmoji(text('a👍', { 'font-size': '10', 'text-decoration': 'underline' }));
+    const [word, under] = only(ops, 'text');
+    const space = writer.widthOf(' ', 'Helvetica', 10, false);
+    expect(under).toMatchObject({
+      text: ' ',
+      font: 'Helvetica',
+      size: 10,
+      y: word!.y,
+      underline: true,
+      strike: false,
+    });
+    expect(under!.x).toBe(only(ops, 'image')[0]!.x);
+    expect(under!.letterSpacing).toBeCloseTo(10 - space, 6);
+  });
+
+  it('strikes through the emoji too, and draws no text for one without a decoration', () => {
+    const struck = drawEmoji(text('👍', { 'text-decoration': 'line-through' }));
+    expect(only(struck, 'text')).toMatchObject([{ text: ' ', strike: true, underline: false }]);
+    expect(only(drawEmoji(text('👍')), 'text')).toHaveLength(0);
+  });
+
+  it('moves an emoji after a justified gap by the word spacing', () => {
+    const box = text('ab 👍 cd longerwordhere', {
+      'font-size': '10',
+      'text-align': 'justify',
+      width: '80',
+    });
+    const ops = drawEmoji(box);
+    const [first] = only(ops, 'text');
+    expect(first!.text).toBe('ab ');
+    const [image] = only(ops, 'image');
+    const after = first!.x + writer.widthOf('ab ', 'Helvetica', 10) + first!.wordSpacing!;
+    expect(first!.wordSpacing).toBeGreaterThan(0);
+    expect(image!.x).toBeCloseTo(after, 6);
+  });
+});

@@ -119,7 +119,7 @@ NGPDF_APT=poppler-utils ./scripts/dev node scripts/server-check.mjs   # packed d
     image URL "<url>" on the server`, and any other scheme throws `ngpdf: image URL "<url>" is not
     http or https; …`; neither reaches `fetchImage`. Data URLs and bytes always work. Font URLs
     are cached per render, never in the injector's font set, so one render never gets bytes
-    another's `fetchImage` read.
+    another's `fetchImage` read. Emoji URLs follow the same rules; a refused one is drawn as text.
   - On the server (no global `document`, or the `server` platform), `downloadPdf` and
     `pdfResource` given an `injector` throw `ngpdf: <name> needs a browser; …` before any render.
     `pdfResource` made in an injection context stays `idle`, and `pdf-viewer` shows its loading
@@ -143,6 +143,21 @@ NGPDF_APT=poppler-utils ./scripts/dev node scripts/server-check.mjs   # packed d
     synthetic bold or italic.
   - Only the faces of families a document names are loaded, so an unused broken font never fails
     a render.
+  - Emoji are text unless `providePdfEmoji` gives a source (a `{codepoints}` URL template or a
+    function); ngpdf ships no emoji images. With one, a grapheme cluster with an emoji
+    presentation is drawn as a PNG or JPEG image fitted in a 1 em square, taking
+    `letter-spacing` and the decoration but not the color. A cluster whose second character is
+    U+FE0E stays text; otherwise it is an emoji if it has U+FE0F, is a ZWJ sequence starting with
+    an `Extended_Pictographic` character, is a keycap (`0-9`, `#` or `*` with U+20E3), is a
+    modifier sequence such as ✌🏽, or starts with an `Emoji_Presentation` character. Its bottom
+    sits on the font's descent, or on the baseline when the metrics give no descent
+    (`FontMetrics.descent` is optional; the pdfkit writer gives it). Each distinct emoji loads once
+    per render, at most 500 and 6 started at a time, each with 10 s from the start of its own
+    load; a timed-out source or server `fetchImage` is not stopped, only no longer awaited. One
+    whose image is `null`, fails, is empty, is not a PNG or JPEG, is a cut-off PNG or runs out
+    of time is drawn as text, with one dev-mode warning per render naming them; past 500, the
+    rest are text, with one warning. A JPEG is checked only up to its frame header, so a cut-off
+    one is embedded. Text nodes over 1 MB are not searched for emoji.
 - **Tables:**
   - Columns are declared on the table: `[columns]` with points, `'Nfr'`, `'N%'` or `'auto'`.
   - Column widths are resolved in this order: fixed widths first, then percentages, then `auto`
