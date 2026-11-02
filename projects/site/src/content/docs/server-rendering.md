@@ -41,7 +41,8 @@ interface RenderToBufferOptions {
 
 - The result is a `Uint8Array`, which is what Node's `Buffer` extends. Pass it to `res.end(pdf)`, `fs.writeFile` or an email attachment as it is.
 - Every call is isolated like `renderToBlob`: its own child injector, tree and writer, and the document is destroyed when the render settles.
-- Without `injector`, the document gets a root injector of its own with only `providers`, running zoneless. Services with `providedIn: 'root'` resolve in it, and are destroyed with it after the render, so two renders at once share nothing.
+- Without `injector`, the document gets a root injector of its own with only `providers`, running zoneless. Services with `providedIn: 'root'` resolve in it, and are destroyed with it after the render, so two renders at once share no service instances.
+- Injectors do not copy provider values. An object created once and passed to every render with `useValue` is the same object in each, and a change one render makes shows in the others. Create the value inside the call, or provide it with `useFactory`, which runs once per render: `{ provide: CART, useFactory: () => new Cart() }`.
 - With `injector`, renders that pass the same one share what it holds: its services and their state. Keep state that belongs to one render in `inputs` or `providers`. Fonts are the exception: each render reads font URLs with its own `fetchImage` and keeps them for that render only.
 - A failed render rejects with the same `ngpdf:` errors as in the browser.
 
@@ -116,13 +117,14 @@ That route renders with an injector of its own. To have the document resolve you
 ```ts
 import { EnvironmentInjector, Service, inject } from '@angular/core';
 import { renderToBuffer } from '@ngpdf/core/server';
+import { Invoice } from './invoice'; // your document component
 
 @Service()
 export class InvoicePdf {
   private readonly injector = inject(EnvironmentInjector);
 
-  render(invoice: Invoice): Promise<Uint8Array> {
-    return renderToBuffer(InvoiceDocument, { inputs: { invoice }, injector: this.injector });
+  render(inputs: Record<string, unknown>): Promise<Uint8Array> {
+    return renderToBuffer(Invoice, { inputs, injector: this.injector });
   }
 }
 ```
@@ -136,7 +138,7 @@ A server that fetched any URL found in a document could be made to fetch interna
 - A relative URL, such as `/assets/logo.png`, has no page to resolve against. It rejects with `ngpdf: relative image URL "<url>" on the server`, with or without `fetchImage`.
 - Only `http:` and `https:` URLs reach `fetchImage`. Any other scheme, such as `file:///etc/passwd`, `ftp://…`, or `localhost:3000/a.png` and `C:\logo.png` (which parse as the schemes `localhost:` and `c:`), rejects with `ngpdf: image URL "<url>" is not http or https; the server reads no other scheme`.
 - Font URLs in `providePdfFonts` follow the same rules through the same `fetchImage`, with `font` in place of `image` in the messages.
-- `<url>` is shown without its query string and fragment, which often carry a token. `fetchImage` gets the whole URL.
+- `<url>` is shown without its query string and fragment, which often carry a token, and so is the URL where a `fetchImage` error repeats it. `fetchImage` gets the whole URL.
 - If `fetchImage` rejects, the render rejects with `ngpdf: could not load image "<url>": <reason>` (or `font`).
 
 `fetchImage` is where you decide what the server may fetch: an allow-list of hosts, a timeout and a size limit. For example:
