@@ -127,7 +127,7 @@ describe('loadEmoji', () => {
     const fetchFn = vi.fn(() => Promise.resolve(new Response(bytes)));
     const fetchImage = vi.fn(() => Promise.resolve(bytes));
     const template = 'https://cdn.example/emoji/{codepoints}.png';
-    const read = await loadEmoji(doc('😀'), template, writer, () => {}, fetchFn, { fetchImage });
+    const read = await loadEmoji(doc('😀'), template, writer, vi.fn(), fetchFn, { fetchImage });
     expect(fetchImage).toHaveBeenCalledWith('https://cdn.example/emoji/1f600.png');
     expect(read.size).toBe(1);
 
