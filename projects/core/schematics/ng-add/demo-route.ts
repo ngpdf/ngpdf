@@ -25,11 +25,12 @@ export function addDemoRoute(routesFile: string, demoFile: string): Rule {
       return;
     }
     const elements = routes.elements;
-    if (!elements.every(ts.isObjectLiteralExpression)) {
-      // A spread, a variable or a call may hold a wildcard that would catch pdf-demo first.
+    if (!elements.every((element) => readableRoute(ts, element))) {
+      // Any of these may be a wildcard that would catch pdf-demo first.
       context.logger.warn(
-        `ngpdf: the routes array in ${routesFile} has entries that are not object literals, and ` +
-          `one may be a wildcard. Add this route by hand, before any wildcard: ` +
+        `ngpdf: the routes array in ${routesFile} has routes ng add cannot read (a spread, a ` +
+          `variable, a call or a path that is not a plain string), and one may be a wildcard. ` +
+          `Add this route by hand, before any wildcard: ` +
           `{ path: 'pdf-demo', loadComponent: ${load} }`,
       );
       return;
@@ -104,6 +105,21 @@ function findRoutesArray(
     }
   }
   return undefined;
+}
+
+/**
+ * Whether `element` is an object literal whose path, if it has one, `routePath` can read: no
+ * spread inside it, and no `path` written as a shorthand, a variable or a template with `${}`.
+ */
+function readableRoute(ts: typeof TS, element: TS.Expression): boolean {
+  if (!ts.isObjectLiteralExpression(element)) return false;
+  return element.properties.every((property) => {
+    if (ts.isSpreadAssignment(property)) return false;
+    const name = property.name;
+    const isPath = (ts.isIdentifier(name) || ts.isStringLiteral(name)) && name.text === 'path';
+    if (!isPath) return true;
+    return ts.isPropertyAssignment(property) && ts.isStringLiteralLike(property.initializer);
+  });
 }
 
 /** The string `path` of a route object literal, with its key written `path`, `'path'` or `"path"`. */

@@ -492,6 +492,10 @@ export const routes: Routes = [
       ['a spread', `[{ path: '', redirectTo: 'home' }, ...fallbackRoutes]`],
       ['a variable', `[{ path: '', redirectTo: 'home' }, fallback]`],
       ['a call', `[{ path: '', redirectTo: 'home' }, notFound()]`],
+      ['a path from a variable', `[{ path: fallbackPath, component: NotFound }]`],
+      ['a shorthand path', `[{ path, component: NotFound }]`],
+      ['a path from a template with a substitution', '[{ path: `${base}`, component: NotFound }]'],
+      ['a spread inside a route', `[{ ...wildcardRoute }]`],
     ])('prints the route to add by hand when the routes array holds %s', async (_, array) => {
       const tree = await application(await workspace(), 'app');
       const custom = `import { Routes } from '@angular/router';\n\nexport const routes: Routes = ${array};\n`;
@@ -503,8 +507,9 @@ export const routes: Routes = [
       expect(result.readContent(routesPath)).toBe(custom);
       expect(result.exists(demoPath)).toBe(true);
       expect(lines).toContain(
-        `ngpdf: the routes array in ${routesPath.slice(1)} has entries that are not object ` +
-          `literals, and one may be a wildcard. Add this route by hand, before any wildcard: ` +
+        `ngpdf: the routes array in ${routesPath.slice(1)} has routes ng add cannot read (a ` +
+          `spread, a variable, a call or a path that is not a plain string), and one may be a ` +
+          `wildcard. Add this route by hand, before any wildcard: ` +
           `{ path: 'pdf-demo', loadComponent: () => import('./documents/pdf-demo').then((m) => m.PdfDemo) }`,
       );
     });
