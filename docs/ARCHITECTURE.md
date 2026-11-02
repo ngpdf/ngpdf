@@ -38,7 +38,7 @@ this project calls for it. Where the simplest correct answer is no pattern, this
   - Angular's change detection at the start;
   - the loaders, `loadImages`, `registerUsedFonts` and `loadEmoji`: the boundary where the
     shell fetches images, fonts and emoji images, in parallel and before layout, so every stage
-    after them is pure and synchronous;
+    after them runs synchronously, with no I/O;
   - pdfkit writing bytes at the end.
 
 **Why this fits:**
