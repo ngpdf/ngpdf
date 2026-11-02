@@ -14,7 +14,7 @@ export interface ImageAsset {
  */
 export function describeError(reason: unknown, src: unknown, label: string): string {
   const text = reason instanceof Error ? reason.message : String(reason);
-  return typeof src === 'string' ? text.replaceAll(src, label) : text;
+  return typeof src === 'string' ? text.replaceAll(src, () => label) : text;
 }
 
 /**

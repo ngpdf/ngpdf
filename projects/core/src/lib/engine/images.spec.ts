@@ -215,6 +215,16 @@ describe('loadImages', () => {
     );
   });
 
+  it('inserts the query-free URL as it is, even when its path holds a $& pattern', async () => {
+    const url = 'https://cdn.example.com/$&.png?token=secret';
+    const fetchFn = vi.fn(() => Promise.reject(new TypeError(`fetch failed for ${url}`)));
+    const load = loadImages(root(imageNode(url)), writer, fetchFn);
+    await expect(load).rejects.toThrow(
+      'ngpdf: could not load image "https://cdn.example.com/$&.png": fetch failed for https://cdn.example.com/$&.png',
+    );
+    await expect(load).rejects.not.toThrow(/secret/);
+  });
+
   it('rejects a failed fetch with the reason', async () => {
     const fetchFn = vi.fn(() => Promise.reject(new TypeError('Failed to fetch')));
     await expect(
