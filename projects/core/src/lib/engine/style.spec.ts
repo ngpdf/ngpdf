@@ -96,19 +96,25 @@ describe('resolveStyles', () => {
     expect(style.padding).toEqual({ top: 4, right: 4, bottom: 4, left: 9 });
   });
 
-  it('ignores unknown properties that only contain a side name', () => {
-    const style = styleOf({
-      'margin-top-x': '10',
-      'margin-rightmost': '10',
-      'margin-x-bottom': '10',
-      'margin-leftover': '10',
-      'padding-top-x': '5',
-      'padding-rightmost': '5',
-      'padding-x-bottom': '5',
-      'padding-leftover': '5',
-    });
+  it('ignores unknown properties that only contain a side name, without a warning', () => {
+    const warn = vi.fn();
+    const style = styleOf(
+      {
+        'margin-top-x': '10',
+        'margin-rightmost': '10',
+        'margin-x-bottom': '10',
+        'margin-leftover': '10',
+        'padding-top-x': '5',
+        'padding-rightmost': '5',
+        'padding-x-bottom': '5',
+        'padding-leftover': '5',
+      },
+      'pdf-view',
+      warn,
+    );
     expect(style.margin).toEqual({ top: 0, right: 0, bottom: 0, left: 0 });
     expect(style.padding).toEqual({ top: 0, right: 0, bottom: 0, left: 0 });
+    expect(warn).not.toHaveBeenCalled();
   });
 
   it('rejects auto padding, which CSS does not have', () => {
