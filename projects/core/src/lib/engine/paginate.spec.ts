@@ -1374,6 +1374,24 @@ describe('paginatePage: position', () => {
     expect(placedOf(pages, stamp).y).toBeCloseTo(CONTENT_TOP, 6);
   });
 
+  it('reuses the overflow sheet for badges sharing an absolute top', () => {
+    const unit = block();
+    const first = badge({ top: '900', left: '0' });
+    const second = badge({ top: '900', right: '0' });
+    const pages = paginate(page([unit, first, second]));
+    expect(nodesOn(pages)).toEqual([[unit], [first, second]]);
+    expect(placedOf(pages, first).y).toBeCloseTo(CONTENT_TOP, 6);
+    expect(placedOf(pages, second).y).toBeCloseTo(CONTENT_TOP, 6);
+  });
+
+  it('adds distinct overflow sheets for badges separated by a page', () => {
+    const unit = block();
+    const near = badge({ top: '900', left: '0' });
+    const far = badge({ top: '1700', left: '0' });
+    const pages = paginate(page([unit, near, far]));
+    expect(nodesOn(pages)).toEqual([[unit], [near], [far]]);
+  });
+
   it('groups an absolute box taken out of a unit with the faded views it leaves', () => {
     const stamp = badge({ top: '0', left: '0' });
     const inner = el('pdf-view', { opacity: '0.4' }, [block(), stamp]);

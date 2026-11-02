@@ -1416,8 +1416,12 @@ export function paginatePage(
         page = below.page;
         y = float.top + below.unitShift;
       } else {
-        startPage();
-        page = pages.length - 1;
+        // Several absolutes beyond the final unit may land on the same sheet.
+        // Resolve from the flow position, not from pages.length: an earlier
+        // absolute can already have created the destination sheet (#240).
+        const beyond = Math.max(1, Math.floor((y - frame.top) / contentHeight));
+        page += beyond;
+        while (pages.length <= page) startPage();
         y = frame.top;
       }
     }
