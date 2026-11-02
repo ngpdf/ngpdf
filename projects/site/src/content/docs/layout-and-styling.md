@@ -189,7 +189,8 @@ Each faded element adds a small object to the file (a PDF transparency group). F
 - The whole element is transformed: its background, border, children, text and image. Its [`overflow`](#overflow) clip turns with it.
 - The layout does not change: sizes and positions are the same with or without a transform, and nothing around the element moves.
 - A transformed element can be drawn outside its box, past the page margins or off the sheet. Only an ancestor with an `overflow` other than `visible` clips it.
-- A column `pdf-view` with a transform is one [pagination unit](/docs/pagination#units), and a transformed `pdf-text` stays whole on one sheet, so a rotated box is never cut across sheets.
+- A column `pdf-view` with a transform and a transformed `pdf-text` are each one [pagination unit](/docs/pagination#units), so a rotated box is never cut across sheets. One taller than the sheet's content area is cut at the bottom, with a dev-mode warning.
+- A `pdf-span` is part of a line, so `transform` and `transform-origin` have no effect on it.
 - Neither property is inherited. `transform` is ignored on a `pdf-page` and on a `pdf-table`, which keeps breaking between its rows; its value is still checked.
 - `skew()`, `matrix()` and the 3D functions throw, like any unknown function.
 
