@@ -1,7 +1,8 @@
 import LineBreaker from 'linebreak';
 import type { Color } from './color';
-import { covers, fontFor, normalizeText, shapeText, SOFT_HYPHEN } from './fonts';
-import { graphemeCount, graphemeStarts } from './graphemes';
+import { covers, fontFor, normalizeText, shapeText, SOFT_HYPHEN, type ShapedText } from './fonts';
+import { graphemeCount, graphemeStarts, isSimple } from './graphemes';
+import type { ImageAsset } from './images';
 import type { TextStyle } from './style';
 import type { FontMetrics, FontName } from './writer';
 
@@ -21,6 +22,11 @@ export interface TextRun {
   readonly ascent: number;
   /** The URL of the pdf-link the run belongs to, or `#name` for one to an anchor. */
   readonly link?: string;
+  /**
+   * Set on a run of emoji: each of its grapheme clusters is this image, 1 em square, and `font`
+   * is the text font its decoration is drawn in.
+   */
+  readonly emoji?: ImageAsset;
 }
 
 export interface TextLine {
@@ -51,6 +57,8 @@ export interface TextRange {
   readonly fonts?: TextFonts;
   /** The checked URL of the pdf-link the range is in, or `#name` for one to an anchor. */
   readonly link?: string;
+  /** Images of emoji by sequence; an emoji with one is drawn as it, 1 em square. */
+  readonly emoji?: ReadonlyMap<string, ImageAsset>;
 }
 
 /** What applies to a paragraph as a whole: its line height and an optional line limit. */
@@ -70,7 +78,8 @@ export function wordGaps(text: string): number {
   return text.match(/[ \u00a0]+/g)?.length ?? 0;
 }
 
-const MAX_TEXT_LENGTH = 1_048_576;
+/** The longest text one node may hold; layout throws past it. */
+export const MAX_TEXT_LENGTH = 1_048_576;
 // yoga-layout's MeasureMode.Undefined: no width constraint.
 const MEASURE_MODE_UNDEFINED = 0;
 // How far over `maxWidth` the summed character widths may be and still be tried by measuring.
@@ -354,13 +363,14 @@ interface Face {
   readonly letterSpacing: number;
   readonly ascent: number;
   readonly link?: string;
+  readonly emoji?: ImageAsset;
 }
 
 /** What a range contributes to the cache key: its length and everything its faces depend on. */
 function rangeKey(range: TextRange): string {
   const { fontSize, color, textDecoration, letterSpacing, textTransform, hyphens } = range.style;
   const chain = range.fonts?.chain ?? [fontFor(range.style)];
-  return `${String(range.text.length)}:${chain.join(',')}:${String(fontSize)}:${String(color.r)},${String(color.g)},${String(color.b)},${String(color.a)}:${textDecoration}:${String(letterSpacing)}:${textTransform}:${hyphens}:${range.link ?? ''}`;
+  return `${String(range.text.length)}:${chain.join(',')}:${String(fontSize)}:${String(color.r)},${String(color.g)},${String(color.b)},${String(color.a)}:${textDecoration}:${String(letterSpacing)}:${textTransform}:${hyphens}:${range.link ?? ''}:${range.emoji?.size ? 'emoji' : ''}`;
 }
 
 /** The text, faces and per-unit face index of a paragraph, each range shaped in its own chain. */
@@ -375,6 +385,8 @@ interface ShapedRanges {
   readonly softBreaks: readonly number[];
   /** 1 for each unit of `text` in a range with `hyphens: auto`; undefined when there is none. */
   readonly autoAt?: Uint8Array;
+  /** For an emoji face, the face of the text around it, which an ellipsis after it takes. */
+  readonly textFace?: ReadonlyMap<number, number>;
 }
 
 /**
@@ -411,6 +423,29 @@ function dropLooseSoftHyphens(pieces: readonly string[]): string[] {
   });
 }
 
+/** `text` cut into its text and the emoji that have an image, in order. */
+function splitEmoji(
+  text: string,
+  emoji: ReadonlyMap<string, ImageAsset> | undefined,
+): (string | { readonly emoji: string; readonly image: ImageAsset })[] {
+  if (!emoji?.size || isSimple(text)) return [text];
+  const parts: (string | { emoji: string; image: ImageAsset })[] = [];
+  let pending = '';
+  const segmenter = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
+  for (const { segment } of segmenter.segment(text)) {
+    const image = emoji.get(segment);
+    if (!image) {
+      pending += segment;
+      continue;
+    }
+    if (pending !== '') parts.push(pending);
+    pending = '';
+    parts.push({ emoji: segment, image });
+  }
+  if (pending !== '' || parts.length === 0) parts.push(pending);
+  return parts;
+}
+
 function shapeRanges(ranges: readonly TextRange[], metrics: FontMetrics): ShapedRanges {
   const faces: Face[] = [];
   const faceIndex = new Map<string, number>();
@@ -442,11 +477,53 @@ function shapeRanges(ranges: readonly TextRange[], metrics: FontMetrics): Shaped
     ),
     ranges.map((range) => range.style.textTransform),
   );
-  const shapedPieces = ranges.map((range, i) => {
+  const textFace = new Map<number, number>();
+  const emojiFaceOf = (emoji: string, image: ImageAsset, range: TextRange, text: number) => {
+    const { fontSize: size, color, textDecoration: decoration, letterSpacing } = range.style;
+    const key = `emoji ${emoji}:${String(text)}`;
+    let index = faceIndex.get(key);
+    if (index === undefined) {
+      index = faces.length;
+      const font = faces[text]?.font ?? fontFor(range.style);
+      // 1 em tall with its bottom on the font's descent.
+      const ascent = size - (metrics.descent?.(font, size) ?? 0);
+      faces.push({
+        font,
+        size,
+        color,
+        decoration,
+        letterSpacing,
+        ascent,
+        ...(range.link !== undefined && { link: range.link }),
+        emoji: image,
+      });
+      faceIndex.set(key, index);
+      textFace.set(index, text);
+    }
+    return index;
+  };
+  const shapedPieces = ranges.flatMap((range, i) => {
     const chain = range.fonts?.chain ?? [fontFor(range.style)];
     // Registered in chain order, so for a single range a face index is its chain index.
     const toFace = chain.map((font) => faceOf(font, range.style, range.link));
-    return { range, shaped: shapeText(pieces[i] ?? '', chain, metrics), toFace };
+    return splitEmoji(pieces[i] ?? '', range.emoji).map((part) => {
+      if (typeof part === 'string') {
+        return { range, shaped: shapeText(part, chain, metrics), toFace };
+      }
+      const shaped: ShapedText = {
+        text: part.emoji,
+        fontAt: new Uint16Array(part.emoji.length),
+        clusterStarts: [0, part.emoji.length],
+        replaced: [],
+        missing: [],
+        softHyphens: [],
+      };
+      return {
+        range,
+        shaped,
+        toFace: [emojiFaceOf(part.emoji, part.image, range, toFace[0] ?? 0)],
+      };
+    });
   });
 
   const nonEmpty = shapedPieces.filter(({ shaped }) => shaped.text !== '');
@@ -503,6 +580,7 @@ function shapeRanges(ranges: readonly TextRange[], metrics: FontMetrics): Shaped
         new Uint8Array(text.length),
       ),
     }),
+    ...(textFace.size > 0 && { textFace }),
   };
 }
 
@@ -536,6 +614,7 @@ export function layoutRanges(
     const shaped = shapeRanges(ranges, metrics);
     const widthOfs = shaped.faces.map((face) => {
       const spacing = face.letterSpacing;
+      if (face.emoji) return (chunk: string) => (face.size + spacing) * graphemeCount(chunk);
       if (!spacing) return cache.widthOf(metrics, face.font, face.size);
       const widthOf = cache.widthOf(metrics, face.font, face.size, false);
       return (chunk: string) => widthOf(chunk) + spacing * graphemeCount(chunk);
@@ -587,6 +666,8 @@ function breakLines(
   hyphenation: LineHyphenation,
 ): TextBlock {
   const { text: collapsed, faces, faceAt: fontAt, clusterStarts, softBreaks, autoAt } = shaped;
+  // An ellipsis after an emoji is drawn in the text face around the emoji.
+  const textFaceOf = (index: number): number => shaped.textFace?.get(index) ?? index;
   const length = collapsed.length;
   const widthIn = (font: number, chunk: string): number => (widthOfs[font] ?? (() => 0))(chunk);
 
@@ -637,7 +718,7 @@ function breakLines(
   /** The face the ellipsis takes after `[start, end)`: its last kept character's, or `fallback`. */
   const ellipsisFace = (start: number, end: number, fallback: number): number => {
     const kept = keptEnd(start, end);
-    return kept > start ? (fontAt[kept - 1] ?? fallback) : fallback;
+    return kept > start ? textFaceOf(fontAt[kept - 1] ?? fallback) : fallback;
   };
   /** The runs of `[start, end)` without its trailing spaces, then the ellipsis in face `index`. */
   const runsWithEllipsis = (start: number, end: number, index: number): TextRun[] => {
@@ -656,13 +737,20 @@ function breakLines(
     return runs;
   };
 
-  /** The runs of `[start, end)`, then the hyphen of the face of its last character. */
+  /**
+   * The runs of `[start, end)`, then the hyphen of the face of its last character. After an emoji,
+   * whose run is drawn as images, the hyphen is a run of its own in the text face around it.
+   */
   const runsWithHyphen = (start: number, end: number): TextRun[] => {
     const runs = runsOf(start, end);
     const last = runs.at(-1);
-    const index = fontAt[end - 1] ?? 0;
-    if (last) {
-      const text = last.text + (hyphenation.glyphs[index] ?? HYPHEN_MINUS);
+    const index = textFaceOf(fontAt[end - 1] ?? 0);
+    const hyphen = hyphenation.glyphs[index] ?? HYPHEN_MINUS;
+    const face = faces[index];
+    if (last?.emoji && face) {
+      runs.push({ ...face, text: hyphen, x: last.x + last.width, width: widthIn(index, hyphen) });
+    } else if (last) {
+      const text = last.text + hyphen;
       runs[runs.length - 1] = { ...last, text, width: widthIn(index, text) };
     }
     return runs;
@@ -791,7 +879,7 @@ function breakLines(
     // The paragraph's ends are trimmed, so anything after `end` is text that gets cut.
     const clamped = lines.length + 1 >= maxLines && end < length;
     if (clamped) {
-      const fallback = fontAt[drawnEnd(end) - 1] ?? 0;
+      const fallback = textFaceOf(fontAt[drawnEnd(end) - 1] ?? 0);
       const widthWith = (k: number, face: number): number =>
         runsWithEllipsis(start, cut(k), face).reduce((sum, run) => sum + run.width, 0);
       // The ellipsis takes the face of the last kept character, so a cut that ends in a smaller
@@ -865,10 +953,11 @@ export function measureRanges(
 ): (width: number, widthMode: number) => { width: number; height: number } {
   assertTextSize(ranges);
   // Warnings are left to the layout that draws the text.
-  const quiet = ranges.map(({ text, style, fonts }) => ({
+  const quiet = ranges.map(({ text, style, fonts, emoji }) => ({
     text,
     style,
     ...(fonts && { fonts: { chain: fonts.chain } }),
+    ...(emoji && { emoji }),
   }));
   return (width, widthMode) => {
     const maxWidth = widthMode === MEASURE_MODE_UNDEFINED ? Infinity : width;

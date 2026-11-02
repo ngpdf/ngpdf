@@ -1,7 +1,7 @@
 const segmenter = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
 
 /** Whether every code unit of `text` is a whole character: below U+0300, no marks or surrogates. */
-function isSimple(text: string): boolean {
+export function isSimple(text: string): boolean {
   for (let i = 0; i < text.length; i++) if (text.charCodeAt(i) >= 0x300) return false;
   return true;
 }

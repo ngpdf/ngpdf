@@ -98,13 +98,100 @@ A character that no font in the list has is drawn as the first font's empty glyp
 
 If the list starts with a standard font, such a character becomes `?`, as below.
 
-There is no right-to-left text yet, so Arabic and Hebrew are not laid out correctly, and color emoji fonts are not supported.
+There is no right-to-left text yet, so Arabic and Hebrew are not laid out correctly, and color emoji fonts are not supported. Emoji can be drawn as images instead: see [Emoji](#emoji).
+
+## Emoji
+
+A font draws emoji in one color at best, and the standard fonts draw them as `?`. To draw them in color, give ngpdf a source of emoji images with `providePdfEmoji`. Each emoji is then drawn as a small inline image in the text.
+
+```ts
+// app.config.ts
+import { providePdfEmoji } from '@ngpdf/core';
+
+export const appConfig: ApplicationConfig = {
+  providers: [providePdfEmoji('/assets/emoji/{codepoints}.png')],
+};
+```
+
+```html
+<pdf-text>Shipped 👍🏽 to 🇧🇷 at 9️⃣ o'clock 🎉</pdf-text>
+```
+
+```ts
+type PdfEmojiImage = string | Uint8Array | Blob | ArrayBuffer;
+type PdfEmojiSource =
+  | string
+  | ((emoji: string, codepoints: string) => PdfEmojiImage | null | Promise<PdfEmojiImage | null>);
+function providePdfEmoji(source: PdfEmojiSource): EnvironmentProviders;
+```
+
+- **URL template:** a string source is a URL in which `{codepoints}` is replaced by the emoji's code points in lower-case hex, joined by `-`, without U+FE0F. `👍🏽` becomes `1f44d-1f3fd` and `#️⃣` becomes `23-20e3`. Emoji image sets name their files their own way: Twemoji keeps U+FE0F in some names, and Noto Emoji uses `emoji_u`, `_` and at least four hex digits. To match one exactly, use a function source.
+- **Function:** a function source gets the emoji and the same code points, and returns a PNG or JPEG as a URL, a data URL or the bytes, or a promise of one. It returns `null` to draw that emoji as text.
+- **No images by default:** ngpdf ships no emoji images and fetches nothing unless you provide a source. Without one, an emoji is text like any other character: a [custom font](#custom-fonts) in the `font-family` list that has the glyph draws it, and one that no font in the list has follows the [fallback](#the-family-list-and-fallback), `?` when the list starts with a standard font and the first font's empty glyph otherwise.
+- **Where it applies:** documents rendered with the injector that has the provider, or one below it, as with [custom fonts](#custom-fonts). A provider in a child injector replaces the parent's.
+
+A function that matches Noto Emoji's file names (`emoji_u1f44d_1f3fd.png`, `emoji_u00a9.png`), for a copy of its `png/72` folder:
+
+```ts
+providePdfEmoji((_emoji, codepoints) => {
+  const name = codepoints
+    .split('-')
+    .map((hex) => hex.padStart(4, '0'))
+    .join('_');
+  return `/assets/noto/emoji_u${name}.png`;
+});
+```
+
+That folder has no flags: the Noto Emoji repository keeps them apart, in `third_party/region-flags/png`, named by region code (`BR.png`). Copy those too and send each regional-indicator pair there:
+
+```ts
+providePdfEmoji((_emoji, codepoints) => {
+  const points = codepoints.split('-').map((hex) => parseInt(hex, 16));
+  if (points.length === 2 && points.every((point) => point >= 0x1f1e6 && point <= 0x1f1ff)) {
+    const region = String.fromCharCode(...points.map((point) => point - 0x1f1e6 + 65));
+    return `/assets/flags/${region}.png`;
+  }
+  return `/assets/noto/emoji_u${points.map((point) => point.toString(16).padStart(4, '0')).join('_')}.png`;
+});
+```
+
+### What counts as an emoji
+
+A character as you see it (a grapheme cluster) is an emoji when:
+
+- it contains U+FE0F (the emoji variation selector);
+- or it is a ZWJ sequence that starts with a pictographic character (`Extended_Pictographic`), such as 👨‍👩‍👧‍👦 or ⛹‍♀;
+- or it is a keycap: a digit, `#` or `*` followed by U+20E3, with or without U+FE0F, such as `#️⃣` or `1⃣`;
+- or it is a modifier sequence: a character that takes a skin tone (`Emoji_Modifier_Base`) followed by one, such as ✌🏽;
+- or it starts with a character that shows as an emoji by default, which covers 😀, a skin tone such as 👍🏽, flags such as 🇧🇷 and tag sequences such as 🏴󠁧󠁢󠁳󠁣󠁴󠁿.
+
+`©`, `®`, `™`, the digits and other characters that show as text by default stay text on their own. They become emoji with U+FE0F after them, in a keycap (the digits, `#` and `*`), or, for a pictographic character, in a ZWJ sequence or with a skin tone, as above. A cluster whose second character is U+FE0E (the text variation selector) always stays text.
+
+### Layout
+
+- Each emoji is a square 1 em on each side, at the `font-size` of its text. An image that is not square is fitted inside it, centered, without stretching. Its bottom sits on the font's descent and its top is 1 em above that, so it lines up with the text around it. A writer whose font metrics give no descent puts the bottom on the baseline instead; the default pdfkit writer always gives one.
+- It takes the text's `letter-spacing`, and lines break around it as around any character, never inside it.
+- An underline or a line-through runs under or through it like text. Its `color` does not apply to the image.
+- `max-lines`, `text-align: justify` and `text-transform` work as they do for text. An ellipsis after an emoji is drawn in the font of the text around it.
+- The text of `pdf-page-number` is always drawn as text.
+
+### Loading
+
+- Each distinct emoji is loaded once per render, together with the document's images and before layout, at most 6 at a time. The PDF embeds each image once, however often the emoji appears.
+- URLs are fetched like [images](/docs/images), with same-origin credentials only.
+- A render loads at most 500 distinct emoji. The rest are drawn as text, with one warning in development mode: `ngpdf: more than 500 distinct emoji; the rest are drawn as text`.
+- An emoji whose image fails to load, is not a whole PNG or JPEG (a file cut off after its header counts as broken), is `null`, has no width or height, or takes more than 10 seconds from the start of its load is drawn as text. A fetch that runs out of time is aborted. The 10 seconds cannot interrupt a source function while it runs synchronously: they only cut off waiting for its promise or for a fetch. Emoji often come from user data, so a missing one does not fail the render. In development mode ngpdf logs one warning per render listing them: `ngpdf: emoji without an image, drawn as text: 🦤`.
+
+### Limits
+
+- An emoji image is not text. Copying, searching and screen readers skip it. Giving it real text needs a tagged PDF, which ngpdf does not write yet.
+- Only raster images (PNG and JPEG) work. Color font formats (COLR, sbix and CBDT) are not read.
 
 ## Characters: WinAnsi
 
 The standard fonts use the WinAnsi encoding (Windows-1252). Text in a [custom font](#custom-fonts) is not limited to it. It covers ASCII, the Latin-1 accented letters (`á`, `ç`, `ñ`, `ü` and so on) and a few more, such as `€`, `“ ”`, `‘ ’`, `–`, `—`, `…`, `•` and `™`.
 
-In a standard font, any other character is drawn as `?`. That includes emoji, Greek, Cyrillic, CJK, arrows and check marks. In development mode ngpdf logs one warning per render that lists every replaced character:
+In a standard font, any other character is drawn as `?`. That includes emoji (unless [`providePdfEmoji`](#emoji) gives them images), Greek, Cyrillic, CJK, arrows and check marks. In development mode ngpdf logs one warning per render that lists every replaced character:
 
 `ngpdf: characters outside WinAnsi replaced with "?": ✓→`
 

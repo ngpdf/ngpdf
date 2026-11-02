@@ -16,7 +16,9 @@ this project calls for it. Where the simplest correct answer is no pattern, this
  dissolveHosts      → PdfNode tree of pdf-* elements only
  resolveStyles      → Map<PdfNode, ResolvedStyle>
  collectAnchors     → anchor names, marked elements, outline
- loadImages         → Map<PdfNode, ImageAsset>          (the only async I/O)
+ loadImages         → Map<PdfNode, ImageAsset>         ┐ the only async I/O, in
+ registerUsedFonts  → FontRegistry (named fonts only)  │ parallel: URLs fetched on
+ loadEmoji          → Map<string, ImageAsset>          ┘ demand
  layoutBox (Yoga)   → Box tree
  paginatePage       → PageLayout[]
  paintCanvases      → Map<Box, shape ops>                (runs each pdf-canvas paint once)
@@ -27,13 +29,16 @@ this project calls for it. Where the simplest correct answer is no pattern, this
 **Architecture pattern: pipes and filters, with a functional core and an imperative shell.**
 
 - Each stage is a function from the previous stage's output to a new value.
-- A stage does not mutate its input, keeps no state between calls, and does no I/O.
+- A stage does not mutate its input and keeps no state between calls. Every stage but the three
+  loaders does no I/O.
 - `paintCanvases` is the one stage that runs user code: each pdf-canvas's `paint`, once per
   render, against a recorder (`canvas-recorder.ts`) that turns its calls into `shape` ops. The
   display list only places and clips those ops, so it stays a function of its input.
 - The I/O sits at the edges, in the imperative shell:
   - Angular's change detection at the start;
-  - fetching images;
+  - the loaders, `loadImages`, `registerUsedFonts` and `loadEmoji`: the boundary where the
+    shell fetches images, fonts and emoji images, in parallel and before layout, so every stage
+    after them runs synchronously, with no I/O;
   - pdfkit writing bytes at the end.
 
 **Why this fits:**
@@ -200,7 +205,7 @@ direct code. Strategy would add indirection with one implementation each.
 projects/core/src/lib/tree/       PdfNode, PdfRendererFactory           (eager)
 projects/core/src/lib/elements/   pdf-* components, PDF_ELEMENTS        (eager)
 projects/core/src/lib/render/     render-tree, PdfRenderer facade       (eager)
-projects/core/src/lib/engine/     hosts, color, style, anchors, fonts, text, images, layout,
+projects/core/src/lib/engine/     hosts, color, style, anchors, fonts, text, images, emoji, layout,
                                   paginate, canvas-recorder, display-list, writer, index (lazy)
 projects/core/viewer/             pdf-viewer, entry point @ngpdf/core/viewer (own chunk)
 projects/demo/                    the three reference documents

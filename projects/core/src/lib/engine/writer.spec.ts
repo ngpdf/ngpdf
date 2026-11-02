@@ -8,6 +8,7 @@ import {
   type StandardFont,
 } from './writer';
 import { testFont } from '../../testing/test-fonts';
+import { testPng, testRows, testZeros } from '../../testing/test-png';
 
 /** 3x2 8-bit grayscale PNG, generated so no binary file sits in the repo. */
 function tinyPng(): Uint8Array {
@@ -232,6 +233,57 @@ describe('createPdfkitWriter', () => {
     expect(ascent).toBeGreaterThan(0);
     expect(ascent).toBeLessThan(10);
     expect(writer.ascent('Helvetica', 20)).toBeCloseTo(ascent * 2, 5);
+  });
+
+  describe('checkImage', () => {
+    // A JPEG down to its start-of-frame marker, which is all pdfkit reads: it embeds JPEG as is.
+    const jpeg = Uint8Array.from([
+      0xff, 0xd8, 0xff, 0xc0, 0x00, 0x11, 0x08, 0x00, 0x02, 0x00, 0x02, 0x03, 0x01, 0x22, 0x00,
+      0x02, 0x11, 0x01, 0x03, 0x11, 0x01, 0xff, 0xd9,
+    ]);
+
+    it('accepts a whole PNG, with or without alpha, and a JPEG', async () => {
+      expect(await writer.checkImage?.(testPng())).toBe(true);
+      expect(await writer.checkImage?.(testPng({ colorType: 2, idat: testRows(2, 2, 3) }))).toBe(
+        true,
+      );
+      expect(await writer.checkImage?.(jpeg)).toBe(true);
+    });
+
+    it('rejects a PNG cut off after a valid header', async () => {
+      const whole = testPng();
+      expect(await writer.checkImage?.(whole.slice(0, whole.length - 20))).toBe(false);
+      expect(await writer.checkImage?.(testPng({ noEnd: true }))).toBe(false);
+    });
+
+    it('rejects a PNG whose pixel data does not inflate to the whole image', async () => {
+      const garbage = Uint8Array.from([0x78, 0x9c, 1, 2, 3, 4, 5]);
+      expect(await writer.checkImage?.(testPng({ idat: garbage }))).toBe(false);
+      const cut = testRows();
+      expect(await writer.checkImage?.(testPng({ idat: cut.slice(0, cut.length - 4) }))).toBe(
+        false,
+      );
+      expect(await writer.checkImage?.(testPng({ idat: testRows(2, 2, 4, 1) }))).toBe(false);
+      expect(await writer.checkImage?.(testPng({ idat: testRows(2, 2, 4, 3) }))).toBe(false);
+    });
+
+    it('expects an interlaced PNG to hold each of its seven passes', async () => {
+      // 2×2 RGBA in Adam7: passes 1, 6 and 7 have pixels, 1, 1 and 2 of them, one row each.
+      const interlaced = (length: number) => testPng({ interlaced: true, idat: testZeros(length) });
+      expect(await writer.checkImage?.(interlaced(5 + 5 + 9))).toBe(true);
+      expect(await writer.checkImage?.(interlaced(2 * (1 + 8)))).toBe(false);
+    });
+
+    it('rejects a JPEG without a frame, and bytes that are not an image', async () => {
+      expect(await writer.checkImage?.(Uint8Array.from([0xff, 0xd8, 0xff, 0xd9]))).toBe(false);
+      expect(await writer.checkImage?.(Uint8Array.from([1, 2, 3]))).toBe(false);
+    });
+  });
+
+  it('reports the descent below the baseline as a positive length that scales with size', () => {
+    // Helvetica's descender is -207/1000 em.
+    expect(writer.descent?.('Helvetica', 10)).toBeCloseTo(2.07, 6);
+    expect(writer.descent?.('Helvetica', 20)).toBeCloseTo(4.14, 6);
   });
 
   it('writes a PDF blob with a rect and a text op', async () => {

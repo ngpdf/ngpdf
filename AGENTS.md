@@ -116,6 +116,19 @@ The site (`projects/site`) is a prerendered Angular app. Its docs are the Markdo
     synthetic bold or italic.
   - Only the faces of families a document names are loaded, so an unused broken font never fails
     a render.
+  - Emoji are text unless `providePdfEmoji` gives a source (a `{codepoints}` URL template or a
+    function); ngpdf ships no emoji images. With one, a grapheme cluster with an emoji
+    presentation is drawn as a PNG or JPEG image fitted in a 1 em square, taking
+    `letter-spacing` and the decoration but not the color. A cluster whose second character is
+    U+FE0E stays text; otherwise it is an emoji if it has U+FE0F, is a ZWJ sequence starting with
+    an `Extended_Pictographic` character, is a keycap (`0-9`, `#` or `*` with U+20E3), is a
+    modifier sequence such as ✌🏽, or starts with an `Emoji_Presentation` character. Its bottom
+    sits on the font's descent, or on the baseline when the metrics give no descent
+    (`FontMetrics.descent` is optional; the pdfkit writer gives it). Each distinct emoji loads once
+    per render, at most 500 and 6 at a time, each with 10 s from the start of its own load. One
+    whose image is `null`, fails, is empty, is not a whole PNG or JPEG or runs out of time is
+    drawn as text, with one dev-mode warning per render naming them; past 500, the rest are text,
+    with one warning. Text nodes over 1 MB are not searched for emoji.
 - **Tables:**
   - Columns are declared on the table: `[columns]` with points, `'Nfr'`, `'N%'` or `'auto'`.
   - Column widths are resolved in this order: fixed widths first, then percentages, then `auto`

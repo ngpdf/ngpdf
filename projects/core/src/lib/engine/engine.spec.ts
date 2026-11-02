@@ -1,6 +1,7 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createNode, type PdfNode } from '../tree/node';
 import { testFont } from '../../testing/test-fonts';
+import { testPng } from '../../testing/test-png';
 import { renderDocument, type FontSource } from './index';
 import { createPdfkitWriter, type DocumentInfo, type PageOps, type PdfWriter } from './writer';
 
@@ -856,5 +857,82 @@ describe('renderDocument with fonts', () => {
     const doc = onePage(text('Zoë 日本', { 'font-family': 'Noto Sans, Noto Sans JP' }));
     const pdf = await bytesOf(await renderDocument(doc, { writer, dev: false, fonts }));
     expect(pdf.match(/\/FontFile2/g)).toHaveLength(2);
+  });
+});
+
+describe('renderDocument with emoji', () => {
+  // A 1×1 opaque PNG.
+  const PNG =
+    'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGO4y2AIAALMAQ+JqrH2AAAAAElFTkSuQmCC';
+  const onePage = (content: string) =>
+    host({}, [el('pdf-page', {}, [text(content)], { size: 'A4' })]);
+  const opsOf = (writer: ReturnType<typeof recordingWriter>) =>
+    writer.recorded[0]!.pages.flatMap((page) => page.ops);
+
+  it('draws each emoji as an image from the source, one image per sequence', async () => {
+    const writer = recordingWriter();
+    const source = vi.fn(() => PNG);
+    await renderDocument(onePage('Done 👍 and 👍 ©'), { writer, dev: false, emoji: source });
+    expect(source).toHaveBeenCalledTimes(1);
+    const images = opsOf(writer).filter((op) => op.op === 'image');
+    expect(images).toHaveLength(2);
+    expect(images[0]!.data).toBe(images[1]!.data);
+    const texts = opsOf(writer).flatMap((op) => (op.op === 'text' ? [op.text] : []));
+    expect(texts.join('')).toBe('Done  and  ©');
+  });
+
+  it('keeps today’s text glyph without a source', async () => {
+    const writer = recordingWriter();
+    await renderDocument(onePage('Done 👍'), { writer, dev: false });
+    expect(opsOf(writer).some((op) => op.op === 'image')).toBe(false);
+    expect(opsOf(writer).some((op) => op.op === 'text' && op.text === 'Done ?')).toBe(true);
+  });
+
+  it('draws an emoji without an image as text, with one warning in dev mode', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const writer = recordingWriter();
+    await renderDocument(onePage('👍 🎉 👍'), { writer, dev: true, emoji: () => null });
+    expect(opsOf(writer).some((op) => op.op === 'image')).toBe(false);
+    expect(warn.mock.calls.map(([message]: unknown[]) => message)).toContain(
+      'ngpdf: emoji without an image, drawn as text: 👍 🎉',
+    );
+  });
+
+  it('draws an emoji whose PNG pdfkit cannot read as text, and still writes the PDF', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const whole = testPng();
+    const cut = whole.slice(0, whole.length - 20);
+    const blob = await renderDocument(onePage('Done 👍'), {
+      writer: await createPdfkitWriter({ compress: false }),
+      dev: true,
+      emoji: () => cut,
+    });
+    const pdf = await bytesOf(blob);
+    expect(pdf).not.toContain('/Subtype /Image');
+    expect(warn.mock.calls.map(([message]: unknown[]) => message)).toContain(
+      'ngpdf: emoji without an image, drawn as text: 👍',
+    );
+  });
+
+  it('still rejects the render for a pdf-image pdfkit cannot read', async () => {
+    const whole = testPng();
+    const image = el('pdf-image', { width: '10', height: '10' }, [], {
+      src: whole.slice(0, whole.length - 20).buffer,
+    });
+    const doc = host({}, [el('pdf-page', {}, [image], { size: 'A4' })]);
+    await expect(
+      renderDocument(doc, { writer: await createPdfkitWriter({ compress: false }), dev: false }),
+    ).rejects.toThrow();
+  });
+
+  it('embeds an emoji image once in the PDF', async () => {
+    const pdf = await bytesOf(
+      await renderDocument(onePage('👍 👍 👍'), {
+        writer: await createPdfkitWriter({ compress: false }),
+        dev: false,
+        emoji: () => PNG,
+      }),
+    );
+    expect(pdf.match(/\/Subtype \/Image/g)).toHaveLength(1);
   });
 });
