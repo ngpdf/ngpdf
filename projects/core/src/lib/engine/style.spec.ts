@@ -906,7 +906,7 @@ describe('resolveStyles property coverage', () => {
   });
 
   it('rejects duplicate border width, style and color tokens (#235)', () => {
-    for (const value of ['red blue', '1 2 red', 'solid dashed']) {
+    for (const value of ['red blue', 'red solid blue', '1 2 red', '0 thin red', 'thin 1 red', 'solid dashed', 'none solid', 'solid none']) {
       expect(() => styleOf({ border: value })).toThrow('ngpdf: invalid border in');
       expect(() => styleOf({ 'border-top': value })).toThrow('ngpdf: invalid border in');
     }
