@@ -102,6 +102,17 @@ describe('resolveStyles', () => {
     expect(style.padding.left).toBe(3);
     expect(styleOf({ 'margin-top-x': '10' }).margin.top).toBe(0);
     expect(styleOf({ 'padding-leftover': '5' }).padding.left).toBe(0);
+    const warn = vi.fn();
+    for (const side of ['top', 'right', 'bottom', 'left']) {
+      const bad = styleOf(
+        { [`margin-${side}-extra`]: '12', [`padding-${side}-extra`]: '12' },
+        'pdf-view',
+        warn,
+      );
+      expect(bad.margin[side as keyof typeof bad.margin]).toBe(0);
+      expect(bad.padding[side as keyof typeof bad.padding]).toBe(0);
+    }
+    expect(warn).not.toHaveBeenCalled();
   });
 
   it('lets a longhand override the shorthand it follows', () => {
