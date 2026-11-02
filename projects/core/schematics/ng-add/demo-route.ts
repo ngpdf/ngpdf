@@ -22,6 +22,15 @@ export function addDemoRoute(routesFile: string, demoFile: string): Rule {
       return;
     }
     const elements = routes.elements;
+    if (elements.some(ts.isSpreadElement)) {
+      // A wildcard in the spread routes would be invisible here, and catch pdf-demo first.
+      context.logger.warn(
+        `ngpdf: the routes array in ${routesFile} spreads other routes, which may end in a ` +
+          `wildcard. Add this route by hand, before any wildcard: ` +
+          `{ path: 'pdf-demo', loadComponent: ${load} }`,
+      );
+      return;
+    }
     if (elements.some((element) => routePath(element) === 'pdf-demo')) return;
 
     const recorder = tree.beginUpdate(routesFile);
