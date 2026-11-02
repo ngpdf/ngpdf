@@ -9,11 +9,12 @@ const REQUIRED = [
   'LICENSE',
   'README.md',
   // The ng add schematic: the CommonJS marker, the collection, the compiled factory and its
-  // helper, the options and the file templates.
+  // helpers, the options and the file templates.
   'schematics/package.json',
   'schematics/collection.json',
   'schematics/ng-add/index.js',
   'schematics/ng-add/demo-route.js',
+  'schematics/ng-add/typescript.js',
   'schematics/ng-add/schema.json',
   'schematics/ng-add/files/document/example-document.ts.template',
   'schematics/ng-add/files/demo/pdf-demo.ts.template',
