@@ -1,6 +1,6 @@
 ---
 title: Getting started
-description: Install @ngpdf/core, write a PDF document as an Angular component and download it or get a Blob from the browser with PdfRenderer.
+description: Install @ngpdf/core with ng add, write a PDF document as an Angular component and download it or get a Blob from the browser with PdfRenderer.
 section: Guide
 order: 1
 ---
@@ -8,6 +8,45 @@ order: 1
 ngpdf renders Angular components to PDF, in the browser. A document is a normal standalone component whose template uses the `pdf-*` elements. ngpdf lays it out with flexbox, breaks it into pages and writes a PDF with selectable text.
 
 ## Install
+
+```sh
+ng add @ngpdf/core
+```
+
+`ng add` installs the package with npm (or your package manager) and adds an example document to your application: `src/app/documents/example-document.ts`, a standalone component with a heading, a short table and a page number. It takes these options:
+
+| Option | What it does |
+| --- | --- |
+| `--project <name>` | The application to add the example to. Without it, `ng add` uses the workspace's only project or the project of the folder you run it in, and otherwise asks. Without a terminal to ask in, it takes the only application, or stops and asks for `--project`. A library is refused. |
+| `--path <folder>` | The folder for the example files, from the workspace root. The default is `src/app/documents` in the project. |
+| `--demo-route` | Also adds `pdf-demo.ts`, a page with a Download PDF button that uses [`PdfDownload`](/docs/rendering-api#pdfdownload), and a lazy `pdf-demo` route in `app.routes.ts`. |
+
+Then run `ng serve` and open `/pdf-demo` if you added the demo route.
+
+- `ng add` never overwrites a file. If `example-document.ts` or `pdf-demo.ts` is already there, it is skipped, and the command says so.
+- With `--demo-route`, if `example-document.ts` is already there, `ng add` adds no demo page and no route either, and says why: `pdf-demo.ts` imports `ExampleDocument`, which your file may not export.
+- With `--demo-route`, if `pdf-demo.ts` is already there, `ng add` keeps it and adds no route, and says why: the route imports `PdfDemo` from it, which your file may not export.
+- It does not change `main.ts` or your providers: ngpdf needs no setup, because `PdfRenderer` is provided in the root injector.
+- If there is no `app.routes.ts`, no `routes` array in it, or the array spreads other routes (`...moreRoutes`, which may end in a wildcard), `--demo-route` adds no route. It prints the route to add by hand instead.
+- The package goes in `dependencies`, with its own dependencies (pdfkit, yoga-layout, linebreak and tslib) as usual. `ng add` adds no other direct dependency to your app.
+
+`ng build` then prints eight warnings like `Module 'unicode-trie' used by 'node_modules/linebreak/dist/module.mjs' is not ESM`. They name `unicode-trie` and `base64-js` (used by `linebreak` and `unicode-properties`), and `fast-deep-equal`, `dfa`, `clone`, `tiny-inflate` and `brotli/decompress.js` (used by `fontkit`). They come from `linebreak`, a dependency of ngpdf, and from `fontkit`, a dependency of pdfkit, and they ship only as CommonJS. They are in the PDF engine's lazy chunk, not in your initial bundle, and the build still succeeds. To silence the warnings, list them in the build options of your project in `angular.json`:
+
+```json
+"allowedCommonJsDependencies": [
+  "base64-js",
+  "brotli",
+  "clone",
+  "dfa",
+  "fast-deep-equal",
+  "tiny-inflate",
+  "unicode-trie"
+]
+```
+
+`ng add` leaves `angular.json` alone, so add this entry yourself if you want it.
+
+To install the package without the example, use npm:
 
 ```sh
 npm install @ngpdf/core

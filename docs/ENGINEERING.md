@@ -12,6 +12,7 @@ Tests are written first and must fail without the change they cover (see `AGENTS
 | --- | --- | --- | --- |
 | Unit | One stage, from its input data to its output data | Vitest (node) | `engine/*.spec.ts`, `tree/*.spec.ts` |
 | Property | Invariants hold for any input, not only the examples | Vitest + `fast-check` | `engine/*.property.spec.ts` |
+| Schematic | `ng add` on a workspace made by `@schematics/angular`, compiled with the workspace's strict tsconfig and checked against its `.prettierrc` | Vitest + `SchematicTestRunner` + `@angular/compiler-cli` | `schematics/ng-add/*.spec.ts` |
 | Component | Real templates (control flow, pipes, DI) build the right tree; the preview component | Vitest (jsdom) + Angular compiler (`@analogjs/vite-plugin-angular`) | `render/*.spec.ts`, `viewer/*.spec.ts` |
 | Integration | The whole engine, with a recording fake `PdfWriter` | Vitest | `engine/engine.spec.ts` |
 | End to end | The demo's PDFs in a real Chrome, compared as text with `pdftotext -layout`, and the demo's `pdf-viewer` showing its PDF in Chrome's PDF viewer | `puppeteer-core` + poppler (Docker) | `scripts/e2e.mjs`, `e2e/expected/` |
@@ -115,10 +116,13 @@ These invariants are checked for any input:
 6. **Bundle budget:** `node scripts/bundle-budget.mjs`. It also fails when `@ngpdf/core/viewer`
    reaches an initial chunk of the demo, which loads its preview in a deferred chunk.
 7. **End to end:** `node scripts/e2e.mjs`, using Chrome from `browser-actions/setup-chrome`.
-8. **Library build:** `npm run build:core`, then `node scripts/check-pack.mjs`, which reads the
-   file list of `npm pack --dry-run` and fails on a spec, bench or test helper, or a missing
-   LICENSE or README.
-9. **Dependency scans:** OSV-Scanner and `npm audit` (see "Dependency vulnerabilities").
+8. **Library build:** `npm run build:core` (ng-packagr, then `scripts/build-schematics.mjs` for the
+   `ng add` schematic), then `node scripts/check-pack.mjs`, which reads the file list of
+   `npm pack --dry-run` and fails on a spec, bench or test helper, or a missing LICENSE, README or
+   compiled schematic.
+9. **`ng add`:** the packed tarball is added with `ng add --demo-route` to a fresh `ng new` app made
+   with the repository's Angular CLI major, and that app must `ng build`.
+10. **Dependency scans:** OSV-Scanner and `npm audit` (see "Dependency vulnerabilities").
 
 ### Scheduled jobs (weekly)
 

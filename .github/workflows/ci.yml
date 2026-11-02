@@ -158,6 +158,45 @@ jobs:
       # LICENSE or README.
       - run: node scripts/check-pack.mjs dist/core
 
+  # The packed tarball, as users get it from npm: `ng add` on a fresh `ng new` app, then `ng build`
+  # with nothing changed by hand.
+  ng-add:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      NG_CLI_ANALYTICS: 'false'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm run build:core
+      - run: npm pack --pack-destination "$RUNNER_TEMP"
+        working-directory: dist/core
+      # The app is made with the Angular CLI major this repository builds with.
+      - id: cli
+        run: echo "major=$(node -p "require('@angular/cli/package.json').version.split('.')[0]")" >> "$GITHUB_OUTPUT"
+      - run: >-
+          npx --yes @angular/cli@${{ steps.cli.outputs.major }} new fresh-app --defaults
+          --interactive=false --skip-git --ai-config=none
+        working-directory: ${{ runner.temp }}
+      - run: npx ng add "$RUNNER_TEMP"/ngpdf-core-*.tgz --skip-confirmation --interactive=false --demo-route
+        working-directory: ${{ runner.temp }}/fresh-app
+      # The build below must depend on what ng add wrote, so check it is there first.
+      - name: Check the generated files and route
+        run: |
+          grep -q 'export class ExampleDocument' src/app/documents/example-document.ts
+          grep -q 'export class PdfDemo' src/app/documents/pdf-demo.ts
+          grep -q "path: 'pdf-demo'" src/app/app.routes.ts
+          grep -q "import('./documents/pdf-demo')" src/app/app.routes.ts
+        working-directory: ${{ runner.temp }}/fresh-app
+      - run: npx ng build
+        working-directory: ${{ runner.temp }}/fresh-app
+
   e2e:
     needs: build
     runs-on: ubuntu-24.04
