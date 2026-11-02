@@ -96,6 +96,12 @@ describe('resolveStyles', () => {
     expect(style.padding).toEqual({ top: 4, right: 4, bottom: 4, left: 9 });
   });
 
+  it('ignores unknown properties that merely contain a side name', () => {
+    const style = styleOf({ 'margin-top-x': '10', 'padding-leftover': '5' });
+    expect(style.margin).toEqual({ top: 0, right: 0, bottom: 0, left: 0 });
+    expect(style.padding).toEqual({ top: 0, right: 0, bottom: 0, left: 0 });
+  });
+
   it('rejects auto padding, which CSS does not have', () => {
     expect(() => styleOf({ padding: 'auto' })).toThrow(/^ngpdf: expected a length in "auto"/);
     expect(() => styleOf({ padding: '4 auto' })).toThrow(/^ngpdf:/);
