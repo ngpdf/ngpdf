@@ -122,7 +122,8 @@ These invariants are checked for any input:
    `npm pack --dry-run` and fails on a spec, bench or test helper, or a missing LICENSE, README or
    compiled schematic.
 9. **`ng add`:** the packed tarball is added with `ng add --demo-route` to a fresh `ng new` app made
-   with the repository's Angular CLI major, and that app must `ng build`.
+   with the repository's Angular CLI major, and that app must `ng build`. It runs twice: with npm,
+   and with the app inside a pnpm workspace with `hoist=false`.
 10. **Dependency scans:** OSV-Scanner and `npm audit` (see "Dependency vulnerabilities").
 11. **Server:** on Node 22 and 24, and on Node 22 with `--angular 22.0.0` (the lowest
     `@angular/core` of the peer range, as `renderToBuffer` reads a private Angular export),

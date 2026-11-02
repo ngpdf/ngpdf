@@ -195,9 +195,14 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # pnpm with hoist=false resolves nothing from @ngpdf/core but its own dependencies, so the
-        # schematic must get @angular-devkit and @schematics from the CLI (encapsulation).
-        package-manager: [npm, pnpm]
+        include:
+          - package-manager: npm
+            app: fresh-app
+          # A pnpm workspace with the app in apps/ and hoist=false: nothing but its own
+          # dependencies resolves from @ngpdf/core, and the app's typescript is not up its tree.
+          # The schematic must take the devkit from the CLI and typescript from the app.
+          - package-manager: pnpm
+            app: mono/apps/fresh-app
     env:
       NG_CLI_ANALYTICS: 'false'
     steps:
@@ -216,22 +221,29 @@ jobs:
       - id: cli
         run: echo "major=$(node -p "require('@angular/cli/package.json').version.split('.')[0]")" >> "$GITHUB_OUTPUT"
       - if: matrix.package-manager == 'pnpm'
-        run: npm install --global pnpm@10.34.9
+        name: Set up a pnpm workspace without hoisting
+        run: |
+          npm install --global pnpm@10.34.9
+          mkdir -p mono/apps
+          printf '{ "name": "mono", "private": true }\n' > mono/package.json
+          printf 'packages:\n  - apps/*\n' > mono/pnpm-workspace.yaml
+          printf 'hoist=false\n' > mono/.npmrc
+        working-directory: ${{ runner.temp }}
       - run: >-
           npx --yes @angular/cli@${{ steps.cli.outputs.major }} new fresh-app --defaults
           --interactive=false --skip-git --ai-config=none
           --package-manager=${{ matrix.package-manager }}
-        working-directory: ${{ runner.temp }}
+          ${{ matrix.package-manager == 'pnpm' && '--skip-install' || '' }}
+        working-directory: ${{ runner.temp }}/${{ matrix.package-manager == 'pnpm' && 'mono/apps' || '' }}
       - if: matrix.package-manager == 'pnpm'
-        name: Install without hoisting
+        name: Install the workspace
         run: |
-          printf 'hoist=false\n' > .npmrc
-          rm -rf node_modules
           pnpm install
           test ! -e node_modules/.pnpm/node_modules/@angular-devkit
-        working-directory: ${{ runner.temp }}/fresh-app
+          test ! -e node_modules/typescript
+        working-directory: ${{ runner.temp }}/mono
       - run: npx ng add "$RUNNER_TEMP"/ngpdf-core-*.tgz --skip-confirmation --interactive=false --demo-route
-        working-directory: ${{ runner.temp }}/fresh-app
+        working-directory: ${{ runner.temp }}/${{ matrix.app }}
       # The build below must depend on what ng add wrote, so check it is there first.
       - name: Check the generated files and route
         run: |
@@ -239,9 +251,9 @@ jobs:
           grep -q 'export class PdfDemo' src/app/documents/pdf-demo.ts
           grep -q "path: 'pdf-demo'" src/app/app.routes.ts
           grep -q "import('./documents/pdf-demo')" src/app/app.routes.ts
-        working-directory: ${{ runner.temp }}/fresh-app
+        working-directory: ${{ runner.temp }}/${{ matrix.app }}
       - run: npx ng build
-        working-directory: ${{ runner.temp }}/fresh-app
+        working-directory: ${{ runner.temp }}/${{ matrix.app }}
 
   e2e:
     needs: build

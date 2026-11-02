@@ -1,9 +1,11 @@
 import { SchematicTestRunner, type UnitTestTree } from '@angular-devkit/schematics/testing';
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
+import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { check } from 'prettier';
 import ts from 'typescript';
-import { beforeAll, describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { buildSchematics } from '../../../../scripts/build-schematics.mjs';
 import type { Schema } from './schema';
 
@@ -121,6 +123,40 @@ describe('packaging', () => {
       'tslib',
       'yoga-layout',
     ]);
+  });
+});
+
+describe('typescript', () => {
+  // A fresh runner on a cleared require cache, as if ng ran in a folder with no typescript above it.
+  async function runIn(folder: string, options: Partial<Schema>): Promise<UnitTestTree> {
+    const nodeRequire = createRequire(import.meta.url);
+    for (const key of Object.keys(nodeRequire.cache)) {
+      if (key.startsWith(out)) Reflect.deleteProperty(nodeRequire.cache, key);
+    }
+    const fresh = new SchematicTestRunner('@ngpdf/core', join(out, 'collection.json'));
+    const tree = await application(await workspace(), 'app');
+    const cwd = vi.spyOn(process, 'cwd').mockReturnValue(folder);
+    try {
+      return await fresh.runSchematic('ng-add', options, tree);
+    } finally {
+      cwd.mockRestore();
+    }
+  }
+
+  it('is not loaded without --demo-route', async () => {
+    const empty = realpathSync(mkdtempSync(join(tmpdir(), 'ngpdf-no-ts-')));
+
+    const tree = await runIn(empty, {});
+
+    expect(tree.exists(documentPath)).toBe(true);
+  });
+
+  it("is the app's own, found from the folder ng runs in", async () => {
+    const empty = realpathSync(mkdtempSync(join(tmpdir(), 'ngpdf-no-ts-')));
+
+    await expect(runIn(empty, { demoRoute: true })).rejects.toThrow(
+      `ngpdf: --demo-route needs your app's typescript package, and none was found from ${empty}.`,
+    );
   });
 });
 
@@ -346,6 +382,15 @@ export const routes: Routes = [
       const { diagnostics } = ts.transpileModule(routes, { reportDiagnostics: true });
       expect(diagnostics).toEqual([]);
       expect(importSpecifiers(routes)).toEqual([`./${folder}/pdf-demo`]);
+    });
+
+    it('imports from a folder whose name starts with a dot', async () => {
+      const tree = await ngAdd(await application(await workspace(), 'app'), {
+        demoRoute: true,
+        path: 'projects/app/src/app/.docs',
+      });
+
+      expect(importSpecifiers(tree.readContent(routesPath))).toEqual(['./.docs/pdf-demo']);
     });
 
     it('finds a routes array behind satisfies', async () => {

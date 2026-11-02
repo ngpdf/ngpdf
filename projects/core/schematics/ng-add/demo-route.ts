@@ -1,6 +1,7 @@
 import type { Rule } from '@angular-devkit/schematics';
 import { posix } from 'node:path';
-import * as ts from 'typescript';
+import type * as TS from 'typescript';
+import { loadTypeScript } from './typescript';
 
 /**
  * Adds a lazy `pdf-demo` route to the `routes` array of `routesFile`, before a `**` route if there
@@ -8,12 +9,14 @@ import * as ts from 'typescript';
  */
 export function addDemoRoute(routesFile: string, demoFile: string): Rule {
   return (tree, context) => {
+    const ts = loadTypeScript();
     let specifier = posix.relative(posix.dirname(routesFile), demoFile).replace(/\.ts$/, '');
-    if (!specifier.startsWith('.')) specifier = `./${specifier}`;
-    const load = loadComponent(specifier);
+    // A folder such as `.docs` also starts with a dot, so test for the relative prefixes.
+    if (!specifier.startsWith('./') && !specifier.startsWith('../')) specifier = `./${specifier}`;
+    const load = loadComponent(ts, specifier);
 
     const text = tree.exists(routesFile) ? tree.readText(routesFile) : undefined;
-    const routes = text === undefined ? undefined : findRoutesArray(routesFile, text);
+    const routes = text === undefined ? undefined : findRoutesArray(ts, routesFile, text);
     if (text === undefined || routes === undefined) {
       context.logger.warn(
         `ngpdf: no routes array in ${routesFile}. Add this route by hand: ` +
@@ -31,10 +34,10 @@ export function addDemoRoute(routesFile: string, demoFile: string): Rule {
       );
       return;
     }
-    if (elements.some((element) => routePath(element) === 'pdf-demo')) return;
+    if (elements.some((element) => routePath(ts, element) === 'pdf-demo')) return;
 
     const recorder = tree.beginUpdate(routesFile);
-    const wildcard = elements.find((element) => routePath(element) === '**');
+    const wildcard = elements.find((element) => routePath(ts, element) === '**');
     const last = elements.at(-1);
     if (last === undefined) {
       // `[]`, or an empty array spread over lines: write it again with the route in it.
@@ -57,9 +60,9 @@ export function addDemoRoute(routesFile: string, demoFile: string): Rule {
  * and printed, so the specifier is always a well-formed string literal however odd `--path` is. It
  * is single-quoted, as the CLI writes code, unless it holds a `'`.
  */
-function loadComponent(specifier: string): string {
+function loadComponent(ts: typeof TS, specifier: string): string {
   const dynamicImport = ts.factory.createCallExpression(
-    ts.factory.createToken(ts.SyntaxKind.ImportKeyword) as ts.Expression,
+    ts.factory.createToken(ts.SyntaxKind.ImportKeyword) as TS.Expression,
     undefined,
     [ts.factory.createStringLiteral(specifier, !specifier.includes("'"))],
   );
@@ -78,7 +81,11 @@ function route(indent: string, load: string): string {
 }
 
 /** The array a top-level `routes` variable is set to, through `as`, `satisfies` or parentheses. */
-function findRoutesArray(fileName: string, text: string): ts.ArrayLiteralExpression | undefined {
+function findRoutesArray(
+  ts: typeof TS,
+  fileName: string,
+  text: string,
+): TS.ArrayLiteralExpression | undefined {
   const source = ts.createSourceFile(fileName, text, ts.ScriptTarget.Latest, true);
   for (const statement of source.statements) {
     if (!ts.isVariableStatement(statement)) continue;
@@ -100,7 +107,7 @@ function findRoutesArray(fileName: string, text: string): ts.ArrayLiteralExpress
 }
 
 /** The string `path` of a route object literal, with its key written `path`, `'path'` or `"path"`. */
-function routePath(element: ts.Expression): string | undefined {
+function routePath(ts: typeof TS, element: TS.Expression): string | undefined {
   if (!ts.isObjectLiteralExpression(element)) return undefined;
   for (const property of element.properties) {
     if (
