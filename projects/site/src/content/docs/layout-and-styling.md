@@ -28,7 +28,7 @@ What has no effect:
 
 - `class` and `[class.*]` bindings, and the component's `styles` or `styleUrl`. They are CSS for the DOM, and a document has no DOM.
 - Styles on the host element of your own components. ngpdf ignores them with a dev-mode warning. See [Components in documents](/docs/components-in-documents).
-- Properties ngpdf does not know, such as `display`, `flex-wrap`, `font`, `z-index` or `box-shadow`. They are ignored without a warning.
+- Properties ngpdf does not know, such as `display`, `flex-wrap`, `font`, `z-index` or `box-shadow`. They are ignored on ordinary layout elements without a warning; `pdf-note` and inline `pdf-span` or `pdf-link` warn when styles have no effect there.
 
 The style attribute is split on `;` outside quotes and parentheses, so a value such as `url(data:image/png;base64,...)` or `"A;B"` stays whole. Keywords are matched in any case, as in CSS: `text-align: CENTER` is `center` and `font-weight: BOLD` is `bold`. `!important` and `var()` are not supported.
 
