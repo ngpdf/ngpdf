@@ -59,9 +59,13 @@ ngpdf v0.1 covers documents built from text, tables, boxes and images. This page
 
 - `pdf-viewer` shows the PDF with the browser's own PDF viewer. Chrome on Android shows no PDF inside a page, and Safari on iOS shows only the first page. See [Where the preview works](/docs/rendering-api#where-the-preview-works) for a download fallback.
 
+### Server rendering
+
+- `renderToBuffer` needs a Node version Angular 22 supports, and nothing in the document may need a DOM. See [Server rendering](/docs/server-rendering#limits).
+- `renderToBuffer` reads image and font URLs only through `fetchImage`. `renderToBlob` and `PdfRenderer.toBlob` still fetch them directly on the server, so use `renderToBuffer` there.
+
 ### Not in v0.1
 
-- Server rendering. Render in the browser.
 - SVG.
 - Forms.
 - Capturing the DOM of a page as a PDF.

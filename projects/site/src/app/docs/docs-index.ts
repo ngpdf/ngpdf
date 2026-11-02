@@ -13,6 +13,7 @@ import limitationsAndRoadmap from '../../content/docs/limitations-and-roadmap.md
 import pagination from '../../content/docs/pagination.md';
 import renderingApi from '../../content/docs/rendering-api.md';
 import security from '../../content/docs/security.md';
+import serverRendering from '../../content/docs/server-rendering.md';
 import styleProperties from '../../content/docs/style-properties.md';
 import tables from '../../content/docs/tables.md';
 import textAndFonts from '../../content/docs/text-and-fonts.md';
@@ -28,6 +29,7 @@ const SOURCES: Readonly<Record<string, string>> = {
   images,
   'lines-and-shapes': linesAndShapes,
   'components-in-documents': componentsInDocuments,
+  'server-rendering': serverRendering,
   elements,
   'rendering-api': renderingApi,
   'style-properties': styleProperties,

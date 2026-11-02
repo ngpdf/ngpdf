@@ -153,7 +153,7 @@ A PNG or JPEG image.
 
 | Input | Type | Default | Description |
 | --- | --- | --- | --- |
-| `src` | `string \| Blob \| ArrayBuffer` | required | A `data:` URL, a URL to fetch, a `Blob` or an `ArrayBuffer`. |
+| `src` | `string \| Blob \| ArrayBuffer \| Uint8Array` | required | A `data:` URL, a URL to fetch, a `Blob`, an `ArrayBuffer` or a `Uint8Array`. |
 
 Sizing follows the aspect ratio unless you set both `width` and `height`; then `object-fit` (`contain` or `cover`) places the image. See [Images](/docs/images).
 

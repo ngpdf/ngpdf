@@ -10,6 +10,7 @@ import {
   type Signal,
   type Type,
 } from '@angular/core';
+import { assertBrowser, isBrowser } from './browser-only';
 import { renderToBlob } from './pdf-renderer';
 
 export interface PdfResourceOptions {
@@ -38,7 +39,8 @@ export interface PdfResourceRef extends Resource<Blob | undefined> {
 
 /**
  * Renders `component` to a PDF and keeps it current as `inputs` change, built on Angular's
- * `resource()`. A render that is overtaken by a newer one is dropped.
+ * `resource()`. A render that is overtaken by a newer one is dropped. On the server it stays
+ * `idle` when made in an injection context, and throws when given an `injector`.
  */
 export function pdfResource<T>(
   component: Type<T>,
@@ -46,9 +48,13 @@ export function pdfResource<T>(
 ): PdfResourceRef {
   if (!options.injector) assertInInjectionContext(pdfResource);
   const injector = options.injector ?? inject(Injector);
+  // Made by a component or service on the server, as in an SSR page, it stays idle: the page
+  // renders, and the browser renders the PDF. A call with an explicit injector has no such page.
+  if (options.injector) assertBrowser('pdfResource', injector);
+  const browser = isBrowser(injector);
   const environment = injector.get(EnvironmentInjector);
   const debounce = options.debounce ?? 0;
-  const inputs = options.inputs ?? (() => ({}));
+  const inputs = browser ? (options.inputs ?? (() => ({}))) : () => undefined;
 
   const pdf = resource({
     params: inputs,

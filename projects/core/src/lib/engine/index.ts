@@ -9,7 +9,7 @@ import { displayList, paintCanvases } from './display-list';
 export { loadFont } from './font-loading';
 import { parseFontFamily, type FontRegistry, type RegisteredFace } from './fonts';
 import { dissolveHosts } from './hosts';
-import { loadImages } from './images';
+import { loadImages, type ServerSources } from './images';
 import type { LayoutContext } from './layout';
 import { paginatePage } from './paginate';
 import { securityOf } from './security';
@@ -52,6 +52,8 @@ export interface RenderDocumentOptions {
   readonly fonts?: readonly FontSource[];
   /** The app's hyphenation function, for `hyphens: auto`; called with the document's language. */
   readonly hyphenate?: Hyphenate;
+  /** Set on the server: URLs are read only through its `fetchImage`, and a relative one throws. */
+  readonly server?: ServerSources;
 }
 
 /** One face of a font family, with a way to get its bytes. */
@@ -221,7 +223,7 @@ export async function renderDocument(
     // Before layout: a link to "#name" is checked against every name in the document.
     const anchors = collectAnchors(tree, warn);
     const [images, fonts] = await Promise.all([
-      loadImages(tree, writer),
+      loadImages(tree, writer, undefined, options.server),
       registerUsedFonts(options.fonts ?? [], styles, writer),
     ]);
     // One text cache per render, passed down like the metrics and images, so renders share nothing.

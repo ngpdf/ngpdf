@@ -3,14 +3,22 @@
 # StrykerJS kills process trees with `ps`, which the slim image lacks: use NGPDF_IMAGE=node:24-bookworm for it.
 # NGPDF_PUBLISH=127.0.0.1:4200:4200 publishes a port on the host's loopback only, for a dev server
 # (npm run start:site), which listens on all of the container's interfaces so Docker can reach it.
+# NGPDF_APT=poppler-utils installs Debian packages as root first, then runs the command as uid 1000.
 set -euo pipefail
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 tty_flags=()
 [ -t 0 ] && [ -t 1 ] && tty_flags=(-t)
+user_flags=(-u 1000:1000)
+command=("$@")
+if [ -n "${NGPDF_APT:-}" ]; then
+  user_flags=(-u 0:0 -e NGPDF_APT)
+  # shellcheck disable=SC2016 # expanded by the container's shell
+  command=(sh -c 'apt-get -qq update >/dev/null && apt-get -qq install -y --no-install-recommends $NGPDF_APT >/dev/null && exec setpriv --reuid=1000 --regid=1000 --clear-groups "$@"' sh "$@")
+fi
 # Named per process, so a stuck container can be found and stopped without touching others.
 exec docker run --rm -i --name "ngpdf-dev-$$" "${tty_flags[@]}" \
-  -u 1000:1000 -m 6g --memory-swap 6g \
+  "${user_flags[@]}" -m 6g --memory-swap 6g \
   -e HOME=/tmp -e NPM_CONFIG_UPDATE_NOTIFIER=false -e CI="${CI:-}" \
   ${NGPDF_PUBLISH:+-p "$NGPDF_PUBLISH"} \
   -v "$root":/w -w /w \
-  "${NGPDF_IMAGE:-node:24-bookworm-slim}" "$@"
+  "${NGPDF_IMAGE:-node:24-bookworm-slim}" "${command[@]}"

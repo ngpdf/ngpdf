@@ -3,6 +3,8 @@ import {
   Component,
   DestroyRef,
   EnvironmentInjector,
+  PLATFORM_ID,
+  createEnvironmentInjector,
   inject,
   input,
   provideZoneChangeDetection,
@@ -236,6 +238,17 @@ describe('download', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it('rejects under a server platform before rendering anything', async () => {
+    const injector = createEnvironmentInjector(
+      [{ provide: PLATFORM_ID, useValue: 'server' }],
+      TestBed.inject(EnvironmentInjector),
+    );
+    await expect(downloadPdf(TestDocument, { injector, fileName: 'a.pdf' })).rejects.toThrow(
+      'ngpdf: downloadPdf needs a browser; on the server, use renderToBuffer from @ngpdf/core/server',
+    );
+    expect(destroyed).toEqual([]);
   });
 
   it('does not click when the render fails', async () => {
