@@ -62,7 +62,7 @@ ngpdf v0.1 covers documents built from text, tables, boxes and images. This page
 ### Server rendering
 
 - `renderToBuffer` needs a Node version Angular 22 supports, and nothing in the document may need a DOM. See [Server rendering](/docs/server-rendering#limits).
-- On the server, image and font URLs are read only through `fetchImage`.
+- `renderToBuffer` reads image and font URLs only through `fetchImage`. `renderToBlob` and `PdfRenderer.toBlob` still fetch them directly on the server, so use `renderToBuffer` there.
 
 ### Not in v0.1
 

@@ -153,7 +153,11 @@ async function fetchImage(url: string): Promise<Uint8Array> {
     throw new Error('not on the allow-list');
   }
   const response = await fetch(url, { redirect: 'error', signal: AbortSignal.timeout(5000) });
-  if (!response.ok || !response.body) throw new Error(`HTTP ${response.status}`);
+  if (!response.ok || !response.body) {
+    // Cancel the body, so a slow error response does not hold the connection.
+    await response.body?.cancel();
+    throw new Error(`HTTP ${response.status}`);
+  }
   // Count while reading, so a huge response is cut off instead of held in memory.
   const reader = response.body.getReader();
   const chunks: Uint8Array[] = [];
