@@ -126,6 +126,17 @@ describe('packaging', () => {
   });
 });
 
+describe('schema', () => {
+  // A free-text prompt turns an empty answer into `project: ''` instead of picking the app.
+  it('does not prompt for the project', () => {
+    const schema = JSON.parse(
+      readFileSync(join(repo, 'projects/core/schematics/ng-add/schema.json'), 'utf8'),
+    ) as { properties: Record<string, Record<string, unknown>> };
+
+    expect(schema.properties['project']).not.toHaveProperty('x-prompt');
+  });
+});
+
 describe('typescript', () => {
   // A fresh runner on a cleared require cache, as if ng ran in a folder with no typescript above it.
   async function runIn(folder: string, options: Partial<Schema>): Promise<UnitTestTree> {
@@ -211,6 +222,12 @@ describe('ng-add', () => {
     await expect(ngAdd(tree)).rejects.toThrow(
       'ngpdf: the workspace has several applications (first, second). Run ng add again with --project <name>.',
     );
+  });
+
+  it.each(['', '  '])('treats --project %j as not given', async (project) => {
+    const tree = await ngAdd(await application(await workspace(), 'app'), { project });
+
+    expect(tree.exists(documentPath)).toBe(true);
   });
 
   it('picks the only application when the workspace also has a library', async () => {

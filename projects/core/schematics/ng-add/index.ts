@@ -24,7 +24,10 @@ import type { Schema } from './schema';
  */
 export function ngAdd(options: Schema): Rule {
   return async (tree, context) => {
-    const project = pickApplication(await readWorkspace(tree), options.project);
+    // An empty answer or flag, `--project ""`, means no project was named.
+    const trimmed = options.project?.trim();
+    const name = trimmed === '' ? undefined : trimmed;
+    const project = pickApplication(await readWorkspace(tree), name);
     const sourceRoot = project.sourceRoot ?? posix.join(project.root, 'src');
     const folder = normalize(options.path ?? posix.join(sourceRoot, 'app/documents'));
     const prefix = project.prefix ?? 'app';

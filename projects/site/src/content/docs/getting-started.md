@@ -17,7 +17,7 @@ ng add @ngpdf/core
 
 | Option | What it does |
 | --- | --- |
-| `--project <name>` | The application to add the example to. Without it, `ng add` uses the workspace's only project or the project of the folder you run it in, and otherwise asks. Without a terminal to ask in, it takes the only application, or stops and asks for `--project`. A library is refused. |
+| `--project <name>` | The application to add the example to. Without it, `ng add` uses the project of the folder you run it in, or the workspace's only application. With several applications and none of them chosen that way, it stops and asks you to run it again with `--project`. A library is refused. |
 | `--path <folder>` | The folder for the example files, from the workspace root. The default is `app/documents` under the application's source root, normally `src/app/documents`. |
 | `--demo-route` | Also adds `pdf-demo.ts`, a page with a Download PDF button that uses [`PdfDownload`](/docs/rendering-api#pdfdownload), and a lazy `pdf-demo` route in `app.routes.ts`. |
 

@@ -7,8 +7,7 @@
     "project": {
       "type": "string",
       "description": "The application to add the example document to.",
-      "$default": { "$source": "projectName" },
-      "x-prompt": "Which application should get the example document?"
+      "$default": { "$source": "projectName" }
     },
     "path": {
       "type": "string",
