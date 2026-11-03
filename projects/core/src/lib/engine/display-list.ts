@@ -198,12 +198,27 @@ function drawBox(
   const { top, right, bottom, left } = box.border;
   const color = style.borderColor;
   const line = (x1: number, y1: number, x2: number, y2: number, width: number, c: Color): void => {
-    const cutY1 = Math.min(y1, limit);
-    const cutY2 = Math.min(y2, limit);
     const stroke = paint(c);
-    // A line wholly below the limit is gone; a vertical one is shortened.
-    if (!stroke || (y1 >= limit && y2 >= limit)) return;
-    out.push({ op: 'line', x1, y1: cutY1, x2, y2: cutY2, width, ...stroke });
+    if (!stroke) return;
+    if (y1 === y2 && y1 + width / 2 > limit) {
+      // A horizontal stroke across the limit keeps only its band above it.
+      const top = y1 - width / 2;
+      if (top >= limit) return;
+      const y = (top + limit) / 2;
+      out.push({ op: 'line', x1, y1: y, x2, y2: y, width: limit - top, ...stroke });
+      return;
+    }
+    // A vertical line wholly below the limit is gone; one that crosses it is shortened.
+    if (y1 >= limit && y2 >= limit) return;
+    out.push({
+      op: 'line',
+      x1,
+      y1: Math.min(y1, limit),
+      x2,
+      y2: Math.min(y2, limit),
+      width,
+      ...stroke,
+    });
   };
   // A side that touches a rounded corner follows the outline; the others stay square lines.
   const rounded = (side: BorderSide, width: number, c: Color): boolean => {

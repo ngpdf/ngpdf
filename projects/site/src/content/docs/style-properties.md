@@ -5,7 +5,7 @@ section: Reference
 order: 11
 ---
 
-These are all the style properties ngpdf reads. Any other property is ignored without a warning. An invalid value for a property in this list throws an `ngpdf:` error and the render rejects.
+These are all the style properties ngpdf reads. Any other property is ignored without a warning. An invalid value for a property in this list throws an `ngpdf:` error and the render rejects, except where the tables say what other values do (`font-weight`, `font-style`, `break-before`, `break-after` and `break-inside`).
 
 In the tables:
 
@@ -139,7 +139,7 @@ Some styles are ignored in specific places:
 - margins, `min-width` and `max-width` on a `pdf-cell` inside a table;
 - position and size styles other than `height` on `pdf-page-number`;
 - `position`, `top`, `right`, `bottom` and `left` on a `pdf-page`, a `pdf-row` and a `pdf-cell`;
-- everything except the six text properties above on a `pdf-span` (with a warning).
+- everything except the nine text properties above on a `pdf-span` (with a warning).
 
 ## Throws
 

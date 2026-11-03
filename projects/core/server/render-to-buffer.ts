@@ -27,6 +27,11 @@ export interface RenderToBufferOptions {
    * document's data could point the server at its own internal services (SSRF).
    */
   readonly fetchImage?: (url: string) => Promise<Uint8Array>;
+  /**
+   * The most bytes an image URL may have. `fetchImage`'s result is checked once it resolves, so
+   * put a size limit in `fetchImage` too. No cap by default.
+   */
+  readonly maxImageBytes?: number;
 }
 
 /**
@@ -88,9 +93,13 @@ export async function renderToBuffer<T>(
 ): Promise<Uint8Array> {
   const { injector, owned } = injectorFor(options);
   try {
-    const blob = await renderPdf(component, injector, options.inputs, {
-      ...(options.fetchImage && { fetchImage: options.fetchImage }),
-    });
+    const blob = await renderPdf(
+      component,
+      injector,
+      options.inputs,
+      { ...(options.fetchImage && { fetchImage: options.fetchImage }) },
+      options.maxImageBytes,
+    );
     return new Uint8Array(await blob.arrayBuffer());
   } finally {
     if (owned) injector.destroy();

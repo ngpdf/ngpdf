@@ -1374,6 +1374,46 @@ describe('paginatePage: position', () => {
     expect(placedOf(pages, stamp).y).toBeCloseTo(CONTENT_TOP, 6);
   });
 
+  it('puts absolute boxes with the same top below the last unit on one new sheet', () => {
+    const last = block();
+    const [first, second] = [badge({ top: '900' }), badge({ top: '900' })];
+    const pages = paginate(page([last, first, second]));
+    expect(nodesOn(pages)).toEqual([[last], [first, second]]);
+    expect(placedOf(pages, first).y).toBeCloseTo(CONTENT_TOP, 6);
+    expect(placedOf(pages, second).y).toBeCloseTo(CONTENT_TOP, 6);
+  });
+
+  it('moves absolute boxes below the last unit with the sheet the first one starts', () => {
+    const last = block();
+    const upper = badge({ top: '900' });
+    const lower = badge({ top: '950' });
+    // Template order is kept on the sheet, whatever the order of the tops.
+    const pages = paginate(page([last, lower, upper]));
+    expect(nodesOn(pages)).toEqual([[last], [lower, upper]]);
+    expect(placedOf(pages, upper).y).toBeCloseTo(CONTENT_TOP, 6);
+    expect(placedOf(pages, lower).y).toBeCloseTo(CONTENT_TOP + 50, 6);
+  });
+
+  it('starts one sheet per content height for absolute boxes a page apart', () => {
+    const last = block();
+    const upper = badge({ top: '900' });
+    const lower = badge({ top: String(900 + AREA) });
+    const pages = paginate(page([last, lower, upper]));
+    expect(nodesOn(pages)).toEqual([[last], [upper], [lower]]);
+    expect(placedOf(pages, upper).y).toBeCloseTo(CONTENT_TOP, 6);
+    expect(placedOf(pages, lower).y).toBeCloseTo(CONTENT_TOP, 6);
+  });
+
+  it('starts a new sheet for an absolute box a page apart that float32 rounds short', () => {
+    const last = block();
+    // In float32 the lower top lands some 0.00005pt above one content height past the upper.
+    const upper = badge({ top: '900.05' });
+    const lower = badge({ top: String(900.05 + AREA) });
+    const pages = paginate(page([last, upper, lower]));
+    expect(nodesOn(pages)).toEqual([[last], [upper], [lower]]);
+    expect(placedOf(pages, lower).y).toBeCloseTo(CONTENT_TOP, 3);
+  });
+
   it('groups an absolute box taken out of a unit with the faded views it leaves', () => {
     const stamp = badge({ top: '0', left: '0' });
     const inner = el('pdf-view', { opacity: '0.4' }, [block(), stamp]);

@@ -1,7 +1,7 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createNode, type PdfNode } from '../tree/node';
 import { testFont } from '../../testing/test-fonts';
-import { testPng } from '../../testing/test-png';
+import { testPng, testRows } from '../../testing/test-png';
 import type { PdfPerSheetContext } from '../tree/per-sheet';
 import { renderDocument, type FontSource } from './index';
 import { createPdfkitWriter, type DocumentInfo, type PageOps, type PdfWriter } from './writer';
@@ -79,6 +79,26 @@ async function bytesOf(blob: Blob): Promise<string> {
 }
 
 describe('renderDocument', () => {
+  it('does not count the anonymous box of bare text towards the nesting limit', async () => {
+    // pdf-document > pdf-page > 62 pdf-views is 64 elements; the box around the bare text in
+    // the innermost view would be the 65th level.
+    let deepest = el('pdf-view', {}, [createNode('text', '', 'deepest')]);
+    for (let i = 1; i < 62; i++) deepest = el('pdf-view', {}, [deepest]);
+    const writer = recordingWriter();
+    await renderDocument(host({}, [el('pdf-page', {}, [deepest], { size: 'A4' })]), {
+      writer,
+      dev: false,
+    });
+    const [{ pages }] = writer.recorded as [Recorded];
+    expect(pages[0]!.ops.some((op) => op.op === 'text' && op.text === 'deepest')).toBe(true);
+    await expect(
+      renderDocument(host({}, [el('pdf-page', {}, [el('pdf-view', {}, [deepest])])]), {
+        writer,
+        dev: false,
+      }),
+    ).rejects.toThrow('ngpdf: nesting deeper than 64');
+  });
+
   it('hands the writer every page and the document metadata', async () => {
     const writer = recordingWriter();
     const props = {
@@ -421,6 +441,42 @@ describe('renderDocument', () => {
     await expect(renderDocument(host({}, [page]), { writer: recordingWriter() })).rejects.toThrow(
       'ngpdf: pdf-image cannot have children (found <pdf-text>)',
     );
+    expect(fetchFn).not.toHaveBeenCalled();
+  });
+
+  it('rejects an image URL over maxImageBytes', async () => {
+    const png = testPng();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => Promise.resolve(new Response(png as BodyInit))),
+    );
+    const page = () =>
+      el('pdf-page', {}, [el('pdf-image', { width: '10' }, [], { src: '/logo.png' })]);
+    await expect(
+      renderDocument(host({}, [page()]), {
+        writer: recordingWriter(),
+        dev: false,
+        maxImageBytes: png.length - 1,
+      }),
+    ).rejects.toThrow(
+      `ngpdf: could not load image "/logo.png": larger than ${String(png.length - 1)} bytes`,
+    );
+    await expect(
+      renderDocument(host({}, [page()]), {
+        writer: recordingWriter(),
+        dev: false,
+        maxImageBytes: png.length,
+      }),
+    ).resolves.toBeDefined();
+  });
+
+  it('rejects an invalid maxImageBytes before fetching anything', async () => {
+    const fetchFn = vi.fn(() => Promise.reject(new TypeError('Failed to fetch')));
+    vi.stubGlobal('fetch', fetchFn);
+    const page = el('pdf-page', {}, [el('pdf-image', {}, [], { src: '/logo.png' })]);
+    await expect(
+      renderDocument(host({}, [page]), { writer: recordingWriter(), maxImageBytes: 0 }),
+    ).rejects.toThrow('ngpdf: invalid maxImageBytes "0"');
     expect(fetchFn).not.toHaveBeenCalled();
   });
 
@@ -1307,6 +1363,27 @@ describe('renderDocument with emoji', () => {
     await expect(
       renderDocument(doc, { writer: await createPdfkitWriter({ compress: false }), dev: false }),
     ).rejects.toThrow();
+  });
+
+  // pdfkit decodes these pixels while it writes, in a zlib callback whose throw no promise sees.
+  describe.each([
+    ['RGBA', 6, 4],
+    ['gray with alpha', 4, 2],
+    ['a palette with tRNS', 3, 1],
+  ] as const)('a pdf-image in %s', (_, colorType, channels) => {
+    const cut = testRows(2, 2, channels);
+    it.each([
+      ['a bad filter byte', testPng({ colorType, idat: testRows(2, 2, channels, 2, 9) })],
+      ['a truncated IDAT', testPng({ colorType, idat: cut.slice(0, cut.length - 4) })],
+    ])('with %s rejects the render', async (__, png) => {
+      const image = el('pdf-image', { width: '10', height: '10' }, [], { src: png });
+      const doc = host({}, [el('pdf-page', {}, [image], { size: 'A4' })]);
+      await expect(
+        renderDocument(doc, { writer: await createPdfkitWriter({ compress: false }), dev: false }),
+      ).rejects.toThrow(
+        'ngpdf: could not load image "Uint8Array": the image data is corrupt or cut off',
+      );
+    });
   });
 
   it('embeds an emoji image once in the PDF', async () => {

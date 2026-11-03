@@ -12,7 +12,7 @@ export { loadFont } from './font-loading';
 import { loadEmoji, type EmojiSource } from './emoji';
 import { parseFontFamily, type RegisteredFace } from './fonts';
 import { dissolveHosts } from './hosts';
-import { loadImages, type ServerSources } from './images';
+import { loadImages, maxImageBytesOf, type ServerSources } from './images';
 import type { Box, LayoutContext } from './layout';
 import {
   fixedViewWidth,
@@ -74,6 +74,8 @@ export interface RenderDocumentOptions {
   readonly emoji?: EmojiSource;
   /** Renders a `pdfPerSheet` template for one sheet; the eager half passes it. */
   readonly perSheet?: RenderPerSheet;
+  /** The most bytes a fetched `pdf-image` URL may have; no cap when undefined. */
+  readonly maxImageBytes?: number;
 }
 
 /** One face of a font family, with a way to get its bytes. */
@@ -219,6 +221,7 @@ export async function renderDocument(
   const dev = options.dev ?? (typeof ngDevMode === 'undefined' || !!ngDevMode);
   const document = findDocument(root);
   if (!document) throw new Error('ngpdf: no pdf-document in the rendered component');
+  const maxImageBytes = maxImageBytesOf(options.maxImageBytes);
 
   const warnings = new Set<string>();
   const warn = (message: string): void => {
@@ -256,7 +259,7 @@ export async function renderDocument(
     const fonts = new Map<string, RegisteredFace[]>();
     // Emoji images load with the others, before layout, so measuring stays synchronous.
     const [{ images, loads }, , found] = await Promise.all([
-      loadImages(tree, writer, undefined, options.server),
+      loadImages(tree, writer, undefined, options.server, maxImageBytes),
       registerUsedFonts(options.fonts ?? [], styles, writer, fonts),
       loadEmoji(tree, options.emoji, writer, warn, undefined, options.server),
     ]);
@@ -303,7 +306,7 @@ export async function renderDocument(
       if (!pageStyle) throw new Error('ngpdf: no resolved style for <pdf-page>');
       const viewStyles = resolveStyles(filled.view, warn, { style: pageStyle, depth: 3 });
       const [viewImages, , viewEmoji] = await Promise.all([
-        loadImages(filled.view, writer, undefined, options.server, imageLoads),
+        loadImages(filled.view, writer, undefined, options.server, maxImageBytes, imageLoads),
         registerUsedFonts(options.fonts ?? [], viewStyles, writer, fonts),
         loadEmoji(filled.view, options.emoji, writer, warn, undefined, options.server, seenEmoji),
       ]);
