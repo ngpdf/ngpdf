@@ -54,6 +54,12 @@ export interface TextStyle {
   /** Where words may break with a hyphen: at soft hyphens (`manual`), also by the app's
    * hyphenation function (`auto`), or nowhere (`none`). */
   readonly hyphens: 'none' | 'manual' | 'auto';
+  /**
+   * Points the baseline of the text is raised above its paragraph's (negative lowers it), from the
+   * `vertical-align` of its pdf-span and the spans around it. Not `vertical-align` itself: a nested
+   * span sits on the shifted baseline of its parent, so the shift is passed down.
+   */
+  readonly baselineShift: number;
   /** The fewest lines of a split text left at the bottom of a page. */
   readonly orphans: number;
   /** The fewest lines of a split text carried to the top of the next page. */
@@ -181,6 +187,7 @@ export const ROOT_TEXT_STYLE: TextStyle = Object.freeze({
   letterSpacing: 0,
   textTransform: 'none',
   hyphens: 'manual',
+  baselineShift: 0,
   orphans: 2,
   widows: 2,
 });
@@ -1315,11 +1322,13 @@ function resolveOne(node: PdfNode, inherited: TextStyle, warn: Warn): ResolvedSt
   const isNote = node.tag === 'pdf-note';
   const style = defaultStyle(node, isNote ? { ...inherited, color: NOTE_YELLOW } : inherited);
   let lineHeight: string | null = null;
+  let verticalAlign: string | null = null;
   for (const [property, value] of Object.entries(node.rawStyle)) {
     // Dropped unparsed, so it neither moves the note nor fails the render.
     if (isNote && !NOTE_PROPERTIES.includes(property)) {
       warn(`ngpdf: ${property} has no effect on pdf-note`);
     } else if (property === 'line-height') lineHeight = value.trim();
+    else if (property === 'vertical-align') verticalAlign = value;
     else apply(style, property, value, node.tag, warn);
   }
   // Resolved last because a length depends on this element's own font size.
@@ -1332,7 +1341,48 @@ function resolveOne(node: PdfNode, inherited: TextStyle, warn: Warn): ResolvedSt
       style.borderWidth = withSide(style.borderWidth, side, 0);
     }
   }
+  if (verticalAlign === null) return style;
+  if (node.tag === 'pdf-span') {
+    applyVerticalAlign(style, verticalAlign, inherited.fontSize, 'font-size' in node.rawStyle);
+  } else {
+    warn(`ngpdf: vertical-align has no effect on ${node.tag}`);
+  }
   return style;
+}
+
+// What browsers commonly use for <sup> and <sub>; CSS leaves both to the user agent.
+const SUPER_RAISE = 0.33;
+const SUB_DROP = 0.2;
+const SCRIPT_SIZE = 0.7;
+
+/**
+ * Moves a pdf-span's baseline: `super` and `sub` by a share of the parent's font size, drawn at 70%
+ * of it unless the span sets its own; a length by that much; a percentage of the span's line height.
+ */
+function applyVerticalAlign(
+  style: Mutable<ResolvedStyle>,
+  value: string,
+  parentSize: number,
+  ownSize: boolean,
+): void {
+  const keyword = keywordOf(value);
+  if (keyword === 'super' || keyword === 'sub') {
+    style.baselineShift += (keyword === 'super' ? SUPER_RAISE : -SUB_DROP) * parentSize;
+    if (!ownSize) style.fontSize = parentSize * SCRIPT_SIZE;
+    return;
+  }
+  if (keyword === 'baseline') return;
+  const code = keyword.charCodeAt(0);
+  const length = code >= 97 && code <= 122 ? 'auto' : parseLength(value, 'pdf-span');
+  if (length === 'auto') fail(`invalid value "${show(value)}" for vertical-align`, 'pdf-span');
+  style.baselineShift +=
+    typeof length === 'number'
+      ? length
+      : (length.percent / 100) * style.lineHeight * style.fontSize;
+  // Each value is finite, but nested spans or a large percentage can add up past it.
+  if (!Number.isFinite(style.baselineShift)) {
+    fail(`invalid value "${show(value)}" for vertical-align`, 'pdf-span');
+  }
 }
 
 function textPartOf(style: ResolvedStyle): TextStyle {
@@ -1348,6 +1398,7 @@ function textPartOf(style: ResolvedStyle): TextStyle {
     letterSpacing: style.letterSpacing,
     textTransform: style.textTransform,
     hyphens: style.hyphens,
+    baselineShift: style.baselineShift,
     orphans: style.orphans,
     widows: style.widows,
   };
@@ -1395,6 +1446,7 @@ const SPAN_PROPERTIES = new Set([
   'letter-spacing',
   'text-transform',
   'hyphens',
+  'vertical-align',
 ]);
 
 /** Whether the node is part of a line: inside a pdf-text, or a span or link that is. */
