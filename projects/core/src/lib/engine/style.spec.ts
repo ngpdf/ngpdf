@@ -692,6 +692,72 @@ describe('resolveStyles property coverage', () => {
     });
   });
 
+  describe('wrapping', () => {
+    it('defaults to nowrap and a stretched align-content', () => {
+      expect(styleOf({})).toMatchObject({ flexWrap: 'nowrap', alignContent: 'stretch' });
+    });
+
+    it('takes every flex-wrap and align-content keyword, in any case', () => {
+      for (const wrap of ['nowrap', 'wrap', 'wrap-reverse'] as const) {
+        expect(styleOf({ 'flex-wrap': wrap.toUpperCase() }).flexWrap).toBe(wrap);
+      }
+      const aligns = [
+        'flex-start',
+        'flex-end',
+        'center',
+        'space-between',
+        'space-around',
+        'space-evenly',
+        'stretch',
+      ] as const;
+      for (const align of aligns) {
+        expect(styleOf({ 'align-content': align }).alignContent).toBe(align);
+      }
+    });
+
+    it('reads flex-flow as a direction and a wrap, in any order', () => {
+      expect(styleOf({ 'flex-flow': 'row wrap' })).toMatchObject({
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+      });
+      expect(styleOf({ 'flex-flow': 'wrap-reverse column' })).toMatchObject({
+        flexDirection: 'column',
+        flexWrap: 'wrap-reverse',
+      });
+    });
+
+    it('resets the part flex-flow leaves out to its default', () => {
+      expect(styleOf({ 'flex-direction': 'row', 'flex-flow': 'wrap' })).toMatchObject({
+        flexDirection: 'column',
+        flexWrap: 'wrap',
+      });
+      expect(styleOf({ 'flex-flow': 'wrap' }, 'pdf-row').flexDirection).toBe('row');
+      expect(styleOf({ 'flex-wrap': 'wrap', 'flex-flow': 'row' })).toMatchObject({
+        flexDirection: 'row',
+        flexWrap: 'nowrap',
+      });
+      expect(styleOf({ 'flex-flow': 'row', 'flex-wrap': 'wrap' }).flexWrap).toBe('wrap');
+    });
+
+    it('rejects bad values', () => {
+      expect(() => styleOf({ 'flex-wrap': 'yes' })).toThrow(
+        'ngpdf: invalid value "yes" for flex-wrap on pdf-view',
+      );
+      expect(() => styleOf({ 'align-content': 'baseline' })).toThrow(
+        'ngpdf: invalid value "baseline" for align-content on pdf-view',
+      );
+      expect(() => styleOf({ 'flex-flow': 'row column' })).toThrow(
+        'ngpdf: invalid value "row column" for flex-flow on pdf-view',
+      );
+      expect(() => styleOf({ 'flex-flow': 'wrap nowrap' })).toThrow(
+        /^ngpdf: invalid value "wrap nowrap" for flex-flow/,
+      );
+      expect(() => styleOf({ 'flex-flow': 'row wrap row' })).toThrow(/^ngpdf: invalid value/);
+      expect(() => styleOf({ 'flex-flow': 'sideways' })).toThrow(/^ngpdf: invalid value/);
+      expect(() => styleOf({ 'flex-flow': '' })).toThrow(/^ngpdf: invalid value/);
+    });
+  });
+
   describe('gaps', () => {
     it('sets both gaps from one gap value', () => {
       expect(styleOf({ gap: '6' })).toMatchObject({ rowGap: 6, columnGap: 6 });
