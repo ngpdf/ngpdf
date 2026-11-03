@@ -200,8 +200,10 @@ NGPDF_APT=poppler-utils ./scripts/dev node scripts/server-check.mjs   # packed d
     `$implicit`/`sheet`, `total`, `first`, `last` and `page` (1-based pdf-page index) in its
     context. The view reserves the height of a first render with `sheet = total = 1`; each
     sheet's content is laid out in that height and cut at its bottom, with one dev-mode warning
-    per render when it is taller. Each sheet's embedded view is checked on its own and destroyed
-    before the next. Anchors and bookmarks inside it are ignored. Anywhere but inside a fixed view
+    per render when it is taller. Each sheet's embedded view is checked on its own. A template
+    destroys its previous view before it renders the next, and its last one with the document,
+    so a render holds at most one view per template. Anchors and bookmarks inside it are ignored.
+    Anywhere but inside a fixed view
     it throws `ngpdf: pdfPerSheet must be inside a fixed pdf-view`: content in the flow that
     changed per sheet could change the sheet count.
   - A unit taller than a page goes on a page of its own, is clipped, and gets a dev-mode warning.

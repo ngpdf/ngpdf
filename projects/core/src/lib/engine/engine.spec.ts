@@ -1229,9 +1229,16 @@ describe('renderDocument with pdfPerSheet', () => {
       expect(render).toHaveBeenCalledTimes(sheets + 1);
       return elapsed;
     };
+    // The fastest of a few runs, as in the text budgets, so one pause on a busy runner does not
+    // decide the ratio.
+    const fastest = async (sheets: number): Promise<number> => {
+      const timings: number[] = [];
+      for (let run = 0; run < 3; run++) timings.push(await timeFor(sheets));
+      return Math.min(...timings);
+    };
     await timeFor(50); // warm up
-    const short = await timeFor(50);
-    const long = await timeFor(500);
+    const short = await fastest(50);
+    const long = await fastest(500);
     // Linear work gives 10 times as long; a cost that grew with the sheet count would give ~100.
     expect(long / short).toBeLessThan(30);
   });

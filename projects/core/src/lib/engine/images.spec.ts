@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { createNode, type PdfNode } from '../tree/node';
-import { fitImage, loadImages } from './images';
+import { fitImage, loadImages, type ImageAsset } from './images';
 import { createPdfkitWriter, type PdfWriter } from './writer';
 
 /** PNG signature plus an IHDR chunk: all `imageSize` reads. */
@@ -185,6 +185,21 @@ describe('loadImages', () => {
     const assets = await loadImages(root(first, second), writer, fetchFn);
     expect(fetchFn).toHaveBeenCalledTimes(1);
     expect(assets.get(second)).toBe(assets.get(first));
+  });
+
+  it('reads a Blob or an ArrayBuffer once across calls that share a map', async () => {
+    const blob = new Blob([png as BlobPart], { type: 'image/png' });
+    const read = vi.spyOn(blob, 'arrayBuffer');
+    const buffer = png.buffer.slice(0);
+    const shared = new Map<unknown, Promise<ImageAsset>>();
+    const first = [imageNode(blob), imageNode(buffer)];
+    const second = [imageNode(blob), imageNode(buffer)];
+    const before = await loadImages(root(...first), writer, undefined, undefined, shared);
+    const after = await loadImages(root(...second), writer, undefined, undefined, shared);
+    expect(read).toHaveBeenCalledTimes(1);
+    // The same bytes, so the writer encodes each image once.
+    expect(after.get(second[0]!)?.data).toBe(before.get(first[0]!)?.data);
+    expect(after.get(second[1]!)?.data).toBe(before.get(first[1]!)?.data);
   });
 
   it('rejects a 404 with the URL and the status', async () => {

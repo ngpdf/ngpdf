@@ -142,15 +142,15 @@ async function loadOne(
 }
 
 /**
- * Loads every `pdf-image` under `root` in parallel; the first failure rejects. Loads of string
- * sources go in `shared`, so calls that pass the same map fetch each source once.
+ * Loads every `pdf-image` under `root` in parallel; the first failure rejects. Loads of URLs,
+ * Blobs and ArrayBuffers go in `shared`, so calls that pass the same map read each source once.
  */
 export async function loadImages(
   root: PdfNode,
   writer: Pick<PdfWriter, 'imageSize'>,
   fetchFn?: typeof fetch,
   server?: ServerSources,
-  shared = new Map<string, Promise<ImageAsset>>(),
+  shared = new Map<unknown, Promise<ImageAsset>>(),
 ): Promise<Map<PdfNode, ImageAsset>> {
   const nodes: PdfNode[] = [];
   const visit = (node: PdfNode): void => {
@@ -159,10 +159,13 @@ export async function loadImages(
     node.children.forEach(visit);
   };
   visit(root);
-  // One load per distinct string `src`, so a logo used ten times is fetched once.
+  // One load per distinct `src`, so a logo used ten times is fetched once. A Blob or an
+  // ArrayBuffer gives the same bytes each time, so the writer encodes it once too.
   const loadNode = (node: PdfNode): Promise<ImageAsset> => {
     const src = propsOf(node)['src'];
-    if (typeof src !== 'string') return loadOne(src, writer, fetchFn, server);
+    if (typeof src !== 'string' && !(src instanceof Blob) && !(src instanceof ArrayBuffer)) {
+      return loadOne(src, writer, fetchFn, server);
+    }
     let pending = shared.get(src);
     if (!pending) {
       pending = loadOne(src, writer, fetchFn, server);

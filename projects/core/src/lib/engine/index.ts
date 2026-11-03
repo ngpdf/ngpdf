@@ -253,7 +253,7 @@ export async function renderDocument(
       : { tree: dissolved, views: new Map<PdfNode, PerSheetView>(), origins: new Map() };
     const anchors = marksOf(origins, collected);
     const styles = resolveStyles(tree, warn);
-    const sharedImages = new Map<string, Promise<ImageAsset>>();
+    const sharedImages = new Map<unknown, Promise<ImageAsset>>();
     const fonts = new Map<string, RegisteredFace[]>();
     // Emoji tried so far; a pdfPerSheet sheet's content loads only the ones not in it.
     const seenEmoji = new Set<string>();
@@ -291,7 +291,7 @@ export async function renderDocument(
       .flatMap((child) => paginatePage(child, styles, ctx));
     let warnedTaller = false;
     // A pdfPerSheet view renders, lays out and is drawn one sheet at a time, so the eager half
-    // holds one sheet's views at once.
+    // holds at most one view per template.
     const perSheetView = async (
       placed: PlacedBox,
       view: PerSheetView,
@@ -338,7 +338,7 @@ export async function renderDocument(
     const pages: PageOps[] = [];
     for (const [index, sheet] of sheets.entries()) {
       const layout = await sheetOf(sheet, index + 1);
-      paintCanvases([layout], canvases);
+      for (const [box, shapes] of paintCanvases([layout], canvases)) canvases.set(box, shapes);
       pages.push({
         width: layout.width,
         height: layout.height,

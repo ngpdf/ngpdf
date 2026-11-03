@@ -2314,6 +2314,22 @@ describe('pdf-canvas', () => {
     for (const ops of all) expect(only(ops, 'shape')).toHaveLength(1);
   });
 
+  it('paints one sheet at a time without changing the shapes it was given', () => {
+    const paint = vi.fn(square);
+    const header = el('pdf-view', {}, [canvas(paint, { height: '20' })], { fixed: 'top' });
+    const blocks = Array.from({ length: 2 }, () => el('pdf-view', { height: '500' }));
+    const later = canvas(paint, { height: '20' });
+    const pages = layout(page([header, ...blocks, later]));
+    expect(pages).toHaveLength(2);
+    const first = paintCanvases([pages[0]!]);
+    const earlier = new Map(first);
+    const second = paintCanvases([pages[1]!], first);
+    // The header's canvas is not painted again, and only the new one is returned.
+    expect(paint).toHaveBeenCalledTimes(2);
+    expect(first).toEqual(earlier);
+    expect([...second.keys()].map((box) => box.node)).toEqual([later]);
+  });
+
   it('paints a canvas in a repeated header row once and draws it on every sheet', () => {
     const paint = vi.fn(square);
     const head = el('pdf-row', { height: '20' }, [el('pdf-cell', {}, [canvas(paint)])], {
