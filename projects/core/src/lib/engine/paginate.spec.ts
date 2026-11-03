@@ -1749,6 +1749,63 @@ describe('paginatePage: table rows taller than a page', () => {
     expect(linesOf(pages[1]!, long)).toEqual(['a74']);
   });
 
+  describe('a row that fits a page only without its header, with no break that fits below it', () => {
+    const header = (): PdfNode => el('pdf-row', { height: '100' }, [cell([])], { header: true });
+    const short = (): PdfNode => el('pdf-row', { height: '20' }, [cell([])]);
+    /** A one-cell row of fixed-height views: it can break only between them. */
+    const blocks = (...heights: number[]): PdfNode =>
+      el('pdf-row', {}, [
+        cell(heights.map((height) => el('pdf-view', { height: String(height) }))),
+      ]);
+    const layout = (rows: PdfNode[]): [PageLayout[], string[]] => {
+      const warn = vi.fn<(message: string) => void>();
+      const root = page([el('pdf-table', {}, rows, { columns: ['1fr'] })]);
+      return [paginate(root, warn), warn.mock.calls.map(([message]) => message)];
+    };
+    const nodes = (pages: PageLayout[]): PdfNode[][] =>
+      pages.map((laid) => laid.placed.map((placed) => placed.box.node));
+
+    // 669.89pt below the header: the only break, at 680pt, does not fit there.
+    it('draws the header once and moves the first row whole to the next sheet', () => {
+      const [head, tall] = [header(), blocks(680, 20)];
+      const [pages, warnings] = layout([head, tall]);
+      expect(nodes(pages)).toEqual([[head], [tall]]);
+      expect(pages[1]!.placed[0]!.y).toBeCloseTo(CONTENT_TOP, 6);
+      expect(pages[1]!.placed[0]!.box.h).toBeCloseTo(700, 6);
+      expect(pages.flatMap((laid) => laid.placed).every((p) => bottom(p) <= BOTTOM)).toBe(true);
+      expect(warnings).toEqual([HEADER_WITHOUT_FIRST_ROW]);
+    });
+
+    it('places a later row whole on a sheet of its own, without the header', () => {
+      const [head, first, tall] = [header(), short(), blocks(680, 20)];
+      const [pages, warnings] = layout([head, first, tall]);
+      expect(nodes(pages)).toEqual([[head, first], [tall]]);
+      expect(pages[1]!.placed[0]!.y).toBeCloseTo(CONTENT_TOP, 6);
+      expect(pages[1]!.placed[0]!.clipBottom).toBeUndefined();
+      expect(warnings).toEqual([]);
+    });
+
+    // The first piece fits (10pt), but the next one (680pt) does not fit below the header.
+    it('does the same when only a later piece would not fit', () => {
+      const [head, first, tall] = [header(), short(), blocks(10, 680, 10)];
+      const [pages, warnings] = layout([head, first, tall]);
+      expect(nodes(pages)).toEqual([[head, first], [tall]]);
+      expect(pages[1]!.placed[0]!.clipBottom).toBeUndefined();
+      expect(warnings).toEqual([]);
+    });
+
+    it('still splits the row under the header when a break fits below it', () => {
+      const [head, tall] = [header(), blocks(650, 50)];
+      const [pages, warnings] = layout([head, tall]);
+      expect(nodes(pages)).toEqual([
+        [head, tall],
+        [head, tall],
+      ]);
+      expect(pages.map((laid) => laid.placed[1]!.box.h)).toEqual([650, 50]);
+      expect(warnings).toEqual([]);
+    });
+  });
+
   it('moves a row that fits on a page below its header whole, as before', () => {
     const header = el('pdf-row', { height: '20' }, [cell([]), cell([])], { header: true });
     const before = el('pdf-row', {}, [cell([lines(10)]), cell([])]);

@@ -280,7 +280,8 @@ function isHeaderRow(node: PdfNode): boolean {
 
 /**
  * Whether a table's header can go on a page with its first row. A row that does not fit under
- * the header but fits a page alone, and can't split, would go to a page of its own without it.
+ * the header but fits a page alone, and can't split below it, would go to a page of its own
+ * without it.
  */
 function sharesPage(
   height: number,
@@ -291,7 +292,9 @@ function sharesPage(
   if (!first) return true;
   const slack = fitSlack(maxHeader);
   if (height + gap + first.h <= maxHeader + slack || first.h > maxHeader + slack) return true;
-  return first.node.tag === 'pdf-row' && canBreak(first.style) && !!splitCells(first, maxHeader);
+  const cells =
+    first.node.tag === 'pdf-row' && canBreak(first.style) ? splitCells(first, maxHeader) : null;
+  return !!cells && splitsBelow(first, cells, maxHeader - height - gap, 0, slack);
 }
 
 /**
@@ -785,6 +788,29 @@ function splitCells(row: Box, pageHeight: number): SplitCell[] | null {
   return cells.some((cell) => cell.breaks.length > 0) ? cells : null;
 }
 
+/**
+ * Whether a row's cells split into pieces with `room` points below the header on every sheet,
+ * none of them cut at the bottom: the row needs no sheet but the first piece's to start on.
+ * `reserve` is kept below the cells that end on a piece, besides the row's bottom inset.
+ */
+function splitsBelow(
+  row: Box,
+  cells: readonly SplitCell[],
+  room: number,
+  reserve: number,
+  slack: number,
+): boolean {
+  const insetTop = row.padding.top + row.border.top;
+  const below = reserve + row.padding.bottom + row.border.bottom;
+  let starts: readonly number[] = cells.map(() => 0);
+  for (let space = room - insetTop; ; space = room) {
+    const stops = nextStops(cells, starts, space, below, slack, false);
+    if (!stops) return false;
+    if (cells.every((cell, i) => at(stops, i) >= cell.end - EPSILON)) return true;
+    starts = stops;
+  }
+}
+
 /** The index of the first item above `value` in an ascending list, or its length. */
 function firstAbove(list: readonly number[], value: number): number {
   let [lo, hi] = [0, list.length];
@@ -1222,6 +1248,10 @@ export function paginatePage(
     current.headers.add(header);
   };
 
+  // The bottom of the wrappers that close with unit `index`, below it.
+  const trailOf = (index: number, unit: Unit): number =>
+    Math.max(0, (closesAt.get(index) ?? unit.bottom) - unit.bottom);
+
   /**
    * Places a row taller than a page in pieces, one per sheet, from `next` on the current sheet,
    * or from the top of the next one when a cell with content can't fit a piece here.
@@ -1237,7 +1267,7 @@ export function paginatePage(
     const insetTop = row.padding.top + row.border.top;
     const insetBottom = row.padding.bottom + row.border.bottom;
     // The last piece keeps the row's bottom inset and the wrappers closing with it on its sheet.
-    const reserve = insetBottom + Math.max(0, (closesAt.get(index) ?? unit.bottom) - unit.bottom);
+    const reserve = insetBottom + trailOf(index, unit);
     const room = (top: number, first: boolean): number =>
       frame.bottom - top - (first ? insetTop : 0);
     let next = planned;
@@ -1338,10 +1368,20 @@ export function paginatePage(
     }
     // A row taller than a page below its header splits, when its cells can break.
     const below = unit.header ? unit.header.height + unit.header.gap : 0;
-    const cells =
+    let cells =
       unit.splits && unit.box.h > contentHeight - below + slack
         ? splitCells(unit.box, contentHeight)
         : null;
+    // One that fits a page without its header but has a piece too tall for the room below it goes
+    // whole, as a row that can't break: on a sheet of its own, without the header.
+    if (
+      cells &&
+      unit.header &&
+      unit.box.h <= contentHeight + slack &&
+      !splitsBelow(unit.box, cells, contentHeight - below, trailOf(index, unit), slack)
+    ) {
+      cells = null;
+    }
     const plan = (): Plan => {
       const header = unit.header && !current.headers.has(unit.header) ? unit.header : null;
       // A row that fits a page only without the header goes on its own page, at the top, without it.
@@ -1424,7 +1464,7 @@ export function paginatePage(
       return;
     }
     const planned = index <= textLast ? textBreaks : null;
-    const trail = Math.max(0, (closesAt.get(index) ?? unit.bottom) - unit.bottom);
+    const trail = trailOf(index, unit);
     const overflows = next.top + unit.box.h + trail > frame.bottom + slack;
     if ((planned ? planned.has(index) : overflows) && current.units > 0) {
       startPage();
