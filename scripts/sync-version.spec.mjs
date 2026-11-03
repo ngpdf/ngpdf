@@ -27,5 +27,11 @@ describe('syncVersion', () => {
     expect(() => syncVersion(source, "0.8.0'); alert(1); ('")).toThrow(
       'sync-version: "0.8.0\'); alert(1); (\'" is not a version',
     );
+    for (const version of ['01.2.3', '1.02.3', '1.2.03', '1.2.3-01', '1.2.3-rc.01']) {
+      expect(() => syncVersion(source, version)).toThrow(
+        `sync-version: "${version}" is not a version`,
+      );
+    }
+    expect(syncVersion(source, '1.2.3-0.rc.10+001')).toContain("new Version('1.2.3-0.rc.10+001')");
   });
 });
