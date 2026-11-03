@@ -40,8 +40,6 @@ it does not affect a correct document. Items that change behaviour need a design
   `text-align` and the other `oneOf` properties, falls back to `normal` for `font-weight` and
   `font-style`, and is ignored by `break-before` and `break-inside`; pick one policy (fallback or
   throw).
-- `PdfRendererFactory.createRenderer()` has a narrower signature than `RendererFactory2`'s.
-- The nesting limit counts anonymous text boxes; document or exclude them.
 
 ## Tooling
 
