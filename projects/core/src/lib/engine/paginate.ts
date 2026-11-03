@@ -916,6 +916,18 @@ function rowPieceBox(
   };
 }
 
+/** The width a fixed view is laid out at: the page's content width less the view's margins. */
+export function fixedViewWidth(
+  page: PdfNode,
+  pageStyle: ResolvedStyle,
+  viewStyle: ResolvedStyle | undefined,
+): number {
+  const { contentWidth } = frameOf(page, pageStyle);
+  const margin = viewStyle?.margin ?? ZERO_EDGES;
+  const side = (edge: 'left' | 'right'): number => lengthIn(margin[edge], contentWidth);
+  return Math.max(0, contentWidth - side('left') - side('right'));
+}
+
 /**
  * Breaks one pdf-page's content into pages. The content is laid out once at the content width
  * with unbounded height; units keep the vertical offsets between them from that layout, and a
@@ -953,7 +965,7 @@ export function paginatePage(
   const fixedBox = (node: PdfNode): { box: Box; top: number; bottom: number; left: number } => {
     const margin = styles.get(node)?.margin ?? ZERO_EDGES;
     const side = (edge: keyof Edges<Length>): number => lengthIn(margin[edge], base.contentWidth);
-    const width = Math.max(0, base.contentWidth - side('left') - side('right'));
+    const width = fixedViewWidth(page, pageStyle, styles.get(node));
     const box = layoutBox(node, styles, width, ctx);
     return {
       box: { ...box, x: 0, y: 0 },

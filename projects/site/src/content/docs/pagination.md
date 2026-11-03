@@ -194,7 +194,49 @@ Give a `pdf-view` that is a direct child of `pdf-page` the `fixed` input to draw
 - A fixed view can have a `transform`, such as a header turned along the page edge. It is drawn transformed on every sheet, and the flow keeps the space of its untransformed box.
 - Fixed views that leave no room for content fail the render with `ngpdf: fixed views leave no room for content on pdf-page`.
 - A `fixed` view nested deeper than a direct child of `pdf-page` is laid out as an ordinary view where it is, and logs `ngpdf: a fixed pdf-view must be a direct child of pdf-page` in development mode: inside the flow it stays in the flow, and inside a fixed view it repeats with that view.
-- The content of a fixed view is the same on every sheet, except a `pdf-page-number` inside it, which shows each sheet's number (see [Page numbers](#page-numbers)).
+- The content of a fixed view is the same on every sheet, except a `pdf-page-number` inside it, which shows each sheet's number (see [Page numbers](#page-numbers)), and a `pdfPerSheet` template (see [Content that changes per sheet](#content-that-changes-per-sheet)).
+
+## Content that changes per sheet
+
+Put an `ng-template` with the `pdfPerSheet` directive inside a fixed view to render different content on each sheet, such as "Continued on next page" on every sheet but the last:
+
+```html
+<pdf-view fixed="bottom" style="height: 20; flex-direction: row">
+  <ng-template pdfPerSheet let-sheet let-total="total">
+    <pdf-text style="flex: 1">Sheet {{ sheet }} of {{ total }}</pdf-text>
+    @if (sheet < total) {
+      <pdf-text>Continued on next page</pdf-text>
+    } @else {
+      <pdf-text>End of report</pdf-text>
+    }
+  </ng-template>
+</pdf-view>
+```
+
+`pdfPerSheet` comes with `PDF_ELEMENTS`, so there is nothing else to import. The template gets these values:
+
+| Name | Type | Value |
+| --- | --- | --- |
+| `$implicit`, `sheet` | `number` | The sheet's number, from 1, across all `pdf-page` elements |
+| `total` | `number` | The number of sheets in the whole document |
+| `first` | `boolean` | Whether it is the first sheet of the document |
+| `last` | `boolean` | Whether it is the last sheet of the document |
+| `page` | `number` | Which `pdf-page` the sheet comes from, from 1, in template order |
+
+- The template renders like the rest of the document: pipes, inputs, services and your own components work in it. Change detection runs on the template alone, once per sheet. Each template destroys its previous sheet's content before it renders the next one, and its last one when the document is destroyed, so a long document keeps at most one sheet's content per template in memory.
+- The rest of the fixed view's content stays the same on every sheet. The template's content is drawn where the `ng-template` sits in the view.
+- A `pdf-page-number` inside the template shows the same numbers as `sheet` and `total`.
+- A `pdf-image` in the template loads like any other, under the same `maxImageBytes` and server `fetchImage`. Each sheet loads only the sources no earlier sheet loaded, so an image over the cap that only a later sheet shows still rejects the render.
+- `pdfPerSheet` works only inside a fixed view (at any depth inside it). Anywhere else, the render fails with `ngpdf: pdfPerSheet must be inside a fixed pdf-view`. Content in the flow that changed per sheet could move a page break, which would change the number of sheets and so the content again.
+- An `anchor` or `bookmark` inside the template is ignored, since its element would be on every sheet. Put it on the fixed view itself.
+
+### Height
+
+The fixed view reserves its height before the sheets are known. To measure it, the template is rendered once as if the document had one sheet: `sheet` and `total` are 1, and `first` and `last` are `true`. The flow gets the space that leaves, as with any fixed view.
+
+On each sheet, the template's content is laid out in that reserved height. Content taller than the reservation is cut at the bottom of the view, with one development-mode warning per render: `ngpdf: pdfPerSheet content is taller on sheet <n> than on the first; set a height on the fixed view`.
+
+When the content's height varies from sheet to sheet, give the fixed view a `height` that fits the tallest version, as in the example above.
 
 ## Page numbers
 

@@ -117,6 +117,27 @@ class ZoneDocument {
   protected readonly zone = inject(NgZone) instanceof NgZone ? 'zone' : 'noop zone';
 }
 
+@Component({
+  selector: 'pdf-per-sheet-server-document',
+  imports: [PDF_ELEMENTS],
+  template: `
+    <pdf-document>
+      <pdf-page>
+        <pdf-view fixed="bottom">
+          <ng-template pdfPerSheet let-sheet let-total="total">
+            <pdf-text>{{ greeting }}, sheet {{ sheet }} of {{ total }}</pdf-text>
+          </ng-template>
+        </pdf-view>
+        <pdf-view style="height: 500"><pdf-text>One</pdf-text></pdf-view>
+        <pdf-view style="height: 500"><pdf-text>Two</pdf-text></pdf-view>
+      </pdf-page>
+    </pdf-document>
+  `,
+})
+class PerSheetServerDocument {
+  protected readonly greeting = inject(GREETING, { optional: true }) ?? 'Hello';
+}
+
 @Component({ selector: 'pdf-no-document', imports: [PDF_ELEMENTS], template: '<pdf-page />' })
 class NoDocument {
   constructor() {
@@ -174,6 +195,16 @@ describe('renderToBuffer', () => {
     expect(pdf).toBeInstanceOf(Uint8Array);
     expect(latin1(pdf.slice(0, 5))).toBe('%PDF-');
     expect(shownText(pdf)).toEqual(['Hello', 'nobody 2026']);
+  });
+
+  it('renders a pdfPerSheet template on each sheet, with the app’s services', async () => {
+    const pdf = await renderToBuffer(PerSheetServerDocument, { injector: appInjector() });
+    expect(shownText(pdf)).toEqual([
+      'From the app, sheet 1 of 2',
+      'One',
+      'From the app, sheet 2 of 2',
+      'Two',
+    ]);
   });
 
   it('draws the standard fonts with pdfkit’s Node build', async () => {

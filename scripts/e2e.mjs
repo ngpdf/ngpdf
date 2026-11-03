@@ -131,6 +131,12 @@ const DOCUMENTS = [
   },
   // Emoji are images, not text: pdfimages lists each of the 7 drawn, from 5 embedded images.
   { name: 'emoji-sample', pages: 1, images: 7, contains: ['© 2026 Example Club stays text.'] },
+  // A pdfPerSheet footer: its text depends on the sheet it is drawn on.
+  {
+    name: 'per-sheet-sample',
+    pages: 3,
+    contains: ['Sheet 1 of 3', 'Continued on next page', 'Sheet 3 of 3', 'End of report'],
+  },
 ];
 
 const update = process.argv.includes('--update');

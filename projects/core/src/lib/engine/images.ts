@@ -225,9 +225,16 @@ async function loadOne(
   }
 }
 
+export interface LoadedImages {
+  readonly images: Map<PdfNode, ImageAsset>;
+  /** The loads this call started, by URL, Blob or ArrayBuffer, for a later call's `known`. */
+  readonly loads: ReadonlyMap<unknown, Promise<ImageAsset>>;
+}
+
 /**
  * Loads every `pdf-image` under `root` in parallel; the first failure rejects. `maxBytes` caps
- * each fetched URL.
+ * each fetched URL. A URL, Blob or ArrayBuffer in `known` is not read again, so calls that pass
+ * on each other's `loads` read each source once.
  */
 export async function loadImages(
   root: PdfNode,
@@ -235,7 +242,8 @@ export async function loadImages(
   fetchFn?: typeof fetch,
   server?: ServerSources,
   maxBytes?: number,
-): Promise<Map<PdfNode, ImageAsset>> {
+  known: ReadonlyMap<unknown, Promise<ImageAsset>> = new Map(),
+): Promise<LoadedImages> {
   const nodes: PdfNode[] = [];
   const visit = (node: PdfNode): void => {
     if (node.kind !== 'element') return;
@@ -243,22 +251,25 @@ export async function loadImages(
     node.children.forEach(visit);
   };
   visit(root);
-  // One load per distinct string `src`, so a logo used ten times is fetched once.
-  const shared = new Map<string, Promise<ImageAsset>>();
+  const loads = new Map<unknown, Promise<ImageAsset>>();
+  // One load per distinct `src`, so a logo used ten times is fetched once. A Blob or an
+  // ArrayBuffer gives the same bytes each time, so the writer encodes it once too.
   const loadNode = (node: PdfNode): Promise<ImageAsset> => {
     const src = propsOf(node)['src'];
-    if (typeof src !== 'string') return loadOne(src, writer, fetchFn, server, maxBytes);
-    let pending = shared.get(src);
+    if (typeof src !== 'string' && !(src instanceof Blob) && !(src instanceof ArrayBuffer)) {
+      return loadOne(src, writer, fetchFn, server, maxBytes);
+    }
+    let pending = known.get(src) ?? loads.get(src);
     if (!pending) {
       pending = loadOne(src, writer, fetchFn, server, maxBytes);
-      shared.set(src, pending);
+      loads.set(src, pending);
     }
     return pending;
   };
   const entries = await Promise.all(
     nodes.map(async (node) => [node, await loadNode(node)] as const),
   );
-  return new Map(entries);
+  return { images: new Map(entries), loads };
 }
 
 /** The image rectangle inside `box`; `cover` overflows it and the display list clips. */
