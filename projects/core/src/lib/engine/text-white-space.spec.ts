@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { ROOT_TEXT_STYLE, type TextStyle } from './style';
-import { layoutRanges, layoutText, measureText, TextMeasureCache, type TextRange } from './text';
+import {
+  collapseWhitespace,
+  layoutRanges,
+  layoutText,
+  measureText,
+  TextMeasureCache,
+  type TextRange,
+} from './text';
 import type { FontMetrics } from './writer';
 
 const MEASURE_MODE_UNDEFINED = 0;
@@ -163,6 +170,31 @@ describe('white-space', () => {
       layoutRanges(ranges(inner), styled('normal'), 35, metrics).lines.map((line) => line.text);
     expect(lines('normal')).toEqual(['aa', 'bb', 'cc', 'dd', 'ee']);
     expect(lines('nowrap')).toEqual(['aa', 'bb', 'cc dd', 'ee']);
+  });
+
+  it('collapses each piece under its own value, across pieces', () => {
+    // A collapsing space at the start of a pre-line piece goes after a space before it.
+    expect(collapseWhitespace(['a ', ' b'], ['normal', 'pre-line'])).toEqual(['a ', 'b']);
+    // A kept line break stays; the space before it is left for the line to drop.
+    expect(collapseWhitespace(['a ', '\n b'], ['normal', 'pre-line'])).toEqual(['a ', '\nb']);
+    // A pre piece keeps its spaces, a space after it is kept, and the end trim stops at it.
+    expect(collapseWhitespace([' a ', '  b  ', ' c '], ['normal', 'pre', 'normal'])).toEqual([
+      'a ',
+      '  b  ',
+      ' c',
+    ]);
+    expect(collapseWhitespace(['  ', '  b  ', '  '], ['normal', 'pre', 'normal'])).toEqual([
+      '',
+      '  b  ',
+      '',
+    ]);
+  });
+
+  it('counts a tab at the end of a line under pre, and lets it hang under pre-wrap', () => {
+    expect(lay('a\t', 'pre').lines[0]?.width).toBe(80);
+    expect(measureText('a\t', styled('pre'), metrics)(0, MEASURE_MODE_UNDEFINED).width).toBe(80);
+    expect(lay('a\t', 'pre-wrap').lines[0]?.width).toBe(10);
+    expect(texts('ab\tcd', 'pre-wrap', 45)).toEqual(['ab', 'cd']);
   });
 
   it('measures the widest kept line with no width limit', () => {

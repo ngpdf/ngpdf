@@ -962,9 +962,10 @@ function breakLines(
   /**
    * `[start, end)` split where the face changes, each piece measured in its own face. `start` is
    * the start of a line: a tab moves to the next stop from there, every 8 spaces of its face, and
-   * to the one after when less than half a space is left, as in CSS.
+   * to the one after when less than half a space is left, as in CSS. `width` is where the last
+   * run or tab ends: a tab is not a run, so a tab at the end still counts.
    */
-  const runsOf = (start: number, end: number): TextRun[] => {
+  const placeRuns = (start: number, end: number): { runs: TextRun[]; width: number } => {
     const runs: TextRun[] = [];
     let x = 0;
     for (let from = start; from < end;) {
@@ -996,9 +997,10 @@ function breakLines(
       x += width;
       from = to;
     }
-    return runs;
+    return { runs, width: x };
   };
-  const widthOfRange = (start: number, end: number): number => runsWidth(runsOf(start, end));
+  const runsOf = (start: number, end: number): TextRun[] => placeRuns(start, end).runs;
+  const widthOfRange = (start: number, end: number): number => placeRuns(start, end).width;
 
   /** `end` without the spaces and the line break before it, down to `start`. */
   const keptEnd = (start: number, end: number): number => {
@@ -1093,7 +1095,7 @@ function breakLines(
 
   /**
    * The end of the text to draw for a line `[start, end)`: a line break, a collapsed trailing space
-   * and the spaces that hang under `pre-wrap` are not drawn. Under `pre`, spaces are drawn.
+   * and the spaces and tabs that hang under `pre-wrap` are not drawn. Under `pre`, they are.
    */
   const drawnEnd = (start: number, end: number): number => {
     let drawn = end;
@@ -1102,7 +1104,7 @@ function breakLines(
       return drawn > start && collapsed.charCodeAt(drawn - 1) === SPACE ? drawn - 1 : drawn;
     while (
       drawn > start &&
-      collapsed.charCodeAt(drawn - 1) === SPACE &&
+      (collapsed.charCodeAt(drawn - 1) === SPACE || collapsed.charCodeAt(drawn - 1) === TAB) &&
       !(keepsSpacesAt(drawn - 1) && noWrapAt(drawn - 1))
     ) {
       drawn--;
@@ -1197,7 +1199,8 @@ function breakLines(
       else end = cut(first + 1);
     }
 
-    let runs = hyphenated ? runsWithHyphen(start, end) : runsOf(start, drawnEnd(start, end));
+    const placed = hyphenated ? undefined : placeRuns(start, drawnEnd(start, end));
+    let runs = placed?.runs ?? runsWithHyphen(start, end);
     // The paragraph's ends are trimmed, so anything after `end` is text that gets cut.
     const clamped = lines.length + 1 >= maxLines && end < length;
     if (clamped) {
@@ -1244,7 +1247,7 @@ function breakLines(
     const box = growForShifts(sized, lineHeight, size * lineHeight, ascent);
     lines.push({
       text: runs.map((run) => run.text).join(''),
-      width: runsWidth(runs),
+      width: placed && !clamped ? placed.width : runsWidth(runs),
       y: top,
       height: box.height,
       ascent: box.ascent,

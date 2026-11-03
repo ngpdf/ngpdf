@@ -263,7 +263,7 @@ An address or a note typed with line breaks keeps them with `pre-line`:
 - A line break is LF, CRLF or CR. Where line breaks are kept, each one starts a new line, and two in a row leave an empty line. A line break at the very end of the text adds no line.
 - Under `pre-line`, the spaces around a line break are dropped, and the ends of the text are trimmed. Under `pre` and `pre-wrap`, nothing is trimmed, so put the binding right against the tags: `<pdf-text>{{ text }}</pdf-text>`.
 - Under `pre` and `pre-wrap`, a tab moves to the next tab stop. Stops are every 8 space widths of the tab's font, counted from the start of the line, as with CSS's default `tab-size`. A tab is not underlined. There is no `tab-size` property.
-- Under `pre-wrap`, spaces at the end of a wrapped line hang past it and are not drawn.
+- Under `pre-wrap`, spaces and tabs at the end of a line hang past it and are not drawn. Under `pre`, they count in the line's width.
 - Text that does not wrap (`nowrap`, `pre`) and is wider than its box is drawn past the edge, or clipped with `overflow: hidden`. A word in it is never cut at the box edge or hyphenated.
 - A `nowrap` or `pre` `pdf-span` inside a wrapping paragraph does not break inside.
 - A kept line break ends the line before it, so `text-align: justify` leaves that line at the start, as it does the last line. `max-lines` counts lines across kept line breaks.
@@ -399,7 +399,7 @@ Wrap part of a text in a `pdf-span` to draw it in other text styles:
 </pdf-text>
 ```
 
-- A span inherits the text styles around it and can change `color`, `font-family`, `font-size`, `font-weight`, `font-style`, `text-decoration`, `letter-spacing`, `text-transform` and `hyphens`, and move its text up or down with `vertical-align` (below). Spans nest.
+- A span inherits the text styles around it and can change `color`, `font-family`, `font-size`, `font-weight`, `font-style`, `text-decoration`, `letter-spacing`, `text-transform`, `hyphens` and `white-space`, and move its text up or down with `vertical-align` (below). Spans nest.
 - The paragraph wraps as one text: a span boundary is not a place to break, and a span wraps over lines like the rest of the text. Kerning is not applied across two spans.
 - Runs of different sizes share a baseline, and a line is as tall as its largest font size times the paragraph's `line-height`. The baseline goes where the [half-leading](#line-height) of the run that reaches highest puts it. A line grows when a raised or lowered run sticks out of it (see [Superscript and subscript](#superscript-and-subscript)).
 - `line-height` and `text-align` belong to the `pdf-text`. Other properties on a span, such as padding or a background, have no effect and get a warning in development mode.
