@@ -83,7 +83,7 @@ describe('hyphens: manual', () => {
   });
 
   it('draws the hyphen in the face of the run it ends, with its decoration', () => {
-    const underlined: TextStyle = { ...style, textDecoration: 'underline', fontWeight: 'bold' };
+    const underlined: TextStyle = { ...style, textDecoration: 'underline', fontWeight: 700 };
     const block = layoutRanges(
       [
         { text: 'an ', style },

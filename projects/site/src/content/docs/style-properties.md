@@ -5,7 +5,7 @@ section: Reference
 order: 11
 ---
 
-These are all the style properties ngpdf reads. Any other property is ignored without a warning. An invalid value for a property in this list throws an `ngpdf:` error and the render rejects, except where the tables say what other values do (`font-weight`, `font-style`, `break-before`, `break-after` and `break-inside`).
+These are all the style properties ngpdf reads. Any other property is ignored without a warning. An invalid value for a property in this list throws an `ngpdf:` error and the render rejects, except where the tables say what other values do (`font-style`, `break-before`, `break-after` and `break-inside`).
 
 In the tables:
 
@@ -23,7 +23,7 @@ All text properties are inherited by child elements.
 | `color` | color | `black` |
 | `font-family` | a list of family names: [registered fonts](/docs/text-and-fonts#custom-fonts) and Courier, Times or Helvetica | Helvetica |
 | `font-size` | length ≥ 0 | `10` |
-| `font-weight` | `bold`, `bolder`, a number ≥ 600 (bold); anything else is normal | normal |
+| `font-weight` | a number from 1 to 1000, `thin` (100), `extralight` (200), `light` (300), `normal` (400), `medium` (500), `semibold` (600), `bold` (700), `extrabold` (800), `black` (900), or `bolder` and `lighter` from the inherited weight; anything else throws. See [Fonts](/docs/text-and-fonts#fonts) | normal (400) |
 | `font-style` | `italic`, `oblique` (italic); anything else is normal | normal |
 | `line-height` | number (× font size), `N%`, length, `normal` (keeps the inherited value) | `1.2` |
 | `text-align` | `left`, `center`, `right`, `justify` | `left` |

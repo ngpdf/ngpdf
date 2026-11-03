@@ -30,10 +30,26 @@ You pick a face with three properties:
 | `font-family` | contains `courier` or `mono` | Courier |
 | | contains `times`, or `serif` but not `sans` | Times |
 | | anything else | Helvetica |
-| `font-weight` | `bold`, `bolder`, or a number of 600 or more | bold |
-| | anything else | regular |
+| `font-weight` | above 500 | bold |
+| | 500 or less | regular |
 | `font-style` | `italic` or `oblique` | italic |
 | | anything else | upright |
+
+`font-weight` is a number from 1 to 1000 or one of the names below, in any case. Any other value throws `ngpdf: invalid value "<value>" for font-weight on <tag>`, and the message lists the allowed values. The standard fonts have only a regular and a bold face, so 100 to 500 is regular and 600 to 900 is bold; a [registered family](#custom-fonts) can have a face for every weight.
+
+| Name | Weight |
+| --- | --- |
+| `thin` | 100 |
+| `extralight` | 200 |
+| `light` | 300 |
+| `normal` | 400 |
+| `medium` | 500 |
+| `semibold` | 600 |
+| `bold` | 700 |
+| `extrabold` | 800 |
+| `black` | 900 |
+| `bolder` | from the inherited weight: below 350 gives 400, below 550 gives 700, below 900 gives 900, and 900 or more stays |
+| `lighter` | from the inherited weight: below 100 stays, below 550 gives 100, below 750 gives 400, and 750 or more gives 700 |
 
 When the value names no [registered family](#custom-fonts), the family match ignores case and looks at the whole value, so `'Times New Roman', serif`, `Georgia, serif` and `serif` all give Times, and `Arial`, `Inter` or `sans-serif` give Helvetica. ngpdf never throws for a family name.
 
@@ -51,6 +67,7 @@ export const appConfig: ApplicationConfig = {
   providers: [
     providePdfFonts([
       { family: 'Inter', src: '/fonts/Inter-Regular.woff2' },
+      { family: 'Inter', src: '/fonts/Inter-Light.woff2', weight: 300 },
       { family: 'Inter', src: '/fonts/Inter-Bold.woff2', weight: 'bold' },
       { family: 'Noto Sans JP', src: '/fonts/NotoSansJP-Regular.ttf' },
     ]),
@@ -68,7 +85,7 @@ export const appConfig: ApplicationConfig = {
 interface PdfFont {
   readonly family: string;
   readonly src: string | ArrayBuffer | Uint8Array | Blob;
-  readonly weight?: 'normal' | 'bold'; // default 'normal'
+  readonly weight?: number | 'normal' | 'bold'; // 1 to 1000; 'normal' is 400 (default), 'bold' 700
   readonly style?: 'normal' | 'italic'; // default 'normal'
 }
 function providePdfFonts(fonts: readonly PdfFont[]): EnvironmentProviders;
@@ -77,8 +94,8 @@ function providePdfFonts(fonts: readonly PdfFont[]): EnvironmentProviders;
 - **Formats:** TrueType (`.ttf`), OpenType (`.otf`), WOFF and WOFF2. Font collections (`.ttc`) are not supported.
 - **Sources:** `src` is a URL, a data URL, or the bytes. A URL is fetched like an image (same-origin credentials only), on the first render whose document names its family. A font no document names is never fetched, so a broken font file fails only the documents that use it. It is fetched once per injector and reused by later renders. A failed fetch is not kept, so the next render tries again. With `renderToBuffer` from `@ngpdf/core/server`, a font URL is read only through its `fetchImage`, and kept for that render only; see [Server rendering](/docs/server-rendering#images-and-fonts-on-the-server). `renderToBlob` and `PdfRenderer.toBlob` fetch it as above, also on a server.
 - **Embedding:** each PDF embeds only the fonts its pages use, cut down to the characters it draws.
-- **Matching:** `family` is matched in any case. Each face is one `weight` and `style`; register one entry per face.
-- **Missing faces:** if a family has no face for the text's weight and style, ngpdf uses the closest one it has, keeping the weight first, then the regular face, and warns in development mode. It never makes a bold or italic face up.
+- **Matching:** `family` is matched in any case. Each face is one `weight` and `style`; register one entry per face. A `weight` outside 1 to 1000 rejects the first render that uses the family with `ngpdf: invalid font weight "<weight>" for "<family>"`.
+- **Missing faces:** if a family has no face for the text's weight, ngpdf picks a weight as CSS does. For 400 it tries 500, then lighter weights going down, then heavier going up; for 500 it tries 400, then lighter, then heavier. Below 400 it tries lighter weights first, then heavier; above 500, heavier first, then lighter. Among the faces of that weight it takes the text's style, or else the upright one. It warns in development mode, naming the face it used (`ngpdf: font "Inter" has no medium face; using its regular face`), and it never makes a bold or italic face up.
 - **Where they apply:** documents rendered with the injector that has the provider, or one below it. `providePdfFonts` in a route's `providers` adds fonts for that route's renders through `pdfResource`, `pdfDownload` and `renderToBlob`, on top of the app's. `PdfRenderer` is a root service, so it sees only the app's fonts. Several `providePdfFonts` calls in one injector add up.
 
 ### The family list and fallback

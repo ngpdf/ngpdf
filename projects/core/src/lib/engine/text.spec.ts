@@ -458,7 +458,7 @@ describe('layoutRanges', () => {
     writer = await createPdfkitWriter({ compress: false });
     writer.registerFont('font:0', testFont('noto-sans-regular.ttf'));
   });
-  const bold: TextStyle = { ...style, fontWeight: 'bold' };
+  const bold: TextStyle = { ...style, fontWeight: 700 };
   const red: TextStyle = { ...style, color: { r: 255, g: 0, b: 0, a: 1 } };
   const big: TextStyle = { ...style, fontSize: 18 };
   const range = (text: string, rangeStyle: TextStyle = style): TextRange => ({
@@ -805,7 +805,7 @@ describe('layoutRanges with maxLines', () => {
   });
 
   it('draws the ellipsis in the style of the last run on the line', () => {
-    const bold: TextStyle = { ...style, fontWeight: 'bold' };
+    const bold: TextStyle = { ...style, fontWeight: 700 };
     const [line] = clamped(1, 120, [
       { text: 'Status: ', style },
       { text: 'aprovado sem ressalvas pela comissão', style: bold },
@@ -816,7 +816,7 @@ describe('layoutRanges with maxLines', () => {
   });
 
   it('draws the ellipsis in the style of the last kept run when the cut removes a whole run', () => {
-    const bold: TextStyle = { ...style, fontWeight: 'bold' };
+    const bold: TextStyle = { ...style, fontWeight: 700 };
     // The box holds "Status aprovado x" with 2pt to spare, so the ellipsis fits only once "x" is gone.
     const maxWidth =
       writer.widthOf('Status aprovado ', 'Helvetica', 9) +

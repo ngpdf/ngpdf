@@ -81,13 +81,22 @@ export interface RenderDocumentOptions {
 /** One face of a font family, with a way to get its bytes. */
 export interface FontSource {
   readonly family: string;
-  readonly weight?: 'normal' | 'bold';
+  /** A number from 1 to 1000; `'normal'` is 400 and `'bold'` 700. */
+  readonly weight?: number | 'normal' | 'bold';
   readonly style?: 'normal' | 'italic';
   /** The bytes, and a label for them (the URL, "Blob", …) for error messages. */
   readonly load: () => Promise<{ readonly label: string; readonly data: Uint8Array }>;
 }
 
 const familyKey = (family: string): string => family.trim().toLowerCase();
+
+function faceWeight(source: FontSource): number {
+  const weight = source.weight ?? 'normal';
+  if (weight === 'normal') return 400;
+  if (weight === 'bold') return 700;
+  if (typeof weight === 'number' && weight >= 1 && weight <= 1000) return weight;
+  throw new Error(`ngpdf: invalid font weight "${String(weight)}" for "${source.family}"`);
+}
 
 /**
  * Loads the faces of the families that some `font-family` in `styles` names and `registry` does
@@ -110,11 +119,13 @@ async function registerUsedFonts(
     return named.has(key) && !registry.has(key);
   });
   if (used.length === 0) return;
+  // Checked before any bytes are read, so a bad weight fails the render without a fetch.
+  const weights = used.map(faceWeight);
   const loaded = await Promise.all(
     used.map(async (source) => ({ source, ...(await source.load()) })),
   );
   let index = [...registry.values()].reduce((count, faces) => count + faces.length, 0);
-  for (const { source, label, data } of loaded) {
+  for (const [i, { source, label, data }] of loaded.entries()) {
     const font: CustomFont = `font:${String(index++)}`;
     try {
       writer.registerFont(font, data);
@@ -123,7 +134,7 @@ async function registerUsedFonts(
     }
     const key = familyKey(source.family);
     const faces = registry.get(key) ?? [];
-    faces.push({ weight: source.weight ?? 'normal', style: source.style ?? 'normal', font });
+    faces.push({ weight: weights[i] ?? 400, style: source.style ?? 'normal', font });
     registry.set(key, faces);
   }
 }
