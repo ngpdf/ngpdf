@@ -62,8 +62,19 @@ const PAGE_SIZES = new Map<string, readonly [number, number]>([
   ['Legal', [612, 1008]],
 ]);
 
-// Float sums of row heights must not push a row that fits exactly onto the next page.
-const EPSILON = 1e-6;
+// Two positions this close are the same point.
+const EPSILON = 0.001;
+
+/**
+ * How far past the bottom a box may end and still fit, on a content area `height` tall. Yoga
+ * returns float32 positions, and each box in a column can add half a float32 step of rounding:
+ * a few hundred boxes that fill the area exactly can end some 60 steps past it. 64 steps
+ * (`height / 2^17`) covers that, and stays under 0.01pt up to A3 height, so a box that much too
+ * tall still moves on every named page size.
+ */
+function fitSlack(height: number): number {
+  return Math.max(EPSILON, height * 2 ** -17);
+}
 
 /** The page's size in points from its `size` and `orientation` props; landscape swaps them. */
 export function pageSize(page: PdfNode): { width: number; height: number } {
@@ -270,8 +281,30 @@ function isHeaderRow(node: PdfNode): boolean {
 }
 
 /**
+ * Whether a table's header can go on a page with its first row. A row that does not fit under
+ * the header but fits a page alone, and can't split below it, would go to a page of its own
+ * without it. `trail` is the bottom of the wrappers that close with the row, kept below its last
+ * piece as when it is placed.
+ */
+function sharesPage(
+  height: number,
+  gap: number,
+  first: Box | undefined,
+  maxHeader: number,
+  trail: number,
+): boolean {
+  if (!first) return true;
+  const slack = fitSlack(maxHeader);
+  if (height + gap + first.h <= maxHeader + slack || first.h > maxHeader + slack) return true;
+  const cells =
+    first.node.tag === 'pdf-row' && canBreak(first.style) ? splitCells(first, maxHeader) : null;
+  return !!cells && splitsBelow(first, cells, maxHeader - height - gap, trail, slack);
+}
+
+/**
  * Units in flow order, and the wrappers they came from in pre-order (outer first). A header
- * taller than `maxHeader` (the content area) is not repeated: its rows become plain units.
+ * taller than `maxHeader` (the content area), or one that can't go on a page with the table's
+ * first row, is not repeated: its rows become plain units.
  */
 function collectUnits(
   content: Box,
@@ -323,6 +356,7 @@ function collectUnits(
     dx: number,
     dy: number,
     inTable = false,
+    closing?: number,
   ): void => {
     if (box.text && isSplittable(box)) {
       visitText(box, box.text, x, top, header, groups, dx, dy);
@@ -379,18 +413,35 @@ function collectUnits(
         }));
         const headerTop = Math.min(...rows.map((r) => r.top));
         const headerBottom = Math.max(...rows.map((r) => r.top + r.box.h));
-        if (headerBottom - headerTop <= maxHeader + EPSILON) {
+        const height = headerBottom - headerTop;
+        const first = body.find((child) => !isFlowNote(child) && !isAbsolute(child));
+        // A first row that is also the last closes the table, and the wrappers that close with it.
+        const end = closing ?? top + box.h;
+        const trail =
+          first && first === body[lastInFlow(body)]
+            ? Math.max(0, end - (top + first.y + first.h))
+            : 0;
+        let repeats = height <= maxHeader + fitSlack(maxHeader);
+        if (!repeats) {
+          warn('ngpdf: pdf-table header rows are taller than a page and are not repeated');
+        } else if (!sharesPage(height, box.style.gap, first, maxHeader, trail)) {
+          // Repeated, it would be left off the first row's page, and off every page when no row
+          // fits under it.
+          warn(
+            'ngpdf: pdf-table header rows do not fit on a page with the first row and are not repeated',
+          );
+          repeats = false;
+        }
+        if (repeats) {
           childHeader = {
             rows,
             top: headerTop,
-            height: headerBottom - headerTop,
+            height,
             gap: box.style.gap,
             groups: inside,
             breakBefore: rows.some((r) => asksForBreak(r.box)),
           };
           children = body;
-        } else {
-          warn('ngpdf: pdf-table header rows are taller than a page and are not repeated');
         }
       }
     }
@@ -410,7 +461,9 @@ function collectUnits(
         });
       } else {
         const inTable = box.node.tag === 'pdf-table';
-        visit(child, childX, childTop, childHeader, inside, innerDx, innerDy, inTable);
+        // The bottom of the outermost wrapper that closes with the last child.
+        const closes = i === last ? (closing ?? top + box.h) : undefined;
+        visit(child, childX, childTop, childHeader, inside, innerDx, innerDy, inTable, closes);
       }
     }
     wrapper.last = units.length - 1;
@@ -692,7 +745,7 @@ interface RowPiece {
 function breaksBetween(box: Box, pageHeight: number): boolean {
   const { style } = box;
   const tag = box.node.tag;
-  const kept = style.breakInside === 'avoid' && box.h <= pageHeight + EPSILON;
+  const kept = style.breakInside === 'avoid' && box.h <= pageHeight + fitSlack(pageHeight);
   return (
     (tag === 'pdf-view' || tag === 'pdf-link' || tag === 'pdf-cell') &&
     style.flexDirection === 'column' &&
@@ -751,6 +804,29 @@ function splitCells(row: Box, pageHeight: number): SplitCell[] | null {
   return cells.some((cell) => cell.breaks.length > 0) ? cells : null;
 }
 
+/**
+ * Whether a row's cells split into pieces with `room` points below the header on every sheet,
+ * none of them cut at the bottom: the row needs no sheet but the first piece's to start on.
+ * `reserve` is kept below the cells that end on a piece, besides the row's bottom inset.
+ */
+function splitsBelow(
+  row: Box,
+  cells: readonly SplitCell[],
+  room: number,
+  reserve: number,
+  slack: number,
+): boolean {
+  const insetTop = row.padding.top + row.border.top;
+  const below = reserve + row.padding.bottom + row.border.bottom;
+  let starts: readonly number[] = cells.map(() => 0);
+  for (let space = room - insetTop; ; space = room) {
+    const stops = nextStops(cells, starts, space, below, slack, false);
+    if (!stops) return false;
+    if (cells.every((cell, i) => at(stops, i) >= cell.end - EPSILON)) return true;
+    starts = stops;
+  }
+}
+
 /** The index of the first item above `value` in an ascending list, or its length. */
 function firstAbove(list: readonly number[], value: number): number {
   let [lo, hi] = [0, list.length];
@@ -773,6 +849,7 @@ function nextStops(
   starts: readonly number[],
   room: number,
   reserve: number,
+  slack: number,
   force: true,
 ): number[];
 function nextStops(
@@ -780,6 +857,7 @@ function nextStops(
   starts: readonly number[],
   room: number,
   reserve: number,
+  slack: number,
   force: boolean,
 ): number[] | null;
 function nextStops(
@@ -787,12 +865,13 @@ function nextStops(
   starts: readonly number[],
   room: number,
   reserve: number,
+  slack: number,
   force: boolean,
 ): number[] | null {
   const stops: number[] = [];
   for (const [i, cell] of cells.entries()) {
     const start = at(starts, i);
-    const limit = start + room + EPSILON;
+    const limit = start + room + slack;
     if (start >= cell.end - EPSILON) {
       stops.push(start);
     } else if (cell.end + reserve <= limit) {
@@ -1023,6 +1102,7 @@ export function paginatePage(
   const contentStyles = new Map(styles).set(content, contentStyle);
   const laid = layoutBox(content, contentStyles, frame.contentWidth, ctx);
   const contentHeight = frame.bottom - frame.top;
+  const slack = fitSlack(contentHeight);
   const { units, wrappers, texts, floats, notes } = collectUnits(
     laid,
     contentHeight,
@@ -1096,8 +1176,7 @@ export function paginatePage(
       frame.top + group(i).top - (opensAt.get(run.first + i) ?? group(i).top);
     // Whether groups i..k-1 fit on a page with group i at `top`.
     const fits = (i: number, k: number, top: number): boolean =>
-      top + group(k - 1).bottom - group(i).top + (k === count ? trail : 0) <=
-      frame.bottom + EPSILON;
+      top + group(k - 1).bottom - group(i).top + (k === count ? trail : 0) <= frame.bottom + slack;
     // A page ending before a break keeps `orphans` lines, one starting after a break `widows`.
     const need = (i: number): number => Math.max(run.orphans, i > 0 ? run.widows : 0);
     const endsHere = (i: number, top: number): boolean =>
@@ -1168,7 +1247,7 @@ export function paginatePage(
   ): void => {
     const { box } = at;
     const drawn = { box, x: x + at.dx, y: y + at.dy, ...grouped(groups) };
-    if (y + box.h > frame.bottom + EPSILON) {
+    if (y + box.h > frame.bottom + slack) {
       const what = isHeaderRow(box.node) ? `${box.node.tag} header` : box.node.tag;
       warn(`ngpdf: ${what} is taller than a page and is cut at the bottom`);
       on.placed.push({ ...drawn, clipBottom: frame.bottom });
@@ -1191,7 +1270,7 @@ export function paginatePage(
   const keptBottom = (wrapper: Wrapper): number =>
     Math.max(wrapper.bottom, closesAt.get(wrapper.last) ?? wrapper.bottom);
   const keptHere = (i: number): Wrapper | undefined =>
-    keptAt.get(i)?.find((wrapper) => keptBottom(wrapper) - wrapper.top <= contentHeight + EPSILON);
+    keptAt.get(i)?.find((wrapper) => keptBottom(wrapper) - wrapper.top <= contentHeight + slack);
 
   const placeHeader = (header: Header | null, leadTop: number): void => {
     if (!header) return;
@@ -1200,6 +1279,10 @@ export function paginatePage(
     }
     current.headers.add(header);
   };
+
+  // The bottom of the wrappers that close with unit `index`, below it.
+  const trailOf = (index: number, unit: Unit): number =>
+    Math.max(0, (closesAt.get(index) ?? unit.bottom) - unit.bottom);
 
   /**
    * Places a row taller than a page in pieces, one per sheet, from `next` on the current sheet,
@@ -1216,17 +1299,24 @@ export function paginatePage(
     const insetTop = row.padding.top + row.border.top;
     const insetBottom = row.padding.bottom + row.border.bottom;
     // The last piece keeps the row's bottom inset and the wrappers closing with it on its sheet.
-    const reserve = insetBottom + Math.max(0, (closesAt.get(index) ?? unit.bottom) - unit.bottom);
+    const reserve = insetBottom + trailOf(index, unit);
     const room = (top: number, first: boolean): number =>
       frame.bottom - top - (first ? insetTop : 0);
     let next = planned;
     let starts: readonly number[] = cells.map(() => 0);
-    const here = nextStops(cells, starts, room(next.top, true), reserve, current.units === 0);
+    const here = nextStops(
+      cells,
+      starts,
+      room(next.top, true),
+      reserve,
+      slack,
+      current.units === 0,
+    );
     if (!here) {
       startPage();
       next = replan();
     }
-    let stops = here ?? nextStops(cells, starts, room(next.top, true), reserve, true);
+    let stops = here ?? nextStops(cells, starts, room(next.top, true), reserve, slack, true);
     const pieces: (RowPiece & { built: PageBuilder; page: number; plan: Plan })[] = [];
     for (;;) {
       const first = pieces.length === 0;
@@ -1251,7 +1341,7 @@ export function paginatePage(
       starts = stops;
       startPage();
       next = replan();
-      stops = nextStops(cells, starts, room(next.top, false), reserve, true);
+      stops = nextStops(cells, starts, room(next.top, false), reserve, slack, true);
     }
     // The pieces go in after their sheets' headers; a gradient runs over them end to end.
     const height = pieces.reduce((sum, piece) => sum + piece.h, 0);
@@ -1259,7 +1349,7 @@ export function paginatePage(
     let offset = 0;
     for (const piece of pieces) {
       const top = piece.plan.top;
-      if (top + piece.h > frame.bottom + EPSILON) {
+      if (top + piece.h > frame.bottom + slack) {
         warn(`ngpdf: ${row.node.tag} is taller than a page and is cut at the bottom`);
       }
       piece.built.placed.push({
@@ -1310,10 +1400,20 @@ export function paginatePage(
     }
     // A row taller than a page below its header splits, when its cells can break.
     const below = unit.header ? unit.header.height + unit.header.gap : 0;
-    const cells =
-      unit.splits && unit.box.h > contentHeight - below + EPSILON
+    let cells =
+      unit.splits && unit.box.h > contentHeight - below + slack
         ? splitCells(unit.box, contentHeight)
         : null;
+    // One that fits a page without its header but has a piece too tall for the room below it goes
+    // whole, as a row that can't break: on a sheet of its own, without the header.
+    if (
+      cells &&
+      unit.header &&
+      unit.box.h <= contentHeight + slack &&
+      !splitsBelow(unit.box, cells, contentHeight - below, trailOf(index, unit), slack)
+    ) {
+      cells = null;
+    }
     const plan = (): Plan => {
       const header = unit.header && !current.headers.has(unit.header) ? unit.header : null;
       // A row that fits a page only without the header goes on its own page, at the top, without it.
@@ -1321,8 +1421,8 @@ export function paginatePage(
         !cells &&
         header &&
         current.units === 0 &&
-        header.height + header.gap + unit.box.h > contentHeight + EPSILON &&
-        unit.box.h <= contentHeight + EPSILON
+        header.height + header.gap + unit.box.h > contentHeight + slack &&
+        unit.box.h <= contentHeight + slack
       ) {
         // The rest of the page continues the table without a header.
         warn(
@@ -1344,7 +1444,7 @@ export function paginatePage(
     if (
       kept &&
       current.units > 0 &&
-      next.top - unit.top + keptBottom(kept) > frame.bottom + EPSILON
+      next.top - unit.top + keptBottom(kept) > frame.bottom + slack
     ) {
       startPage();
       previousBottom = null;
@@ -1377,8 +1477,8 @@ export function paginatePage(
       const repeated =
         unit.header && unit.header.top < chainTop ? unit.header.height + unit.header.gap : 0;
       if (
-        chainBottom - chainTop + repeated <= contentHeight + EPSILON &&
-        next.top - unit.top + chainBottom > frame.bottom + EPSILON
+        chainBottom - chainTop + repeated <= contentHeight + slack &&
+        next.top - unit.top + chainBottom > frame.bottom + slack
       ) {
         startPage();
         previousBottom = null;
@@ -1399,8 +1499,8 @@ export function paginatePage(
       return;
     }
     const planned = index <= textLast ? textBreaks : null;
-    const trail = Math.max(0, (closesAt.get(index) ?? unit.bottom) - unit.bottom);
-    const overflows = next.top + unit.box.h + trail > frame.bottom + EPSILON;
+    const trail = trailOf(index, unit);
+    const overflows = next.top + unit.box.h + trail > frame.bottom + slack;
     if ((planned ? planned.has(index) : overflows) && current.units > 0) {
       startPage();
       previousBottom = null;
@@ -1539,7 +1639,7 @@ export function paginatePage(
       pieces.push({ page: p, top, h: Math.min(full, Math.max(0, frame.bottom - top)), full });
     }
     // A gradient runs once over the pieces put end to end, uncut, so each sheet shows its part.
-    const cut = pieces.length > 1 || pieces.some((piece) => piece.full > piece.h + EPSILON);
+    const cut = pieces.length > 1 || pieces.some((piece) => piece.full > piece.h + slack);
     const sliced = cut && wrapper.box.style.backgroundImage !== null;
     const height = pieces.reduce((sum, piece) => sum + piece.full, 0);
     let offset = 0;

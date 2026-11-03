@@ -37,8 +37,11 @@ function rowOf(height: number, header = false): PdfNode {
   return adopt(el('pdf-row', { height: String(height) }, { header }), [el('pdf-cell', {})]);
 }
 
+const HEADER_WITHOUT_FIRST_ROW =
+  'ngpdf: pdf-table header rows do not fit on a page with the first row and are not repeated';
 const SKIPPED_HEADER =
   'ngpdf: a pdf-table header is not repeated above a row that fits a page only without it';
+const CUT = 'ngpdf: pdf-row is taller than a page and is cut at the bottom';
 
 describe('paginatePage properties', () => {
   it('places every row once and in order, above the content bottom, under its header', () => {
@@ -76,6 +79,14 @@ describe('paginatePage properties', () => {
           const others = placedNodes.filter((node) => !isRow.has(node));
           if (!header) expect(others).toEqual(rows.length === 0 ? [table] : []);
 
+          // A header that can't go on a page with the first row is placed once, as a row.
+          const once =
+            headerHeight !== undefined &&
+            heights.length > 0 &&
+            headerHeight + heights[0]! > CONTENT_HEIGHT &&
+            heights[0]! <= CONTENT_HEIGHT;
+          if (once) expect(others).toEqual([header]);
+
           let clipped = 0;
           let skipped = false;
           for (const laid of pages) {
@@ -89,7 +100,7 @@ describe('paginatePage properties', () => {
             }
             const pageRows = laid.placed.filter((placed) => isRow.has(placed.box.node));
             const nodes = laid.placed.map((placed) => placed.box.node);
-            if (header && pageRows.length > 0) {
+            if (header && !once && pageRows.length > 0) {
               if (nodes[0] === header) {
                 // The header once, then only rows.
                 expect(nodes.filter((node) => node === header)).toHaveLength(1);
@@ -103,9 +114,14 @@ describe('paginatePage properties', () => {
               }
             }
           }
-          const cut = warnings.filter((message) => message.endsWith('cut at the bottom'));
-          expect(cut).toHaveLength(clipped);
+          expect(warnings.filter((message) => message === CUT)).toHaveLength(clipped);
+          expect(warnings.includes(HEADER_WITHOUT_FIRST_ROW)).toBe(once);
           expect(warnings.includes(SKIPPED_HEADER)).toBe(skipped);
+          expect(
+            warnings.every((message) =>
+              [CUT, HEADER_WITHOUT_FIRST_ROW, SKIPPED_HEADER].includes(message),
+            ),
+          ).toBe(true);
           if (header && rows.length === 0) {
             expect(pages).toHaveLength(1);
             expect(pages[0]!.placed.map((placed) => placed.box.node)).toEqual([header]);

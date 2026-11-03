@@ -56,6 +56,7 @@ A `pdf-text` that is a unit by the rules above, as a child of the page or of a c
 A table row that fits on an empty page (below its repeated header, if the table has one) moves to the next page whole, as any unit. A row taller than that splits across sheets instead of being cut:
 
 - It starts on the current sheet when at least one line of each non-empty cell fits there, and otherwise on the next sheet.
+- A row that fits on an empty page only without its header splits only when every piece fits below the header. When one can't, because content that can't break is taller than the space under the header, the row goes whole on a sheet of its own, without the header (see [Tables](/docs/tables#header-rows)).
 - Each cell breaks on its own: between the lines of its texts, or between the children of a column `pdf-view` inside it, at the last break that fits. The next sheet carries on from there, under the repeated header.
 - `orphans` and `widows` don't apply inside a split cell: any line can end a piece.
 - Content that can't break, such as an image, a row `pdf-view`, a table or a box with a fixed height, moves whole to the next piece. One taller than a page is clipped, with the warning below.

@@ -176,8 +176,11 @@ NGPDF_APT=poppler-utils ./scripts/dev node scripts/server-check.mjs   # packed d
     `height`, a `max-height`, a `transform` or an `overflow` other than `visible` keeps it one
     unit.
   - A `header` row repeats at the top of every page its table runs onto. A header taller than the
-    page's content area, or one left off a page whose first row fits only without it, warns in dev mode. A
-    break before a header row goes before the first row it is drawn above, once.
+    page's content area, or one that can't go on a page with the table's first row (a row that
+    fits a page only without it and can't split below it), is laid out once, as plain rows. A
+    header left off a later page whose first row fits only without it is not repeated there.
+    Each case warns in dev mode. A break before a header row goes before the first row it is
+    drawn above, once.
   - A body row of a table taller than a page (below its repeated header) splits instead of being
     clipped. It starts on the current sheet when one line of each non-empty cell fits there.
     Each cell breaks on its own, between the lines of its texts or the children of a column view
@@ -185,7 +188,9 @@ NGPDF_APT=poppler-utils ./scripts/dev node scripts/server-check.mjs   # packed d
     is clipped when taller than a page. Each piece is as tall as its tallest cell piece, cells
     are drawn from the top and stretched to it, and cell and row decorations are sliced. A row
     with `break-inside: avoid`, a fixed `height`, a `max-height`, a `transform` or an `overflow`
-    other than `visible`, a header row, and a row with nothing to break stay one unit.
+    other than `visible`, a header row, and a row with nothing to break stay one unit. So does a
+    row that fits a page without its header when a piece of it can't fit below the header: it
+    goes on a sheet of its own without the header, so no piece is cut at the bottom.
   - `breakBefore` starts a new page, and `breakAfter` starts one after the element.
   - `break-after: avoid` (or `avoid-page`) moves an element to the next page with the unit after
     it when that unit does not fit. An element at the top of a page, a chain that would not fit on

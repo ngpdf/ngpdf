@@ -69,6 +69,11 @@ function bottom(placed: PlacedBox): number {
   return placed.y + placed.box.h;
 }
 
+const HEADER_WITHOUT_FIRST_ROW =
+  'ngpdf: pdf-table header rows do not fit on a page with the first row and are not repeated';
+const SKIPPED_HEADER =
+  'ngpdf: a pdf-table header is not repeated above a row that fits a page only without it';
+
 function isHeader(node: PdfNode): boolean {
   return node.owner?.pdfProps()['header'] === true;
 }
@@ -184,13 +189,13 @@ describe('paginatePage: tables', () => {
 
   it('drops the header on a page whose row fits only without it', () => {
     const header = row(100, true);
-    const rows = [row(700), row(700)];
+    const rows = [row(20), row(700), row(20)];
     const warn = vi.fn<(message: string) => void>();
     const root = page([el('pdf-table', {}, [header, ...rows], { columns: ['1fr'] }), pageNumber()]);
     const pages = paginate(root, warn);
     expect(pages.map((p) => p.placed.map((placed) => placed.box.node))).toEqual([
-      [rows[0]],
-      [rows[1]],
+      [header, rows[0]],
+      [rows[1], rows[2]],
     ]);
     expect(pages[1]!.placed[0]!.y).toBeCloseTo(CONTENT_TOP, 6);
     // Once per page here; the render keeps one of each warning.
@@ -215,6 +220,49 @@ describe('paginatePage: tables', () => {
     expect(warn.mock.calls.map(([message]) => message)).toEqual([
       'ngpdf: pdf-table header rows are taller than a page and are not repeated',
     ]);
+  });
+
+  // Repeated, the header would be left off the only row's page, so it was never drawn.
+  it.each([999.5, 1000, 1000.0005, 1000.004])(
+    'draws a %spt header that cannot share a page with the first row once, as a row',
+    (height) => {
+      const header = row(height, true);
+      const body = row(10);
+      const warn = vi.fn<(message: string) => void>();
+      const root = page(
+        [el('pdf-table', {}, [header, body], { columns: ['1fr'] })],
+        {},
+        { size: [200, 1000] },
+      );
+      const pages = paginate(root, warn);
+      expect(pages.map((p) => p.placed.map((placed) => placed.box.node))).toEqual([
+        [header],
+        [body],
+      ]);
+      expect(pages[0]!.placed[0]!.clipBottom).toBeUndefined();
+      expect(warn.mock.calls.map(([message]) => message)).toEqual([HEADER_WITHOUT_FIRST_ROW]);
+    },
+  );
+
+  it('does not repeat a header that cannot share a page with the first row', () => {
+    const header = row(100, true);
+    const rows = [row(700), ...Array.from({ length: 40 }, () => row())];
+    const warn = vi.fn<(message: string) => void>();
+    const root = page([el('pdf-table', {}, [header, ...rows], { columns: ['1fr'] }), pageNumber()]);
+    const placed = paginate(root, warn).flatMap((p) => p.placed.map((laid) => laid.box.node));
+    expect(placed).toEqual([header, ...rows]);
+    expect(warn.mock.calls.map(([message]) => message)).toEqual([HEADER_WITHOUT_FIRST_ROW]);
+  });
+
+  it('still repeats a header that shares a page with the first row', () => {
+    const header = row(100, true);
+    const rows = [row(600), ...Array.from({ length: 40 }, () => row())];
+    const warn = vi.fn<(message: string) => void>();
+    const root = page([el('pdf-table', {}, [header, ...rows], { columns: ['1fr'] }), pageNumber()]);
+    const pages = paginate(root, warn);
+    expect(pages.length).toBeGreaterThan(1);
+    for (const laid of pages) expect(laid.placed[0]!.box.node).toBe(header);
+    expect(warn).not.toHaveBeenCalled();
   });
 
   it('sends layout and pagination warnings to the same ctx.warn', () => {
@@ -992,6 +1040,54 @@ describe('page geometry', () => {
   });
 });
 
+describe('paginatePage: units that fill the page exactly', () => {
+  function views(count: number, height: number): PdfNode[] {
+    return Array.from({ length: count }, () => el('pdf-view', { height: String(height) }));
+  }
+
+  // Yoga lays out in float32: these bottoms come back a few 1e-5pt below the content bottom.
+  it.each([
+    ['2 x 384.945 on A4', views(2, 384.945)],
+    ['3 x 256.63 on A4', views(3, 256.63)],
+  ])('keeps %s on one sheet', (_, units) => {
+    const pages = paginate(page(units));
+    expect(pages).toHaveLength(1);
+    expect(pages[0]!.placed).toHaveLength(units.length);
+  });
+
+  it('keeps units that fill a custom page size on one sheet', () => {
+    expect(paginate(page(views(3, 11.1), {}, { size: [200, 33.3] }))).toHaveLength(1);
+    expect(paginate(page(views(30, 25.4), {}, { size: [200, 762] }))).toHaveLength(1);
+  });
+
+  // The rounding grows with the page height and the number of boxes: these end over 0.001pt past.
+  it.each([
+    ['13 units on a 14340pt page', views(13, 14340 / 13), [200, 14340]],
+    ['48 units on a 4250.55pt page', views(48, 4250.55 / 48), [200, 4250.55]],
+    ['197 units on A4', views(197, 769.89 / 197), 'A4'],
+  ])('keeps %s on one sheet', (_, units, size) => {
+    const style = size === 'A4' ? undefined : {};
+    expect(paginate(page(units, style, { size }))).toHaveLength(1);
+  });
+
+  it('still moves a unit 0.01pt too tall to the next sheet', () => {
+    const tooTall = [...views(1, 384.945), ...views(1, 384.955)];
+    expect(paginate(page(tooTall)).map((laid) => laid.placed.length)).toEqual([1, 1]);
+    const rows = [...views(2, 11.1), ...views(1, 11.11)];
+    const sheets = paginate(page(rows, {}, { size: [200, 33.3] }));
+    expect(sheets.map((laid) => laid.placed.length)).toEqual([2, 1]);
+    // A3's content area is 1118.55pt with padding 36.
+    const a3 = page([...views(1, 559.275), ...views(1, 559.285)], undefined, { size: 'A3' });
+    expect(paginate(a3).map((laid) => laid.placed.length)).toEqual([1, 1]);
+  });
+
+  it('moves a unit that is visibly too tall on a tall page', () => {
+    const units = [...views(6, 2000), ...views(1, 2340.5)];
+    const sheets = paginate(page(units, {}, { size: [200, 14340] }));
+    expect(sheets.map((laid) => laid.placed.length)).toEqual([6, 1]);
+  });
+});
+
 describe('paginatePage: text split across pages', () => {
   // Without a page number, the content area is 769.89pt: 76 lines of 10pt and 9.89pt left over.
   const AREA = A4_HEIGHT - 2 * PADDING;
@@ -1440,6 +1536,14 @@ describe('paginatePage: position', () => {
     expect(placedOf(pages, stamp).y).toBeCloseTo(CONTENT_TOP, 6);
   });
 
+  it('keeps an absolute box whose top is just above the bottom of a tall page on its sheet', () => {
+    // 0.05pt is under the page-fit slack of a 14340pt page, but the top is still on the sheet.
+    const last = block();
+    const stamp = badge({ top: '14339.95', left: '0', height: '0.04' });
+    const pages = paginate(page([last, stamp], {}, { size: [200, 14340] }));
+    expect(nodesOn(pages)).toEqual([[last, stamp]]);
+  });
+
   it('puts absolute boxes with the same top below the last unit on one new sheet', () => {
     const last = block();
     const [first, second] = [badge({ top: '900' }), badge({ top: '900' })];
@@ -1751,6 +1855,77 @@ describe('paginatePage: table rows taller than a page', () => {
       [header, row],
     ]);
     expect(linesOf(pages[1]!, long)).toEqual(['a74']);
+  });
+
+  describe('a row that fits a page only without its header, with no break that fits below it', () => {
+    const header = (): PdfNode => el('pdf-row', { height: '100' }, [cell([])], { header: true });
+    const short = (): PdfNode => el('pdf-row', { height: '20' }, [cell([])]);
+    /** A one-cell row of fixed-height views: it can break only between them. */
+    const blocks = (...heights: number[]): PdfNode =>
+      el('pdf-row', {}, [
+        cell(heights.map((height) => el('pdf-view', { height: String(height) }))),
+      ]);
+    const layout = (rows: PdfNode[]): [PageLayout[], string[]] => {
+      const warn = vi.fn<(message: string) => void>();
+      const root = page([el('pdf-table', {}, rows, { columns: ['1fr'] })]);
+      return [paginate(root, warn), warn.mock.calls.map(([message]) => message)];
+    };
+    const nodes = (pages: PageLayout[]): PdfNode[][] =>
+      pages.map((laid) => laid.placed.map((placed) => placed.box.node));
+
+    // 669.89pt below the header: the only break, at 680pt, does not fit there.
+    it('draws the header once and moves the first row whole to the next sheet', () => {
+      const [head, tall] = [header(), blocks(680, 20)];
+      const [pages, warnings] = layout([head, tall]);
+      expect(nodes(pages)).toEqual([[head], [tall]]);
+      expect(pages[1]!.placed[0]!.y).toBeCloseTo(CONTENT_TOP, 6);
+      expect(pages[1]!.placed[0]!.box.h).toBeCloseTo(700, 6);
+      expect(pages.flatMap((laid) => laid.placed).every((p) => bottom(p) <= BOTTOM)).toBe(true);
+      expect(warnings).toEqual([HEADER_WITHOUT_FIRST_ROW]);
+    });
+
+    it('places a later row whole on a sheet of its own, without the header', () => {
+      const [head, first, tall] = [header(), short(), blocks(680, 20)];
+      const [pages, warnings] = layout([head, first, tall]);
+      expect(nodes(pages)).toEqual([[head, first], [tall]]);
+      expect(pages[1]!.placed[0]!.y).toBeCloseTo(CONTENT_TOP, 6);
+      expect(pages[1]!.placed[0]!.clipBottom).toBeUndefined();
+      expect(warnings).toEqual([SKIPPED_HEADER]);
+    });
+
+    // The first piece fits (10pt), but the next one (680pt) does not fit below the header.
+    it('does the same when only a later piece would not fit', () => {
+      const [head, first, tall] = [header(), short(), blocks(10, 680, 10)];
+      const [pages, warnings] = layout([head, first, tall]);
+      expect(nodes(pages)).toEqual([[head, first], [tall]]);
+      expect(pages[1]!.placed[0]!.clipBottom).toBeUndefined();
+      expect(warnings).toEqual([SKIPPED_HEADER]);
+    });
+
+    it('still splits the row under the header when a break fits below it', () => {
+      const [head, tall] = [header(), blocks(650, 50)];
+      const [pages, warnings] = layout([head, tall]);
+      expect(nodes(pages)).toEqual([
+        [head, tall],
+        [head, tall],
+      ]);
+      expect(pages.map((laid) => laid.placed[1]!.box.h)).toEqual([650, 50]);
+      expect(warnings).toEqual([]);
+    });
+
+    // The view's 20pt bottom padding closes with the row: the last piece (660pt) needs 680pt
+    // below the header, so the row can't split there, as when it is placed.
+    it('counts the wrappers closing with the first row when it checks the split', () => {
+      const [head, tall] = [header(), blocks(40, 660)];
+      const warn = vi.fn<(message: string) => void>();
+      const table = el('pdf-table', {}, [head, tall], { columns: ['1fr'] });
+      const pages = paginate(page([el('pdf-view', { 'padding-bottom': '20' }, [table])]), warn);
+      expect(nodes(pages).map((laid) => laid.filter((node) => node.tag === 'pdf-row'))).toEqual([
+        [head],
+        [tall],
+      ]);
+      expect(warn.mock.calls.map(([message]) => message)).toEqual([HEADER_WITHOUT_FIRST_ROW]);
+    });
   });
 
   it('moves a row that fits on a page below its header whole, as before', () => {
