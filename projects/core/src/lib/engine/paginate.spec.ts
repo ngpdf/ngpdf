@@ -1110,6 +1110,17 @@ describe('page geometry', () => {
     expectSize('10cm', (10 * 72) / 2.54, (10 * 72) / 2.54);
   });
 
+  it('paginates on a size given in lengths', () => {
+    const units = Array.from({ length: 3 }, () => el('pdf-view', { height: '60' }));
+    const pages = paginate(page(units, {}, { size: '100mm 50mm' }));
+    expect(pages).toHaveLength(2);
+    for (const laid of pages) {
+      expect(laid.width).toBeCloseTo((100 * 72) / 25.4, 9);
+      expect(laid.height).toBeCloseTo((50 * 72) / 25.4, 9);
+    }
+    expect(pages.map((laid) => laid.placed.map((placed) => placed.y))).toEqual([[0, 60], [0]]);
+  });
+
   it('still takes a name before a length', () => {
     expect(sizeOf('A4')).toEqual([595.28, A4_HEIGHT]);
   });
