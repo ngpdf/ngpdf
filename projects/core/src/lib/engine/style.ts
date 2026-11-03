@@ -115,6 +115,8 @@ export interface ResolvedStyle extends TextStyle {
   readonly padding: Edges<Length>;
   readonly borderWidth: Edges<number>;
   readonly borderColor: Edges<Color>;
+  /** A `none` side also has a width of 0. */
+  readonly borderStyle: Edges<BorderStyle>;
   readonly borderRadius: Corners<number>;
   /** Null when nothing is painted, also for a fully transparent color. */
   readonly backgroundColor: Color | null;
@@ -148,10 +150,15 @@ export interface FlexParts {
   readonly basis: Length;
 }
 
+/** How a border side is drawn; `hidden` reads as `none`, and the other CSS styles as `solid`. */
+export type BorderStyle = 'solid' | 'dashed' | 'dotted' | 'none';
+
 export interface BorderParts {
   readonly width: number;
   readonly color: Color;
-  /** A CSS border style other than solid or none; it is drawn solid. */
+  /** Solid when the value names no style. */
+  readonly style: BorderStyle;
+  /** A CSS border style drawn solid, such as `double`; null for the others. */
   readonly unsupportedStyle: string | null;
 }
 
@@ -200,6 +207,22 @@ const BORDER_STYLES = new Set([
   'inset',
   'outset',
 ]);
+
+/** A border style keyword, and the CSS style it stands in for when that one is drawn solid. */
+interface ParsedBorderStyle {
+  readonly style: BorderStyle;
+  readonly unsupported: string | null;
+}
+
+function parseBorderStyle(value: string, tag?: string): ParsedBorderStyle {
+  const keyword = value.trim().toLowerCase();
+  if (!BORDER_STYLES.has(keyword)) return fail(`invalid border style "${show(value)}"`, tag);
+  if (keyword === 'none' || keyword === 'hidden') return { style: 'none', unsupported: null };
+  if (keyword === 'solid' || keyword === 'dashed' || keyword === 'dotted') {
+    return { style: keyword, unsupported: null };
+  }
+  return { style: 'solid', unsupported: keyword };
+}
 
 function fail(message: string, tag?: string): never {
   throw new Error(`ngpdf: ${message}${tag ? ` on ${tag}` : ''}`);
@@ -361,8 +384,7 @@ export function parseEdges(value: string, tag?: string): Edges<Length> {
 export function parseBorder(value: string, tag?: string): BorderParts {
   let width: number | null = null;
   let color: Color | null = null;
-  let none = false;
-  let unsupportedStyle: string | null = null;
+  let style: ParsedBorderStyle | null = null;
   const tokens = tokenize(value);
   if (tokens.length > 3) return fail(`too many values in "${show(value)}"`, tag);
   for (const token of tokens) {
@@ -376,14 +398,18 @@ export function parseBorder(value: string, tag?: string): BorderParts {
     ) {
       width = parseBorderWidth(token, tag);
     } else if (BORDER_STYLES.has(token.toLowerCase())) {
-      const style = token.toLowerCase();
-      if (style === 'none' || style === 'hidden') none = true;
-      else if (style !== 'solid') unsupportedStyle = style;
+      if (style !== null) return fail(`expected one border style in "${show(value)}"`, tag);
+      style = parseBorderStyle(token, tag);
     } else {
       color = parseColor(token, tag);
     }
   }
-  return { width: none ? 0 : (width ?? 1), color: color ?? BLACK, unsupportedStyle };
+  return {
+    width: width ?? 1,
+    color: color ?? BLACK,
+    style: style?.style ?? 'solid',
+    unsupportedStyle: style?.unsupported ?? null,
+  };
 }
 
 /** `flex: <grow> [<shrink>] [<basis>]`, plus the `auto` and `none` keywords. */
@@ -937,6 +963,7 @@ function defaultStyle(node: PdfNode, inherited: TextStyle): Mutable<ResolvedStyl
     padding: allSides(0),
     borderWidth: allSides(0),
     borderColor: allSides(BLACK),
+    borderStyle: allSides<BorderStyle>('solid'),
     borderRadius: { topLeft: 0, topRight: 0, bottomRight: 0, bottomLeft: 0 },
     backgroundColor: null,
     backgroundImage: null,
@@ -983,6 +1010,11 @@ function apply(
     warnBorder(border, warn);
     style.borderWidth = withSide(style.borderWidth, side, border.width);
     style.borderColor = withSide(style.borderColor, side, border.color);
+    style.borderStyle = withSide(style.borderStyle, side, border.style);
+    return;
+  }
+  if (side && property === `border-${side}-style`) {
+    style.borderStyle = withSide(style.borderStyle, side, borderStyleOf(value, tag, warn));
     return;
   }
   if (side && property === `border-${side}-width`) {
@@ -1120,10 +1152,14 @@ function apply(
       warnBorder(border, warn);
       style.borderWidth = allSides(border.width);
       style.borderColor = allSides(border.color);
+      style.borderStyle = allSides(border.style);
       break;
     }
     case 'border-width':
       style.borderWidth = parseEdgeValues(value, (token) => parseBorderWidth(token, tag), tag);
+      break;
+    case 'border-style':
+      style.borderStyle = parseEdgeValues(value, (token) => borderStyleOf(token, tag, warn), tag);
       break;
     case 'border-color':
       style.borderColor = parseEdgeValues(value, (token) => parseColor(token, tag), tag);
@@ -1235,9 +1271,20 @@ function numberOf(value: string, property: string, tag: string): number {
 }
 
 function warnBorder(border: BorderParts, warn: Warn): void {
-  if (border.unsupportedStyle !== null) {
-    warn(`ngpdf: border style "${border.unsupportedStyle}" is not supported; drawing solid`);
-  }
+  if (border.unsupportedStyle !== null) warnUnsupported(border.unsupportedStyle, warn);
+}
+
+function warnUnsupported(style: string, warn: Warn): void {
+  warn(`ngpdf: border style "${style}" is not supported; drawing solid`);
+}
+
+/** One `border-style` value; a style drawn solid warns. */
+function borderStyleOf(value: string, tag: string, warn: Warn): BorderStyle {
+  if (tokenize(value).length !== 1)
+    return fail(`expected one border style in "${show(value)}"`, tag);
+  const { style, unsupported } = parseBorderStyle(value, tag);
+  if (unsupported !== null) warnUnsupported(unsupported, warn);
+  return style;
 }
 
 /** A bare number is a multiplier, N% is N/100, a length is divided by the font size. */
@@ -1278,6 +1325,12 @@ function resolveOne(node: PdfNode, inherited: TextStyle, warn: Warn): ResolvedSt
   // Resolved last because a length depends on this element's own font size.
   if (lineHeight !== null && keywordOf(lineHeight) !== 'normal') {
     style.lineHeight = lineHeightOf(lineHeight, style.fontSize, node.tag);
+  }
+  // As in CSS, a side with no style has no width, whichever was declared last.
+  for (const side of SIDES) {
+    if (style.borderStyle[side] === 'none' && style.borderWidth[side] !== 0) {
+      style.borderWidth = withSide(style.borderWidth, side, 0);
+    }
   }
   return style;
 }

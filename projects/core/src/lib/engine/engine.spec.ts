@@ -811,18 +811,18 @@ describe('renderDocument', () => {
 
     it('routes the border style warning through the render, once and only in dev mode', async () => {
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-      const dashed = (): PdfNode =>
+      const grooved = (): PdfNode =>
         host({}, [
           el('pdf-page', {}, [
-            el('pdf-view', { border: '1 dashed red' }),
-            el('pdf-view', { border: '1 dashed blue' }),
+            el('pdf-view', { border: '1 groove red' }),
+            el('pdf-view', { border: '1 groove blue' }),
           ]),
         ]);
-      await renderDocument(dashed(), { writer: recordingWriter(), dev: false });
+      await renderDocument(grooved(), { writer: recordingWriter(), dev: false });
       expect(warn).not.toHaveBeenCalled();
-      await renderDocument(dashed(), { writer: recordingWriter(), dev: true });
+      await renderDocument(grooved(), { writer: recordingWriter(), dev: true });
       expect(warn).toHaveBeenCalledExactlyOnceWith(
-        'ngpdf: border style "dashed" is not supported; drawing solid',
+        'ngpdf: border style "groove" is not supported; drawing solid',
       );
     });
 

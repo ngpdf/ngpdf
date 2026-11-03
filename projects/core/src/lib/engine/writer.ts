@@ -94,6 +94,19 @@ export type GradientFill =
       readonly stops: readonly GradientStop[];
     };
 
+/** How a stroke is broken up; a stroke without it is solid. */
+export interface StrokePattern {
+  /**
+   * Dash and gap lengths, repeated along the stroke. The gaps are above 0; a dash of 0 with round
+   * caps is a dot.
+   */
+  readonly dash?: readonly number[];
+  /** How far into the pattern the stroke starts; 0 without. */
+  readonly dashPhase?: number;
+  /** Butt (PDF's default) without. */
+  readonly cap?: 'round';
+}
+
 export type DrawOp =
   | {
       readonly op: 'rect';
@@ -109,7 +122,7 @@ export type DrawOp =
       readonly opacity: number;
       readonly gradient?: GradientFill;
     }
-  | {
+  | ({
       readonly op: 'line';
       readonly x1: number;
       readonly y1: number;
@@ -118,18 +131,16 @@ export type DrawOp =
       readonly width: number;
       readonly color: string;
       readonly opacity: number;
-    }
+    } & StrokePattern)
   /** An open stroked path, such as one side of a rounded border. */
-  | {
+  | ({
       readonly op: 'path';
       readonly from: Point;
       readonly segments: readonly OpenSegment[];
       readonly width: number;
       readonly color: string;
       readonly opacity: number;
-      /** Dash and gap lengths, repeated along the path; solid without. Each one above 0. */
-      readonly dash?: readonly number[];
-    }
+    } & StrokePattern)
   /** A path drawn in a pdf-canvas, filled, stroked or both. */
   | {
       readonly op: 'shape';
@@ -1255,6 +1266,23 @@ function endGroup(doc: Doc, state: PageState): void {
   doc.restore();
 }
 
+/**
+ * The cap and dash of a border stroke, in the op's graphics state. The dash is written directly:
+ * pdfkit's `dash()` refuses the zero-length dashes of a dotted border.
+ */
+function setPattern(doc: Doc, pattern: StrokePattern): void {
+  if (pattern.cap === 'round') doc.lineCap('round');
+  if (!pattern.dash) return;
+  const lengths = pattern.dash.map(pdfNumber).join(' ');
+  doc.addContent(`[${lengths}] ${pdfNumber(pattern.dashPhase ?? 0)} d`);
+}
+
+/** A finite number as a PDF operand, rounded to 1/10000 of a point. */
+function pdfNumber(value: number): string {
+  const rounded = Math.round(value * 10_000) / 10_000;
+  return String(Object.is(rounded, -0) ? 0 : rounded);
+}
+
 /** A canvas shape in its own graphics state, so its colors, line settings and dash end with it. */
 function drawShape(doc: Doc, op: Extract<DrawOp, { op: 'shape' }>): void {
   const { fill, stroke } = op;
@@ -1298,13 +1326,14 @@ function drawOp(
     case 'line':
       doc.save();
       doc.lineWidth(op.width).strokeColor(op.color, op.opacity);
+      setPattern(doc, op);
       doc.moveTo(op.x1, op.y1).lineTo(op.x2, op.y2).stroke();
       doc.restore();
       return;
     case 'path':
       doc.save();
       doc.lineWidth(op.width).strokeColor(op.color, op.opacity);
-      if (op.dash) doc.dash([...op.dash]);
+      setPattern(doc, op);
       doc.moveTo(op.from.x, op.from.y);
       for (const segment of op.segments) pathTo(doc, segment);
       doc.stroke();
