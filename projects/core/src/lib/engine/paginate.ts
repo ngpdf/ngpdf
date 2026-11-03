@@ -106,7 +106,10 @@ interface Header {
   readonly rows: readonly Flowed[];
   readonly top: number;
   readonly height: number;
-  /** The table's gap, kept between a repeated header and the row under it. */
+  /**
+   * From the header's bottom to the row it is drawn with: the table's row gap in a column table,
+   * and minus the header's height in a row table, where the rows sit beside it.
+   */
   readonly gap: number;
   /** The faded table and its faded ancestors, around the header rows. */
   readonly groups: readonly OpacityGroup[];
@@ -529,10 +532,11 @@ function collectUnits(
           first && first === body[lastInFlow(body)]
             ? Math.max(0, end - (top + first.y + first.h))
             : 0;
+        const gap = box.style.flexDirection === 'column' ? rowGapOf(box) : -height;
         let repeats = height <= maxHeader + fitSlack(maxHeader);
         if (!repeats) {
           warn('ngpdf: pdf-table header rows are taller than a page and are not repeated');
-        } else if (!sharesPage(height, rowGapOf(box), first, maxHeader, trail)) {
+        } else if (!sharesPage(height, gap, first, maxHeader, trail)) {
           // Repeated, it would be left off the first row's page, and off every page when no row
           // fits under it.
           warn(
@@ -545,7 +549,7 @@ function collectUnits(
             rows,
             top: headerTop,
             height,
-            gap: rowGapOf(box),
+            gap,
             groups: inside,
             breakBefore: rows.some((r) => asksForBreak(r.box)),
           };
@@ -846,6 +850,14 @@ interface Plan {
   readonly leadFlow: number;
   readonly leadTop: number;
   readonly top: number;
+}
+
+/**
+ * Where the header drawn with a unit ends. Above the unit in a column table, but beside it in a
+ * row table, where a header taller than the unit can reach lower.
+ */
+function headerBottom(plan: Plan): number {
+  return plan.header ? plan.leadTop + plan.header.height : -Infinity;
 }
 
 /** An absolute box asks for no break: it is never a unit. */
@@ -1484,14 +1496,10 @@ export function paginatePage(
       frame.bottom - top - (first ? insetTop : 0);
     let next = planned;
     let starts: readonly number[] = cells.map(() => 0);
-    const here = nextStops(
-      cells,
-      starts,
-      room(next.top, true),
-      reserve,
-      slack,
-      current.units === 0,
-    );
+    const headerFits = headerBottom(next) <= frame.bottom + slack || current.units === 0;
+    const here = headerFits
+      ? nextStops(cells, starts, room(next.top, true), reserve, slack, current.units === 0)
+      : null;
     if (!here) {
       startPage();
       next = replan();
@@ -1680,7 +1688,8 @@ export function paginatePage(
     }
     const planned = index <= textLast ? textBreaks : null;
     const trail = trailOf(index, unit);
-    const overflows = next.top + unit.box.h + trail > frame.bottom + slack;
+    const overflows =
+      Math.max(next.top + unit.box.h + trail, headerBottom(next)) > frame.bottom + slack;
     if ((planned ? planned.has(index) : overflows) && current.units > 0) {
       startPage();
       previousBottom = null;
