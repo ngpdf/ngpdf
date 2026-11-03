@@ -281,6 +281,22 @@ function isHeaderRow(node: PdfNode): boolean {
 }
 
 /**
+ * A table's row gap in points. Yoga resolves a percentage against the content height when that
+ * height is definite, and against a smaller one while it sizes an auto height. The distance
+ * between the first two rows (rows in a table have no margin) is the gap plus any space
+ * `justify-content` adds, so the smaller of the two is the gap Yoga used.
+ */
+function rowGapOf(table: Box): number {
+  const gap = table.style.rowGap;
+  if (typeof gap === 'number') return gap;
+  const [a, b] = table.children.filter((child) => !isFlowNote(child) && !isAbsolute(child));
+  if (!a || !b) return 0;
+  const { padding, border } = table;
+  const content = table.h - padding.top - padding.bottom - border.top - border.bottom;
+  return Math.min(b.y - (a.y + a.h), (gap.percent / 100) * content);
+}
+
+/**
  * Whether a table's header can go on a page with its first row. A row that does not fit under
  * the header but fits a page alone, and can't split below it, would go to a page of its own
  * without it. `trail` is the bottom of the wrappers that close with the row, kept below its last
@@ -424,7 +440,7 @@ function collectUnits(
         let repeats = height <= maxHeader + fitSlack(maxHeader);
         if (!repeats) {
           warn('ngpdf: pdf-table header rows are taller than a page and are not repeated');
-        } else if (!sharesPage(height, box.style.gap, first, maxHeader, trail)) {
+        } else if (!sharesPage(height, rowGapOf(box), first, maxHeader, trail)) {
           // Repeated, it would be left off the first row's page, and off every page when no row
           // fits under it.
           warn(
@@ -437,7 +453,7 @@ function collectUnits(
             rows,
             top: headerTop,
             height,
-            gap: box.style.gap,
+            gap: rowGapOf(box),
             groups: inside,
             breakBefore: rows.some((r) => asksForBreak(r.box)),
           };
@@ -1001,16 +1017,31 @@ function rowPieceBox(
   };
 }
 
-/** The width a fixed view is laid out at: the page's content width less the view's margins. */
+/**
+ * The width a fixed view is laid out at: its own `width` (a percent is of the page's content
+ * width), or else the content width less its margins, with an `auto` margin as 0.
+ */
 export function fixedViewWidth(
   page: PdfNode,
   pageStyle: ResolvedStyle,
   viewStyle: ResolvedStyle | undefined,
 ): number {
   const { contentWidth } = frameOf(page, pageStyle);
+  if (viewStyle && viewStyle.width !== 'auto') return lengthIn(viewStyle.width, contentWidth);
   const margin = viewStyle?.margin ?? ZERO_EDGES;
   const side = (edge: 'left' | 'right'): number => lengthIn(margin[edge], contentWidth);
   return Math.max(0, contentWidth - side('left') - side('right'));
+}
+
+/**
+ * How far a fixed view `width` wide starts from the content's left edge. As in CSS, `auto` side
+ * margins take the room the view and its other margins leave: both share it, one takes it all.
+ */
+function fixedViewLeft(margin: Edges<Length>, width: number, contentWidth: number): number {
+  const left = lengthIn(margin.left, contentWidth);
+  const free = Math.max(0, contentWidth - width - left - lengthIn(margin.right, contentWidth));
+  if (margin.left !== 'auto') return left;
+  return margin.right === 'auto' ? free / 2 : free;
 }
 
 /**
@@ -1056,7 +1087,7 @@ export function paginatePage(
       box: { ...box, x: 0, y: 0 },
       top: side('top'),
       bottom: side('bottom'),
-      left: side('left'),
+      left: fixedViewLeft(margin, box.w, base.contentWidth),
     };
   };
   let top = base.top;

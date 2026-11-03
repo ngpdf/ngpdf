@@ -545,7 +545,56 @@ describe('resolveStyles property coverage', () => {
       justifyContent: 'space-between',
       alignItems: 'center',
       alignSelf: 'flex-end',
-      gap: 6,
+      rowGap: 6,
+      columnGap: 6,
+    });
+  });
+
+  describe('gaps', () => {
+    it('sets both gaps from one gap value', () => {
+      expect(styleOf({ gap: '6' })).toMatchObject({ rowGap: 6, columnGap: 6 });
+    });
+
+    it('reads gap as a row gap then a column gap', () => {
+      expect(styleOf({ gap: '4 1in' })).toMatchObject({ rowGap: 4, columnGap: 72 });
+    });
+
+    it('takes row-gap and column-gap on their own, in any unit', () => {
+      const style = styleOf({ 'row-gap': '10mm', 'column-gap': '2px' });
+      expect(style.rowGap).toBeCloseTo((10 * 72) / 25.4, 9);
+      expect(style.columnGap).toBe(2);
+    });
+
+    it('defaults both gaps to 0', () => {
+      expect(styleOf({})).toMatchObject({ rowGap: 0, columnGap: 0 });
+    });
+
+    it('takes percentages', () => {
+      expect(styleOf({ gap: '10% 5%' })).toMatchObject({
+        rowGap: { percent: 10 },
+        columnGap: { percent: 5 },
+      });
+      expect(styleOf({ 'row-gap': '50%' }).rowGap).toEqual({ percent: 50 });
+    });
+
+    it('lets a later longhand override gap, and gap override an earlier longhand', () => {
+      expect(styleOf({ gap: '4', 'column-gap': '9' })).toMatchObject({ rowGap: 4, columnGap: 9 });
+      expect(styleOf({ 'row-gap': '9', gap: '4' })).toMatchObject({ rowGap: 4, columnGap: 4 });
+    });
+
+    it('rejects negative, auto, unknown units and more than two values', () => {
+      expect(() => styleOf({ 'row-gap': '-4' })).toThrow(
+        'ngpdf: expected a non-negative length in "-4" on pdf-view',
+      );
+      expect(() => styleOf({ gap: '4 -1%' })).toThrow(/^ngpdf: expected a non-negative length/);
+      expect(() => styleOf({ 'column-gap': 'auto' })).toThrow(
+        'ngpdf: expected a length in "auto" on pdf-view',
+      );
+      expect(() => styleOf({ gap: '4em' })).toThrow(/^ngpdf: unknown unit in "4em"/);
+      expect(() => styleOf({ gap: '1 2 3' })).toThrow(
+        'ngpdf: expected 1 or 2 values in "1 2 3" on pdf-view',
+      );
+      expect(() => styleOf({ gap: '' })).toThrow(/^ngpdf: expected 1 or 2 values/);
     });
   });
 
@@ -1104,7 +1153,9 @@ describe('resolveStyles property coverage', () => {
   });
 
   it('rejects percent where points are required', () => {
-    expect(() => styleOf({ gap: '10%' })).toThrow('ngpdf: expected a length in "10%" on pdf-view');
+    expect(() => styleOf({ 'border-radius': '10%' })).toThrow(
+      'ngpdf: expected a length in "10%" on pdf-view',
+    );
     expect(() => styleOf({ 'font-size': 'auto' })).toThrow(/^ngpdf: expected a length/);
   });
 

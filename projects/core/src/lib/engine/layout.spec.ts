@@ -125,6 +125,44 @@ describe('layoutBox', () => {
     expect(box.h).toBe(64);
   });
 
+  it('puts the row gap between the children of a column', () => {
+    const root = el('pdf-view', { gap: '4 30' }, [
+      el('pdf-view', { height: '20' }),
+      el('pdf-view', { height: '20' }),
+    ]);
+    const box = lay(root, 200);
+    expect(box.children.map((child) => child.y)).toEqual([0, 24]);
+    expect(box.h).toBe(44);
+  });
+
+  it('puts the column gap between the children of a row', () => {
+    const root = el('pdf-view', { 'flex-direction': 'row', 'row-gap': '30', 'column-gap': '6' }, [
+      el('pdf-view', { width: '20', height: '20' }),
+      el('pdf-view', { width: '20', height: '20' }),
+    ]);
+    const box = lay(root, 200);
+    expect(box.children.map((child) => child.x)).toEqual([0, 26]);
+    expect(box.h).toBe(20);
+  });
+
+  it('resolves a column gap percentage against the content width', () => {
+    const root = el('pdf-view', { 'flex-direction': 'row', padding: '10', 'column-gap': '10%' }, [
+      el('pdf-view', { width: '20', height: '20' }),
+      el('pdf-view', { width: '20', height: '20' }),
+    ]);
+    // 10% of 180.
+    expect(lay(root, 200).children.map((child) => child.x)).toEqual([10, 48]);
+  });
+
+  it('resolves a row gap percentage against the content height', () => {
+    const root = el('pdf-view', { height: '300', padding: '10', 'row-gap': '10%' }, [
+      el('pdf-view', { height: '20' }),
+      el('pdf-view', { height: '20' }),
+    ]);
+    // 10% of 280.
+    expect(lay(root, 200).children.map((child) => child.y)).toEqual([10, 58]);
+  });
+
   it('measures text: height equals the block and lines fit the box', () => {
     const root = el('pdf-view', { width: '120' }, [
       el('pdf-text', {}, [textNode('Gabriela Teixeira de Albuquerque Cavalcanti')]),
@@ -304,6 +342,39 @@ describe('layoutBox', () => {
     expect(box.children).toHaveLength(2);
     expect(box.children[0]?.w).toBe(60);
     expect(box.children[1]?.h).toBe(8);
+  });
+
+  it('centres a box with a set width under margin: 0 auto', () => {
+    const root = el('pdf-view', {}, [
+      el('pdf-view', { width: '100', height: '10', margin: '0 auto' }),
+    ]);
+    const child = lay(root, 300).children[0];
+    expect([child?.x, child?.w]).toEqual([100, 100]);
+  });
+
+  it('pushes a row item to the end with margin-left: auto', () => {
+    const root = el('pdf-view', { 'flex-direction': 'row' }, [
+      el('pdf-view', { width: '30', height: '10' }),
+      el('pdf-view', { width: '40', height: '10', 'margin-left': 'auto' }),
+    ]);
+    const [first, last] = lay(root, 200).children;
+    expect([first?.x, last?.x]).toEqual([0, 160]);
+  });
+
+  it('splits the free space between auto sides, after the fixed ones', () => {
+    const root = el('pdf-view', { 'flex-direction': 'row', height: '100' }, [
+      el('pdf-view', { width: '40', height: '20', margin: 'auto 10 auto auto' }),
+    ]);
+    const child = lay(root, 200).children[0];
+    expect([child?.x, child?.y]).toEqual([150, 40]);
+  });
+
+  it('pushes a box to the bottom of a column with margin-top: auto', () => {
+    const root = el('pdf-view', { height: '100' }, [
+      el('pdf-view', { height: '10' }),
+      el('pdf-view', { height: '20', 'margin-top': 'auto' }),
+    ]);
+    expect(lay(root, 50).children[1]?.y).toBe(80);
   });
 
   it('sizes an image box from its style and attaches the asset', () => {
@@ -522,10 +593,20 @@ describe('table box model', () => {
     expect(message).toContain('pdf-row flex-direction');
   });
 
-  it('warns for gap on a row', () => {
+  it('warns for a column gap on a row, set through gap or column-gap', () => {
+    for (const style of [{ gap: '10' }, { 'column-gap': '10' }, { gap: '0 10%' }]) {
+      const warn = vi.fn();
+      const box = lay(tableOf([styledRow(style)]), 200, warn);
+      expect(warn).toHaveBeenCalledWith('ngpdf: ignored inside tables: pdf-row column-gap');
+      // The cells stay on their columns.
+      expect(box.children[0]?.children.map((cell) => cell.x)).toEqual([0, 60]);
+    }
+  });
+
+  it('does not warn for a row gap on a row', () => {
     const warn = vi.fn();
-    lay(tableOf([styledRow({ gap: '10' })]), 200, warn);
-    expect(warn).toHaveBeenCalledWith('ngpdf: ignored inside tables: pdf-row gap');
+    lay(tableOf([styledRow({ 'row-gap': '10' })]), 200, warn);
+    expect(warn).not.toHaveBeenCalled();
   });
 });
 
