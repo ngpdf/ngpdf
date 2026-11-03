@@ -281,14 +281,19 @@ function isHeaderRow(node: PdfNode): boolean {
 }
 
 /**
- * A table's row gap in points. Yoga resolves a percentage against a height the box does not keep,
- * so that one is read off the layout, between the first two rows (rows in a table have no margin).
+ * A table's row gap in points. Yoga resolves a percentage against the content height when that
+ * height is definite, and against a smaller one while it sizes an auto height. The distance
+ * between the first two rows (rows in a table have no margin) is the gap plus any space
+ * `justify-content` adds, so the smaller of the two is the gap Yoga used.
  */
 function rowGapOf(table: Box): number {
   const gap = table.style.rowGap;
   if (typeof gap === 'number') return gap;
   const [a, b] = table.children.filter((child) => !isFlowNote(child) && !isAbsolute(child));
-  return a && b ? b.y - (a.y + a.h) : 0;
+  if (!a || !b) return 0;
+  const { padding, border } = table;
+  const content = table.h - padding.top - padding.bottom - border.top - border.bottom;
+  return Math.min(b.y - (a.y + a.h), (gap.percent / 100) * content);
 }
 
 /**

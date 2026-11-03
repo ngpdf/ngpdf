@@ -168,11 +168,36 @@ describe('paginatePage: tables', () => {
     const [header, first, second] = pages[0]!.placed;
     const gap = first!.y - bottom(header!);
     expect(gap).toBeGreaterThan(0);
-    expect(second!.y - bottom(first!)).toBeCloseTo(gap, 6);
+    // Yoga places rows in float32, so gaps differ below 1e-5.
+    expect(second!.y - bottom(first!)).toBeCloseTo(gap, 5);
     for (const laid of pages.slice(1)) {
       const [repeated, next] = laid.placed;
-      expect(next!.y - bottom(repeated!)).toBeCloseTo(gap, 6);
+      expect(next!.y - bottom(repeated!)).toBeCloseTo(gap, 5);
     }
+  });
+
+  it('leaves the space justify-content adds out of a percentage header gap', () => {
+    const tall = el(
+      'pdf-table',
+      { height: '300', 'justify-content': 'space-between', 'row-gap': '10%' },
+      [row(20, true), row()],
+      {
+        columns: ['1fr'],
+      },
+    );
+    // A 100pt content area: header, 30pt gap and row fit together.
+    const root = page(
+      [tall, pageNumber()],
+      { padding: String(PADDING) },
+      { size: [300, 100 + 2 * PADDING + NUMBER_HEIGHT] },
+    );
+    const warn = vi.fn<(message: string) => void>();
+    const pages = paginate(root, warn);
+    expect(warn).not.toHaveBeenCalledWith(HEADER_WITHOUT_FIRST_ROW);
+    const laid = pages.find((p) => p.placed.length === 2)!;
+    const [header, first] = laid.placed;
+    expect(isHeader(header!.box.node)).toBe(true);
+    expect(first!.y - bottom(header!)).toBeCloseTo(30, 6);
   });
 
   it('starts the header where the table starts, after its border and padding', () => {
