@@ -88,12 +88,16 @@ class DatedDocument {
       <pdf-page>
         <pdf-view style="margin-top: 20; margin: 0; margin-top: 5" />
         <pdf-view style="margin-top: 5; margin: 10" [style.margin-top.pt]="top" />
+        <pdf-view style="margin-top: 7" [style.margin-top.pt]="unset" />
+        <pdf-view style="margin-top: 7" [style.margin-top.pt]="removed" />
       </pdf-page>
     </pdf-document>
   `,
 })
 class CascadeDocument {
   readonly top = 20;
+  readonly unset = undefined;
+  readonly removed = null;
 }
 
 const seen: { injector?: EnvironmentInjector } = {};
@@ -235,6 +239,12 @@ describe('renderTree', () => {
     const styles = resolveStyles(result.root);
     expect(styles.get(at(views, 0))?.margin).toEqual({ top: 5, right: 0, bottom: 0, left: 0 });
     expect(styles.get(at(views, 1))?.margin).toEqual({ top: 20, right: 10, bottom: 10, left: 10 });
+  });
+
+  it('falls back to the static style for an undefined binding and removes it for null', () => {
+    const views = find(render(CascadeDocument).root, 'pdf-view');
+    expect(at(views, 2).rawStyle['margin-top']).toBe('7');
+    expect(at(views, 3).rawStyle['margin-top']).toBeUndefined();
   });
 
   it('formats dates through pipes with the component locale', () => {
