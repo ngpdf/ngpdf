@@ -200,6 +200,8 @@ A character as you see it (a grapheme cluster) is an emoji when:
 
 The standard fonts use the WinAnsi encoding (Windows-1252). Text in a [custom font](#custom-fonts) is not limited to it. It covers ASCII, the Latin-1 accented letters (`á`, `ç`, `ñ`, `ü` and so on) and a few more, such as `€`, `“ ”`, `‘ ’`, `–`, `—`, `…`, `•` and `™`.
 
+An accented letter written as a base letter plus a combining mark, such as `e` followed by U+0301 (common in macOS file names), is drawn as the composed letter `é` when it has one. In a `font-family` list, a font that lacks the letter as written but has its composed form draws that form; a custom font that has the combining mark draws the text as written.
+
 In a standard font, any other character is drawn as `?`. That includes emoji (unless [`providePdfEmoji`](#emoji) gives them images), Greek, Cyrillic, CJK, arrows and check marks. In development mode ngpdf logs one warning per render that lists every replaced character:
 
 `ngpdf: characters outside WinAnsi replaced with "?": ✓→`
