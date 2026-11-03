@@ -144,7 +144,7 @@ How it behaves:
 
 ## Page size and orientation
 
-`size` takes a named size or a `[width, height]` pair in points. The default is `A4`.
+`size` takes a named size or your own size. The default is `A4`.
 
 | Size | Width × height (pt) |
 | --- | --- |
@@ -154,18 +154,30 @@ How it behaves:
 | `Letter` | 612 × 792 |
 | `Legal` | 612 × 1008 |
 
-`orientation` is `portrait` (the default) or `landscape`. Landscape swaps width and height.
+For your own size, give the sides in points or in the units styles take (`pt`, `px`, `in`, `cm`, `mm`), in any of these forms:
 
-The size names are case-sensitive: `a4` does not type-check, and at run time an unknown name or a pair with a value that is not a positive number fails with `ngpdf: unknown page size "<size>" on pdf-page`.
+| `size` | Page |
+| --- | --- |
+| `[size]="[300, 400]"` | 300 × 400 pt |
+| `[size]="['210mm', '297mm']"` | 210 × 297 mm; the sides can mix numbers and lengths, such as `[300, '4in']` |
+| `size="210mm 297mm"` | the CSS `@page` form: width, then height |
+| `[size]="400"` or `size="400"` | a square page, 400 × 400 pt |
+| `size="10cm"` | a square page, 10 × 10 cm |
 
-For a custom size, use the exported `PageSize` type:
+Names are tried first, so `size="A4"` is always the named size.
+
+`orientation` is `portrait` (the default) or `landscape`. Landscape always swaps width and height, for named sizes and your own: `size="297mm 210mm" orientation="landscape"` gives a portrait page 210 × 297 mm. Give your own size the way round you want it and leave `orientation` out.
+
+The size names are case-sensitive: `a4` does not type-check. At run time, a size that is not one of the forms above fails with `ngpdf: unknown page size "<size>" on pdf-page`. That covers an unknown name, a side that is zero, negative or not finite, `%`, `em`, `auto` or any other unit, and a string with more than two lengths.
+
+For a size in a field, use the exported `PageSize` type:
 
 ```ts
 import { type PageSize } from '@ngpdf/core';
 
 export class PagesDocument {
-  // 80 mm wide, 200 mm long, in points
-  readonly receipt: PageSize = [226.77, 566.93];
+  // 80 mm wide, 200 mm long
+  readonly receipt: PageSize = ['80mm', '200mm'];
 }
 ```
 

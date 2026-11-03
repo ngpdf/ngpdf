@@ -145,7 +145,10 @@ NGPDF_APT=poppler-utils ./scripts/dev node scripts/server-check.mjs   # packed d
   `position: fixed`/`sticky` (which say they are not supported). No property falls back or ignores
   an unknown keyword. Unknown properties are ignored.
 - **Page sizes, in points:** A3 841.89×1190.55, A4 595.28×841.89, A5 419.53×595.28, Letter
-  612×792, Legal 612×1008, or `[width, height]`. Landscape swaps them.
+  612×792, Legal 612×1008, or your own: `[width, height]` with each side a number of points or
+  a length in pt, px, in, cm or mm (the style parser), one number or length for a square, or the
+  CSS `@page` string of two lengths. Any other unit, or a side not finite and above 0, throws
+  `ngpdf: unknown page size`. Landscape always swaps them.
 - **Fonts:**
   - The 12 text faces of the standard PDF fonts, WinAnsi encoding. In them, a character outside
     WinAnsi becomes `?`, with one dev-mode warning per render naming the characters.
