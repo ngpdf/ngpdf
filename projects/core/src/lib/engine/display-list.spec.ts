@@ -822,6 +822,29 @@ describe('displayList', () => {
       const lowest = Math.max(...paths.map((path) => path.segments.at(-1)!.to.y));
       expect(lowest).toBeCloseTo(limit, 6);
     });
+
+    it('cuts the stroke of a border line that straddles clipBottom', () => {
+      // The content bottom is at 805.89. The bottom border's stroke runs from 802.89 to 806.89,
+      // the top border's from 804.89 to 808.89: only what lies above the cut is drawn.
+      const left = el('pdf-view', { 'flex-grow': '1' }, [
+        el('pdf-view', { height: '770.89', 'border-bottom': '4 solid #000' }),
+      ]);
+      const right = el('pdf-view', { 'flex-grow': '1' }, [
+        el('pdf-view', { height: '768.89' }),
+        el('pdf-view', { height: '100', 'border-top': '4 solid #000' }),
+      ]);
+      const unit = el('pdf-view', { 'flex-direction': 'row' }, [left, right]);
+      const laid = layout(page([unit]))[0]!;
+      const limit = laid.placed[0]!.clipBottom!;
+      expect(limit).toBeCloseTo(805.89, 6);
+      const lines = only(list(laid, 0, 1), 'line');
+      expect(lines).toHaveLength(2);
+      for (const line of lines) {
+        expect(line.y1).toBe(line.y2);
+        expect(line.y1 + line.width / 2).toBeCloseTo(limit, 6);
+      }
+      expect(lines.map((line) => line.width)).toEqual([expect.closeTo(3, 3), expect.closeTo(1, 3)]);
+    });
   });
 
   describe('transform', () => {
