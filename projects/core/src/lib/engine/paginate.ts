@@ -62,8 +62,10 @@ const PAGE_SIZES = new Map<string, readonly [number, number]>([
   ['Legal', [612, 1008]],
 ]);
 
-// Float sums of row heights must not push a row that fits exactly onto the next page.
-const EPSILON = 1e-6;
+// Float sums of row heights must not push a row that fits exactly onto the next page. Yoga
+// returns float32 positions, about 6e-5pt apart at A4 height, and a column of a few dozen boxes
+// can end 1e-4pt past where it should. 0.001pt covers that and is still far too small to see.
+const EPSILON = 0.001;
 
 /** The page's size in points from its `size` and `orientation` props; landscape swaps them. */
 export function pageSize(page: PdfNode): { width: number; height: number } {

@@ -926,6 +926,35 @@ describe('page geometry', () => {
   });
 });
 
+describe('paginatePage: units that fill the page exactly', () => {
+  function views(count: number, height: number): PdfNode[] {
+    return Array.from({ length: count }, () => el('pdf-view', { height: String(height) }));
+  }
+
+  // Yoga lays out in float32: these bottoms come back a few 1e-5pt below the content bottom.
+  it.each([
+    ['2 x 384.945 on A4', views(2, 384.945)],
+    ['3 x 256.63 on A4', views(3, 256.63)],
+  ])('keeps %s on one sheet', (_, units) => {
+    const pages = paginate(page(units));
+    expect(pages).toHaveLength(1);
+    expect(pages[0]!.placed).toHaveLength(units.length);
+  });
+
+  it('keeps units that fill a custom page size on one sheet', () => {
+    expect(paginate(page(views(3, 11.1), {}, { size: [200, 33.3] }))).toHaveLength(1);
+    expect(paginate(page(views(30, 25.4), {}, { size: [200, 762] }))).toHaveLength(1);
+  });
+
+  it('still moves a unit 0.01pt too tall to the next sheet', () => {
+    const tooTall = [...views(1, 384.945), ...views(1, 384.955)];
+    expect(paginate(page(tooTall)).map((laid) => laid.placed.length)).toEqual([1, 1]);
+    const rows = [...views(2, 11.1), ...views(1, 11.11)];
+    const sheets = paginate(page(rows, {}, { size: [200, 33.3] }));
+    expect(sheets.map((laid) => laid.placed.length)).toEqual([2, 1]);
+  });
+});
+
 describe('paginatePage: text split across pages', () => {
   // Without a page number, the content area is 769.89pt: 76 lines of 10pt and 9.89pt left over.
   const AREA = A4_HEIGHT - 2 * PADDING;
