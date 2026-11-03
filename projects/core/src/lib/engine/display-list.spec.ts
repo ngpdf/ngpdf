@@ -2620,6 +2620,8 @@ describe('vertical-align', () => {
     const [line] = laid.placed[0]!.box.text!.lines;
     const links = only(list(laid, 0, 1), 'link');
     expect(links).toHaveLength(1);
+    expect(links[0]!.x).toBeCloseTo(36, 6);
+    expect(links[0]!.w).toBeCloseTo(line!.width, 6);
     expect(links[0]!.y).toBeCloseTo(36, 6);
     expect(links[0]!.h).toBeCloseTo(line!.height, 6);
   });
