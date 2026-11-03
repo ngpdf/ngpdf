@@ -226,7 +226,24 @@ function scanNumber(text: string): number {
       digits++;
     }
   }
-  return digits === 0 ? 0 : i;
+  if (digits === 0) return 0;
+  return scanExponent(text, i);
+}
+
+/**
+ * End index after an exponent such as `e-15` at `start`, or `start` when there is none. String(n)
+ * writes one for numbers below 1e-6 and from 1e21 up. An `e` with no digit after it stays part of
+ * the unit, so `3em` is still 3 and `em`.
+ */
+function scanExponent(text: string, start: number): number {
+  const e = text.charCodeAt(start);
+  if (e !== 69 && e !== 101) return start;
+  let i = start + 1;
+  const sign = text.charCodeAt(i);
+  if (sign === 43 || sign === 45) i++;
+  if (!isDigit(text.charCodeAt(i))) return start;
+  while (isDigit(text.charCodeAt(i))) i++;
+  return i;
 }
 
 /** A unitless number, or null when the whole token is not one. */
@@ -263,12 +280,15 @@ export function parseLength(value: string, tag?: string): Length {
   const end = scanNumber(text);
   if (end === 0) return fail(`invalid length "${show(value)}"`, tag);
   const amount = Number(text.slice(0, end));
-  if (!Number.isFinite(amount)) return fail(`invalid length "${show(value)}"`, tag);
+  const notFinite = () => fail(`invalid length "${show(value)}" (not a finite number)`, tag);
+  if (!Number.isFinite(amount)) return notFinite();
   const unit = text.slice(end).toLowerCase();
   if (unit === '%') return { percent: amount };
   const factor = UNIT_FACTORS.get(unit);
   if (factor === undefined) return fail(`unknown unit in "${show(value)}"`, tag);
-  return amount * factor;
+  // 1e308 is finite, but 1e308in is not once it is in points.
+  const points = amount * factor;
+  return Number.isFinite(points) ? points : notFinite();
 }
 
 /** A length that must resolve to points (no percent, no auto). */
@@ -399,11 +419,10 @@ const ANGLE_UNITS = new Map<string, number>([
 function parseAngle(token: string, fn: string, tag?: string): number {
   const end = scanNumber(token);
   const amount = Number(token.slice(0, end));
-  const factor =
-    end > 0 && Number.isFinite(amount)
-      ? ANGLE_UNITS.get(token.slice(end).toLowerCase())
-      : undefined;
-  if (factor !== undefined) return amount * factor;
+  const factor = end > 0 ? ANGLE_UNITS.get(token.slice(end).toLowerCase()) : undefined;
+  // Infinity from the number or from the unit (1e308turn) fails the same check.
+  const radians = factor === undefined ? NaN : amount * factor;
+  if (Number.isFinite(radians)) return radians;
   if (parseNumber(token) === 0) return 0;
   return fail(`invalid angle "${show(token)}" in "${show(fn)}"`, tag);
 }
@@ -611,10 +630,9 @@ function angleOf(token: string, tag?: string): number | null {
   const amount = Number(token.slice(0, end));
   const unit = token.slice(end).toLowerCase();
   const factor = unit === '' && amount === 0 ? 1 : ANGLE_DEGREES.get(unit);
-  if (end === 0 || factor === undefined || !Number.isFinite(amount)) {
-    return fail(`invalid gradient angle "${show(token)}"`, tag);
-  }
-  return amount * factor;
+  const degrees = end === 0 || factor === undefined ? NaN : amount * factor;
+  if (!Number.isFinite(degrees)) return fail(`invalid gradient angle "${show(token)}"`, tag);
+  return degrees;
 }
 
 /** `to <side>` or `to <side> <side>`, one side per axis. */
@@ -1313,10 +1331,13 @@ function checkInline(node: PdfNode, warn: Warn): void {
 export function resolveStyles(
   root: PdfNode,
   warn: Warn = () => undefined,
+  /** For a subtree resolved on its own: its parent's style and its own nesting depth. */
+  parent?: { readonly style: ResolvedStyle; readonly depth: number },
 ): Map<PdfNode, ResolvedStyle> {
   const result = new Map<PdfNode, ResolvedStyle>();
   if (root.kind !== 'element') return result;
-  const stack: Pending[] = [{ node: root, depth: 1, inherited: ROOT_TEXT_STYLE, inLink: false }];
+  const inherited = parent ? textPartOf(parent.style) : ROOT_TEXT_STYLE;
+  const stack: Pending[] = [{ node: root, depth: parent?.depth ?? 1, inherited, inLink: false }];
   for (let item = stack.pop(); item; item = stack.pop()) {
     if (item.depth > MAX_NESTING) fail(`nesting deeper than ${String(MAX_NESTING)}`);
     const isLink = item.node.tag === 'pdf-link';

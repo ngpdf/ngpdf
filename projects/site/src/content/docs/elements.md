@@ -5,7 +5,7 @@ section: Reference
 order: 9
 ---
 
-All thirteen elements are standalone components exported from `@ngpdf/core`. Import them all at once with `PDF_ELEMENTS`, or one by one by class name.
+All thirteen elements are standalone components exported from `@ngpdf/core`. Import them all at once with `PDF_ELEMENTS`, or one by one by class name. `PDF_ELEMENTS` also holds the `pdfPerSheet` directive (`PdfPerSheet`), which renders a template once per sheet inside a fixed view: see [Content that changes per sheet](/docs/pagination#content-that-changes-per-sheet).
 
 ```ts
 import { PDF_ELEMENTS } from '@ngpdf/core';
@@ -83,7 +83,7 @@ A flex container, like a `div` with `display: flex; flex-direction: column`.
 | --- | --- | --- | --- |
 | `breakBefore` | `boolean` | `false` | Starts a new sheet before this element, or before the table row or row `pdf-view` it is in (see [Pagination](/docs/pagination)). A boolean attribute: `<pdf-view breakBefore>` is `true`. |
 | `breakAfter` | `boolean` | `false` | Starts a new sheet after this element, or after the table row or row `pdf-view` it is in. A boolean attribute. |
-| `fixed` | `'top' \| 'bottom' \| undefined` | `undefined` | Takes the view out of the flow and draws it at the top or bottom of every sheet of its `pdf-page`. Only on a direct child of `pdf-page`. See [Fixed headers and footers](/docs/pagination#fixed-headers-and-footers). |
+| `fixed` | `'top' \| 'bottom' \| undefined` | `undefined` | Takes the view out of the flow and draws it at the top or bottom of every sheet of its `pdf-page`. Only on a direct child of `pdf-page`. See [Fixed headers and footers](/docs/pagination#fixed-headers-and-footers), and [Content that changes per sheet](/docs/pagination#content-that-changes-per-sheet) for a `pdfPerSheet` template inside it. |
 
 In pagination, a column `pdf-view` with children is a wrapper whose children are units, and a row `pdf-view` is one unit. See [Pagination](/docs/pagination).
 

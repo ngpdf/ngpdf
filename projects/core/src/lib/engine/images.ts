@@ -56,10 +56,82 @@ function withoutQuery(url: string): string {
   return cuts.length > 0 ? url.slice(0, Math.min(...cuts)) : url;
 }
 
-async function fetchBytes(url: string, fetchFn: typeof fetch): Promise<Uint8Array> {
+/**
+ * The render option `maxImageBytes`: `undefined` is no cap, anything else must be a positive safe
+ * integer. Checked before any image loads.
+ */
+export function maxImageBytesOf(value: unknown): number | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value <= 0) {
+    const shown =
+      typeof value === 'number' || typeof value === 'string' ? String(value) : typeof value;
+    throw new Error(`ngpdf: invalid maxImageBytes "${shown}"`);
+  }
+  return value;
+}
+
+const tooLarge = (maxBytes: number) => new Error(`larger than ${String(maxBytes)} bytes`);
+
+function withinCap(bytes: Uint8Array, maxBytes: number | undefined): Uint8Array {
+  if (maxBytes !== undefined && bytes.byteLength > maxBytes) throw tooLarge(maxBytes);
+  return bytes;
+}
+
+async function fetchBytes(
+  url: string,
+  fetchFn: typeof fetch,
+  maxBytes: number | undefined,
+): Promise<Uint8Array> {
+  if (maxBytes !== undefined) return fetchCapped(url, fetchFn, maxBytes);
   const response = await fetchFn(url, { credentials: 'same-origin' });
   if (!response.ok) throw new Error(`HTTP ${String(response.status)}`);
   return new Uint8Array(await response.arrayBuffer());
+}
+
+/**
+ * Reads at most `maxBytes` of a response. A larger body is refused on its `Content-Length`
+ * before any of it is read, or as soon as the bytes read pass the cap; either way the fetch is
+ * aborted, so the rest is never downloaded.
+ */
+async function fetchCapped(
+  url: string,
+  fetchFn: typeof fetch,
+  maxBytes: number,
+): Promise<Uint8Array> {
+  const controller = new AbortController();
+  const response = await fetchFn(url, { credentials: 'same-origin', signal: controller.signal });
+  if (!response.ok) {
+    controller.abort();
+    throw new Error(`HTTP ${String(response.status)}`);
+  }
+  // A missing or malformed header is NaN, which is never over the cap.
+  if (Number(response.headers.get('content-length')) > maxBytes) {
+    controller.abort();
+    throw tooLarge(maxBytes);
+  }
+  if (!response.body) return withinCap(new Uint8Array(await response.arrayBuffer()), maxBytes);
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let length = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    length += value.byteLength;
+    if (length > maxBytes) {
+      // Cancelling an aborted body can reject; the render has its error already.
+      reader.cancel().catch(() => undefined);
+      controller.abort();
+      throw tooLarge(maxBytes);
+    }
+    chunks.push(value);
+  }
+  const bytes = new Uint8Array(length);
+  let at = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, at);
+    at += chunk.byteLength;
+  }
+  return bytes;
 }
 
 /**
@@ -80,6 +152,7 @@ function serverRead(
   label: string,
   server: ServerSources,
   kind: 'image' | 'font',
+  maxBytes: number | undefined,
 ): () => Promise<Uint8Array> {
   if (!URL.canParse(url)) throw new Error(`ngpdf: relative ${kind} URL "${label}" on the server`);
   const { protocol } = new URL(url);
@@ -92,18 +165,21 @@ function serverRead(
   if (!fetchImage) {
     throw new Error(`ngpdf: remote ${kind} "${label}" refused on the server; pass fetchImage`);
   }
-  return () => fetchImage(url);
+  // ngpdf cannot stop the app's callback, so only its result is checked.
+  return async () => withinCap(await fetchImage(url), maxBytes);
 }
 
 /**
  * Where a source's bytes come from: a label for messages and a reader. Undefined for other types.
- * With `server`, a URL the server may not read throws here, before any load starts.
+ * With `server`, a URL the server may not read throws here, before any load starts. `maxBytes`
+ * caps fetched URLs only: data URLs and bytes are in memory already.
  */
 export function readSource(
   src: unknown,
   fetchFn: typeof fetch | undefined,
   server?: ServerSources,
   kind: 'image' | 'font' = 'image',
+  maxBytes?: number,
 ): { label: string; read: () => Promise<Uint8Array> | Uint8Array } | undefined {
   // URL schemes are case-insensitive, so `DATA:` and `Data:` are data URLs too.
   if (typeof src === 'string' && src.slice(0, 5).toLowerCase() === 'data:') {
@@ -111,8 +187,11 @@ export function readSource(
   }
   if (typeof src === 'string') {
     const label = withoutQuery(src);
-    if (server) return { label, read: serverRead(src, label, server, kind) };
-    return { label, read: () => fetchBytes(src, fetchFn ?? ((...args) => fetch(...args))) };
+    if (server) return { label, read: serverRead(src, label, server, kind, maxBytes) };
+    return {
+      label,
+      read: () => fetchBytes(src, fetchFn ?? ((...args) => fetch(...args)), maxBytes),
+    };
   }
   if (src instanceof Blob) {
     return { label: 'Blob', read: async () => new Uint8Array(await src.arrayBuffer()) };
@@ -124,16 +203,21 @@ export function readSource(
 
 async function loadOne(
   src: unknown,
-  writer: Pick<PdfWriter, 'imageSize'>,
+  writer: Pick<PdfWriter, 'imageSize' | 'checkImage'>,
   fetchFn: typeof fetch | undefined,
   server: ServerSources | undefined,
+  maxBytes: number | undefined,
 ): Promise<ImageAsset> {
-  const source = readSource(src, fetchFn, server);
+  const source = readSource(src, fetchFn, server, 'image', maxBytes);
   const label = source?.label ?? typeof src;
   try {
     if (!source) throw new Error('src must be a string, Blob, ArrayBuffer or Uint8Array');
     const data = await source.read();
-    return { data, ...writer.imageSize(data) };
+    const size = writer.imageSize(data);
+    if (writer.checkImage && !(await writer.checkImage(data))) {
+      throw new Error('the image data is corrupt or cut off');
+    }
+    return { data, ...size };
   } catch (error) {
     throw new Error(`ngpdf: could not load image "${label}": ${describeError(error, src, label)}`, {
       cause: error,
@@ -141,13 +225,25 @@ async function loadOne(
   }
 }
 
-/** Loads every `pdf-image` under `root` in parallel; the first failure rejects. */
+export interface LoadedImages {
+  readonly images: Map<PdfNode, ImageAsset>;
+  /** The loads this call started, by URL, Blob or ArrayBuffer, for a later call's `known`. */
+  readonly loads: ReadonlyMap<unknown, Promise<ImageAsset>>;
+}
+
+/**
+ * Loads every `pdf-image` under `root` in parallel; the first failure rejects. `maxBytes` caps
+ * each fetched URL. A URL, Blob or ArrayBuffer in `known` is not read again, so calls that pass
+ * on each other's `loads` read each source once.
+ */
 export async function loadImages(
   root: PdfNode,
-  writer: Pick<PdfWriter, 'imageSize'>,
+  writer: Pick<PdfWriter, 'imageSize' | 'checkImage'>,
   fetchFn?: typeof fetch,
   server?: ServerSources,
-): Promise<Map<PdfNode, ImageAsset>> {
+  maxBytes?: number,
+  known: ReadonlyMap<unknown, Promise<ImageAsset>> = new Map(),
+): Promise<LoadedImages> {
   const nodes: PdfNode[] = [];
   const visit = (node: PdfNode): void => {
     if (node.kind !== 'element') return;
@@ -155,22 +251,25 @@ export async function loadImages(
     node.children.forEach(visit);
   };
   visit(root);
-  // One load per distinct string `src`, so a logo used ten times is fetched once.
-  const shared = new Map<string, Promise<ImageAsset>>();
+  const loads = new Map<unknown, Promise<ImageAsset>>();
+  // One load per distinct `src`, so a logo used ten times is fetched once. A Blob or an
+  // ArrayBuffer gives the same bytes each time, so the writer encodes it once too.
   const loadNode = (node: PdfNode): Promise<ImageAsset> => {
     const src = propsOf(node)['src'];
-    if (typeof src !== 'string') return loadOne(src, writer, fetchFn, server);
-    let pending = shared.get(src);
+    if (typeof src !== 'string' && !(src instanceof Blob) && !(src instanceof ArrayBuffer)) {
+      return loadOne(src, writer, fetchFn, server, maxBytes);
+    }
+    let pending = known.get(src) ?? loads.get(src);
     if (!pending) {
-      pending = loadOne(src, writer, fetchFn, server);
-      shared.set(src, pending);
+      pending = loadOne(src, writer, fetchFn, server, maxBytes);
+      loads.set(src, pending);
     }
     return pending;
   };
   const entries = await Promise.all(
     nodes.map(async (node) => [node, await loadNode(node)] as const),
   );
-  return new Map(entries);
+  return { images: new Map(entries), loads };
 }
 
 /** The image rectangle inside `box`; `cover` overflows it and the display list clips. */

@@ -53,7 +53,7 @@ export class MetaDocument {
 | `security` | `PdfSecurity` | Encryption and permissions. See [Passwords and permissions](#passwords-and-permissions). |
 | `debug` | `boolean` | Not metadata: draws layout outlines on every page. Off by default. See [Debugging layouts](/docs/layout-and-styling#debugging-layouts). |
 
-Unset metadata inputs are omitted, except `producer`, which defaults to `ngpdf`, and `creationDate`, which defaults to the time of the render. Pass a fixed `creationDate` when you need the same bytes for the same data, for example in snapshot tests: it is the only time source in a render.
+Unset metadata inputs are omitted, except `producer`, which defaults to `ngpdf`, and `creationDate`, which defaults to the time of the render. To record the version too, bind `[producer]="'ngpdf ' + version"` with `version = VERSION.full` (see [VERSION](/docs/rendering-api#version)). Pass a fixed `creationDate` when you need the same bytes for the same data, for example in snapshot tests: it is the only time source in a render.
 
 Rules for the document:
 

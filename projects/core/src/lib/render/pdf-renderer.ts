@@ -8,6 +8,11 @@ import { renderTree } from './render-tree';
 export interface RenderOptions {
   /** Values for the document component's inputs, by input name. */
   readonly inputs?: Record<string, unknown>;
+  /**
+   * The most bytes an image fetched from a URL may have. A larger one rejects the render, and
+   * its download is stopped. No cap by default.
+   */
+  readonly maxImageBytes?: number;
 }
 
 export interface DownloadOptions extends RenderOptions {
@@ -47,6 +52,7 @@ export async function renderPdf<T>(
   injector: EnvironmentInjector,
   inputs?: Record<string, unknown>,
   server?: ServerSources,
+  maxImageBytes?: number,
 ): Promise<Blob> {
   const tree = renderTree(component, injector, inputs);
   try {
@@ -59,9 +65,11 @@ export async function renderPdf<T>(
     const emoji = injector.get(PDF_EMOJI, null);
     return await loaded.renderDocument(tree.root, {
       fonts: fonts ?? [],
+      perSheet: tree.perSheet,
       ...(hyphenate && { hyphenate }),
       ...(server && { server }),
       ...(emoji !== null && { emoji }),
+      ...(maxImageBytes !== undefined && { maxImageBytes }),
     });
   } finally {
     tree.destroy();
@@ -73,7 +81,7 @@ export async function renderPdf<T>(
  * destroyed when the render settles, so concurrent calls share nothing.
  */
 export function renderToBlob<T>(component: Type<T>, options: RenderToBlobOptions): Promise<Blob> {
-  return renderPdf(component, options.injector, options.inputs);
+  return renderPdf(component, options.injector, options.inputs, undefined, options.maxImageBytes);
 }
 
 /** Renders `component` and saves the PDF through a temporary `<a download>`. */

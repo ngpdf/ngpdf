@@ -14,13 +14,15 @@ this project calls for it. Where the simplest correct answer is no pattern, this
         │  ─ ─ ─ ─ ─ ─ dynamic import('../engine') ─ ─ ─ ─ ─ ─
         ▼                                 lazy half: engine/
  dissolveHosts      → PdfNode tree of pdf-* elements only
- resolveStyles      → Map<PdfNode, ResolvedStyle>
  collectAnchors     → anchor names, marked elements, outline
+ reserveSheets      → pdfPerSheet templates rendered once  (calls back into the eager half)
+ resolveStyles      → Map<PdfNode, ResolvedStyle>
  loadImages         → Map<PdfNode, ImageAsset>         ┐ the only async I/O, in
  registerUsedFonts  → FontRegistry (named fonts only)  │ parallel: URLs fetched on
  loadEmoji          → Map<string, ImageAsset>          ┘ demand
  layoutBox (Yoga)   → Box tree
  paginatePage       → PageLayout[]
+ per sheet: fillSlots → layout of each pdfPerSheet view    (calls back again)
  paintCanvases      → Map<Box, shape ops>                (runs each pdf-canvas paint once)
  displayList        → DrawOp[][]
  PdfWriter.write    → Blob
@@ -32,7 +34,7 @@ this project calls for it. Where the simplest correct answer is no pattern, this
 - A stage does not mutate its input and keeps no state between calls. Every stage but the three
   loaders does no I/O.
 - `paintCanvases` is the one stage that runs user code: each pdf-canvas's `paint`, once per
-  render, against a recorder (`canvas-recorder.ts`) that turns its calls into `shape` ops. The
+  render (once per sheet inside a `pdfPerSheet` template), against a recorder (`canvas-recorder.ts`) that turns its calls into `shape` ops. The
   display list only places and clips those ops, so it stays a function of its input.
 - The I/O sits at the edges, in the imperative shell:
   - Angular's change detection at the start;
@@ -135,6 +137,31 @@ invalidation would buy nothing here.
 - **Failure case.** If the chunk fails to load (offline), the promise is cleared and the next
   render tries again.
 
+### A callback from the engine into the eager half: `pdfPerSheet`
+
+- **Context.** A `pdfPerSheet` template in a fixed view shows each sheet's number and count. Those
+  are known only after pagination, in the lazy half, but the template is Angular's, in the eager
+  half. This is the first data that flows back from the engine to the eager half.
+- **Decision.** A plain function, `RenderPerSheet = (slot, context) => PdfNode`, declared in
+  `tree/per-sheet.ts` and passed in `RenderDocumentOptions.perSheet`.
+  - `render-tree` hands it over; it asks the `PdfPerSheet` directive that owns the slot (the
+    template's anchor comment) to create an embedded view, run `detectChanges` on it alone and
+    return its nodes under a host node. The directive destroys the previous sheet's view first,
+    and the last one when the document is destroyed.
+  - The engine calls it once in `reserveSheets` (sheet 1 of 1) so the fixed view reserves a
+    height, then once per sheet after pagination: `fillSlots` copies the view with the slot
+    replaced, and the view is styled, laid out in the reserved height and drawn before the next
+    sheet renders.
+  - Each sheet's view goes through the loaders again with the render's caches, so it fetches
+    only images, fonts and emoji the document has not loaded yet, and its pdf-canvas paints on
+    that sheet. On the server it reads URLs through the same `fetchImage`.
+  - The engine imports only the function type, never Angular, so the bundle line holds.
+- **Why only in fixed views.** A fixed view is laid out apart from the flow, so content that
+  changes per sheet cannot move a break, change the sheet count and loop.
+- **Alternative.** Rendering every sheet's template up front in the eager half. It loses because
+  the sheet count is unknown before pagination, and a long document would hold every sheet's
+  view at once.
+
 ### Component hosts: dissolved once, before the stages
 
 - **Context.** A document is split into components like any Angular template, so a
@@ -206,10 +233,11 @@ direct code. Strategy would add indirection with one implementation each.
 
 ```
 projects/core/src/lib/tree/       PdfNode, PdfRendererFactory           (eager)
-projects/core/src/lib/elements/   pdf-* components, PDF_ELEMENTS        (eager)
+projects/core/src/lib/elements/   pdf-* components, pdfPerSheet, PDF_ELEMENTS (eager)
 projects/core/src/lib/render/     render-tree, PdfRenderer facade       (eager)
 projects/core/src/lib/engine/     hosts, color, style, anchors, fonts, text, images, emoji, layout,
-                                  paginate, canvas-recorder, display-list, writer, index (lazy)
+                                  paginate, per-sheet, canvas-recorder, display-list, writer,
+                                  index (lazy)
 projects/core/schematics/         ng add: an example document; with --demo-route, a demo page and route
 projects/core/viewer/             pdf-viewer, entry point @ngpdf/core/viewer (own chunk)
 projects/core/server/             renderToBuffer, entry point @ngpdf/core/server (Node)

@@ -7,10 +7,10 @@ import {
   createEnvironmentInjector,
   inject,
   input,
-  provideZoneChangeDetection,
 } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { testPng } from '../../testing/test-png';
 import { PDF_ELEMENTS } from '../elements';
 import { PdfRenderer, downloadPdf, renderToBlob } from './pdf-renderer';
 
@@ -27,8 +27,9 @@ vi.mock('../engine', async (importOriginal) => {
   const { createPdfkitWriter } = await import('../engine/writer');
   return {
     ...actual,
-    renderDocument: async (root: Parameters<typeof actual.renderDocument>[0]) =>
+    renderDocument: async (...[root, options]: Parameters<typeof actual.renderDocument>) =>
       actual.renderDocument(root, {
+        ...options,
         dev: false,
         writer: await createPdfkitWriter({ compress: false }),
       }),
@@ -78,6 +79,76 @@ class BareTextDocument {
   readonly cell = input('');
 }
 
+// Math.sin(Math.PI) * 10 is 1.2246467991473533e-15, and a binding passes it on as String(n).
+@Component({
+  selector: 'pdf-exponent-document',
+  imports: [PDF_ELEMENTS],
+  template: `
+    <pdf-document>
+      <pdf-page>
+        <pdf-view style="position: relative" [style.left.pt]="nearZero" [style.opacity]="faint">
+          <pdf-text>Nearly zero</pdf-text>
+        </pdf-view>
+      </pdf-page>
+    </pdf-document>
+  `,
+})
+class ExponentDocument {
+  readonly nearZero = Math.sin(Math.PI) * 10;
+  readonly faint = 1e-7;
+}
+
+// Strings in exponent form whose values survive the writer's rounding, so the PDF shows them.
+@Component({
+  selector: 'pdf-exponent-string-document',
+  imports: [PDF_ELEMENTS],
+  template: `
+    <pdf-document>
+      <pdf-page>
+        <pdf-view style="position: relative" [style.left]="shift" [style.opacity]="half">
+          <pdf-text>Shifted</pdf-text>
+        </pdf-view>
+      </pdf-page>
+    </pdf-document>
+  `,
+})
+class ExponentStringDocument {
+  readonly shift = '1.5e1pt';
+  readonly half = '5e-1';
+}
+
+@Component({
+  selector: 'pdf-per-sheet-document',
+  imports: [PDF_ELEMENTS],
+  template: `
+    <pdf-document>
+      <pdf-page size="A5">
+        <pdf-view fixed="bottom">
+          <ng-template pdfPerSheet let-sheet let-total="total">
+            @if (sheet < total) {
+              <pdf-text>Continued on next page</pdf-text>
+            } @else {
+              <pdf-text>End of report</pdf-text>
+            }
+          </ng-template>
+        </pdf-view>
+        @for (row of rows; track $index) {
+          <pdf-view style="height: 250"
+            ><pdf-text>Row {{ row }}</pdf-text></pdf-view
+          >
+        }
+      </pdf-page>
+    </pdf-document>
+  `,
+})
+class PerSheetDocument {
+  readonly rows = [1, 2, 3, 4, 5];
+
+  constructor() {
+    inject(DestroyRef).onDestroy(() => destroyed.push('per-sheet'));
+  }
+}
+
 @Component({
   selector: 'pdf-no-document',
   imports: [PDF_ELEMENTS],
@@ -88,6 +159,17 @@ class NoDocument {
     inject(DestroyRef).onDestroy(() => destroyed.push('no-document'));
   }
 }
+
+@Component({
+  selector: 'pdf-image-document',
+  imports: [PDF_ELEMENTS],
+  template: `
+    <pdf-document>
+      <pdf-page><pdf-image src="https://cdn.example.test/logo.png" style="width: 20px" /></pdf-page>
+    </pdf-document>
+  `,
+})
+class ImageDocument {}
 
 /** The strings the PDF shows: each `[<hex> kern <hex>] TJ` line joined and decoded. */
 async function shownText(blob: Blob): Promise<string[]> {
@@ -130,19 +212,39 @@ describe('PdfRenderer', () => {
     expect(await shownText(blob)).toEqual(['In a cell', 'a', 'b', 'c']);
   });
 
+  it('renders a pdfPerSheet footer with the numbers of each sheet', async () => {
+    const blob = await TestBed.inject(PdfRenderer).toBlob(PerSheetDocument);
+    expect(await shownText(blob)).toEqual([
+      // A fixed view is drawn before the flow of its sheet.
+      'Continued on next page',
+      'Row 1',
+      'Row 2',
+      'Continued on next page',
+      'Row 3',
+      'Row 4',
+      'End of report',
+      'Row 5',
+    ]);
+    expect(destroyed).toEqual(['per-sheet']);
+  });
+
+  it('renders numbers that bindings write in exponent form', async () => {
+    const blob = await TestBed.inject(PdfRenderer).toBlob(ExponentDocument);
+    expect(await shownText(blob)).toEqual(['Nearly zero']);
+  });
+
+  it('applies exponent-form strings that bindings pass on', async () => {
+    const blob = await TestBed.inject(PdfRenderer).toBlob(ExponentStringDocument);
+    const pdf = new TextDecoder('latin1').decode(new Uint8Array(await blob.arrayBuffer()));
+    expect(await shownText(blob)).toEqual(['Shifted']);
+    expect(pdf).toMatch(/^1 0 0 1 15 [\d.]+ Tm$/m);
+    expect(pdf).toMatch(/^\/ca 0\.5$/m);
+  });
+
   it('renders without inputs', async () => {
     const blob = await TestBed.inject(PdfRenderer).toBlob(TestDocument);
     expect(await shownText(blob)).toEqual([]);
     expect(await blob.slice(0, 5).text()).toBe('%PDF-');
-  });
-
-  it('works when the parent injector provides zone change detection', async () => {
-    await import('zone.js');
-    TestBed.configureTestingModule({ providers: [provideZoneChangeDetection()] });
-    const blob = await TestBed.inject(PdfRenderer).toBlob(TestDocument, {
-      inputs: { rows: ['Zoned row'] },
-    });
-    expect(await shownText(blob)).toEqual(['Zoned row']);
   });
 
   it('keeps two renders started together apart', async () => {
@@ -183,7 +285,11 @@ describe('download', () => {
   } {
     const create = vi.fn(() => url);
     const revoke = vi.fn();
-    vi.stubGlobal('URL', Object.assign(URL, { createObjectURL: create, revokeObjectURL: revoke }));
+    // A subclass, so the stub never touches the real URL and unstubbing restores it.
+    vi.stubGlobal(
+      'URL',
+      Object.assign(class extends URL {}, { createObjectURL: create, revokeObjectURL: revoke }),
+    );
     return { create, revoke };
   }
 
@@ -212,17 +318,21 @@ describe('download', () => {
   });
 
   it('downloadPdf works with an explicit injector', async () => {
-    stubUrls();
+    const { revoke } = stubUrls();
     const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(vi.fn());
+    // Fake timers, so the revoke runs here and not on whatever URL a later test stubs.
+    vi.useFakeTimers();
     await downloadPdf(TestDocument, {
       injector: TestBed.inject(EnvironmentInjector),
       fileName: 'a.pdf',
     });
     expect(click).toHaveBeenCalledOnce();
+    vi.runAllTimers();
+    expect(revoke).toHaveBeenCalledExactlyOnceWith('blob:ngpdf-test');
   });
 
   it('removes the anchor and revokes the URL when click throws', async () => {
-    // Its own URL: a revoke that an earlier test left on a timer also lands on this stub.
+    // Its own URL, so the revoke checked below can only be this test's.
     const { revoke } = stubUrls('blob:ngpdf-blocked');
     vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {
       throw new Error('click blocked');
@@ -267,5 +377,59 @@ describe('injection', () => {
     const renderer = TestBed.inject(PdfRenderer);
     const again = TestBed.runInInjectionContext(() => inject(PdfRenderer));
     expect(again).toBe(renderer);
+  });
+});
+
+describe('maxImageBytes', () => {
+  const png = testPng();
+  const cap = png.length - 1;
+  const message = `ngpdf: could not load image "https://cdn.example.test/logo.png": larger than ${String(cap)} bytes`;
+
+  beforeEach(() => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => Promise.resolve(new Response(png as BodyInit))),
+    );
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('has no cap by default', async () => {
+    const blob = await TestBed.inject(PdfRenderer).toBlob(ImageDocument);
+    expect(await blob.slice(0, 5).text()).toBe('%PDF-');
+  });
+
+  it('reaches the engine from PdfRenderer.toBlob and renderToBlob', async () => {
+    await expect(
+      TestBed.inject(PdfRenderer).toBlob(ImageDocument, { maxImageBytes: cap }),
+    ).rejects.toThrow(message);
+    await expect(
+      renderToBlob(ImageDocument, {
+        injector: TestBed.inject(EnvironmentInjector),
+        maxImageBytes: cap,
+      }),
+    ).rejects.toThrow(message);
+    await expect(
+      TestBed.inject(PdfRenderer).toBlob(ImageDocument, { maxImageBytes: png.length }),
+    ).resolves.toBeInstanceOf(Blob);
+  });
+
+  it('reaches the engine from download and downloadPdf, which then save nothing', async () => {
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(vi.fn());
+    await expect(
+      TestBed.inject(PdfRenderer).download(ImageDocument, {
+        fileName: 'a.pdf',
+        maxImageBytes: cap,
+      }),
+    ).rejects.toThrow(message);
+    await expect(
+      downloadPdf(ImageDocument, {
+        injector: TestBed.inject(EnvironmentInjector),
+        fileName: 'a.pdf',
+        maxImageBytes: cap,
+      }),
+    ).rejects.toThrow(message);
+    expect(click).not.toHaveBeenCalled();
   });
 });

@@ -1,11 +1,11 @@
 ---
 title: Rendering API
-description: Reference for PdfRenderer, renderToBlob, downloadPdf, pdfResource, PdfDownload and the PdfViewer preview in @ngpdf/core - signatures, option types, render lifecycle, errors and dev-mode warnings.
+description: Reference for PdfRenderer, renderToBlob, downloadPdf, pdfResource, PdfDownload, the PdfViewer preview and VERSION in @ngpdf/core - signatures, option types, render lifecycle, errors and dev-mode warnings.
 section: Reference
 order: 10
 ---
 
-`@ngpdf/core` exports one service, three functions and a directive that render a document component to a PDF. `@ngpdf/core/viewer` adds a component that shows one in the page. `renderToBuffer` from `@ngpdf/core/server` renders one in Node: see [Server rendering](/docs/server-rendering).
+`@ngpdf/core` exports one service, three functions and a directive that render a document component to a PDF, and [`VERSION`](#version). `@ngpdf/core/viewer` adds a component that shows one in the page. `renderToBuffer` from `@ngpdf/core/server` renders one in Node: see [Server rendering](/docs/server-rendering).
 
 | Export | Needs an injection context | Returns |
 | --- | --- | --- |
@@ -53,6 +53,7 @@ interface PdfResourceOptions {
   readonly inputs?: () => Record<string, unknown> | undefined;
   readonly debounce?: number;
   readonly injector?: Injector;
+  readonly maxImageBytes?: number;
 }
 
 interface PdfResourceRef extends Resource<Blob | undefined> {
@@ -86,6 +87,7 @@ protected readonly pdf = pdfResource(InvoiceDocument, {
 - `url()` is an object URL for the current PDF. It is created the first time you read it. While a newer render runs it keeps the previous PDF's URL, so a preview does not go blank. It is revoked when a newer PDF replaces it, when a render fails, or when the resource is destroyed. Do not revoke it yourself.
 - `inputs` returning `undefined` holds off rendering, and the resource stays `idle`. Use it while the data is still loading.
 - `debounce` is how many milliseconds to wait after the last change before rendering. A slider or a text field otherwise starts a render per keystroke, and only the last one is kept.
+- `maxImageBytes` caps fetched images as in [`RenderOptions`](#option-types), for every render of the resource.
 - `injector` is needed outside an injection context. The resource is destroyed with it, and the document resolves its services from its `EnvironmentInjector`.
 - On the server, as in an SSR page, a resource made in an injection context stays `idle` and renders nothing; one given an `injector` throws. See [What needs a browser](/docs/server-rendering#what-needs-a-browser).
 
@@ -110,6 +112,7 @@ A directive for the most common case, a button that downloads a document. Import
 | `pdfDownload` | `Type<unknown>` | Required. The document component. |
 | `pdfInputs` | `Record<string, unknown>` | The document's inputs, as in `RenderOptions`. Read when the host is clicked. |
 | `pdfFileName` | `string` | Required. The name the browser saves the file under. |
+| `pdfMaxImageBytes` | `number` | The most bytes a fetched image may have, as in `RenderOptions`. No cap by default. |
 | `(pdfError)` | `unknown` | Emits the error when the render fails. The error also goes to the app's `ErrorHandler`. |
 
 - A click starts `downloadPdf` with the nearest `EnvironmentInjector`: a route's, if the route has `providers`, or the root one. The document can inject route-scoped services.
@@ -142,6 +145,7 @@ A live preview: the PDF in an `<iframe>`, shown by the browser's own PDF viewer 
 | `document` | `Type<unknown>` | Required. The document component. A new one renders again. |
 | `inputs` | `Record<string, unknown>` | The document's inputs, as in `RenderOptions`. Default `{}`. A new object renders again. |
 | `debounce` | `number` | Milliseconds to wait after the last change before rendering, the first render included. Default `300`, since a form bound to `inputs` changes on every key. |
+| `maxImageBytes` | `number` | The most bytes a fetched image may have, as in `RenderOptions`. No cap by default. A new value renders again. |
 | `label` | `string` | The iframe's accessible name (`title`). Default `"PDF preview"`. |
 | `(rendered)` | `Blob` | Emits the PDF after each render that is shown. |
 | `(failed)` | `unknown` | Emits the error when a render fails. |
@@ -183,6 +187,18 @@ export class InvoicePreview {
 
 A canvas viewer built on pdf.js would work in every browser, but it is a large dependency, so ngpdf does not ship one. If you need it, render with `pdfResource` or `renderToBlob` and pass the `Blob` to pdf.js yourself.
 
+## VERSION
+
+`VERSION` is the version of `@ngpdf/core` that the app runs, as an Angular `Version` with `full`, `major`, `minor` and `patch` strings, like `VERSION` from `@angular/core`. Use it in bug reports, support tools or your own `/Producer`:
+
+```ts
+import { VERSION } from '@ngpdf/core';
+
+console.log(VERSION.full); // for example '0.7.0'
+```
+
+It comes from `@ngpdf/core` only. `@ngpdf/core/viewer` and `@ngpdf/core/server` are part of the same package, so they always have the same version.
+
 ## Option types
 
 All four option types are exported as types.
@@ -191,6 +207,8 @@ All four option types are exported as types.
 interface RenderOptions {
   /** Values for the document component's inputs, by input name. */
   readonly inputs?: Record<string, unknown>;
+  /** The most bytes an image fetched from a URL may have. No cap by default. */
+  readonly maxImageBytes?: number;
 }
 
 interface DownloadOptions extends RenderOptions {
@@ -208,6 +226,7 @@ interface DownloadPdfOptions extends DownloadOptions {
 ```
 
 - `inputs` keys are the component's input names (the alias, if an input has one). Each value is set with `ComponentRef.setInput`. The record is not type-checked against the component.
+- `maxImageBytes` caps each image fetched from a URL: a larger one rejects the render with `ngpdf: could not load image "<url>": larger than N bytes`, and its download is stopped. It must be a positive whole number. See [A size cap](/docs/images#a-size-cap).
 - `fileName` is the name the browser saves the file under.
 
 ## The Blob

@@ -71,6 +71,8 @@ function bottom(placed: PlacedBox): number {
 
 const HEADER_WITHOUT_FIRST_ROW =
   'ngpdf: pdf-table header rows do not fit on a page with the first row and are not repeated';
+const SKIPPED_HEADER =
+  'ngpdf: a pdf-table header is not repeated above a row that fits a page only without it';
 
 function isHeader(node: PdfNode): boolean {
   return node.owner?.pdfProps()['header'] === true;
@@ -176,10 +178,10 @@ describe('paginatePage: tables', () => {
     expect(pages[0]!.placed).toHaveLength(1);
     expect(pages[0]!.placed[0]!.box.node).toBe(header);
     expect(pages[0]!.placed[0]!.clipBottom).toBeCloseTo(CONTENT_BOTTOM, 6);
-    expect(warn).toHaveBeenCalledTimes(1);
-    expect(warn).toHaveBeenCalledWith(
+    expect(warn.mock.calls.map(([message]) => message)).toEqual([
+      'ngpdf: pdf-table header rows are taller than a page and are not repeated',
       'ngpdf: pdf-row header is taller than a page and is cut at the bottom',
-    );
+    ]);
     const placed = pages.slice(1).flatMap((p) => p.placed);
     expect(placed.map((p) => p.box.node)).toEqual(rows);
     expect(placed.every((p) => p.clipBottom === undefined)).toBe(true);
@@ -196,7 +198,28 @@ describe('paginatePage: tables', () => {
       [rows[1], rows[2]],
     ]);
     expect(pages[1]!.placed[0]!.y).toBeCloseTo(CONTENT_TOP, 6);
-    expect(warn).not.toHaveBeenCalled();
+    // Once per page here; the render keeps one of each warning.
+    expect(new Set(warn.mock.calls.map(([message]) => message))).toEqual(
+      new Set([
+        'ngpdf: a pdf-table header is not repeated above a row that fits a page only without it',
+      ]),
+    );
+  });
+
+  it('warns when several header rows together are too tall to repeat', () => {
+    const headers = [row(400, true), row(400, true)];
+    const rows = Array.from({ length: 50 }, () => row());
+    const warn = vi.fn<(message: string) => void>();
+    const root = page([
+      el('pdf-table', {}, [...headers, ...rows], { columns: ['1fr'] }),
+      pageNumber(),
+    ]);
+    const pages = paginate(root, warn);
+    const placed = pages.flatMap((p) => p.placed.map((laid) => laid.box.node));
+    expect(placed).toEqual([...headers, ...rows]);
+    expect(warn.mock.calls.map(([message]) => message)).toEqual([
+      'ngpdf: pdf-table header rows are taller than a page and are not repeated',
+    ]);
   });
 
   // Repeated, the header would be left off the only row's page, so it was never drawn.
@@ -645,13 +668,58 @@ describe('paginatePage: page breaks', () => {
     expect(pages[1]!.placed.map((p) => p.box.node)).toEqual([rowView]);
   });
 
-  it('ignores a break asked for inside a repeated header row', () => {
+  it('breaks before a table whose repeated header row has a cell that asks for it', () => {
     const header = el('pdf-row', { height: '20' }, [el('pdf-cell', { 'break-before': 'page' })], {
       header: true,
     });
-    const tableNode = el('pdf-table', {}, [header, row()], { columns: ['1fr'] });
-    const pages = paginate(page([el('pdf-view', { height: '20' }), tableNode]));
-    expect(pages).toHaveLength(1);
+    const body = row();
+    const tableNode = el('pdf-table', {}, [header, body], { columns: ['1fr'] });
+    const first = el('pdf-view', { height: '20' });
+    const pages = paginate(page([first, tableNode]));
+    expect(pages.map((laid) => laid.placed.map((p) => p.box.node))).toEqual([
+      [first],
+      [header, body],
+    ]);
+    expect(pages[1]!.placed[0]!.y).toBeCloseTo(CONTENT_TOP, 6);
+  });
+
+  it('breaks once before a table whose header row has break-before, not where it repeats', () => {
+    const header = el('pdf-row', { height: '20', 'break-before': 'page' }, [el('pdf-cell')], {
+      header: true,
+    });
+    const rows = Array.from({ length: 60 }, () => row());
+    const tableNode = el('pdf-table', {}, [header, ...rows], { columns: ['1fr'] });
+    const first = el('pdf-view', { height: '20' });
+    const pages = paginate(page([first, tableNode]));
+    expect(pages).toHaveLength(3);
+    expect(pages[0]!.placed.map((p) => p.box.node)).toEqual([first]);
+    expect(pages[1]!.placed[0]!.box.node).toBe(header);
+    expect(pages[1]!.placed[1]!.box.node).toBe(rows[0]);
+    // The second sheet is full: the header repeats on the third without a sheet of its own.
+    const rowsPerPage = Math.floor((A4_HEIGHT - 2 * PADDING - 20) / 20);
+    expect(pages[1]!.placed).toHaveLength(1 + rowsPerPage);
+    expect(pages[2]!.placed[0]!.box.node).toBe(header);
+  });
+
+  it('ignores break-before on an absolute box in a repeated header row', () => {
+    const marker = el('pdf-view', {
+      position: 'absolute',
+      width: '10',
+      height: '10',
+      'break-before': 'page',
+    });
+    const header = el('pdf-row', { height: '20' }, [el('pdf-cell', {}, [marker])], {
+      header: true,
+    });
+    const rows = Array.from({ length: 40 }, () => row());
+    const tableNode = el('pdf-table', {}, [header, ...rows], { columns: ['1fr'] });
+    const first = el('pdf-view', { height: '20' });
+    const pages = paginate(page([first, tableNode]));
+    // No break before the table, and none where the header repeats on the second sheet.
+    expect(pages).toHaveLength(2);
+    expect(pages[0]!.placed.slice(0, 2).map((p) => p.box.node)).toEqual([first, header]);
+    expect(pages[1]!.placed[0]!.box.node).toBe(header);
+    expect(pages[1]!.placed[0]!.y).toBeCloseTo(CONTENT_TOP, 6);
   });
 
   it('starts a new page after break-after: page', () => {
@@ -1476,6 +1544,46 @@ describe('paginatePage: position', () => {
     expect(nodesOn(pages)).toEqual([[last, stamp]]);
   });
 
+  it('puts absolute boxes with the same top below the last unit on one new sheet', () => {
+    const last = block();
+    const [first, second] = [badge({ top: '900' }), badge({ top: '900' })];
+    const pages = paginate(page([last, first, second]));
+    expect(nodesOn(pages)).toEqual([[last], [first, second]]);
+    expect(placedOf(pages, first).y).toBeCloseTo(CONTENT_TOP, 6);
+    expect(placedOf(pages, second).y).toBeCloseTo(CONTENT_TOP, 6);
+  });
+
+  it('moves absolute boxes below the last unit with the sheet the first one starts', () => {
+    const last = block();
+    const upper = badge({ top: '900' });
+    const lower = badge({ top: '950' });
+    // Template order is kept on the sheet, whatever the order of the tops.
+    const pages = paginate(page([last, lower, upper]));
+    expect(nodesOn(pages)).toEqual([[last], [lower, upper]]);
+    expect(placedOf(pages, upper).y).toBeCloseTo(CONTENT_TOP, 6);
+    expect(placedOf(pages, lower).y).toBeCloseTo(CONTENT_TOP + 50, 6);
+  });
+
+  it('starts one sheet per content height for absolute boxes a page apart', () => {
+    const last = block();
+    const upper = badge({ top: '900' });
+    const lower = badge({ top: String(900 + AREA) });
+    const pages = paginate(page([last, lower, upper]));
+    expect(nodesOn(pages)).toEqual([[last], [upper], [lower]]);
+    expect(placedOf(pages, upper).y).toBeCloseTo(CONTENT_TOP, 6);
+    expect(placedOf(pages, lower).y).toBeCloseTo(CONTENT_TOP, 6);
+  });
+
+  it('starts a new sheet for an absolute box a page apart that float32 rounds short', () => {
+    const last = block();
+    // In float32 the lower top lands some 0.00005pt above one content height past the upper.
+    const upper = badge({ top: '900.05' });
+    const lower = badge({ top: String(900.05 + AREA) });
+    const pages = paginate(page([last, upper, lower]));
+    expect(nodesOn(pages)).toEqual([[last], [upper], [lower]]);
+    expect(placedOf(pages, lower).y).toBeCloseTo(CONTENT_TOP, 3);
+  });
+
   it('groups an absolute box taken out of a unit with the faded views it leaves', () => {
     const stamp = badge({ top: '0', left: '0' });
     const inner = el('pdf-view', { opacity: '0.4' }, [block(), stamp]);
@@ -1782,7 +1890,7 @@ describe('paginatePage: table rows taller than a page', () => {
       expect(nodes(pages)).toEqual([[head, first], [tall]]);
       expect(pages[1]!.placed[0]!.y).toBeCloseTo(CONTENT_TOP, 6);
       expect(pages[1]!.placed[0]!.clipBottom).toBeUndefined();
-      expect(warnings).toEqual([]);
+      expect(warnings).toEqual([SKIPPED_HEADER]);
     });
 
     // The first piece fits (10pt), but the next one (680pt) does not fit below the header.
@@ -1791,7 +1899,7 @@ describe('paginatePage: table rows taller than a page', () => {
       const [pages, warnings] = layout([head, first, tall]);
       expect(nodes(pages)).toEqual([[head, first], [tall]]);
       expect(pages[1]!.placed[0]!.clipBottom).toBeUndefined();
-      expect(warnings).toEqual([]);
+      expect(warnings).toEqual([SKIPPED_HEADER]);
     });
 
     it('still splits the row under the header when a break fits below it', () => {

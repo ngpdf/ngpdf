@@ -6,6 +6,7 @@ import { PdfLink } from './link';
 import { PdfNote } from './note';
 import { PdfPage } from './page';
 import { PdfPageNumber } from './page-number';
+import { PdfPerSheet } from './per-sheet';
 import { PdfRow } from './row';
 import { PdfSpan } from './span';
 import { PdfTable } from './table';
@@ -21,6 +22,7 @@ export {
   PdfNote,
   PdfPage,
   PdfPageNumber,
+  PdfPerSheet,
   PdfRow,
   PdfSpan,
   PdfTable,
@@ -29,8 +31,9 @@ export {
 };
 export type { NoteIcon } from './note';
 export type { TableColumn } from './table';
+export type { PdfPerSheetContext } from '../tree/per-sheet';
 
-/** Every pdf-* element, for `imports: [PDF_ELEMENTS]`. */
+/** Every pdf-* element and the `pdfPerSheet` directive, for `imports: [PDF_ELEMENTS]`. */
 export const PDF_ELEMENTS = [
   PdfDocument,
   PdfPage,
@@ -45,4 +48,5 @@ export const PDF_ELEMENTS = [
   PdfCell,
   PdfPageNumber,
   PdfCanvas,
+  PdfPerSheet,
 ] as const;

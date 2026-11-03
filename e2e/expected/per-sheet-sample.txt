@@ -1,0 +1,75 @@
+Trail maintenance log
+Day            Task                                  Hours
+Day 1          Clear fallen branches                       1
+Day 2          Repair a step                               3
+Day 3          Paint trail markers                         5
+Day 4          Drain a puddle                              2
+Day 5          Clear fallen branches                       4
+Day 6          Repair a step                               1
+Day 7          Paint trail markers                         3
+Day 8          Drain a puddle                              5
+Day 9          Clear fallen branches                       2
+Day 10         Repair a step                               4
+Day 11         Paint trail markers                         1
+Day 12         Drain a puddle                              3
+Day 13         Clear fallen branches                       5
+Day 14         Repair a step                               2
+Day 15         Paint trail markers                         4
+Day 16         Drain a puddle                              1
+Day 17         Clear fallen branches                       3
+Day 18         Repair a step                               5
+Day 19         Paint trail markers                         2
+Day 20         Drain a puddle                              4
+Day 21         Clear fallen branches                       1
+Day 22         Repair a step                               3
+Day 23         Paint trail markers                         5
+Day 24         Drain a puddle                              2
+Day 25         Clear fallen branches                       4
+
+Sheet 1 of 3                           Continued on next page
+Day            Task                                  Hours
+Day 26         Repair a step                               1
+Day 27         Paint trail markers                         3
+Day 28         Drain a puddle                              5
+Day 29         Clear fallen branches                       2
+Day 30         Repair a step                               4
+Day 31         Paint trail markers                         1
+Day 32         Drain a puddle                              3
+Day 33         Clear fallen branches                       5
+Day 34         Repair a step                               2
+Day 35         Paint trail markers                         4
+Day 36         Drain a puddle                              1
+Day 37         Clear fallen branches                       3
+Day 38         Repair a step                               5
+Day 39         Paint trail markers                         2
+Day 40         Drain a puddle                              4
+Day 41         Clear fallen branches                       1
+Day 42         Repair a step                               3
+Day 43         Paint trail markers                         5
+Day 44         Drain a puddle                              2
+Day 45         Clear fallen branches                       4
+Day 46         Repair a step                               1
+Day 47         Paint trail markers                         3
+Day 48         Drain a puddle                              5
+Day 49         Clear fallen branches                       2
+Day 50         Repair a step                               4
+Day 51         Paint trail markers                         1
+
+
+
+Sheet 2 of 3                           Continued on next page
+Day            Task                         Hours
+Day 52         Drain a puddle                     3
+Day 53         Clear fallen branches              5
+Day 54         Repair a step                      2
+Day 55         Paint trail markers                4
+Day 56         Drain a puddle                     1
+Day 57         Clear fallen branches              3
+Day 58         Repair a step                      5
+Day 59         Paint trail markers                2
+Day 60         Drain a puddle                     4
+
+
+
+
+Sheet 3 of 3                           End of report

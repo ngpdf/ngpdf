@@ -1,7 +1,9 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createNode, type PdfNode } from '../tree/node';
+import { stubFetch } from '../../testing/stub-fetch';
 import { testFont } from '../../testing/test-fonts';
-import { testPng } from '../../testing/test-png';
+import { testPng, testRows } from '../../testing/test-png';
+import type { PdfPerSheetContext } from '../tree/per-sheet';
 import { renderDocument, type FontSource } from './index';
 import { createPdfkitWriter, type DocumentInfo, type PageOps, type PdfWriter } from './writer';
 
@@ -78,6 +80,26 @@ async function bytesOf(blob: Blob): Promise<string> {
 }
 
 describe('renderDocument', () => {
+  it('does not count the anonymous box of bare text towards the nesting limit', async () => {
+    // pdf-document > pdf-page > 62 pdf-views is 64 elements; the box around the bare text in
+    // the innermost view would be the 65th level.
+    let deepest = el('pdf-view', {}, [createNode('text', '', 'deepest')]);
+    for (let i = 1; i < 62; i++) deepest = el('pdf-view', {}, [deepest]);
+    const writer = recordingWriter();
+    await renderDocument(host({}, [el('pdf-page', {}, [deepest], { size: 'A4' })]), {
+      writer,
+      dev: false,
+    });
+    const [{ pages }] = writer.recorded as [Recorded];
+    expect(pages[0]!.ops.some((op) => op.op === 'text' && op.text === 'deepest')).toBe(true);
+    await expect(
+      renderDocument(host({}, [el('pdf-page', {}, [el('pdf-view', {}, [deepest])])]), {
+        writer,
+        dev: false,
+      }),
+    ).rejects.toThrow('ngpdf: nesting deeper than 64');
+  });
+
   it('hands the writer every page and the document metadata', async () => {
     const writer = recordingWriter();
     const props = {
@@ -414,12 +436,48 @@ describe('renderDocument', () => {
 
   it('rejects a pdf-image with children before fetching it, naming the element', async () => {
     const fetchFn = vi.fn(() => Promise.reject(new TypeError('Failed to fetch')));
-    vi.stubGlobal('fetch', fetchFn);
+    stubFetch(fetchFn);
     const image = el('pdf-image', {}, [text('caption')], { src: '/logo.png' });
     const page = el('pdf-page', {}, [image], { size: 'A4' });
     await expect(renderDocument(host({}, [page]), { writer: recordingWriter() })).rejects.toThrow(
       'ngpdf: pdf-image cannot have children (found <pdf-text>)',
     );
+    expect(fetchFn).not.toHaveBeenCalled();
+  });
+
+  it('rejects an image URL over maxImageBytes', async () => {
+    const png = testPng();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => Promise.resolve(new Response(png as BodyInit))),
+    );
+    const page = () =>
+      el('pdf-page', {}, [el('pdf-image', { width: '10' }, [], { src: '/logo.png' })]);
+    await expect(
+      renderDocument(host({}, [page()]), {
+        writer: recordingWriter(),
+        dev: false,
+        maxImageBytes: png.length - 1,
+      }),
+    ).rejects.toThrow(
+      `ngpdf: could not load image "/logo.png": larger than ${String(png.length - 1)} bytes`,
+    );
+    await expect(
+      renderDocument(host({}, [page()]), {
+        writer: recordingWriter(),
+        dev: false,
+        maxImageBytes: png.length,
+      }),
+    ).resolves.toBeDefined();
+  });
+
+  it('rejects an invalid maxImageBytes before fetching anything', async () => {
+    const fetchFn = vi.fn(() => Promise.reject(new TypeError('Failed to fetch')));
+    vi.stubGlobal('fetch', fetchFn);
+    const page = el('pdf-page', {}, [el('pdf-image', {}, [], { src: '/logo.png' })]);
+    await expect(
+      renderDocument(host({}, [page]), { writer: recordingWriter(), maxImageBytes: 0 }),
+    ).rejects.toThrow('ngpdf: invalid maxImageBytes "0"');
     expect(fetchFn).not.toHaveBeenCalled();
   });
 
@@ -858,6 +916,417 @@ describe('renderDocument with fonts', () => {
     const pdf = await bytesOf(await renderDocument(doc, { writer, dev: false, fonts }));
     expect(pdf.match(/\/FontFile2/g)).toHaveLength(2);
   });
+  it('loads a family that only a later sheet of a pdfPerSheet template names', async () => {
+    const writer = await fontWriter();
+    const render = (_slot: PdfNode, context: PdfPerSheetContext): PdfNode =>
+      el('div', {}, [text('Foot', context.sheet === 2 ? { 'font-family': 'Noto Sans' } : {})]);
+    const footer = el('pdf-view', {}, [perSheetSlot()], { fixed: 'bottom' });
+    const rows = [0, 1, 2, 3].map(() => el('pdf-view', { height: '400' }));
+    const doc = host({}, [el('pdf-page', {}, [footer, ...rows], { size: 'A4' })]);
+    await renderDocument(doc, { writer, dev: false, fonts, perSheet: render });
+    expect(fonts[0]!.load).toHaveBeenCalledTimes(1);
+    expect(fonts[2]!.load).not.toHaveBeenCalled();
+    expect(textOps(writer).map((op) => op.font)).toEqual(['Helvetica', 'font:0']);
+  });
+});
+
+/** The anchor comment a `pdfPerSheet` directive leaves where its template sits. */
+function perSheetSlot(): PdfNode {
+  const node = createNode('comment');
+  node.owner = { pdfProps: () => ({ perSheet: true }) };
+  return node;
+}
+
+describe('renderDocument with pdfPerSheet', () => {
+  const ONE_PIXEL_PNG =
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
+
+  /** A footer that reads "Sheet n of t", with `lines` more lines of text on the sheets it names. */
+  function footerRender(extra: Record<number, number> = {}) {
+    return vi.fn((_slot: PdfNode, context: PdfPerSheetContext): PdfNode => {
+      const more = Array.from({ length: extra[context.sheet] ?? 0 }, (_, i) =>
+        text(`Extra ${String(i + 1)}`),
+      );
+      const label = `Sheet ${String(context.sheet)} of ${String(context.total)}`;
+      return el('div', {}, [text(label), ...more]);
+    });
+  }
+
+  /** A page of `sheets` sheets (two 400pt rows fit on A4) with `fixed` views first. */
+  function pageOf(sheets: number, ...fixed: PdfNode[]): PdfNode {
+    const rows = Array.from({ length: sheets * 2 }, () => el('pdf-view', { height: '370' }));
+    return el('pdf-page', {}, [...fixed, ...rows], { size: 'A4' });
+  }
+
+  const texts = (sheet: PageOps): string[] =>
+    sheet.ops.flatMap((op) => (op.op === 'text' ? [op.text] : []));
+
+  const words = (sheet: PageOps): string => texts(sheet).join(' ');
+
+  it('renders the template once to reserve, then once per sheet with its numbers', async () => {
+    const writer = recordingWriter();
+    const render = footerRender();
+    const footer = el('pdf-view', {}, [perSheetSlot()], { fixed: 'bottom' });
+    await renderDocument(host({}, [pageOf(3, footer)]), { writer, dev: false, perSheet: render });
+    const contexts = render.mock.calls.map(([, context]) => context);
+    expect(contexts).toEqual([
+      { $implicit: 1, sheet: 1, total: 1, first: true, last: true, page: 1 },
+      { $implicit: 1, sheet: 1, total: 3, first: true, last: false, page: 1 },
+      { $implicit: 2, sheet: 2, total: 3, first: false, last: false, page: 1 },
+      { $implicit: 3, sheet: 3, total: 3, first: false, last: true, page: 1 },
+    ]);
+    expect(writer.recorded[0]!.pages.map(words)).toEqual([
+      'Sheet 1 of 3',
+      'Sheet 2 of 3',
+      'Sheet 3 of 3',
+    ]);
+  });
+
+  it("keeps the view's other content and draws the template where its slot is", async () => {
+    const writer = recordingWriter();
+    const footer = el('pdf-view', {}, [text('Before'), perSheetSlot(), text('After')], {
+      fixed: 'bottom',
+    });
+    await renderDocument(host({}, [pageOf(2, footer)]), {
+      writer,
+      dev: false,
+      perSheet: footerRender(),
+    });
+    expect(writer.recorded[0]!.pages.map(texts)).toEqual([
+      ['Before', 'Sheet 1 of 2', 'After'],
+      ['Before', 'Sheet 2 of 2', 'After'],
+    ]);
+  });
+
+  it('reserves the height of the first render for the flow', async () => {
+    const yOf = async (reserve: number): Promise<number> => {
+      const writer = recordingWriter();
+      const header = el('pdf-view', {}, [perSheetSlot()], { fixed: 'top' });
+      const page = el('pdf-page', {}, [header, text('Body')], { size: 'A4' });
+      const render = (_slot: PdfNode, context: PdfPerSheetContext): PdfNode =>
+        el('div', {}, [
+          ...Array.from({ length: context.total === 1 ? reserve : 1 }, () => text('Head')),
+        ]);
+      await renderDocument(host({}, [page]), { writer, dev: false, perSheet: render });
+      const body = writer.recorded[0]!.pages[0]!.ops.find(
+        (op) => op.op === 'text' && op.text === 'Body',
+      );
+      return body?.op === 'text' ? body.y : NaN;
+    };
+    const one = await yOf(1);
+    const three = await yOf(3);
+    expect(three - one).toBeCloseTo(2 * 12, 5);
+  });
+
+  it('clips content taller than the reservation, with one warning naming the sheet', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const writer = recordingWriter();
+    const footer = el('pdf-view', {}, [perSheetSlot()], { fixed: 'bottom' });
+    await renderDocument(host({}, [pageOf(3, footer)]), {
+      writer,
+      dev: true,
+      perSheet: footerRender({ 2: 2, 3: 2 }),
+    });
+    expect(writer.recorded[0]!.pages.map(words)).toEqual([
+      'Sheet 1 of 3',
+      'Sheet 2 of 3',
+      'Sheet 3 of 3',
+    ]);
+    expect(warn.mock.calls).toEqual([
+      [
+        'ngpdf: pdfPerSheet content is taller on sheet 2 than on the first; set a height on the fixed view',
+      ],
+    ]);
+  });
+
+  it('fits content that varies in an explicit height, without a warning', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const writer = recordingWriter();
+    const footer = el('pdf-view', { height: '60' }, [perSheetSlot()], { fixed: 'bottom' });
+    await renderDocument(host({}, [pageOf(2, footer)]), {
+      writer,
+      dev: true,
+      perSheet: footerRender({ 2: 2 }),
+    });
+    expect(writer.recorded[0]!.pages.map(words)).toEqual([
+      'Sheet 1 of 2',
+      'Sheet 2 of 2 Extra 1 Extra 2',
+    ]);
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it('keeps the reserved height on a sheet whose content is shorter', async () => {
+    const writer = recordingWriter();
+    const footer = el('pdf-view', { 'background-color': '#eeeeee' }, [perSheetSlot()], {
+      fixed: 'bottom',
+    });
+    const render = (_slot: PdfNode, context: PdfPerSheetContext): PdfNode =>
+      el('div', {}, context.total === 1 ? [text('a'), text('b')] : [text('a')]);
+    await renderDocument(host({}, [pageOf(2, footer)]), { writer, dev: false, perSheet: render });
+    const backgrounds = writer.recorded[0]!.pages.map((sheet) =>
+      sheet.ops.flatMap((op) => (op.op === 'rect' ? [[op.y, op.h]] : [])),
+    );
+    expect(backgrounds[1]).toEqual(backgrounds[0]);
+    expect(backgrounds[0]![0]![1]).toBeCloseTo(2 * 12, 5);
+  });
+
+  it('renders top and bottom views on each sheet', async () => {
+    const writer = recordingWriter();
+    const render = vi.fn((slot: PdfNode, context: PdfPerSheetContext): PdfNode => {
+      const where = slot.parent?.owner?.pdfProps()['fixed'] === 'top' ? 'Top' : 'Bottom';
+      return el('div', {}, [text(`${where} ${String(context.sheet)}`)]);
+    });
+    const top = el('pdf-view', {}, [perSheetSlot()], { fixed: 'top' });
+    const bottom = el('pdf-view', {}, [perSheetSlot()], { fixed: 'bottom' });
+    await renderDocument(host({}, [pageOf(2, top, bottom)]), {
+      writer,
+      dev: false,
+      perSheet: render,
+    });
+    expect(writer.recorded[0]!.pages.map(texts)).toEqual([
+      ['Top 1', 'Bottom 1'],
+      ['Top 2', 'Bottom 2'],
+    ]);
+    expect(render).toHaveBeenCalledTimes(6);
+  });
+
+  it('numbers sheets across pdf-pages and names the pdf-page each comes from', async () => {
+    const writer = recordingWriter();
+    const render = footerRender();
+    const first = pageOf(1, el('pdf-view', {}, [perSheetSlot()], { fixed: 'bottom' }));
+    const second = pageOf(2, el('pdf-view', {}, [perSheetSlot()], { fixed: 'bottom' }));
+    await renderDocument(host({}, [first, second]), { writer, dev: false, perSheet: render });
+    const contexts = render.mock.calls.map(([, context]) => [
+      context.sheet,
+      context.total,
+      context.page,
+    ]);
+    expect(contexts).toEqual([
+      [1, 1, 1],
+      [1, 1, 2],
+      [1, 3, 1],
+      [2, 3, 2],
+      [3, 3, 2],
+    ]);
+    expect(writer.recorded[0]!.pages.map(words)).toEqual([
+      'Sheet 1 of 3',
+      'Sheet 2 of 3',
+      'Sheet 3 of 3',
+    ]);
+  });
+
+  it('draws a pdf-page-number in the template with the numbers of its sheet', async () => {
+    const writer = recordingWriter();
+    const render = (): PdfNode =>
+      el('div', {}, [el('pdf-page-number', {}, [], { format: '{page}/{total}' })]);
+    const footer = el('pdf-view', {}, [perSheetSlot()], { fixed: 'bottom' });
+    await renderDocument(host({}, [pageOf(2, footer)]), { writer, dev: false, perSheet: render });
+    expect(writer.recorded[0]!.pages.map(words)).toEqual(['1/2', '2/2']);
+  });
+
+  it('loads an image of the template once for every sheet', async () => {
+    const bytes = Uint8Array.from(atob(ONE_PIXEL_PNG), (ch) => ch.charCodeAt(0));
+    const fetchFn = vi.fn(() => Promise.resolve(new Response(bytes)));
+    vi.stubGlobal('fetch', fetchFn);
+    const writer = recordingWriter();
+    const render = (): PdfNode =>
+      el('div', {}, [el('pdf-image', { width: '10', height: '10' }, [], { src: '/logo.png' })]);
+    const footer = el('pdf-view', {}, [perSheetSlot()], { fixed: 'bottom' });
+    await renderDocument(host({}, [pageOf(3, footer)]), { writer, dev: false, perSheet: render });
+    expect(fetchFn).toHaveBeenCalledTimes(1);
+    const images = writer.recorded[0]!.pages.flatMap((sheet) =>
+      sheet.ops.flatMap((op) => (op.op === 'image' ? [op.data] : [])),
+    );
+    expect(images).toHaveLength(3);
+    expect(new Set(images).size).toBe(1);
+  });
+
+  it('reads an image of the template through fetchImage on the server', async () => {
+    const bytes = Uint8Array.from(atob(ONE_PIXEL_PNG), (ch) => ch.charCodeAt(0));
+    const fetchFn = vi.fn(() => Promise.reject(new Error('no fetch on the server')));
+    vi.stubGlobal('fetch', fetchFn);
+    const fetchImage = vi.fn(() => Promise.resolve(bytes));
+    const writer = recordingWriter();
+    const render = (_slot: PdfNode, context: PdfPerSheetContext): PdfNode =>
+      el('div', {}, [
+        el('pdf-image', { width: '10', height: '10' }, [], {
+          src: `https://cdn.example.com/${context.last ? 'end' : 'logo'}.png`,
+        }),
+      ]);
+    const footer = el('pdf-view', {}, [perSheetSlot()], { fixed: 'bottom' });
+    await renderDocument(host({}, [pageOf(2, footer)]), {
+      writer,
+      dev: false,
+      perSheet: render,
+      server: { fetchImage },
+    });
+    expect(fetchFn).not.toHaveBeenCalled();
+    expect(fetchImage.mock.calls.map(([url]: unknown[]) => url)).toEqual([
+      'https://cdn.example.com/end.png',
+      'https://cdn.example.com/logo.png',
+    ]);
+  });
+
+  it('rejects an image over maxImageBytes that only a later sheet of the template shows', async () => {
+    const png = testPng();
+    const fetchFn = vi.fn(() => Promise.resolve(new Response(png as BodyInit)));
+    vi.stubGlobal('fetch', fetchFn);
+    // Not on the first render, which reserves the height and loads with the rest of the document.
+    const render = (_slot: PdfNode, context: PdfPerSheetContext): PdfNode =>
+      el(
+        'div',
+        {},
+        context.sheet === 2
+          ? [el('pdf-image', { width: '10', height: '10' }, [], { src: '/second.png' })]
+          : [],
+      );
+    const footer = () => el('pdf-view', {}, [perSheetSlot()], { fixed: 'bottom' });
+    const renderWith = (maxImageBytes: number) =>
+      renderDocument(host({}, [pageOf(2, footer())]), {
+        writer: recordingWriter(),
+        dev: false,
+        perSheet: render,
+        maxImageBytes,
+      });
+    await expect(renderWith(png.length - 1)).rejects.toThrow(
+      `ngpdf: could not load image "/second.png": larger than ${String(png.length - 1)} bytes`,
+    );
+    await expect(renderWith(png.length)).resolves.toBeDefined();
+    expect(fetchFn).toHaveBeenCalledTimes(2);
+  });
+
+  it('draws an emoji that only a later sheet shows as an image, loading each once', async () => {
+    const png =
+      'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGO4y2AIAALMAQ+JqrH2AAAAAElFTkSuQmCC';
+    const source = vi.fn(() => png);
+    const writer = recordingWriter();
+    const render = (_slot: PdfNode, context: PdfPerSheetContext): PdfNode =>
+      el('div', {}, [text(context.sheet === 1 ? 'Go 👍' : 'Done 🎉')]);
+    const footer = el('pdf-view', {}, [perSheetSlot()], { fixed: 'bottom' });
+    await renderDocument(host({}, [pageOf(3, footer)]), {
+      writer,
+      dev: false,
+      perSheet: render,
+      emoji: source,
+    });
+    expect(source.mock.calls.map(([emoji]: unknown[]) => emoji).sort()).toEqual(['🎉', '👍']);
+    const images = writer.recorded[0]!.pages.map(
+      (sheet) => sheet.ops.filter((op) => op.op === 'image').length,
+    );
+    expect(images).toEqual([1, 1, 1]);
+    expect(writer.recorded[0]!.pages.map(words)).toEqual(['Go ', 'Done ', 'Done ']);
+  });
+
+  it('paints a pdf-canvas of the template on each sheet', async () => {
+    const writer = recordingWriter();
+    const paint = vi.fn(
+      (ctx: {
+        moveTo(x: number, y: number): { lineTo(x: number, y: number): { stroke(): unknown } };
+      }) => ctx.moveTo(0, 10).lineTo(100, 10).stroke(),
+    );
+    const render = (): PdfNode =>
+      el('div', {}, [el('pdf-canvas', { height: '20' }, [], { paint })]);
+    const footer = el('pdf-view', {}, [perSheetSlot()], { fixed: 'bottom' });
+    await renderDocument(host({}, [pageOf(2, footer)]), { writer, dev: false, perSheet: render });
+    expect(paint).toHaveBeenCalledTimes(2);
+    const shapes = writer.recorded[0]!.pages.map(
+      (sheet) => sheet.ops.filter((op) => op.op === 'shape').length,
+    );
+    expect(shapes).toEqual([1, 1]);
+  });
+
+  it('paints a pdf-canvas of a fixed view without a template once for every sheet', async () => {
+    const writer = recordingWriter();
+    const paint = vi.fn(
+      (ctx: {
+        moveTo(x: number, y: number): { lineTo(x: number, y: number): { stroke(): unknown } };
+      }) => ctx.moveTo(0, 10).lineTo(100, 10).stroke(),
+    );
+    const canvas = el('pdf-canvas', { height: '20' }, [], { paint });
+    const header = el('pdf-view', {}, [canvas], { fixed: 'top' });
+    const footer = el('pdf-view', {}, [perSheetSlot()], { fixed: 'bottom' });
+    await renderDocument(host({}, [pageOf(3, header, footer)]), {
+      writer,
+      dev: false,
+      perSheet: footerRender(),
+    });
+    expect(paint).toHaveBeenCalledTimes(1);
+    const shapes = writer.recorded[0]!.pages.map(
+      (sheet) => sheet.ops.filter((op) => op.op === 'shape').length,
+    );
+    expect(shapes).toEqual([1, 1, 1]);
+  });
+
+  it('keeps the anchors of the flow in a document with a template', async () => {
+    const writer = recordingWriter();
+    const footer = el('pdf-view', {}, [perSheetSlot()], { fixed: 'bottom' });
+    const target = el('pdf-view', { height: '10' }, [], { anchor: 'end', bookmark: 'End' });
+    const page = pageOf(2, footer);
+    page.children.push(target);
+    target.parent = page;
+    await renderDocument(host({}, [page]), { writer, dev: false, perSheet: footerRender() });
+    const [{ pages, info }] = writer.recorded as [Recorded];
+    expect(pages.flatMap((sheet) => sheet.ops.filter((op) => op.op === 'anchor'))).toHaveLength(1);
+    expect(info.outline).toHaveLength(1);
+  });
+
+  it('keeps the anchor of a fixed view that holds a template on every sheet', async () => {
+    const writer = recordingWriter();
+    const footer = el('pdf-view', {}, [perSheetSlot()], { fixed: 'bottom', anchor: 'foot' });
+    const link = el('pdf-link', {}, [text('Go')], { href: '#foot' });
+    const page = pageOf(2, footer);
+    page.children.push(link);
+    link.parent = page;
+    await renderDocument(host({}, [page]), { writer, dev: false, perSheet: footerRender() });
+    const anchors = writer.recorded[0]!.pages.map(
+      (sheet) => sheet.ops.filter((op) => op.op === 'anchor').length,
+    );
+    expect(anchors).toEqual([1, 1]);
+  });
+
+  it('throws for a pdfPerSheet slot outside a fixed view', async () => {
+    const page = el('pdf-page', {}, [el('pdf-view', {}, [perSheetSlot()])], { size: 'A4' });
+    await expect(
+      renderDocument(host({}, [page]), { writer: recordingWriter(), perSheet: footerRender() }),
+    ).rejects.toThrow('ngpdf: pdfPerSheet must be inside a fixed pdf-view');
+  });
+
+  it('throws for a pdfPerSheet slot in a fixed view nested below the page', async () => {
+    const nested = el('pdf-view', {}, [perSheetSlot()], { fixed: 'bottom' });
+    const page = el('pdf-page', {}, [el('pdf-view', {}, [nested])], { size: 'A4' });
+    await expect(
+      renderDocument(host({}, [page]), {
+        writer: recordingWriter(),
+        dev: false,
+        perSheet: footerRender(),
+      }),
+    ).rejects.toThrow('ngpdf: pdfPerSheet must be inside a fixed pdf-view');
+  });
+
+  it('keeps the cost per sheet bounded on a long document', async () => {
+    const timeFor = async (sheets: number): Promise<number> => {
+      const footer = el('pdf-view', {}, [perSheetSlot()], { fixed: 'bottom' });
+      const doc = host({}, [pageOf(sheets, footer)]);
+      const render = footerRender();
+      const start = performance.now();
+      await renderDocument(doc, { writer: recordingWriter(), dev: false, perSheet: render });
+      const elapsed = performance.now() - start;
+      expect(render).toHaveBeenCalledTimes(sheets + 1);
+      return elapsed;
+    };
+    // The fastest of a few runs, as in the text budgets, so one pause on a busy runner does not
+    // decide the ratio.
+    const fastest = async (sheets: number): Promise<number> => {
+      const timings: number[] = [];
+      for (let run = 0; run < 3; run++) timings.push(await timeFor(sheets));
+      return Math.min(...timings);
+    };
+    await timeFor(50); // warm up
+    const short = await fastest(50);
+    const long = await fastest(500);
+    // Linear work gives 10 times as long; a cost that grew with the sheet count would give ~100.
+    expect(long / short).toBeLessThan(30);
+  });
 });
 
 describe('renderDocument with emoji', () => {
@@ -923,6 +1392,27 @@ describe('renderDocument with emoji', () => {
     await expect(
       renderDocument(doc, { writer: await createPdfkitWriter({ compress: false }), dev: false }),
     ).rejects.toThrow();
+  });
+
+  // pdfkit decodes these pixels while it writes, in a zlib callback whose throw no promise sees.
+  describe.each([
+    ['RGBA', 6, 4],
+    ['gray with alpha', 4, 2],
+    ['a palette with tRNS', 3, 1],
+  ] as const)('a pdf-image in %s', (_, colorType, channels) => {
+    const cut = testRows(2, 2, channels);
+    it.each([
+      ['a bad filter byte', testPng({ colorType, idat: testRows(2, 2, channels, 2, 9) })],
+      ['a truncated IDAT', testPng({ colorType, idat: cut.slice(0, cut.length - 4) })],
+    ])('with %s rejects the render', async (__, png) => {
+      const image = el('pdf-image', { width: '10', height: '10' }, [], { src: png });
+      const doc = host({}, [el('pdf-page', {}, [image], { size: 'A4' })]);
+      await expect(
+        renderDocument(doc, { writer: await createPdfkitWriter({ compress: false }), dev: false }),
+      ).rejects.toThrow(
+        'ngpdf: could not load image "Uint8Array": the image data is corrupt or cut off',
+      );
+    });
   });
 
   it('embeds an emoji image once in the PDF', async () => {

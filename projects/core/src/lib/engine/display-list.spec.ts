@@ -822,6 +822,49 @@ describe('displayList', () => {
       const lowest = Math.max(...paths.map((path) => path.segments.at(-1)!.to.y));
       expect(lowest).toBeCloseTo(limit, 6);
     });
+
+    it('cuts the stroke of a border line that straddles clipBottom', () => {
+      // The content bottom is at 805.89. The bottom border's stroke runs from 802.89 to 806.89,
+      // the top border's from 804.89 to 808.89: only what lies above the cut is drawn.
+      const left = el('pdf-view', { 'flex-grow': '1' }, [
+        el('pdf-view', { height: '770.89', 'border-bottom': '4 solid #000' }),
+      ]);
+      const right = el('pdf-view', { 'flex-grow': '1' }, [
+        el('pdf-view', { height: '768.89' }),
+        el('pdf-view', { height: '100', 'border-top': '4 solid #000' }),
+      ]);
+      const unit = el('pdf-view', { 'flex-direction': 'row' }, [left, right]);
+      const laid = layout(page([unit]))[0]!;
+      const limit = laid.placed[0]!.clipBottom!;
+      expect(limit).toBeCloseTo(805.89, 6);
+      const lines = only(list(laid, 0, 1), 'line');
+      expect(lines).toHaveLength(2);
+      for (const line of lines) {
+        expect(line.y1).toBe(line.y2);
+        expect(line.y1 + line.width / 2).toBeCloseTo(limit, 6);
+      }
+      expect(lines.map((line) => line.width)).toEqual([expect.closeTo(3, 3), expect.closeTo(1, 3)]);
+    });
+
+    it('keeps a border stroke that ends on clipBottom and drops one that starts on it', () => {
+      // Whole numbers keep the edges exactly on the cut at 760. The bottom border's stroke runs
+      // from 756 to 760, the top border's from 760 to 764.
+      const left = el('pdf-view', { 'flex-grow': '1' }, [
+        el('pdf-view', { height: '720', 'border-bottom': '4 solid #000' }),
+      ]);
+      const right = el('pdf-view', { 'flex-grow': '1' }, [
+        el('pdf-view', { height: '720' }),
+        el('pdf-view', { height: '100', 'border-top': '4 solid #000' }),
+      ]);
+      const unit = el('pdf-view', { 'flex-direction': 'row' }, [left, right]);
+      const root = page([unit], { padding: '40' }, { size: [600, 800], orientation: 'portrait' });
+      const laid = layout(root)[0]!;
+      expect(laid.placed[0]!.clipBottom).toBe(760);
+      const lines = only(list(laid, 0, 1), 'line');
+      expect(lines).toEqual([
+        expect.objectContaining({ x1: 40, y1: 758, x2: 300, y2: 758, width: 4 }),
+      ]);
+    });
   });
 
   describe('transform', () => {
@@ -1414,6 +1457,15 @@ describe('gradient backgrounds', () => {
       x2: 36,
       y2: 61,
     });
+  });
+
+  it('points a gradient with a huge angle the way its angle modulo 360 does', () => {
+    const at = (angle: string) =>
+      linear({ 'background-image': `linear-gradient(${angle}, red, blue)` });
+    // 1e20 mod 360 is 280 and 1e308 mod 360 is 296; 1e308 * PI overflows to Infinity.
+    expect(at('1e20deg')).toEqual(at('280deg'));
+    expect(at('1e308deg')).toEqual(at('296deg'));
+    expect(at('-1e308deg')).toEqual(at('-296deg'));
   });
 
   it('points a corner gradient so its middle line joins the other two corners', () => {
@@ -2312,6 +2364,22 @@ describe('pdf-canvas', () => {
     const all = draw(pages);
     expect(paint).toHaveBeenCalledTimes(1);
     for (const ops of all) expect(only(ops, 'shape')).toHaveLength(1);
+  });
+
+  it('paints one sheet at a time without changing the shapes it was given', () => {
+    const paint = vi.fn(square);
+    const header = el('pdf-view', {}, [canvas(paint, { height: '20' })], { fixed: 'top' });
+    const blocks = Array.from({ length: 2 }, () => el('pdf-view', { height: '500' }));
+    const later = canvas(paint, { height: '20' });
+    const pages = layout(page([header, ...blocks, later]));
+    expect(pages).toHaveLength(2);
+    const first = paintCanvases([pages[0]!]);
+    const earlier = new Map(first);
+    const second = paintCanvases([pages[1]!], first);
+    // The header's canvas is not painted again, and only the new one is returned.
+    expect(paint).toHaveBeenCalledTimes(2);
+    expect(first).toEqual(earlier);
+    expect([...second.keys()].map((box) => box.node)).toEqual([later]);
   });
 
   it('paints a canvas in a repeated header row once and draws it on every sheet', () => {

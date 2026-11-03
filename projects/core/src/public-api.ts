@@ -9,13 +9,14 @@ export {
   PdfNote,
   PdfPage,
   PdfPageNumber,
+  PdfPerSheet,
   PdfRow,
   PdfSpan,
   PdfTable,
   PdfText,
   PdfView,
 } from './lib/elements';
-export type { NoteIcon, TableColumn } from './lib/elements';
+export type { NoteIcon, PdfPerSheetContext, TableColumn } from './lib/elements';
 export type {
   PdfCanvasContext,
   PdfCanvasFillRule,
@@ -45,3 +46,4 @@ export type {
   RenderOptions,
   RenderToBlobOptions,
 } from './lib/render/pdf-renderer';
+export { VERSION } from './version';

@@ -39,7 +39,7 @@ All toolchains run in Docker. Nothing is installed on the host except nvm.
 ./scripts/dev npm test -- <pattern>    # one area, e.g. paginate
 ./scripts/dev npm run build:core       # ng-packagr build of @ngpdf/core
 ./scripts/dev npx ng build demo
-./scripts/dev node scripts/bundle-budget.mjs   # eager size of @ngpdf/core in the demo
+./scripts/dev node scripts/bundle-budget.mjs   # eager size of the built @ngpdf/core in the demo
 node scripts/e2e.mjs [--update]        # demo PDFs in headless Chrome vs e2e/expected/*.txt
 ./scripts/dev npm run build:site       # ngpdf.dev, prerendered to dist/site/browser
 ```
@@ -97,6 +97,8 @@ NGPDF_APT=poppler-utils ./scripts/dev node scripts/server-check.mjs   # packed d
   `pdf-note`, `pdf-image`, `pdf-canvas`, `pdf-table`, `pdf-row`, `pdf-cell`, `pdf-page-number`,
   and `pdf-viewer`, the preview component (an HTML component in the app, not a document
   element). The `pdf-` prefix is mandatory: `table`, `image` and `text` exist in HTML and SVG.
+  The one directive, `pdfPerSheet` (`PdfPerSheet`), goes on an `ng-template` and is part of
+  `PDF_ELEMENTS`.
 - **Preview:** `pdf-viewer` comes from its own entry point, `@ngpdf/core/viewer`, and never
   reaches an app that imports `@ngpdf/core` alone; `scripts/bundle-budget.mjs` checks it. It is
   built on `pdfResource` and shows the PDF in an `<iframe>` whose only trusted source is the
@@ -173,9 +175,12 @@ NGPDF_APT=poppler-utils ./scripts/dev node scripts/server-check.mjs   # packed d
     and the last `widows` lines (2 and 2 by default). A short text, `break-inside: avoid`, a fixed
     `height`, a `max-height`, a `transform` or an `overflow` other than `visible` keeps it one
     unit.
-  - A `header` row repeats at the top of every page its table runs onto. A header that can't go
-    on a page with the table's first row (a row that fits a page only without it and can't split
-    below it) is laid out once, as plain rows, with a dev-mode warning.
+  - A `header` row repeats at the top of every page its table runs onto. A header taller than the
+    page's content area, or one that can't go on a page with the table's first row (a row that
+    fits a page only without it and can't split below it), is laid out once, as plain rows. A
+    header left off a later page whose first row fits only without it is not repeated there.
+    Each case warns in dev mode. A break before a header row goes before the first row it is
+    drawn above, once.
   - A body row of a table taller than a page (below its repeated header) splits instead of being
     clipped. It starts on the current sheet when one line of each non-empty cell fits there.
     Each cell breaks on its own, between the lines of its texts or the children of a column view
@@ -198,6 +203,16 @@ NGPDF_APT=poppler-utils ./scripts/dev node scripts/server-check.mjs   # packed d
   - A `pdf-view` with `fixed="top"` or `fixed="bottom"`, a direct child of `pdf-page`, is laid
     out once and drawn on every sheet; the flow gets the space between them. Bottom views sit
     above the page number.
+  - An `ng-template` with `pdfPerSheet` inside a fixed view renders once per sheet, with
+    `$implicit`/`sheet`, `total`, `first`, `last` and `page` (1-based pdf-page index) in its
+    context. The view reserves the height of a first render with `sheet = total = 1`; each
+    sheet's content is laid out in that height and cut at its bottom, with one dev-mode warning
+    per render when it is taller. Each sheet's embedded view is checked on its own. A template
+    destroys its previous view before it renders the next, and its last one with the document,
+    so a render holds at most one view per template. Anchors and bookmarks inside it are ignored.
+    Anywhere but inside a fixed view
+    it throws `ngpdf: pdfPerSheet must be inside a fixed pdf-view`: content in the flow that
+    changed per sheet could change the sheet count.
   - A unit taller than a page goes on a page of its own, is clipped, and gets a dev-mode warning.
     So does a piece of a split row that holds content taller than a page.
   - An element with `position: absolute` is never a unit, and never moves, splits or pushes one.
@@ -210,8 +225,9 @@ NGPDF_APT=poppler-utils ./scripts/dev node scripts/server-check.mjs   # packed d
     so each sheet shows its part.
 - **Text wrapping:** text wraps at Unicode line-break opportunities. A word wider than its box breaks
   at the box edge, unless it can be hyphenated. `max-lines` keeps at most N lines of a `pdf-text`;
-  when text was cut, the last line ends with `…` in the face of its last run, or `...` in a font
-  without `…`.
+  when text was cut, the last line ends with `…` in the face of its last run, or else in the first
+  font of its `font-family` list that has `…`; failing that, `...` the same way. When no font has
+  either, `…` takes the first font's fallback and the missing-character warning.
 - **Hyphenation:** `hyphens` is `manual` (default), `none` or `auto`, inherited, and a `pdf-span`
   can set it.
   - A soft hyphen (U+00AD) is never drawn. Under `manual` and `auto` it is a break point.
@@ -260,6 +276,11 @@ NGPDF_APT=poppler-utils ./scripts/dev node scripts/server-check.mjs   # packed d
     `Uint8Array` (a Node `Buffer` too).
   - `object-fit` is `contain` (default) or `cover`.
   - A failed load rejects the render with `ngpdf: could not load image "<src>": <reason>`.
+  - The render option `maxImageBytes` (no cap by default) caps fetched image URLs only: past it,
+    the reason is `larger than N bytes`. A `Content-Length` over it is refused before the body is
+    read, and a streamed body is cancelled and its fetch aborted once the count passes it; on the
+    server, `fetchImage`'s result is checked. A value that is not a positive safe integer throws
+    `ngpdf: invalid maxImageBytes "<value>"`.
 - **Encryption:** `security` on `pdf-document` takes `userPassword`, `ownerPassword` and
   `permissions` (`printing: 'none' | 'low' | 'high'` and six booleans, all allowed by default).
   - The file is written with AES-256 (pdfkit's `pdfVersion: '1.7ext3'`, `/V 5 /R 5`) when a

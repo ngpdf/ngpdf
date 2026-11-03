@@ -62,9 +62,28 @@ The `data:` prefix and its `;base64` marker are matched in any case, so `DATA:im
 - ngpdf calls `fetch(src, { credentials: 'same-origin' })`. A relative URL such as `/assets/logo.png` resolves against your page, as any `fetch` does.
 - The request runs under your page's CORS rules and Content-Security-Policy. An image on another origin needs CORS headers that allow your origin; cookies are sent only to your own origin.
 - A response that is not OK fails, for example with `HTTP 404`.
-- There is no size limit and no timeout: a very large image is downloaded in full.
+- There is no timeout, and no size limit unless you set `maxImageBytes` (below).
 - All images of a document load in parallel before layout. The same string `src` used several times in one render is fetched once.
 - On the server, `renderToBuffer` reads an absolute URL only through your `fetchImage`, and refuses a relative one. See [Images and fonts on the server](/docs/server-rendering#images-and-fonts-on-the-server).
+
+## A size cap
+
+By default a fetched image is downloaded in full, however large. If image URLs in your documents come from users or another service, set `maxImageBytes`, a render option next to `inputs`:
+
+```ts
+await this.pdf.download(InvoiceDocument, {
+  inputs: { customer, lines },
+  fileName: 'invoice.pdf',
+  maxImageBytes: 10_000_000, // 10 MB
+});
+```
+
+- It caps images fetched from a URL only. Data URLs, `Blob`s, `ArrayBuffer`s and `Uint8Array`s are already in memory and are not counted, and neither are emoji images or fonts.
+- A response whose `Content-Length` is over the cap is refused before its body is read. Otherwise ngpdf counts the bytes as they arrive and stops the download as soon as they pass the cap. An image of exactly `maxImageBytes` bytes loads.
+- Past the cap the render rejects with `ngpdf: could not load image "<source>": larger than N bytes`, where N is the cap.
+- It must be a positive whole number. Any other value rejects the render with `ngpdf: invalid maxImageBytes "<value>"` before any image loads.
+- Every way to render takes it: `PdfRenderer.toBlob` and `.download`, `renderToBlob`, `downloadPdf`, `pdfResource`, `renderToBuffer`, the `pdfMaxImageBytes` input of `PdfDownload` and the `maxImageBytes` input of `pdf-viewer`. See [Rendering API](/docs/rendering-api#option-types).
+- On the server, ngpdf checks the bytes your `fetchImage` returns, but it cannot stop your function's download. Put a size limit in `fetchImage` itself as well.
 
 ## Errors
 
@@ -72,7 +91,7 @@ The first image that fails rejects the whole render with:
 
 `ngpdf: could not load image "<source>": <reason>`
 
-`<source>` is the URL without its query string and fragment (they often carry a token), or `data URL`, `Blob`, `ArrayBuffer` or `Uint8Array`. `<reason>` is the cause, such as `HTTP 404`, the browser's network error, or `ngpdf: image is neither PNG nor JPEG`; where it repeats the URL, the URL is shortened the same way. Nothing is downloaded on failure, and the document component is destroyed.
+`<source>` is the URL without its query string and fragment (they often carry a token), or `data URL`, `Blob`, `ArrayBuffer` or `Uint8Array`. `<reason>` is the cause, such as `HTTP 404`, `larger than N bytes`, the browser's network error, `ngpdf: image is neither PNG nor JPEG`, or `the image data is corrupt or cut off` for a PNG whose pixel data is broken or truncated; where it repeats the URL, the URL is shortened the same way. On failure no PDF is downloaded, though part of the image may have been fetched before the error, and the document component is destroyed.
 
 ## Size
 
