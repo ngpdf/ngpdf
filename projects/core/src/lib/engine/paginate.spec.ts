@@ -2564,6 +2564,23 @@ describe('paginatePage: flex-wrap', () => {
     expect(topsOn(pages[1]!, [note])).toHaveLength(0);
   });
 
+  it('puts a note between lines of a wrap-reverse row with the line after it', () => {
+    const items = cards(40);
+    const note = el('pdf-note');
+    const grid = el('pdf-view', { 'flex-flow': 'row wrap-reverse', 'row-gap': '10' }, [
+      ...items.slice(0, 5),
+      note,
+      ...items.slice(5),
+    ]);
+    const pages = paginate(page([grid, pageNumber()]));
+    expect(pages).toHaveLength(2);
+    // The first line is the lowest, alone on the second sheet; the next one ends the first sheet.
+    expect(topsOn(pages[1]!, items.slice(0, 5))).toHaveLength(5);
+    expect(topsOn(pages[0]!, items.slice(5, 10))).toHaveLength(5);
+    expect(topsOn(pages[0]!, [note])).toHaveLength(1);
+    expect(topsOn(pages[1]!, [note])).toHaveLength(0);
+  });
+
   it('keeps a row without flex-wrap as one unit', () => {
     const items = cards(3);
     const row = el('pdf-view', { 'flex-direction': 'row' }, items);
