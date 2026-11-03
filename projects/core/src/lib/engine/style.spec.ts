@@ -69,7 +69,7 @@ describe('numbers in exponent form', () => {
     expect(styleOf({ opacity: '1e-7' }).opacity).toBe(1e-7);
     expect(styleOf({ 'flex-grow': '2e0' }).flexGrow).toBe(2);
     expect(styleOf({ 'line-height': '1.5e0' }).lineHeight).toBe(1.5);
-    expect(styleOf({ 'font-weight': '7e2' }).fontWeight).toBe('bold');
+    expect(styleOf({ 'font-weight': '7e2' }).fontWeight).toBe(700);
     expect(styleOf({ transform: 'scale(1e-7)' }).transform).toEqual([
       { kind: 'scale', x: 1e-7, y: 1e-7 },
     ]);
@@ -130,7 +130,7 @@ describe('resolveStyles', () => {
       color: BLACK,
       fontFamily: 'Helvetica',
       fontSize: 10,
-      fontWeight: 'normal',
+      fontWeight: 400,
       fontStyle: 'normal',
       lineHeight: 1.2,
       textAlign: 'left',
@@ -286,10 +286,62 @@ describe('resolveStyles', () => {
     expect(styleOf({ 'flex-direction': 'row' }).flexDirection).toBe('row');
   });
 
-  it('resolves bold from keyword or weight >= 600', () => {
-    expect(styleOf({ 'font-weight': 'bold' }).fontWeight).toBe('bold');
-    expect(styleOf({ 'font-weight': '600' }).fontWeight).toBe('bold');
-    expect(styleOf({ 'font-weight': '500' }).fontWeight).toBe('normal');
+  it.each([
+    ['thin', 100],
+    ['extralight', 200],
+    ['light', 300],
+    ['normal', 400],
+    ['medium', 500],
+    ['semibold', 600],
+    ['bold', 700],
+    ['extrabold', 800],
+    ['black', 900],
+  ])('resolves font-weight %s to %d', (keyword, weight) => {
+    expect(styleOf({ 'font-weight': keyword }).fontWeight).toBe(weight);
+  });
+
+  it('keeps a numeric font-weight from 1 to 1000 as written', () => {
+    expect(styleOf({ 'font-weight': '1' }).fontWeight).toBe(1);
+    expect(styleOf({ 'font-weight': '350' }).fontWeight).toBe(350);
+    expect(styleOf({ 'font-weight': '450.5' }).fontWeight).toBe(450.5);
+    expect(styleOf({ 'font-weight': '1000' }).fontWeight).toBe(1000);
+  });
+
+  it.each(['0', '1001', '-100', 'heavy', '400px', 'bold 700', ''])(
+    'rejects font-weight "%s", naming the allowed values',
+    (value) => {
+      expect(() => styleOf({ 'font-weight': value })).toThrow(
+        `ngpdf: invalid value "${value}" for font-weight on pdf-view; expected a number from 1 to 1000, thin, extralight, light, normal, medium, semibold, bold, extrabold, black, bolder or lighter`,
+      );
+    },
+  );
+
+  it.each([
+    [1, 'bolder', 400],
+    [100, 'bolder', 400],
+    [349, 'bolder', 400],
+    [350, 'bolder', 700],
+    [549, 'bolder', 700],
+    [550, 'bolder', 900],
+    [899, 'bolder', 900],
+    [900, 'bolder', 900],
+    [950, 'bolder', 950],
+    [50, 'lighter', 50],
+    [100, 'lighter', 100],
+    [549, 'lighter', 100],
+    [550, 'lighter', 400],
+    [749, 'lighter', 400],
+    [750, 'lighter', 700],
+    [1000, 'lighter', 700],
+  ])('resolves an inherited %d made %s to %d', (inherited, keyword, weight) => {
+    const child = el('pdf-text', { 'font-weight': keyword });
+    const parent = el('pdf-view', { 'font-weight': String(inherited) }, [child]);
+    expect(resolveStyles(el('pdf-document', {}, [parent])).get(child)?.fontWeight).toBe(weight);
+  });
+
+  it('makes bolder and lighter relative to the root weight with no ancestor setting one', () => {
+    expect(styleOf({ 'font-weight': 'bolder' }).fontWeight).toBe(700);
+    expect(styleOf({ 'font-weight': 'lighter' }).fontWeight).toBe(100);
   });
 
   it('resolves line-height from a multiplier or a length', () => {
@@ -317,11 +369,11 @@ describe('resolveStyles', () => {
     const styles = resolveStyles(root);
 
     const rowText = row.children[0]!;
-    expect(styles.get(rowText)).toMatchObject({ color: rgb(255, 255, 255), fontWeight: 'bold' });
+    expect(styles.get(rowText)).toMatchObject({ color: rgb(255, 255, 255), fontWeight: 700 });
     expect(styles.get(rowText)?.backgroundColor).toBeNull();
     expect(styles.get(rowText)?.padding.top).toBe(0);
-    expect(styles.get(plain)).toMatchObject({ color: BLACK, fontWeight: 'normal' });
-    expect(styles.get(white)).toMatchObject({ color: rgb(255, 255, 255), fontWeight: 'bold' });
+    expect(styles.get(plain)).toMatchObject({ color: BLACK, fontWeight: 400 });
+    expect(styles.get(white)).toMatchObject({ color: rgb(255, 255, 255), fontWeight: 700 });
   });
 
   it('inherits through an intermediate that does not set the property', () => {
@@ -396,7 +448,7 @@ describe('resolveStyles', () => {
     ]);
     const text = el('pdf-text', { 'font-size': '14', color: 'blue' }, [span]);
     const style = resolveStyles(el('pdf-document', {}, [text])).get(span);
-    expect(style).toMatchObject({ fontSize: 14, fontWeight: 'bold', color: { r: 255, b: 0 } });
+    expect(style).toMatchObject({ fontSize: 14, fontWeight: 700, color: { r: 255, b: 0 } });
   });
 
   it('accepts a pdf-span inside a pdf-span and throws for one outside a pdf-text', () => {
@@ -429,7 +481,7 @@ describe('resolveStyles', () => {
     const span = el('pdf-span', { 'font-weight': 'bold' });
     const link = el('pdf-link', { color: 'blue', padding: '4' }, [span]);
     const styles = resolveStyles(el('pdf-document', {}, [el('pdf-text', {}, [link])]), warn);
-    expect(styles.get(span)).toMatchObject({ fontWeight: 'bold', color: BLUE });
+    expect(styles.get(span)).toMatchObject({ fontWeight: 700, color: BLUE });
     expect(warn).toHaveBeenCalledExactlyOnceWith('ngpdf: padding has no effect on pdf-link');
   });
 
@@ -516,13 +568,13 @@ describe('resolveStyles property coverage', () => {
     expect(style).toMatchObject({
       color: rgb(51, 102, 153),
       fontSize: 14,
-      fontWeight: 'bold',
+      fontWeight: 700,
       fontStyle: 'italic',
       textAlign: 'right',
       textDecoration: 'line-through',
     });
-    expect(styleOf({ 'font-weight': '400' }).fontWeight).toBe('normal');
-    expect(styleOf({ 'font-weight': 'bolder' }).fontWeight).toBe('bold');
+    expect(styleOf({ 'font-weight': '400' }).fontWeight).toBe(400);
+    expect(styleOf({ 'font-weight': 'bolder' }).fontWeight).toBe(700);
     expect(styleOf({ 'font-style': 'normal' }).fontStyle).toBe('normal');
   });
 
@@ -955,9 +1007,11 @@ describe('resolveStyles property coverage', () => {
     ['align-self', 'STRETCH', 'alignSelf', 'stretch'],
     ['object-fit', 'COVER', 'objectFit', 'cover'],
     ['object-fit', 'Contain', 'objectFit', 'contain'],
-    ['font-weight', 'BOLD', 'fontWeight', 'bold'],
-    ['font-weight', 'Bolder', 'fontWeight', 'bold'],
-    ['font-weight', ' 700 ', 'fontWeight', 'bold'],
+    ['font-weight', 'BOLD', 'fontWeight', 700],
+    ['font-weight', 'Bolder', 'fontWeight', 700],
+    ['font-weight', ' 700 ', 'fontWeight', 700],
+    ['font-weight', 'SemiBold', 'fontWeight', 600],
+    ['font-weight', ' Lighter ', 'fontWeight', 100],
     ['font-style', 'ITALIC', 'fontStyle', 'italic'],
     ['font-style', 'Oblique', 'fontStyle', 'italic'],
     ['break-before', 'PAGE', 'breakBefore', true],
@@ -995,7 +1049,9 @@ describe('resolveStyles property coverage', () => {
     expect(() => styleOf({ 'text-align': 'START' })).toThrow(
       'ngpdf: invalid value "START" for text-align on pdf-view',
     );
-    expect(styleOf({ 'font-weight': 'HEAVY' }).fontWeight).toBe('normal');
+    expect(() => styleOf({ 'font-weight': 'HEAVY' })).toThrow(
+      'ngpdf: invalid value "HEAVY" for font-weight on pdf-view',
+    );
   });
 
   it.each(['flex-grow', 'flex-shrink', 'opacity'])('rejects a non-numeric %s', (property) => {

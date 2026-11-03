@@ -864,10 +864,10 @@ describe('renderDocument with fonts', () => {
     family: string,
     label: string,
     data: Uint8Array,
-    weight?: 'bold',
+    weight?: FontSource['weight'],
   ): FontSource & { load: ReturnType<typeof vi.fn> } => ({
     family,
-    ...(weight && { weight }),
+    ...(weight !== undefined && { weight }),
     load: vi.fn(() => Promise.resolve({ label, data })),
   });
   let fonts: (FontSource & { load: ReturnType<typeof vi.fn> })[];
@@ -921,6 +921,39 @@ describe('renderDocument with fonts', () => {
     const doc = onePage(text('Bold', { 'font-family': 'Noto Sans', 'font-weight': 'bold' }));
     await renderDocument(doc, { writer, dev: false, fonts });
     expect(textOps(writer)[0]?.font).toBe('font:1');
+  });
+
+  it('matches numeric face weights as CSS does', async () => {
+    const writer = await fontWriter();
+    const weighted = [
+      face('Noto Sans', 'light.ttf', testFont('noto-sans-regular.ttf'), 300),
+      face('Noto Sans', 'black.ttf', testFont('noto-sans-bold.ttf'), 900),
+    ];
+    const doc = onePage(
+      text('Light', { 'font-family': 'Noto Sans', 'font-weight': 'light' }),
+      text('Normal', { 'font-family': 'Noto Sans' }),
+      text('Semibold', { 'font-family': 'Noto Sans', 'font-weight': '600' }),
+      text('Black', { 'font-family': 'Noto Sans', 'font-weight': 'black' }),
+    );
+    await renderDocument(doc, { writer, dev: false, fonts: weighted });
+    expect(textOps(writer).map((op) => [op.text, op.font])).toEqual([
+      ['Light', 'font:0'],
+      ['Normal', 'font:0'],
+      ['Semibold', 'font:1'],
+      ['Black', 'font:1'],
+    ]);
+  });
+
+  it.each([0, 1001, Number.NaN])('rejects a face weight of %d', async (weight) => {
+    const writer = await fontWriter();
+    const bad = [face('Noto Sans', 'regular.ttf', testFont('noto-sans-regular.ttf'), weight)];
+    await expect(
+      renderDocument(onePage(text('x', { 'font-family': 'Noto Sans' })), {
+        writer,
+        dev: false,
+        fonts: bad,
+      }),
+    ).rejects.toThrow(`ngpdf: invalid font weight "${String(weight)}" for "Noto Sans"`);
   });
 
   it('leaves documents that name no registered family as they were', async () => {

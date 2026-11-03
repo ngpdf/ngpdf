@@ -11,14 +11,16 @@ export interface PdfFont {
   readonly family: string;
   /** A URL (or data URL) of a TTF, OTF, WOFF or WOFF2 file, or its bytes. */
   readonly src: string | ArrayBuffer | Uint8Array | Blob;
-  readonly weight?: 'normal' | 'bold';
+  /** A number from 1 to 1000; `'normal'` is 400 and `'bold'` 700. */
+  readonly weight?: number | 'normal' | 'bold';
   readonly style?: 'normal' | 'italic';
 }
 
 /** A face as the engine takes it: its bytes are read only if a document names its family. */
 export interface PdfFontSource {
   readonly family: string;
-  readonly weight?: 'normal' | 'bold';
+  /** A number from 1 to 1000; `'normal'` is 400 and `'bold'` 700. */
+  readonly weight?: number | 'normal' | 'bold';
   readonly style?: 'normal' | 'italic';
   readonly load: () => Promise<{ readonly label: string; readonly data: Uint8Array }>;
 }
@@ -50,7 +52,7 @@ export class PdfFontSet {
     const fetched = cache ?? this.#fetched;
     const own = this.#fonts.map((font) => ({
       family: font.family,
-      ...(font.weight && { weight: font.weight }),
+      ...(font.weight !== undefined && { weight: font.weight }),
       ...(font.style && { style: font.style }),
       load: () => read(font.src, loader, fetched),
     }));

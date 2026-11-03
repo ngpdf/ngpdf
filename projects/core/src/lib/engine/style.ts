@@ -41,7 +41,8 @@ export interface TextStyle {
   /** The CSS `font-family` list as written; `fonts.ts` turns it into fonts. */
   readonly fontFamily: string;
   readonly fontSize: number;
-  readonly fontWeight: 'normal' | 'bold';
+  /** From 1 to 1000; 400 is normal and 700 bold. */
+  readonly fontWeight: number;
   readonly fontStyle: 'normal' | 'italic';
   /** Multiplier of the font size. */
   readonly lineHeight: number;
@@ -165,7 +166,7 @@ export const ROOT_TEXT_STYLE: TextStyle = Object.freeze({
   color: BLACK,
   fontFamily: 'Helvetica',
   fontSize: 10,
-  fontWeight: 'normal',
+  fontWeight: 400,
   fontStyle: 'normal',
   lineHeight: 1.2,
   textAlign: 'left',
@@ -873,11 +874,43 @@ function oneOf<T extends string>(
   return found;
 }
 
-function fontWeightOf(value: string): TextStyle['fontWeight'] {
+/** The named weights, in order; each is 100 times its place plus 100. */
+export const WEIGHT_NAMES = Object.freeze([
+  'thin',
+  'extralight',
+  'light',
+  'normal',
+  'medium',
+  'semibold',
+  'bold',
+  'extrabold',
+  'black',
+] as const);
+
+/** `bolder` and `lighter` against the inherited weight, as the CSS table has them. */
+function bolder(weight: number): number {
+  if (weight < 350) return 400;
+  if (weight < 550) return 700;
+  return weight < 900 ? 900 : weight;
+}
+
+function lighter(weight: number): number {
+  if (weight < 100) return weight;
+  if (weight < 550) return 100;
+  return weight < 750 ? 400 : 700;
+}
+
+function fontWeightOf(value: string, inherited: number, tag: string): number {
   const keyword = keywordOf(value);
-  if (keyword === 'bold' || keyword === 'bolder') return 'bold';
+  if (keyword === 'bolder') return bolder(inherited);
+  if (keyword === 'lighter') return lighter(inherited);
+  const named = WEIGHT_NAMES.indexOf(keyword as (typeof WEIGHT_NAMES)[number]);
+  if (named >= 0) return (named + 1) * 100;
   const weight = parseNumber(keyword);
-  return weight !== null && weight >= 600 ? 'bold' : 'normal';
+  if (weight !== null && weight >= 1 && weight <= 1000) return weight;
+  return fail(
+    `invalid value "${show(value)}" for font-weight on ${tag}; expected a number from 1 to 1000, ${WEIGHT_NAMES.join(', ')}, bolder or lighter`,
+  );
 }
 
 const SIDES: readonly Side[] = ['top', 'right', 'bottom', 'left'];
@@ -971,7 +1004,8 @@ function apply(
       style.fontSize = rejectNegative(parsePoints(value, tag), value, tag);
       break;
     case 'font-weight':
-      style.fontWeight = fontWeightOf(value);
+      // The style still holds the inherited weight: a rule sets font-weight once.
+      style.fontWeight = fontWeightOf(value, style.fontWeight, tag);
       break;
     case 'font-style': {
       const keyword = keywordOf(value);
