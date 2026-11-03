@@ -1001,16 +1001,31 @@ function rowPieceBox(
   };
 }
 
-/** The width a fixed view is laid out at: the page's content width less the view's margins. */
+/**
+ * The width a fixed view is laid out at: its own `width` (a percent is of the page's content
+ * width), or else the content width less its margins, with an `auto` margin as 0.
+ */
 export function fixedViewWidth(
   page: PdfNode,
   pageStyle: ResolvedStyle,
   viewStyle: ResolvedStyle | undefined,
 ): number {
   const { contentWidth } = frameOf(page, pageStyle);
+  if (viewStyle && viewStyle.width !== 'auto') return lengthIn(viewStyle.width, contentWidth);
   const margin = viewStyle?.margin ?? ZERO_EDGES;
   const side = (edge: 'left' | 'right'): number => lengthIn(margin[edge], contentWidth);
   return Math.max(0, contentWidth - side('left') - side('right'));
+}
+
+/**
+ * How far a fixed view `width` wide starts from the content's left edge. As in CSS, `auto` side
+ * margins take the room the view and its other margins leave: both share it, one takes it all.
+ */
+function fixedViewLeft(margin: Edges<Length>, width: number, contentWidth: number): number {
+  const left = lengthIn(margin.left, contentWidth);
+  const free = Math.max(0, contentWidth - width - left - lengthIn(margin.right, contentWidth));
+  if (margin.left !== 'auto') return left;
+  return margin.right === 'auto' ? free / 2 : free;
 }
 
 /**
@@ -1056,7 +1071,7 @@ export function paginatePage(
       box: { ...box, x: 0, y: 0 },
       top: side('top'),
       bottom: side('bottom'),
-      left: side('left'),
+      left: fixedViewLeft(margin, box.w, base.contentWidth),
     };
   };
   let top = base.top;

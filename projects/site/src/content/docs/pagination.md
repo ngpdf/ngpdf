@@ -27,7 +27,7 @@ Starting from the children of the `pdf-page`, ngpdf looks inside some elements a
 
 Wrappers can nest to any depth, so a table inside a column `pdf-view` inside another column `pdf-view` still yields its rows as units. A table inside a cell or inside a row `pdf-view` is part of that unit.
 
-When the next unit does not fit below the previous one, it moves to the top of a new sheet. The vertical space between units (margins, gaps, the padding of wrappers) is kept as it was in the layout, except that a unit moved to a new sheet starts at the top of the content area. The bottom padding and border of wrappers that close right after a unit move with that unit.
+When the next unit does not fit below the previous one, it moves to the top of a new sheet. The vertical space between units (margins, gaps, the padding of wrappers) is kept as it was in the layout, except that a unit moved to a new sheet starts at the top of the content area. The bottom padding and border of wrappers that close right after a unit move with that unit. An `auto` margin counts as the space Yoga gave it in that single layout: a box with `margin-top: auto` or `margin-bottom: auto` in a column split across sheets keeps that position, and the free space is not shared out again on each sheet.
 
 If the page's own `flex-direction` is `row`, its whole content is one unit.
 
@@ -188,7 +188,8 @@ Give a `pdf-view` that is a direct child of `pdf-page` the `fixed` input to draw
 </pdf-page>
 ```
 
-- A fixed view is laid out once at the content width and drawn the same on every sheet that `pdf-page` produces. It is taken out of the flow wherever you write it among the page's children.
+- A fixed view is laid out once and drawn the same on every sheet that `pdf-page` produces. It is taken out of the flow wherever you write it among the page's children.
+- A fixed view is as wide as its `width` (a percentage is of the content width), or else the content width less its margins. Left and right `auto` margins place it as in CSS, so `width: 200; margin: 0 auto` centres it. Top and bottom `auto` margins on a fixed view count as 0.
 - `fixed="top"` views stack at the top of the content area, and `fixed="bottom"` views at the bottom, in template order, with their margins. The flow gets the space between them on every sheet.
 - Bottom views sit above the `pdf-page-number`, which keeps the very bottom.
 - A fixed view is never a pagination unit: it is not split, moved or clipped, and page breaks on it or inside it (`breakBefore`, `breakAfter`, `break-before`, `break-after`) do nothing.

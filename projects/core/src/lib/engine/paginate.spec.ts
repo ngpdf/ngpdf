@@ -1443,6 +1443,77 @@ describe('paginatePage: fixed views', () => {
   });
 });
 
+describe('paginatePage: auto margins', () => {
+  const CONTENT_WIDTH = 595.28 - 2 * PADDING;
+  const nodes = (laid: PageLayout): PdfNode[] => laid.placed.map((placed) => placed.box.node);
+  const placedOf = (pages: PageLayout[], node: PdfNode): PlacedBox | undefined =>
+    pages.flatMap((laid) => laid.placed).find((placed) => placed.box.node === node);
+
+  it('centres a page child with a set width under margin: 0 auto', () => {
+    const box = el('pdf-view', { width: '100', height: '10', margin: '0 auto' });
+    const placed = placedOf(paginate(page([box])), box);
+    expect(placed!.x).toBeCloseTo(PADDING + (CONTENT_WIDTH - 100) / 2, 3);
+  });
+
+  it('pushes the last item of a row to the end with margin-left: auto', () => {
+    const last = el('pdf-view', { width: '40', height: '10', 'margin-left': 'auto' });
+    const line = el('pdf-view', { 'flex-direction': 'row' }, [
+      el('pdf-view', { width: '30', height: '10' }),
+      last,
+    ]);
+    const pages = paginate(page([line]));
+    const box = placedOf(pages, line)!.box.children[1]!;
+    expect(box.node).toBe(last);
+    expect(box.x).toBeCloseTo(CONTENT_WIDTH - 40, 3);
+  });
+
+  it('keeps the position Yoga gave a margin-top: auto box in a column split across pages', () => {
+    // On the unsplit layout the box sits 1980pt down the 2000pt column, so it paginates like a
+    // box with a fixed margin-top of 1970: no free space is shared out again per sheet.
+    const sheetsWith = (margin: string): { sheets: number; sheet: number; y: number } => {
+      const pushed = el('pdf-view', { height: '20', 'margin-top': margin });
+      const column = el('pdf-view', { height: '2000' }, [el('pdf-view', { height: '10' }), pushed]);
+      const pages = paginate(page([column]));
+      const sheet = pages.findIndex((laid) => nodes(laid).includes(pushed));
+      const placed = placedOf(pages, pushed);
+      return { sheets: pages.length, sheet, y: placed!.y };
+    };
+    expect(sheetsWith('auto')).toEqual(sheetsWith('1970'));
+    const short = el('pdf-view', { height: '20', 'margin-top': 'auto' });
+    const pages = paginate(page([el('pdf-view', { height: '300' }, [short])]));
+    expect(placedOf(pages, short)!.y).toBeCloseTo(CONTENT_TOP + 280, 3);
+  });
+
+  it('centres a fixed view with a set width under margin: 0 auto', () => {
+    const header = el('pdf-view', { width: '200', height: '20', margin: '0 auto' }, [], {
+      fixed: 'top',
+    });
+    const placed = placedOf(paginate(page([header, el('pdf-view', { height: '10' })])), header);
+    expect(placed!.box.w).toBeCloseTo(200, 3);
+    expect(placed!.x).toBeCloseTo(PADDING + (CONTENT_WIDTH - 200) / 2, 3);
+  });
+
+  it('pushes a fixed view to the right with margin-left: auto, after a fixed right margin', () => {
+    const footer = el(
+      'pdf-view',
+      { width: '25%', height: '20', 'margin-left': 'auto', 'margin-right': '10' },
+      [],
+      { fixed: 'bottom' },
+    );
+    const placed = placedOf(paginate(page([el('pdf-view', { height: '10' }), footer])), footer);
+    expect(placed!.box.w).toBeCloseTo(CONTENT_WIDTH / 4, 3);
+    expect(placed!.x).toBeCloseTo(PADDING + CONTENT_WIDTH - 10 - CONTENT_WIDTH / 4, 3);
+  });
+
+  it('counts margin-top and margin-bottom: auto on a fixed view as 0', () => {
+    const header = el('pdf-view', { height: '20', margin: 'auto' }, [], { fixed: 'top' });
+    const flow = el('pdf-view', { height: '10' });
+    const pages = paginate(page([header, flow]));
+    expect(placedOf(pages, header)!.y).toBeCloseTo(CONTENT_TOP, 3);
+    expect(placedOf(pages, flow)!.y).toBeCloseTo(CONTENT_TOP + 20, 3);
+  });
+});
+
 describe('paginatePage: position', () => {
   // No page number: the content runs down to the bottom padding.
   const BOTTOM = A4_HEIGHT - PADDING;
