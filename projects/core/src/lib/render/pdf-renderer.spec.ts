@@ -97,6 +97,25 @@ class ExponentDocument {
   readonly faint = 1e-7;
 }
 
+// Strings in exponent form whose values survive the writer's rounding, so the PDF shows them.
+@Component({
+  selector: 'pdf-exponent-string-document',
+  imports: [PDF_ELEMENTS],
+  template: `
+    <pdf-document>
+      <pdf-page>
+        <pdf-view style="position: relative" [style.left]="shift" [style.opacity]="half">
+          <pdf-text>Shifted</pdf-text>
+        </pdf-view>
+      </pdf-page>
+    </pdf-document>
+  `,
+})
+class ExponentStringDocument {
+  readonly shift = '1.5e1pt';
+  readonly half = '5e-1';
+}
+
 @Component({
   selector: 'pdf-no-document',
   imports: [PDF_ELEMENTS],
@@ -152,6 +171,14 @@ describe('PdfRenderer', () => {
   it('renders numbers that bindings write in exponent form', async () => {
     const blob = await TestBed.inject(PdfRenderer).toBlob(ExponentDocument);
     expect(await shownText(blob)).toEqual(['Nearly zero']);
+  });
+
+  it('applies exponent-form strings that bindings pass on', async () => {
+    const blob = await TestBed.inject(PdfRenderer).toBlob(ExponentStringDocument);
+    const pdf = new TextDecoder('latin1').decode(new Uint8Array(await blob.arrayBuffer()));
+    expect(await shownText(blob)).toEqual(['Shifted']);
+    expect(pdf).toMatch(/^1 0 0 1 15 [\d.]+ Tm$/m);
+    expect(pdf).toMatch(/^\/ca 0\.5$/m);
   });
 
   it('renders without inputs', async () => {
