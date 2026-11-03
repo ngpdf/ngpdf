@@ -14,11 +14,6 @@ it does not affect a correct document. Items that change behaviour need a design
   and below the text.
 - **A clipped rounded border side** of a unit taller than a page can overshoot the cut by half its
   width; straight border lines stop at the cut.
-- **Table headers:**
-  - a header row is dropped, without a warning, on a page whose first row fits only without it
-    and can't split;
-  - several header rows that together exceed the page are not repeated, without a warning;
-  - header rows lose their `breakBefore`.
 - **A row-direction page** is one pagination unit whose box points at a copy of the page node.
 
 ## Text

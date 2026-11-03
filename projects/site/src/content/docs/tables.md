@@ -133,10 +133,11 @@ Mark a row with `header` and it repeats at the top of every page the table runs 
 
 Current limits of header repetition:
 
-- Headers taller than the page's content area are not repeated; their rows are laid out as ordinary rows.
-- On a page whose first row fits only without the header and can't split (it has `break-inside: avoid`, or its cells hold nothing that can break), that row is placed without it, and the header is not repeated on that page.
+- Headers taller than the page's content area are not repeated; their rows are laid out as ordinary rows, with a dev-mode warning. This also holds for several header rows that are taller than the page together.
+- On a page whose first row fits only without the header and can't split (it has `break-inside: avoid`, or its cells hold nothing that can break), that row is placed without it, and the header is not repeated on that page. It warns in development mode.
 - A table made only of header rows has nothing to repeat over, so its rows are ordinary rows.
-- Header rows lose `break-before` and `break-after`.
+- `break-before: page` on a header row or on an element inside it starts a new sheet before the table's first row, where the header is first drawn. It does not break again where the header repeats.
+- A repeated header ignores `break-after`, because it is always drawn with the row under it.
 
 See [Pagination](/docs/pagination) for how rows move between pages.
 

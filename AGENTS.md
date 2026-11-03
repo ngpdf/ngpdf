@@ -175,7 +175,9 @@ NGPDF_APT=poppler-utils ./scripts/dev node scripts/server-check.mjs   # packed d
     and the last `widows` lines (2 and 2 by default). A short text, `break-inside: avoid`, a fixed
     `height`, a `max-height`, a `transform` or an `overflow` other than `visible` keeps it one
     unit.
-  - A `header` row repeats at the top of every page its table runs onto.
+  - A `header` row repeats at the top of every page its table runs onto. A header taller than the
+    page's content area, or one left off a page whose first row fits only without it, warns in dev mode. A
+    break before a header row goes before the first row it is drawn above, once.
   - A body row of a table taller than a page (below its repeated header) splits instead of being
     clipped. It starts on the current sheet when one line of each non-empty cell fits there.
     Each cell breaks on its own, between the lines of its texts or the children of a column view

@@ -100,7 +100,7 @@ A `pdf-row` with the `header` attribute repeats at the top of every sheet its ta
 }
 ```
 
-On a wrapper, the break happens before its first unit. A break on a sheet that has no units yet is ignored, so you never get a blank page.
+On a wrapper, the break happens before its first unit. On a repeated table header row, it happens before the table's first row, once (see [Tables](/docs/tables#header-rows)). A break on a sheet that has no units yet is ignored, so you never get a blank page.
 
 ## breakAfter
 
