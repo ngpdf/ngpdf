@@ -851,11 +851,22 @@ function drawPageNumber(
   }
   const width = runs.reduce((sum, run) => sum + run.width, 0);
   let runX = alignedX(left, contentWidth, width, style.textAlign);
+  // One line, its height split above and below the text as in a pdf-text (half-leading).
+  const { metrics } = options;
+  const size = style.fontSize;
+  const ascentOf = (font: (typeof chain)[number]) => metrics.ascent(font, size);
+  const baseline = Math.max(
+    ...runs.map(({ font }) => {
+      const ascent = ascentOf(font);
+      const descent = metrics.descent?.(font, size) ?? size - ascent;
+      return ascent + (size * style.lineHeight - ascent - descent) / 2;
+    }),
+  );
   for (const run of runs) {
     out.push({
       op: 'text',
       x: runX,
-      y: top,
+      y: top + baseline - ascentOf(run.font),
       text: run.text,
       font: run.font,
       size: style.fontSize,

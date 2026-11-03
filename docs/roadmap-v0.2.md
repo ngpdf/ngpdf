@@ -10,8 +10,6 @@ it does not affect a correct document. Items that change behaviour need a design
 - **Fill the remaining page height.** Pages lay out with an unbounded height, so a box cannot
   take "the rest of this page". The demo's capture report uses a fixed, computed image height
   instead (`projects/demo/src/app/documents/capture-report.ts`).
-- **Half-leading.** Text sits at the top of its line box; CSS splits the extra line height above
-  and below the text.
 - **A clipped rounded border side** of a unit taller than a page can overshoot the cut by half its
   width; straight border lines stop at the cut.
 - **A row-direction page** is one pagination unit whose box points at a copy of the page node.

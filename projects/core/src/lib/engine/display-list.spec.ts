@@ -67,6 +67,12 @@ function list(
 
 type Op<K extends DrawOp['op']> = Extract<DrawOp, { op: K }>;
 
+/** Half of what a line of `line-height` adds to Helvetica's content, above the text (CSS). */
+function halfLeading(size = 10, lineHeight = 1.2): number {
+  const content = writer.ascent('Helvetica', size) + writer.descent!('Helvetica', size);
+  return (size * lineHeight - content) / 2;
+}
+
 const SQUARE = { topLeft: 0, topRight: 0, bottomRight: 0, bottomLeft: 0 };
 
 function only<K extends DrawOp['op']>(ops: readonly DrawOp[], kind: K): Op<K>[] {
@@ -79,7 +85,8 @@ describe('displayList', () => {
     const ops = list(layout(root)[0]!, 0, 1);
     expect(ops.map((op) => op.op)).toEqual(['rect', 'text']);
     expect(ops[0]).toMatchObject({ op: 'rect', fill: '#dd0031', radii: SQUARE, opacity: 1 });
-    expect(ops[1]).toMatchObject({ op: 'text', text: 'Hello', x: 36, y: 36 });
+    expect(ops[1]).toMatchObject({ op: 'text', text: 'Hello', x: 36 });
+    expect((ops[1] as Op<'text'>).y).toBeCloseTo(36 + halfLeading(), 6);
   });
 
   it('writes colors as #rrggbb and their alpha as the op opacity', () => {
@@ -245,7 +252,7 @@ describe('displayList', () => {
     const [line] = only(ops, 'text');
     const lineWidth = writer.widthOf('Total', 'Helvetica', 10);
     expect(line!.x).toBeCloseTo(36 + 200 - 10 - lineWidth, 6);
-    expect(line!.y).toBe(46);
+    expect(line!.y).toBeCloseTo(46 + halfLeading(), 6);
   });
 
   it('centers text and sets underline and strike flags', () => {
@@ -352,9 +359,53 @@ describe('displayList', () => {
       [' ', 10, '#000000', false],
       ['here', 10, '#000000', true],
     ]);
-    const baseline = 36 + writer.ascent('Helvetica', 20);
+    // The 20pt run's half-leading puts the baseline: (24 - content) / 2 above its ascent.
+    const ascent = writer.ascent('Helvetica', 20);
+    const descent = writer.descent!('Helvetica', 20);
+    const baseline = 36 + ascent + (20 * 1.2 - ascent - descent) / 2;
     expect(ops[0]!.y).toBeCloseTo(baseline - writer.ascent('Helvetica', 10), 6);
-    expect(ops[1]!.y).toBeCloseTo(36, 6);
+    expect(ops[1]!.y).toBeCloseTo(baseline - ascent, 6);
+  });
+
+  describe('half-leading', () => {
+    it('draws text in the middle of a tall line, with its underline', () => {
+      const box = text('Hi', { 'line-height': '3', 'text-decoration': 'underline' });
+      const laid = layout(page([box]))[0]!;
+      const [op] = only(list(laid, 0, 1), 'text');
+      expect(laid.placed[0]!.box.text!.lines[0]!.height).toBe(30);
+      expect(op!.y).toBeCloseTo(36 + halfLeading(10, 3), 6);
+      expect(op!.underline).toBe(true);
+    });
+
+    it('raises text in a line shorter than its content', () => {
+      const [op] = only(
+        list(layout(page([text('Hi', { 'line-height': '0.5' })]))[0]!, 0, 1),
+        'text',
+      );
+      expect(halfLeading(10, 0.5)).toBeLessThan(0);
+      expect(op!.y).toBeCloseTo(36 + halfLeading(10, 0.5), 6);
+    });
+
+    it('keeps an inline link rectangle on the whole line box', () => {
+      const paragraph = el('pdf-text', { 'line-height': '3' }, [
+        el('pdf-link', {}, [createNode('text', '', 'docs')], { href: 'https://example.com/a' }),
+      ]);
+      const laid = layout(page([paragraph]))[0]!;
+      const [area] = only(list(laid, 0, 1), 'link');
+      expect(area).toMatchObject({ y: 36, h: 30 });
+      const [op] = only(list(laid, 0, 1), 'text');
+      expect(op!.y).toBeCloseTo(36 + halfLeading(10, 3), 6);
+    });
+
+    it('draws the page number in the middle of its line', () => {
+      const number = el('pdf-page-number', { 'line-height': '3', height: '30' }, [], {
+        format: '{page}',
+      });
+      const [first] = layout(page([text('a'), number]));
+      const last = only(list(first!, 0, 1), 'text').at(-1)!;
+      expect(last.text).toBe('1');
+      expect(last.y).toBeCloseTo(841.89 - 36 - 30 + halfLeading(10, 3), 6);
+    });
   });
 
   it('draws the page number from the format with page and total', () => {
@@ -397,7 +448,7 @@ describe('displayList', () => {
     const [first] = layout(page([el('pdf-view', { 'flex-direction': 'row' }, [number])]));
     const [op] = only(list(first!, 0, 1), 'text');
     expect(op!.x).toBeCloseTo(36 + 100 - writer.widthOf('1', 'Helvetica', 10), 3);
-    expect(op!.y).toBeCloseTo(36, 3);
+    expect(op!.y).toBeCloseTo(36 + halfLeading(), 3);
   });
 
   it('passes letter-spacing to the text op and aligns by the spaced width', () => {
@@ -482,7 +533,7 @@ describe('displayList', () => {
       const pad = ((595.28 - 72) * 10) / 100;
       const [line] = only(list(laid, 0, 1), 'text');
       expect(line!.x).toBeCloseTo(36 + pad, 3);
-      expect(line!.y).toBeCloseTo(36 + pad, 3);
+      expect(line!.y).toBeCloseTo(36 + pad + halfLeading(), 3);
     });
 
     it('resolves percent padding against the wrapper content width when nested', () => {
@@ -2231,7 +2282,8 @@ describe('notes', () => {
     expect(kinds).toEqual(['group', 'text', 'text', 'ungroup', 'note']);
     const after = only(ops, 'text')[1]!;
     expect(only(ops, 'note')[0]).toMatchObject({ x: 36, text: 'Check this' });
-    expect(only(ops, 'note')[0]!.y).toBeCloseTo(after.y, 6);
+    // At the top of the line box, above the text's half-leading.
+    expect(only(ops, 'note')[0]!.y).toBeCloseTo(after.y - halfLeading(), 6);
   });
 
   it('keeps a note in a faded unit inside its group, where the writer still lifts it out', () => {

@@ -330,7 +330,9 @@ The box is as tall as the kept lines. `max-lines: none`, the default, keeps ever
 
 Write a length with its unit, such as `line-height: 14pt`, when you mean points. A length is divided by the element's own font size, and the resulting ratio is inherited.
 
-ngpdf places text at the top of its line box. Extra line height goes below the text, not half above and half below as in CSS. Each line is `font-size × line-height` high, using the largest font size on the line, so a block of text in one size is `number of lines × font-size × line-height` high.
+Each line is `font-size × line-height` high, using the largest font size on the line, so a block of text in one size is `number of lines × font-size × line-height` high. As in CSS, the space the line height adds to the text (the leading) is split in half: one half above the text, one half below. With `line-height: 3` a 10pt text sits in the middle of a 30pt line. A line height smaller than the font's height gives a negative half, so the text rises and can reach outside its line, as it does in a browser. Underlines and strike-throughs follow the text; a link's clickable area is the whole line.
+
+In a line with runs of several sizes, each run's leading is split around that run, and the run that reaches highest above the baseline sets where the baseline goes. The line stays as tall as its largest font size times `line-height`. CSS can make such a line a little taller when the runs are in fonts with different proportions above and below the baseline; ngpdf keeps the height, so the lower part of such a run can reach that little bit past the line.
 
 ## Alignment and decoration
 
@@ -356,7 +358,7 @@ Wrap part of a text in a `pdf-span` to draw it in other text styles:
 
 - A span inherits the text styles around it and can change `color`, `font-family`, `font-size`, `font-weight`, `font-style`, `text-decoration`, `letter-spacing`, `text-transform` and `hyphens`. Spans nest.
 - The paragraph wraps as one text: a span boundary is not a place to break, and a span wraps over lines like the rest of the text. Kerning is not applied across two spans.
-- Runs of different sizes share a baseline, and a line is as tall as its largest font size times the paragraph's `line-height`.
+- Runs of different sizes share a baseline, and a line is as tall as its largest font size times the paragraph's `line-height`. The baseline goes where the [half-leading](#line-height) of the run that reaches highest puts it.
 - `line-height` and `text-align` belong to the `pdf-text`. Other properties on a span, such as padding or a background, have no effect and get a warning in development mode.
 - A span is drawn in the fonts its own `font-family` names, with the same fallback as any text.
 - `@if`, `@for` and components work inside a `pdf-text` as anywhere else.
