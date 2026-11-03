@@ -283,20 +283,22 @@ function isHeaderRow(node: PdfNode): boolean {
 /**
  * Whether a table's header can go on a page with its first row. A row that does not fit under
  * the header but fits a page alone, and can't split below it, would go to a page of its own
- * without it.
+ * without it. `trail` is the bottom of the wrappers that close with the row, kept below its last
+ * piece as when it is placed.
  */
 function sharesPage(
   height: number,
   gap: number,
   first: Box | undefined,
   maxHeader: number,
+  trail: number,
 ): boolean {
   if (!first) return true;
   const slack = fitSlack(maxHeader);
   if (height + gap + first.h <= maxHeader + slack || first.h > maxHeader + slack) return true;
   const cells =
     first.node.tag === 'pdf-row' && canBreak(first.style) ? splitCells(first, maxHeader) : null;
-  return !!cells && splitsBelow(first, cells, maxHeader - height - gap, 0, slack);
+  return !!cells && splitsBelow(first, cells, maxHeader - height - gap, trail, slack);
 }
 
 /**
@@ -354,6 +356,7 @@ function collectUnits(
     dx: number,
     dy: number,
     inTable = false,
+    closing?: number,
   ): void => {
     if (box.text && isSplittable(box)) {
       visitText(box, box.text, x, top, header, groups, dx, dy);
@@ -412,10 +415,16 @@ function collectUnits(
         const headerBottom = Math.max(...rows.map((r) => r.top + r.box.h));
         const height = headerBottom - headerTop;
         const first = body.find((child) => !isFlowNote(child) && !isAbsolute(child));
+        // A first row that is also the last closes the table, and the wrappers that close with it.
+        const end = closing ?? top + box.h;
+        const trail =
+          first && first === body[lastInFlow(body)]
+            ? Math.max(0, end - (top + first.y + first.h))
+            : 0;
         let repeats = height <= maxHeader + fitSlack(maxHeader);
         if (!repeats) {
           warn('ngpdf: pdf-table header rows are taller than a page and are not repeated');
-        } else if (!sharesPage(height, box.style.gap, first, maxHeader)) {
+        } else if (!sharesPage(height, box.style.gap, first, maxHeader, trail)) {
           // Repeated, it would be left off the first row's page, and off every page when no row
           // fits under it.
           warn(
@@ -452,7 +461,9 @@ function collectUnits(
         });
       } else {
         const inTable = box.node.tag === 'pdf-table';
-        visit(child, childX, childTop, childHeader, inside, innerDx, innerDy, inTable);
+        // The bottom of the outermost wrapper that closes with the last child.
+        const closes = i === last ? (closing ?? top + box.h) : undefined;
+        visit(child, childX, childTop, childHeader, inside, innerDx, innerDy, inTable, closes);
       }
     }
     wrapper.last = units.length - 1;

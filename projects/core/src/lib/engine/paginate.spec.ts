@@ -1912,6 +1912,20 @@ describe('paginatePage: table rows taller than a page', () => {
       expect(pages.map((laid) => laid.placed[1]!.box.h)).toEqual([650, 50]);
       expect(warnings).toEqual([]);
     });
+
+    // The view's 20pt bottom padding closes with the row: the last piece (660pt) needs 680pt
+    // below the header, so the row can't split there, as when it is placed.
+    it('counts the wrappers closing with the first row when it checks the split', () => {
+      const [head, tall] = [header(), blocks(40, 660)];
+      const warn = vi.fn<(message: string) => void>();
+      const table = el('pdf-table', {}, [head, tall], { columns: ['1fr'] });
+      const pages = paginate(page([el('pdf-view', { 'padding-bottom': '20' }, [table])]), warn);
+      expect(nodes(pages).map((laid) => laid.filter((node) => node.tag === 'pdf-row'))).toEqual([
+        [head],
+        [tall],
+      ]);
+      expect(warn.mock.calls.map(([message]) => message)).toEqual([HEADER_WITHOUT_FIRST_ROW]);
+    });
   });
 
   it('moves a row that fits on a page below its header whole, as before', () => {
