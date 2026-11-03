@@ -52,6 +52,8 @@ Every element is a flex container. The defaults follow CSS flexbox, with one dif
 
 Sizing uses `width`, `height`, `min-width`, `min-height`, `max-width` and `max-height`, plus `margin` and `padding` with one to four values, or per side (`margin-top`, `padding-left`, and so on).
 
+A margin can be `auto`, as in CSS: auto margins take the free space on their side. `margin: 0 auto` centres a box that has a `width`, and `margin-left: auto` pushes an item to the end of a row. `padding` has no `auto` and throws on it.
+
 ```html
 <pdf-view
   style="flex-direction: row; justify-content: space-between; align-items: center; gap: 12; padding-bottom: 8; border-bottom: 1 solid #cccccc"

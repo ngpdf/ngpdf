@@ -306,6 +306,39 @@ describe('layoutBox', () => {
     expect(box.children[1]?.h).toBe(8);
   });
 
+  it('centres a box with a set width under margin: 0 auto', () => {
+    const root = el('pdf-view', {}, [
+      el('pdf-view', { width: '100', height: '10', margin: '0 auto' }),
+    ]);
+    const child = lay(root, 300).children[0];
+    expect([child?.x, child?.w]).toEqual([100, 100]);
+  });
+
+  it('pushes a row item to the end with margin-left: auto', () => {
+    const root = el('pdf-view', { 'flex-direction': 'row' }, [
+      el('pdf-view', { width: '30', height: '10' }),
+      el('pdf-view', { width: '40', height: '10', 'margin-left': 'auto' }),
+    ]);
+    const [first, last] = lay(root, 200).children;
+    expect([first?.x, last?.x]).toEqual([0, 160]);
+  });
+
+  it('splits the free space between auto sides, after the fixed ones', () => {
+    const root = el('pdf-view', { 'flex-direction': 'row', height: '100' }, [
+      el('pdf-view', { width: '40', height: '20', margin: 'auto 10 auto auto' }),
+    ]);
+    const child = lay(root, 200).children[0];
+    expect([child?.x, child?.y]).toEqual([150, 40]);
+  });
+
+  it('pushes a box to the bottom of a column with margin-top: auto', () => {
+    const root = el('pdf-view', { height: '100' }, [
+      el('pdf-view', { height: '10' }),
+      el('pdf-view', { height: '20', 'margin-top': 'auto' }),
+    ]);
+    expect(lay(root, 50).children[1]?.y).toBe(80);
+  });
+
   it('sizes an image box from its style and attaches the asset', () => {
     const image = el('pdf-image', { width: '40', height: '30' });
     const asset = { data: new Uint8Array(1), width: 4, height: 3 };
