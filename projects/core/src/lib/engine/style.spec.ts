@@ -270,6 +270,10 @@ describe('resolveStyles', () => {
       left: 'dashed',
     });
     expect(styleOf({ border: 'none', 'border-width': '2' }).borderWidth.top).toBe(0);
+    // A later style brings back the width the shorthand gave.
+    const restyled = styleOf({ border: '2 none #000', 'border-top-style': 'dashed' });
+    expect(restyled.borderWidth).toEqual({ top: 2, right: 0, bottom: 0, left: 0 });
+    expect(restyled.borderStyle.top).toBe('dashed');
     expect(styleOf({ 'border-left-style': 'hidden', 'border-width': '3' }).borderWidth).toEqual({
       top: 3,
       right: 3,

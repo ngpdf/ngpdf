@@ -400,7 +400,7 @@ export function parseBorder(value: string, tag?: string): BorderParts {
     }
   }
   return {
-    width: style.style === 'none' ? 0 : (width ?? 1),
+    width: width ?? 1,
     color: color ?? BLACK,
     style: style.style,
     unsupportedStyle: style.unsupported,
