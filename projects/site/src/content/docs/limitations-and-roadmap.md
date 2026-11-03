@@ -53,7 +53,7 @@ ngpdf v0.1 covers documents built from text, tables, boxes and images. This page
 ### Images
 
 - PNG and JPEG only.
-- Images fetched from a URL have no size limit; a very large image is downloaded in full.
+- Images fetched from a URL have no size limit unless you set `maxImageBytes`.
 
 ### Preview
 

@@ -443,6 +443,42 @@ describe('renderDocument', () => {
     expect(fetchFn).not.toHaveBeenCalled();
   });
 
+  it('rejects an image URL over maxImageBytes', async () => {
+    const png = testPng();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => Promise.resolve(new Response(png as BodyInit))),
+    );
+    const page = () =>
+      el('pdf-page', {}, [el('pdf-image', { width: '10' }, [], { src: '/logo.png' })]);
+    await expect(
+      renderDocument(host({}, [page()]), {
+        writer: recordingWriter(),
+        dev: false,
+        maxImageBytes: png.length - 1,
+      }),
+    ).rejects.toThrow(
+      `ngpdf: could not load image "/logo.png": larger than ${String(png.length - 1)} bytes`,
+    );
+    await expect(
+      renderDocument(host({}, [page()]), {
+        writer: recordingWriter(),
+        dev: false,
+        maxImageBytes: png.length,
+      }),
+    ).resolves.toBeDefined();
+  });
+
+  it('rejects an invalid maxImageBytes before fetching anything', async () => {
+    const fetchFn = vi.fn(() => Promise.reject(new TypeError('Failed to fetch')));
+    vi.stubGlobal('fetch', fetchFn);
+    const page = el('pdf-page', {}, [el('pdf-image', {}, [], { src: '/logo.png' })]);
+    await expect(
+      renderDocument(host({}, [page]), { writer: recordingWriter(), maxImageBytes: 0 }),
+    ).rejects.toThrow('ngpdf: invalid maxImageBytes "0"');
+    expect(fetchFn).not.toHaveBeenCalled();
+  });
+
   it('throws when the tree has no pdf-document', async () => {
     await expect(renderDocument(el('div'), { writer: recordingWriter() })).rejects.toThrow(
       'ngpdf: no pdf-document in the rendered component',

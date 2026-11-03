@@ -25,7 +25,7 @@ Documents often contain data that came from users or a server. ngpdf is built so
 
 Component host elements do not count towards the nesting limit, and neither does text: bare text inside an element is not one more level. Both errors reject the render; no PDF is produced.
 
-There is no size limit on images fetched from a URL yet: a very large image is downloaded in full. If image URLs in your documents come from users, check or restrict them before rendering. A size cap is planned for v0.2.
+An image fetched from a URL is downloaded in full unless you set `maxImageBytes`. If image URLs in your documents come from users, set it, and check or restrict the URLs before rendering. See [A size cap](/docs/images#a-size-cap).
 
 ## Text is text
 

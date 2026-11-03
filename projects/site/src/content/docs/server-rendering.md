@@ -29,6 +29,7 @@ interface RenderToBufferOptions {
   readonly providers?: readonly (Provider | EnvironmentProviders)[];
   readonly injector?: EnvironmentInjector;
   readonly fetchImage?: (url: string) => Promise<Uint8Array>;
+  readonly maxImageBytes?: number;
 }
 ```
 
@@ -38,6 +39,7 @@ interface RenderToBufferOptions {
 | `providers` | Providers for the document, such as `providePdfFonts([...])` or your own services. |
 | `injector` | An injector the document resolves its services from, such as your SSR app's. `providers` are added on top of it. |
 | `fetchImage` | Reads an absolute image or font URL. Without it, the server refuses them. |
+| `maxImageBytes` | The most bytes an image URL may have, checked on what `fetchImage` returns. No cap by default. See [A size cap](/docs/images#a-size-cap). |
 
 - The result is a `Uint8Array`, which is what Node's `Buffer` extends. Pass it to `res.end(pdf)`, `fs.writeFile` or an email attachment as it is.
 - Every call is isolated like `renderToBlob`: its own child injector, tree and writer, and the document is destroyed when the render settles.
@@ -142,7 +144,7 @@ A server that fetched any URL found in a document could be made to fetch interna
 - `<url>` is shown without its query string and fragment, which often carry a token, and so is the URL where a `fetchImage` error repeats it. `fetchImage` gets the whole URL.
 - If `fetchImage` rejects, the render rejects with `ngpdf: could not load image "<url>": <reason>` (or `font`).
 
-`fetchImage` is where you decide what the server may fetch: an allow-list of hosts, a timeout and a size limit. For example:
+`fetchImage` is where you decide what the server may fetch: an allow-list of hosts, a timeout and a size limit. `maxImageBytes` checks the bytes `fetchImage` returns, but only once it has returned them, so the limit inside `fetchImage` is what stops a large download. For example:
 
 ```ts
 // Whole origins (scheme, host and port), so another port on the same host stays out.

@@ -257,6 +257,11 @@ NGPDF_APT=poppler-utils ./scripts/dev node scripts/server-check.mjs   # packed d
     `Uint8Array` (a Node `Buffer` too).
   - `object-fit` is `contain` (default) or `cover`.
   - A failed load rejects the render with `ngpdf: could not load image "<src>": <reason>`.
+  - The render option `maxImageBytes` (no cap by default) caps fetched image URLs only: past it,
+    the reason is `larger than N bytes`. A `Content-Length` over it is refused before the body is
+    read, and a streamed body is cancelled and its fetch aborted once the count passes it; on the
+    server, `fetchImage`'s result is checked. A value that is not a positive safe integer throws
+    `ngpdf: invalid maxImageBytes "<value>"`.
 - **Encryption:** `security` on `pdf-document` takes `userPassword`, `ownerPassword` and
   `permissions` (`printing: 'none' | 'low' | 'high'` and six booleans, all allowed by default).
   - The file is written with AES-256 (pdfkit's `pdfVersion: '1.7ext3'`, `/V 5 /R 5`) when a
