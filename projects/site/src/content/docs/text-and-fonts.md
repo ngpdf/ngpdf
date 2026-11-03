@@ -200,6 +200,8 @@ A character as you see it (a grapheme cluster) is an emoji when:
 
 The standard fonts use the WinAnsi encoding (Windows-1252). Text in a [custom font](#custom-fonts) is not limited to it. It covers ASCII, the Latin-1 accented letters (`á`, `ç`, `ñ`, `ü` and so on) and a few more, such as `€`, `“ ”`, `‘ ’`, `–`, `—`, `…`, `•` and `™`.
 
+An accented letter written as a base letter plus a combining mark, such as `e` followed by U+0301 (common in macOS file names), is drawn as the composed letter `é` when it has one. In a `font-family` list, a font that lacks the letter as written but has its composed form draws that form; a custom font that has the combining mark draws the text as written.
+
 In a standard font, any other character is drawn as `?`. That includes emoji (unless [`providePdfEmoji`](#emoji) gives them images), Greek, Cyrillic, CJK, arrows and check marks. In development mode ngpdf logs one warning per render that lists every replaced character:
 
 `ngpdf: characters outside WinAnsi replaced with "?": ✓→`
@@ -309,7 +311,7 @@ async save(): Promise<void> {
 
 ## Cutting text to a number of lines
 
-`max-lines` keeps at most that many lines of a `pdf-text`. When text was cut, the last kept line ends with an ellipsis: characters come off its end until the line and `…` fit the box. The ellipsis is drawn in the style of the last character kept on that line. A font without `…` gets `...` instead. The standard fonts have it. In a box too narrow for the ellipsis itself, the line is left empty. With `text-align: justify`, the cut line is not stretched, like a paragraph's last line.
+`max-lines` keeps at most that many lines of a `pdf-text`. When text was cut, the last kept line ends with an ellipsis: characters come off its end until the line and `…` fit the box. The ellipsis is drawn in the style of the last character kept on that line. When that character's font has no `…`, the ellipsis comes from the first font in the `font-family` list that has one, like any other character, keeping the size and color. If no font in the list has `…`, it is `...` in the first font that has `.`. The standard fonts have both, and a list with registered families always holds one (see [the fallback](#the-family-list-and-fallback)), so in practice the ellipsis is `…`. In a box too narrow for the ellipsis itself, the line is left empty. With `text-align: justify`, the cut line is not stretched, like a paragraph's last line.
 
 ```html
 <pdf-cell><pdf-text style="max-lines: 2">{{ product.description }}</pdf-text></pdf-cell>

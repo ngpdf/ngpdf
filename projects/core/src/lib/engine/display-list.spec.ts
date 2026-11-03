@@ -1416,6 +1416,15 @@ describe('gradient backgrounds', () => {
     });
   });
 
+  it('points a gradient with a huge angle the way its angle modulo 360 does', () => {
+    const at = (angle: string) =>
+      linear({ 'background-image': `linear-gradient(${angle}, red, blue)` });
+    // 1e20 mod 360 is 280 and 1e308 mod 360 is 296; 1e308 * PI overflows to Infinity.
+    expect(at('1e20deg')).toEqual(at('280deg'));
+    expect(at('1e308deg')).toEqual(at('296deg'));
+    expect(at('-1e308deg')).toEqual(at('-296deg'));
+  });
+
   it('points a corner gradient so its middle line joins the other two corners', () => {
     // The direction is (50, -100) normalized, and the line is 200 / sqrt 5 long.
     expectPoints(linear({ 'background-image': 'linear-gradient(to top right, red, blue)' }), {
