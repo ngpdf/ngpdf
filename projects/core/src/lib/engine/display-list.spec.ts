@@ -8,6 +8,8 @@ import type { ImageAsset } from './images';
 import type { LayoutContext } from './layout';
 import { pageSize, paginatePage, type PageLayout } from './paginate';
 import { resolveStyles } from './style';
+import { compileSvg } from './svg/render';
+import { parseXml } from './svg/xml';
 import { createPdfkitWriter, type DrawOp, type PdfWriter } from './writer';
 
 let yoga: Yoga;
@@ -2882,5 +2884,71 @@ describe('vertical-align', () => {
     const [image] = only(ops, 'image');
     const descent = writer.descent!('Helvetica', 7);
     expect(image!.y + image!.h).toBeCloseTo(baselineOf(a!) - 3.3 + descent, 6);
+  });
+});
+
+describe('pdf-svg', () => {
+  const LOGO = '<svg viewBox="0 0 20 10"><rect width="20" height="10" fill="red"/></svg>';
+
+  function svgPages(source: string, style: Record<string, string>): PageLayout[] {
+    const node = el('pdf-svg', style, [], { src: source });
+    const root = page([node]);
+    const svgs = new Map([
+      [
+        node,
+        compileSvg(
+          parseXml(source, () => undefined),
+          BLACK,
+          () => undefined,
+        ),
+      ],
+    ]);
+    const ctx: LayoutContext = { yoga, metrics: writer, images: new Map(), svgs };
+    return paginatePage(root, resolveStyles(root), ctx);
+  }
+  const BLACK = { r: 0, g: 0, b: 0, a: 1 };
+
+  it('takes its natural size from the viewBox and draws in it, clipped to the content box', () => {
+    const [laid] = svgPages(LOGO, { padding: '2' });
+    const ops = list(laid!, 0, 1);
+    expect(ops.map((op) => op.op)).toEqual(['clip', 'transform', 'shape', 'untransform', 'unclip']);
+    expect(only(ops, 'clip')[0]).toMatchObject({ x: 38, y: 38, w: 20, h: 10 });
+    expect(only(ops, 'transform')[0]).toEqual({ op: 'transform', matrix: [1, 0, 0, 1, 38, 38] });
+  });
+
+  it('follows the viewBox ratio for a missing side', () => {
+    const [laid] = svgPages(LOGO, { width: '100' });
+    const ops = list(laid!, 0, 1);
+    expect(only(ops, 'clip')[0]).toMatchObject({ w: 100, h: 50 });
+    expect(only(ops, 'transform')[0]).toEqual({ op: 'transform', matrix: [5, 0, 0, 5, 36, 36] });
+  });
+
+  it('fits the viewBox by preserveAspectRatio in a box of another shape', () => {
+    const meet = list(svgPages(LOGO, { width: '100', height: '100' })[0]!, 0, 1);
+    expect(only(meet, 'transform')[0]?.matrix).toEqual([5, 0, 0, 5, 36, 61]);
+    const slice = LOGO.replace('<svg', '<svg preserveAspectRatio="xMinYMin slice"');
+    expect(
+      only(list(svgPages(slice, { width: '100', height: '100' })[0]!, 0, 1), 'transform')[0]
+        ?.matrix,
+    ).toEqual([10, 0, 0, 10, 36, 36]);
+    const none = LOGO.replace('<svg', '<svg preserveAspectRatio="none"');
+    expect(
+      only(list(svgPages(none, { width: '100', height: '100' })[0]!, 0, 1), 'transform')[0]?.matrix,
+    ).toEqual([5, 0, 0, 10, 36, 36]);
+  });
+
+  it('draws nothing for an empty drawing or a box with no size', () => {
+    expect(list(svgPages('<svg width="10" height="10"/>', {})[0]!, 0, 1)).toEqual([]);
+    expect(list(svgPages(LOGO, { width: '0' })[0]!, 0, 1)).toEqual([]);
+  });
+
+  it('sizes an svg with no drawing loaded as an empty box', () => {
+    const node = el('pdf-svg', {}, [], { src: LOGO });
+    const root = page([node, text('after')]);
+    const ctx: LayoutContext = { yoga, metrics: writer, images: new Map() };
+    const ops = displayList(paginatePage(root, resolveStyles(root), ctx)[0]!, 0, 1, undefined, {
+      metrics: writer,
+    });
+    expect(ops.map((op) => op.op)).toEqual(['text']);
   });
 });

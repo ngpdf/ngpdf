@@ -183,6 +183,19 @@ class CanvasDocument {
   };
 }
 
+@Component({
+  selector: 'pdf-test-svg',
+  imports: [PDF_ELEMENTS],
+  template: `
+    <pdf-document>
+      <pdf-svg [src]="logo" anchor="logo" bookmark="Logo" style="width: 40px" />
+    </pdf-document>
+  `,
+})
+class SvgDocument {
+  readonly logo = '<svg viewBox="0 0 2 1"><rect width="2" height="1"/></svg>';
+}
+
 function at<T>(items: readonly T[], index: number): T {
   const item = items[index];
   if (item === undefined) throw new Error(`no item at ${String(index)}`);
@@ -210,7 +223,8 @@ describe('pdf-* elements', () => {
       | typeof AnchorsDocument
       | typeof SecureDocument
       | typeof NotesDocument
-      | typeof CanvasDocument,
+      | typeof CanvasDocument
+      | typeof SvgDocument,
   ): PdfNode {
     const environmentInjector = createEnvironmentInjector(
       [{ provide: RendererFactory2, useFactory: () => new PdfRendererFactory() }],
@@ -338,6 +352,18 @@ describe('pdf-* elements', () => {
     expect(full!.rawStyle).toEqual({ color: '#0a7' });
     expect(textContent(full!)).toBe('Is this 42?');
     expect(propsOf(bound!)).toEqual({ author: null, icon: 'comment', open: false });
+  });
+
+  it('renders pdf-svg with no content, exposing src, anchor and bookmark through pdfProps', () => {
+    const svg = at(elementChildren(render(SvgDocument)), 0);
+    expect(svg.tag).toBe('pdf-svg');
+    expect(svg.children).toEqual([]);
+    expect(svg.rawStyle).toEqual({ width: '40px' });
+    expect(propsOf(svg)).toEqual({
+      src: '<svg viewBox="0 0 2 1"><rect width="2" height="1"/></svg>',
+      anchor: 'logo',
+      bookmark: 'Logo',
+    });
   });
 
   it('renders pdf-canvas with no content, exposing paint through pdfProps', () => {
