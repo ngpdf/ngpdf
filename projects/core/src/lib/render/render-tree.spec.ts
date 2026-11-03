@@ -80,6 +80,22 @@ class DatedDocument {
   readonly date = FIXED_DATE;
 }
 
+@Component({
+  selector: 'pdf-test-cascade',
+  imports: [PDF_ELEMENTS],
+  template: `
+    <pdf-document>
+      <pdf-page>
+        <pdf-view style="margin-top: 20; margin: 0; margin-top: 5" />
+        <pdf-view style="margin-top: 5; margin: 10" [style.margin-top.pt]="top" />
+      </pdf-page>
+    </pdf-document>
+  `,
+})
+class CascadeDocument {
+  readonly top = 20;
+}
+
 const seen: { injector?: EnvironmentInjector } = {};
 
 @Component({
@@ -210,6 +226,15 @@ describe('renderTree', () => {
     expect(at(rows, 1).rawStyle['background-color']).toBe('#ffffff');
     expect(at(rows, 2).rawStyle['background-color']).toBe('#f2f2f2');
     expect(at(rows, 1).rawStyle['padding']).toBe('6');
+  });
+
+  it('lets a later longhand, static or bound, win over an earlier shorthand', async () => {
+    const { resolveStyles } = await import('../engine/style');
+    const result = render(CascadeDocument);
+    const views = find(result.root, 'pdf-view');
+    const styles = resolveStyles(result.root);
+    expect(styles.get(at(views, 0))?.margin).toEqual({ top: 5, right: 0, bottom: 0, left: 0 });
+    expect(styles.get(at(views, 1))?.margin).toEqual({ top: 20, right: 10, bottom: 10, left: 10 });
   });
 
   it('formats dates through pipes with the component locale', () => {
