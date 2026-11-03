@@ -153,6 +153,28 @@ describe('paginatePage: tables', () => {
     }
   });
 
+  it('keeps the table row gap between a repeated header and the first row', () => {
+    const pages = paginate(page([table(60, true, { gap: '4 30' }), pageNumber()]));
+    expect(pages.length).toBeGreaterThan(1);
+    for (const laid of pages) {
+      const [header, first] = laid.placed;
+      expect(first!.y - bottom(header!)).toBeCloseTo(4, 6);
+    }
+  });
+
+  it('keeps a percentage row gap between a repeated header and the first row', () => {
+    const pages = paginate(page([table(60, true, { 'row-gap': '0.1%' }), pageNumber()]));
+    expect(pages.length).toBeGreaterThan(1);
+    const [header, first, second] = pages[0]!.placed;
+    const gap = first!.y - bottom(header!);
+    expect(gap).toBeGreaterThan(0);
+    expect(second!.y - bottom(first!)).toBeCloseTo(gap, 6);
+    for (const laid of pages.slice(1)) {
+      const [repeated, next] = laid.placed;
+      expect(next!.y - bottom(repeated!)).toBeCloseTo(gap, 6);
+    }
+  });
+
   it('starts the header where the table starts, after its border and padding', () => {
     const pages = paginate(
       page([table(3, true, { 'border-width': '2', padding: '3' }), pageNumber()]),
@@ -923,6 +945,17 @@ describe('paginatePage: decorations', () => {
     // Page 1's piece ends at its last child, page 2's at the wrapper's padding and border.
     expect(first.y + first.box.h).toBeCloseTo(bottom(pages[0]!.placed.at(-1)!), 6);
     expect(second.y + second.box.h).toBeCloseTo(bottom(pages[1]!.placed.at(-1)!) + 11, 6);
+  });
+
+  it('drops the row gap at a page break', () => {
+    const children = Array.from({ length: 50 }, () => el('pdf-view', { height: '20' }));
+    const wrapper = el('pdf-view', { 'row-gap': '5', 'column-gap': '40' }, children);
+    const pages = paginate(page([wrapper, pageNumber()]));
+    expect(pages).toHaveLength(2);
+    const [first, second] = pages.map((p) => p.placed);
+    expect(second![0]!.y).toBeCloseTo(CONTENT_TOP, 6);
+    expect(second![1]!.y - bottom(second![0]!)).toBeCloseTo(5, 6);
+    expect(first![1]!.y - bottom(first![0]!)).toBeCloseTo(5, 6);
   });
 
   it('extends a sliced outer piece below the inner wrappers that close on its page', () => {
