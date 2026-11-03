@@ -138,7 +138,8 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci --ignore-scripts
-      # Builds the demo and fails above 15 KB gzipped of @ngpdf/core in the initial chunks.
+      # Builds dist/core and the demo against it, and fails above 15 KB gzipped of @ngpdf/core in
+      # the initial chunks or when the package's main file imports the engine statically.
       - run: node scripts/bundle-budget.mjs
 
   build:

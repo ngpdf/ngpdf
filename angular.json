@@ -80,6 +80,10 @@
               "optimization": false,
               "extractLicenses": false,
               "sourceMap": true
+            },
+            "budget": {
+              "tsConfig": "projects/demo/tsconfig.budget.json",
+              "outputPath": "dist/demo-budget"
             }
           },
           "defaultConfiguration": "production"

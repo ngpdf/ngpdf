@@ -39,7 +39,7 @@ All toolchains run in Docker. Nothing is installed on the host except nvm.
 ./scripts/dev npm test -- <pattern>    # one area, e.g. paginate
 ./scripts/dev npm run build:core       # ng-packagr build of @ngpdf/core
 ./scripts/dev npx ng build demo
-./scripts/dev node scripts/bundle-budget.mjs   # eager size of @ngpdf/core in the demo
+./scripts/dev node scripts/bundle-budget.mjs   # eager size of the built @ngpdf/core in the demo
 node scripts/e2e.mjs [--update]        # demo PDFs in headless Chrome vs e2e/expected/*.txt
 ./scripts/dev npm run build:site       # ngpdf.dev, prerendered to dist/site/browser
 ```
