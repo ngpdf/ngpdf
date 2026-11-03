@@ -451,7 +451,7 @@ function notesOf(pdf) {
 
 /**
  * Each painted path in the page content streams, as its path operators, then its paint operator,
- * then `dotted` (a 0 first dash) or `dashed` when a dash pattern is set; the result counts each such key. Clipping paths (`n`)
+ * then `dotted` (a 0 first dash with round caps) or `dashed` when a dash pattern is set; the result counts each such key. Clipping paths (`n`)
  * are left out. pdfkit compresses the content, so each FlateDecode stream is inflated first.
  */
 function pathsOf(pdf) {
@@ -469,21 +469,26 @@ function pathsOf(pdf) {
     }
     // Only page content: a font or image stream does not open a graphics state.
     if (!/^q$/m.test(content)) continue;
-    const dashes = [null];
+    // The dash pattern (`null` when solid) and whether the caps are round, per graphics state.
+    const states = [{ dash: null, round: false }];
+    const state = () => states[states.length - 1];
     let path = [];
     let operands = [];
     for (const [token] of content.matchAll(/\[[^\]]*\]|\S+/g)) {
-      if (token === 'q') dashes.push(dashes.at(-1));
-      else if (token === 'Q') dashes.pop();
+      if (token === 'q') states.push({ ...state() });
+      else if (token === 'Q') states.pop();
+      else if (token === 'J') state().round = operands.at(-1) === '1';
       else if (token === 'd') {
-        // A dash pattern starting with a 0 dash draws dots (with round caps); `[]` is solid.
         const pattern = operands.at(-2) ?? '';
-        const dotted = /^\[\s*0(?:\.0*)?(?:\s|\])/.test(pattern);
-        dashes[dashes.length - 1] = /\d/.test(pattern) ? (dotted ? 'dotted' : 'dashed') : null;
+        state().dash = /\d/.test(pattern) ? pattern : null;
       } else if (['m', 'l', 'c', 'v', 'y', 'h', 're'].includes(token)) path.push(token);
       else if (['f', 'f*', 'S', 's', 'B', 'B*', 'b', 'b*', 'n'].includes(token)) {
         if (token !== 'n' && path.length > 0) {
-          const key = `${path.join(' ')} ${token}${dashes.at(-1) ? ` ${dashes.at(-1)}` : ''}`;
+          const { dash, round } = state();
+          // A 0 first dash draws dots only with round caps; with butt caps it draws nothing.
+          const dots = round && /^\[\s*0(?:\.0*)?(?:\s|\])/.test(dash ?? '');
+          const kind = dash === null ? '' : dots ? ' dotted' : ' dashed';
+          const key = `${path.join(' ')} ${token}${kind}`;
           counts[key] = (counts[key] ?? 0) + 1;
         }
         path = [];
