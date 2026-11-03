@@ -1166,6 +1166,34 @@ describe('renderDocument with pdfPerSheet', () => {
     ]);
   });
 
+  it('rejects an image over maxImageBytes that only a later sheet of the template shows', async () => {
+    const png = testPng();
+    const fetchFn = vi.fn(() => Promise.resolve(new Response(png as BodyInit)));
+    vi.stubGlobal('fetch', fetchFn);
+    // Not on the first render, which reserves the height and loads with the rest of the document.
+    const render = (_slot: PdfNode, context: PdfPerSheetContext): PdfNode =>
+      el(
+        'div',
+        {},
+        context.sheet === 2
+          ? [el('pdf-image', { width: '10', height: '10' }, [], { src: '/second.png' })]
+          : [],
+      );
+    const footer = () => el('pdf-view', {}, [perSheetSlot()], { fixed: 'bottom' });
+    const renderWith = (maxImageBytes: number) =>
+      renderDocument(host({}, [pageOf(2, footer())]), {
+        writer: recordingWriter(),
+        dev: false,
+        perSheet: render,
+        maxImageBytes,
+      });
+    await expect(renderWith(png.length - 1)).rejects.toThrow(
+      `ngpdf: could not load image "/second.png": larger than ${String(png.length - 1)} bytes`,
+    );
+    await expect(renderWith(png.length)).resolves.toBeDefined();
+    expect(fetchFn).toHaveBeenCalledTimes(2);
+  });
+
   it('draws an emoji that only a later sheet shows as an image, loading each once', async () => {
     const png =
       'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGO4y2AIAALMAQ+JqrH2AAAAAElFTkSuQmCC';

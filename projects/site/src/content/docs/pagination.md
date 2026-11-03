@@ -226,6 +226,7 @@ Put an `ng-template` with the `pdfPerSheet` directive inside a fixed view to ren
 - The template renders like the rest of the document: pipes, inputs, services and your own components work in it. Change detection runs on the template alone, once per sheet. Each template destroys its previous sheet's content before it renders the next one, and its last one when the document is destroyed, so a long document keeps at most one sheet's content per template in memory.
 - The rest of the fixed view's content stays the same on every sheet. The template's content is drawn where the `ng-template` sits in the view.
 - A `pdf-page-number` inside the template shows the same numbers as `sheet` and `total`.
+- A `pdf-image` in the template loads like any other, under the same `maxImageBytes` and server `fetchImage`. Each sheet loads only the sources no earlier sheet loaded, so an image over the cap that only a later sheet shows still rejects the render.
 - `pdfPerSheet` works only inside a fixed view (at any depth inside it). Anywhere else, the render fails with `ngpdf: pdfPerSheet must be inside a fixed pdf-view`. Content in the flow that changed per sheet could move a page break, which would change the number of sheets and so the content again.
 - An `anchor` or `bookmark` inside the template is ignored, since its element would be on every sheet. Put it on the fixed view itself.
 
