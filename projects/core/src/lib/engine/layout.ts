@@ -293,9 +293,29 @@ function styleOf(styles: ReadonlyMap<PdfNode, ResolvedStyle>, node: PdfNode): Re
   return style;
 }
 
+/** A pdf-page's `dpi` prop, 72 when unset; anything but a finite number above 0 throws. */
+export function pageDpi(page: PdfNode): number {
+  const dpi = propsOf(page)['dpi'];
+  if (dpi === undefined) return 72;
+  if (typeof dpi !== 'number' || !Number.isFinite(dpi) || dpi <= 0) {
+    const label =
+      typeof dpi === 'number' || typeof dpi === 'string' ? String(dpi) : JSON.stringify(dpi);
+    throw new Error(`ngpdf: invalid dpi "${label}" on pdf-page`);
+  }
+  return dpi;
+}
+
+/** The dpi of the nearest pdf-page above `node`, or 72 without one. */
+function dpiAbove(node: PdfNode): number {
+  for (let current = node.parent; current; current = current.parent) {
+    if (current.kind === 'element' && current.tag === 'pdf-page') return pageDpi(current);
+  }
+  return 72;
+}
+
 /**
  * An image with one dimension set follows the aspect ratio for the other; with none set it
- * takes its natural size (1 pixel = 1pt), capped to the available width.
+ * takes its natural size (72 / dpi points per pixel of its page), capped to the available width.
  */
 function sizeImage(
   node: YogaNode,
@@ -303,6 +323,7 @@ function sizeImage(
   asset: ImageAsset,
   yoga: Yoga,
   parent: ResolvedStyle | undefined,
+  dpi: number,
 ): void {
   const { width, height } = style;
   if (!(asset.width > 0 && asset.height > 0)) {
@@ -320,9 +341,16 @@ function sizeImage(
     if (style.alignSelf === 'auto' && parent?.alignItems === 'stretch') {
       node.setAlignSelf(yoga.ALIGN_FLEX_START);
     }
+    const natural = (asset.width * 72) / dpi;
+    // Yoga works in float32: a tiny dpi must not hand it an infinite size.
+    if (!Number.isFinite(Math.fround(Math.max(natural, natural / ratio)))) {
+      throw new Error(
+        `ngpdf: pdf-image natural size is too large at dpi ${String(dpi)}; set a width or a larger dpi`,
+      );
+    }
     node.setMeasureFunc((available, mode) => {
-      let fitted = Math.min(asset.width, available);
-      if (mode === yoga.MEASURE_MODE_UNDEFINED) fitted = asset.width;
+      let fitted = Math.min(natural, available);
+      if (mode === yoga.MEASURE_MODE_UNDEFINED) fitted = natural;
       else if (mode === yoga.MEASURE_MODE_EXACTLY) fitted = available;
       return { width: fitted, height: fitted / ratio };
     });
@@ -553,6 +581,7 @@ export function layoutBox(
         asset,
         yoga,
         current.parent ? styleFor(current.parent) : undefined,
+        dpiAbove(current),
       );
     }
     const isText = current.tag === 'pdf-text';

@@ -1032,6 +1032,71 @@ describe('renderDocument with fonts', () => {
   });
 });
 
+describe('renderDocument with a page dpi', () => {
+  // 200 x 100 pixels.
+  const png = testPng({ width: 200, height: 100 });
+
+  const imageSizes = (writer: ReturnType<typeof recordingWriter>): number[][][] =>
+    writer.recorded[0]!.pages.map((sheet) =>
+      sheet.ops.flatMap((op) => (op.op === 'image' ? [[op.w, op.h]] : [])),
+    );
+
+  it('draws an image without a size at 72 / dpi points per pixel, page by page', async () => {
+    const writer = recordingWriter();
+    const image = (): PdfNode => el('pdf-image', {}, [], { src: png });
+    await renderDocument(
+      host({}, [
+        el('pdf-page', {}, [image()], { size: 'A4', dpi: 144 }),
+        el('pdf-page', {}, [image()], { size: 'A4' }),
+        el('pdf-page', {}, [image(), el('pdf-image', { width: '50' }, [], { src: png })], {
+          size: 'A4',
+          dpi: 300,
+        }),
+      ]),
+      { writer, dev: false },
+    );
+    expect(imageSizes(writer)).toEqual([
+      [[100, 50]],
+      [[200, 100]],
+      [
+        [48, 24],
+        [50, 25],
+      ],
+    ]);
+  });
+
+  it('sizes images in fixed views and pdfPerSheet content at the dpi of their page', async () => {
+    const writer = recordingWriter();
+    const header = el('pdf-view', {}, [el('pdf-image', {}, [], { src: png })], { fixed: 'top' });
+    const footer = el('pdf-view', {}, [perSheetSlot()], { fixed: 'bottom' });
+    const rows = [0, 1, 2].map(() => el('pdf-view', { height: '300' }));
+    const render = (): PdfNode => el('div', {}, [el('pdf-image', {}, [], { src: png })]);
+    await renderDocument(
+      host({}, [el('pdf-page', {}, [header, footer, ...rows], { size: 'A4', dpi: 288 })]),
+      { writer, dev: false, perSheet: render },
+    );
+    const sizes = imageSizes(writer);
+    expect(sizes).toHaveLength(2);
+    for (const sheet of sizes) {
+      expect(sheet).toEqual([
+        [50, 25],
+        [50, 25],
+      ]);
+    }
+  });
+
+  it('rejects a dpi that is not a number greater than 0', async () => {
+    for (const dpi of [0, -72, Number.NaN, Number.POSITIVE_INFINITY, '300', null]) {
+      await expect(
+        renderDocument(host({}, [el('pdf-page', {}, [text('x')], { size: 'A4', dpi })]), {
+          writer: recordingWriter(),
+          dev: false,
+        }),
+      ).rejects.toThrow(`ngpdf: invalid dpi "${String(dpi)}" on pdf-page`);
+    }
+  });
+});
+
 /** The anchor comment a `pdfPerSheet` directive leaves where its template sits. */
 function perSheetSlot(): PdfNode {
   const node = createNode('comment');

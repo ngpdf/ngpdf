@@ -129,7 +129,7 @@ NGPDF_APT=poppler-utils ./scripts/dev node scripts/server-check.mjs   # packed d
 - **Units:**
   - a bare number and `pt` are points;
   - 1in = 72pt, 1cm = 72/2.54pt, 1mm = 72/25.4pt;
-  - `px` = 1pt;
+  - `px` = 1pt, whatever the page's `dpi`;
   - `%` is of the parent's content box;
   - any other unit throws.
 - **Display:** `display: none` leaves an element and all it holds out of the document before
@@ -279,6 +279,10 @@ NGPDF_APT=poppler-utils ./scripts/dev node scripts/server-check.mjs   # packed d
   - Formats are PNG and JPEG, from a data URL, an http(s) URL, a `Blob`, an `ArrayBuffer` or a
     `Uint8Array` (a Node `Buffer` too).
   - `object-fit` is `contain` (default) or `cover`.
+  - An image with no `width` and no `height` takes 72 / `dpi` points per pixel, where `dpi` is
+    its `pdf-page`'s (72 by default; anything but a finite number above 0 throws
+    `ngpdf: invalid dpi "<value>" on pdf-page`; a natural size past float32 throws too). `dpi`
+    changes nothing else: no `/UserUnit`.
   - A failed load rejects the render with `ngpdf: could not load image "<src>": <reason>`.
   - The render option `maxImageBytes` (no cap by default) caps fetched image URLs only: past it,
     the reason is `larger than N bytes`. A `Content-Length` over it is refused before the body is
