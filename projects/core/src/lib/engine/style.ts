@@ -1226,10 +1226,12 @@ function apply(
       if (!UNPOSITIONED.has(tag)) style.inset = withSide(style.inset, property, offset);
       break;
     }
-    case 'break-before':
-      style.breakBefore =
-        style.breakBefore || oneOf(value, ['auto', 'page'], property, tag) === 'page';
+    case 'break-before': {
+      // Checked before the `||`, so the breakBefore prop does not skip the check.
+      const keyword = oneOf(value, ['auto', 'page'], property, tag);
+      style.breakBefore = style.breakBefore || keyword === 'page';
       break;
+    }
     case 'break-after': {
       const keyword = oneOf(value, ['auto', 'page', 'avoid', 'avoid-page'], property, tag);
       style.breakAfter = style.breakAfter || keyword === 'page';

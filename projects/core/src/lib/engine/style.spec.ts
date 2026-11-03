@@ -1739,6 +1739,19 @@ describe('resolveStyles: unknown keywords', () => {
     );
   });
 
+  it('checks break-before and break-after when the element also has the breakBefore or breakAfter prop', () => {
+    for (const [prop, property] of [
+      ['breakBefore', 'break-before'],
+      ['breakAfter', 'break-after'],
+    ] as const) {
+      const view = el('pdf-view', { [property]: 'always' });
+      view.owner = { pdfProps: () => ({ [prop]: true }) };
+      expect(() => resolveStyles(el('pdf-document', {}, [view]))).toThrow(
+        `ngpdf: invalid value "always" for ${property} on pdf-view; use auto`,
+      );
+    }
+  });
+
   it('still ignores an unknown property', () => {
     expect(() => styleOf({ 'font-stretch': 'wobbly', 'page-break-before': 'x' })).not.toThrow();
   });
