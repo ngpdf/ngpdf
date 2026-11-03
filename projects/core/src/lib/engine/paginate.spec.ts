@@ -653,6 +653,21 @@ describe('paginatePage: page breaks', () => {
     expect(pages[2]!.placed[0]!.box.node).toBe(header);
   });
 
+  it('ignores break-before on an absolute box in a repeated header row', () => {
+    const marker = el('pdf-view', {
+      position: 'absolute',
+      width: '10',
+      height: '10',
+      'break-before': 'page',
+    });
+    const header = el('pdf-row', { height: '20' }, [el('pdf-cell', {}, [marker])], {
+      header: true,
+    });
+    const tableNode = el('pdf-table', {}, [header, row()], { columns: ['1fr'] });
+    const pages = paginate(page([el('pdf-view', { height: '20' }), tableNode]));
+    expect(pages).toHaveLength(1);
+  });
+
   it('starts a new page after break-after: page', () => {
     const first = el('pdf-view', { height: '20', 'break-after': 'page' });
     const second = el('pdf-view', { height: '20' });
