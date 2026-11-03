@@ -4,9 +4,10 @@
 // preview in a deferred chunk, so the viewer in main means @ngpdf/core pulled it in.
 //
 // 1. Builds dist/core (`npm run build:core`).
-// 2. Follows the static imports of dist/core/fesm2022/ngpdf-core.mjs and fails if one of the files
-//    it reaches imports pdfkit, Yoga or linebreak, or is the engine chunk. Dynamic import() is not
-//    followed: that is how the engine is loaded.
+// 2. Follows the static imports of each entry point in the `exports` of dist/core/package.json
+//    (ngpdf-core.mjs, -viewer, -server) and fails if one of the files it reaches imports pdfkit,
+//    Yoga or linebreak, or is the engine chunk. Dynamic import() is not followed: that is how the
+//    engine is loaded.
 // 3. Builds the demo against dist/core (the `budget` configuration, projects/demo/tsconfig.budget.json),
 //    reads the esbuild metafile that `--stats-json` writes, and checks the initial chunks.
 //
@@ -41,28 +42,39 @@ if (!process.argv.includes('--skip-build')) {
   execFileSync('npm', ['run', 'build:core'], { stdio: 'inherit' });
 }
 
-// Static imports of the package's main entry point.
+// Static imports of each of the package's entry points (`exports` in dist/core/package.json).
 // FESM files have their imports at the top level, one statement each, and no `;` inside one.
 const STATIC_IMPORT =
   /^\s*(?:import|export)\b[^;]*?\bfrom\s*["']([^"']+)["']|^\s*import\s*["']([^"']+)["']/gm;
-if (!existsSync(join(FESM_DIR, CORE_ENTRY))) fail(`no ${join(FESM_DIR, CORE_ENTRY)}`);
-const reached = new Set();
+const entryPoints = Object.values(
+  JSON.parse(readFileSync('dist/core/package.json', 'utf8')).exports ?? {},
+)
+  .map((target) => target?.default)
+  .filter((target) => typeof target === 'string' && target.startsWith('./fesm2022/'))
+  .map((target) => target.slice('./fesm2022/'.length));
+if (!entryPoints.includes(CORE_ENTRY)) fail(`no ${CORE_ENTRY} in the exports of dist/core`);
 const fesmLeaks = [];
-const fesmQueue = [CORE_ENTRY];
-while (fesmQueue.length > 0) {
-  const name = fesmQueue.pop();
-  if (reached.has(name)) continue;
-  reached.add(name);
-  if (ENGINE_CHUNK.test(name)) fesmLeaks.push(`${name} (the engine chunk)`);
-  for (const match of readFileSync(join(FESM_DIR, name), 'utf8').matchAll(STATIC_IMPORT)) {
-    const specifier = match[1] ?? match[2];
-    if (specifier.startsWith('./')) fesmQueue.push(specifier.slice(2));
-    else if (ENGINE_PACKAGES.test(specifier)) fesmLeaks.push(`${specifier} (imported by ${name})`);
+for (const entryPoint of entryPoints) {
+  if (!existsSync(join(FESM_DIR, entryPoint))) fail(`no ${join(FESM_DIR, entryPoint)}`);
+  const reached = new Set();
+  const fesmQueue = [entryPoint];
+  while (fesmQueue.length > 0) {
+    const name = fesmQueue.pop();
+    if (reached.has(name)) continue;
+    reached.add(name);
+    if (ENGINE_CHUNK.test(name)) fesmLeaks.push(`${entryPoint}: ${name} (the engine chunk)`);
+    for (const match of readFileSync(join(FESM_DIR, name), 'utf8').matchAll(STATIC_IMPORT)) {
+      const specifier = match[1] ?? match[2];
+      if (specifier.startsWith('./')) fesmQueue.push(specifier.slice(2));
+      else if (ENGINE_PACKAGES.test(specifier)) {
+        fesmLeaks.push(`${entryPoint}: ${specifier} (imported by ${name})`);
+      }
+    }
   }
 }
 if (fesmLeaks.length > 0) {
   fail(
-    `${FESM_DIR}/${CORE_ENTRY} reaches engine code through a static import\n  ${fesmLeaks.join('\n  ')}`,
+    `an entry point in ${FESM_DIR} reaches engine code through a static import\n  ${fesmLeaks.join('\n  ')}`,
   );
 }
 
