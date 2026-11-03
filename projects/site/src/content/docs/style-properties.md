@@ -12,7 +12,7 @@ In the tables:
 - **length** is a number with an optional unit: none or `pt` (points), `px` (= 1pt, whatever the page's `dpi`), `in`, `cm` or `mm`. Any other unit throws.
 - **length/%** also accepts a percentage of the parent's content box.
 - **color** is hex (3, 4, 6 or 8 digits), `rgb()`/`rgba()`, a CSS named color or `transparent`.
-- Keywords are matched in any case, as in CSS: `CENTER` is `center`. That covers the keywords of `text-align`, `text-decoration`, `text-transform`, `text-overflow`, `hyphens`, `vertical-align`, `normal` in `letter-spacing` and `line-height`, `display`, `flex-direction`, `flex-wrap`, `flex-flow`, `justify-content`, `align-items`, `align-self`, `align-content`, `object-fit`, `overflow`, `position`, `font-weight`, `font-style`, `break-before`, `break-after` and `break-inside`, `none` in `max-lines`, `none` and the function names in `transform`, the keywords of `transform-origin`, `auto` in lengths, `auto` and `none` in `flex`, and the border styles, and the gradient function names and keywords in `background` and `background-image`.
+- Keywords are matched in any case, as in CSS: `CENTER` is `center`. That covers the keywords of `text-align`, `text-decoration`, `text-transform`, `text-overflow`, `hyphens`, `vertical-align`, `white-space`, `normal` in `letter-spacing` and `line-height`, `display`, `flex-direction`, `flex-wrap`, `flex-flow`, `justify-content`, `align-items`, `align-self`, `align-content`, `object-fit`, `overflow`, `position`, `font-weight`, `font-style`, `break-before`, `break-after` and `break-inside`, `none` in `max-lines`, `none` and the function names in `transform`, the keywords of `transform-origin`, `auto` in lengths, `auto` and `none` in `flex`, and the border styles, and the gradient function names and keywords in `background` and `background-image`.
 
 ## Text
 
@@ -31,6 +31,7 @@ All text properties are inherited by child elements.
 | `letter-spacing` | length, negative allowed, or `normal` (0): space after each character | `0` |
 | `text-transform` | `none`, `uppercase`, `lowercase`, `capitalize` | `none` |
 | `hyphens` | `manual` (break at soft hyphens), `none`, `auto` (also where the [hyphenation function](/docs/text-and-fonts#automatic-hyphenation) allows) | `manual` |
+| `white-space` | `normal`, `nowrap`, `pre`, `pre-line`, `pre-wrap`: which spaces and line breaks are kept, and whether the text wraps. See [White space](/docs/text-and-fonts#white-space) | `normal` |
 
 `max-lines`, `text-overflow` and `vertical-align` are not inherited:
 
@@ -40,7 +41,7 @@ All text properties are inherited by child elements.
 | `text-overflow` | `clip`, `ellipsis`: with a fixed `height` or `max-height` on the same `pdf-text`, keep the lines that fit, the last ending in `…` when text was cut (see [Cutting text to its height](/docs/text-and-fonts#cutting-text-to-its-height)) | `clip` |
 | `vertical-align` | on a `pdf-span` only: `baseline`, `super`, `sub`, a length (raises; negative lowers) or `N%` of the span's line height. See [Superscript and subscript](/docs/text-and-fonts#superscript-and-subscript) | `baseline` |
 
-A `pdf-span` takes `display`, `color`, `font-family`, `font-size`, `font-weight`, `font-style`, `text-decoration`, `letter-spacing`, `text-transform`, `hyphens` and `vertical-align`; `line-height`, `text-align`, `max-lines` and `text-overflow` come from its `pdf-text`. See [Styled runs](/docs/text-and-fonts#styled-runs-pdf-span).
+A `pdf-span` takes `display`, `color`, `font-family`, `font-size`, `font-weight`, `font-style`, `text-decoration`, `letter-spacing`, `text-transform`, `hyphens`, `vertical-align` and `white-space`; `line-height`, `text-align`, `max-lines` and `text-overflow` come from its `pdf-text`. See [Styled runs](/docs/text-and-fonts#styled-runs-pdf-span).
 
 Without a registered family in the list: `font-family` contains `courier` or `mono`: Courier. Contains `times`, or `serif` without `sans`: Times. Otherwise Helvetica. With one, each character takes the first font in the list that has it. See [Text and fonts](/docs/text-and-fonts).
 
@@ -140,7 +141,7 @@ Everything else is ignored, including:
 - `z-index`, `overflow-x`, `overflow-y`;
 - `order`;
 - `box-shadow`;
-- `font`, `word-spacing`, `white-space`;
+- `font`, `word-spacing`;
 - custom properties (`--name`).
 
 Some styles are ignored in specific places:
@@ -151,7 +152,7 @@ Some styles are ignored in specific places:
 - margins, `min-width` and `max-width` on a `pdf-cell` inside a table;
 - position and size styles other than `height` on `pdf-page-number`;
 - `position`, `top`, `right`, `bottom` and `left` on a `pdf-page`, a `pdf-row` and a `pdf-cell`;
-- everything except `display` and the ten text properties above on a `pdf-span` (with a warning);
+- everything except `display` and the eleven text properties above on a `pdf-span` (with a warning);
 - `vertical-align` on anything but a `pdf-span` (with a warning).
 
 ## Throws

@@ -228,8 +228,11 @@ NGPDF_APT=poppler-utils ./scripts/dev node scripts/server-check.mjs   # packed d
   - Wrapper backgrounds and borders are sliced per page; a gradient runs over the whole wrapper,
     so each sheet shows its part.
 - **Text wrapping:** text wraps at Unicode line-break opportunities. A word wider than its box breaks
-  at the box edge, unless it can be hyphenated. `max-lines` keeps at most N lines of a `pdf-text`;
-  when text was cut, the last line ends with `…` in the face of its last run, or else in the first
+  at the box edge, unless it can be hyphenated. `white-space` (`normal`, `nowrap`, `pre`,
+  `pre-line`, `pre-wrap`, inherited, a `pdf-span` can set it) works as in CSS: kept line breaks
+  (LF, CRLF, CR) force a break, tabs under `pre` and `pre-wrap` go to stops every 8 spaces of
+  their font from the line start, and text that does not wrap overflows its box. `max-lines`
+  keeps at most N lines of a `pdf-text`; when text was cut, the last line ends with `…` in the face of its last run, or else in the first
   font of its `font-family` list that has `…`; failing that, `...` the same way. When no font has
   either, `…` takes the first font's fallback and the missing-character warning.
   `text-overflow: ellipsis` (default `clip`, not inherited) on a `pdf-text` with its own fixed
@@ -251,8 +254,8 @@ NGPDF_APT=poppler-utils ./scripts/dev node scripts/server-check.mjs   # packed d
     font).
 - **Styled runs:** a `pdf-span` inside a `pdf-text` changes only `color`, `font-family`,
   `font-size`, `font-weight`, `font-style`, `text-decoration`, `letter-spacing`,
-  `text-transform`, `hyphens` and `vertical-align`. The paragraph breaks as one text, and runs of
-  different sizes share a baseline. A `pdf-span` outside a `pdf-text` throws.
+  `text-transform`, `hyphens`, `vertical-align` and `white-space`. The paragraph breaks as one
+  text, and runs of different sizes share a baseline. A `pdf-span` outside a `pdf-text` throws.
 - **Line height:** a line is its largest run's `font-size × line-height` tall. As in CSS, each
   run's leading is its own `font-size × line-height` less its ascent and descent, split half
   above and half below it, and negative when that run's height is less than its ascent plus

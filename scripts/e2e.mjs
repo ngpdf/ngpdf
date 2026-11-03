@@ -157,6 +157,12 @@ const DOCUMENTS = [
       'm c l c S dotted': 1,
     },
   },
+  // Line breaks and tabs from data, kept by white-space.
+  {
+    name: 'white-space-sample',
+    pages: 1,
+    contains: ['Marta Quintela', 'Lagoa Serena, 01234-000', 'REF 2026 0417 B'],
+  },
 ];
 
 const update = process.argv.includes('--update');

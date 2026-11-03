@@ -478,6 +478,18 @@ describe('displayList', () => {
       expect(ops[2]!.x).toBeCloseTo(36 + first.runs[2]!.x + 2 * spacing, 6);
     });
 
+    it('does not stretch a line that ends at a kept line break', () => {
+      const box = text('one two\nthree four five six seven eight nine', {
+        'text-align': 'justify',
+        'white-space': 'pre-line',
+        width: '100',
+      });
+      const ops = only(list(layout(page([box]))[0]!, 0, 1), 'text');
+      expect(ops[0]!.text).toBe('one two');
+      expect(ops[0]!.wordSpacing ?? 0).toBe(0);
+      expect(ops[1]!.wordSpacing).toBeGreaterThan(0);
+    });
+
     it('keeps the last line of each piece of a split paragraph justified unless it ends the text', () => {
       const lines = Array.from({ length: 6 }, () => 'aa bb').join(' ');
       const box = text(lines, { 'text-align': 'justify', width: '30', 'line-height': '1' });
