@@ -250,13 +250,19 @@ NGPDF_APT=poppler-utils ./scripts/dev node scripts/server-check.mjs   # packed d
     font).
 - **Styled runs:** a `pdf-span` inside a `pdf-text` changes only `color`, `font-family`,
   `font-size`, `font-weight`, `font-style`, `text-decoration`, `letter-spacing`,
-  `text-transform`, `hyphens` and `white-space`. The paragraph breaks as one text, and runs of
-  different sizes share a baseline. A `pdf-span` outside a `pdf-text` throws.
+  `text-transform`, `hyphens`, `vertical-align` and `white-space`. The paragraph breaks as one
+  text, and runs of different sizes share a baseline. A `pdf-span` outside a `pdf-text` throws.
 - **Line height:** a line is its largest run's `font-size × line-height` tall. As in CSS, each
   run's leading is its own `font-size × line-height` less its ascent and descent, split half
   above and half below it, and negative when that run's height is less than its ascent plus
   descent. The run that reaches highest above its baseline sets the line's baseline. The page
   number's line is split the same way. Pagination only sees the line heights.
+- **Superscript and subscript:** `vertical-align` (not inherited) applies to a `pdf-span` only and
+  warns elsewhere. `super` raises the baseline 0.33em and `sub` lowers it 0.2em of the parent's
+  font size, both at 70% of that size unless the span sets `font-size`; a length raises by it, a
+  percentage is of the span's line height. A nested span adds its move to its parent's. A line
+  grows where a moved run's box (its `font-size × line-height` around it by half-leading) sticks
+  out of it; decorations move with the run, and link areas too, cut to the line box.
 - **Links:** `<pdf-link [href]>` is a column `pdf-view` where a view can go and an inline run like
   a `pdf-span` inside a `pdf-text`. It changes nothing visually.
   - Only absolute `http:`, `https:` and `mailto:` URLs are written, normalized by `URL`. Any other

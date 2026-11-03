@@ -2739,3 +2739,148 @@ describe('emoji', () => {
     expect(image!.x).toBeCloseTo(after, 6);
   });
 });
+
+describe('vertical-align', () => {
+  function sup(content: string, style: Record<string, string> = {}): PdfNode {
+    return el('pdf-span', { 'vertical-align': 'super', ...style }, [
+      createNode('text', '', content),
+    ]);
+  }
+  const baselineOf = (op: Op<'text'>): number => op.y + writer.ascent(op.font, op.size);
+
+  it('draws a super run 0.33em above the line baseline and a sub run 0.2em below it', () => {
+    const paragraph = el('pdf-text', { 'font-size': '10' }, [
+      createNode('text', '', 'm'),
+      sup('2'),
+      createNode('text', '', ' H'),
+      el('pdf-span', { 'vertical-align': 'sub' }, [createNode('text', '', '2')]),
+      createNode('text', '', 'O'),
+    ]);
+    const ops = only(list(layout(page([paragraph]))[0]!, 0, 1), 'text');
+    expect(ops.map((op) => [op.text, op.size])).toEqual([
+      ['m', 10],
+      ['2', 7],
+      [' H', 10],
+      ['2', 7],
+      ['O', 10],
+    ]);
+    const baseline = baselineOf(ops[0]!);
+    expect(baselineOf(ops[1]!)).toBeCloseTo(baseline - 3.3, 6);
+    expect(baselineOf(ops[2]!)).toBeCloseTo(baseline, 6);
+    expect(baselineOf(ops[3]!)).toBeCloseTo(baseline + 2, 6);
+  });
+
+  it('draws the decoration of a shifted run with it', () => {
+    const paragraph = el('pdf-text', { 'font-size': '10' }, [
+      createNode('text', '', 'a'),
+      sup('1', { 'text-decoration': 'underline' }),
+    ]);
+    const [a, one] = only(list(layout(page([paragraph]))[0]!, 0, 1), 'text');
+    expect(one).toMatchObject({ underline: true });
+    expect(baselineOf(one!)).toBeCloseTo(baselineOf(a!) - 3.3, 6);
+  });
+
+  it('moves the link area of a shifted run with it, inside the line box', () => {
+    const paragraph = el('pdf-text', { 'font-size': '10' }, [
+      createNode('text', '', 'Note'),
+      el('pdf-link', {}, [sup('1')], { href: 'https://example.com/n1' }),
+    ]);
+    const laid = layout(page([paragraph]))[0]!;
+    const [line] = laid.placed[0]!.box.text!.lines;
+    const [area] = only(list(laid, 0, 1), 'link');
+    expect(area!.y).toBeCloseTo(36, 6);
+    expect(area!.h).toBeCloseTo(line!.height - 3.3, 6);
+    expect(area!.w).toBeCloseTo(writer.widthOf('1', 'Helvetica', 7), 6);
+  });
+
+  it('covers the plain and the shifted runs of one link fragment', () => {
+    const paragraph = el('pdf-text', { 'font-size': '10' }, [
+      el('pdf-link', {}, [createNode('text', '', 'x'), sup('2')], {
+        href: 'https://example.com/',
+      }),
+    ]);
+    const laid = layout(page([paragraph]))[0]!;
+    const [line] = laid.placed[0]!.box.text!.lines;
+    const links = only(list(laid, 0, 1), 'link');
+    expect(links).toHaveLength(1);
+    expect(links[0]!.y).toBeCloseTo(36, 6);
+    expect(links[0]!.h).toBeCloseTo(line!.height, 6);
+  });
+
+  it('keeps the link area of a lowered run inside the line box', () => {
+    const paragraph = el('pdf-text', { 'font-size': '10' }, [
+      createNode('text', '', 'x'),
+      el(
+        'pdf-link',
+        {},
+        [el('pdf-span', { 'vertical-align': 'sub' }, [createNode('text', '', '2')])],
+        {
+          href: 'https://example.com/',
+        },
+      ),
+    ]);
+    const laid = layout(page([paragraph]))[0]!;
+    const [line] = laid.placed[0]!.box.text!.lines;
+    const [area] = only(list(laid, 0, 1), 'link');
+    expect(area!.y).toBeCloseTo(36 + 2, 6);
+    expect(area!.y + area!.h).toBeCloseTo(36 + line!.height, 6);
+  });
+
+  it('gives a link with a raised and a lowered run one area over the whole line box', () => {
+    const paragraph = el('pdf-text', { 'font-size': '10' }, [
+      el(
+        'pdf-link',
+        {},
+        [sup('1'), el('pdf-span', { 'vertical-align': 'sub' }, [createNode('text', '', '2')])],
+        { href: 'https://example.com/' },
+      ),
+    ]);
+    const laid = layout(page([paragraph]))[0]!;
+    const [line] = laid.placed[0]!.box.text!.lines;
+    const links = only(list(laid, 0, 1), 'link');
+    expect(links).toHaveLength(1);
+    expect(links[0]!.x).toBeCloseTo(36, 6);
+    expect(links[0]!.w).toBeCloseTo(line!.width, 6);
+    expect(links[0]!.y).toBeCloseTo(36, 6);
+    expect(links[0]!.h).toBeCloseTo(line!.height, 6);
+  });
+
+  it('keeps a linked superscript clickable down to its glyph in a short line', () => {
+    const paragraph = el('pdf-text', { 'font-size': '10', 'line-height': '0.5' }, [
+      createNode('text', '', 'x'),
+      el('pdf-link', {}, [sup('1')], { href: 'https://example.com/' }),
+    ]);
+    const laid = layout(page([paragraph]))[0]!;
+    const [line] = laid.placed[0]!.box.text!.lines;
+    const ops = list(laid, 0, 1);
+    const one = only(ops, 'text').find((op) => op.text === '1')!;
+    const [area] = only(ops, 'link');
+    // As with unshifted text, a glyph over the edge of a short line box is cut at it.
+    const glyph = writer.ascent('Helvetica', 7) + writer.descent!('Helvetica', 7);
+    const lineBottom = 36 + line!.height;
+    expect(area!.y).toBeCloseTo(Math.max(36, one.y), 6);
+    expect(area!.y + area!.h).toBeCloseTo(
+      Math.min(lineBottom, Math.max(one.y + glyph, lineBottom - 3.3)),
+      6,
+    );
+    expect(area!.y + area!.h).toBeGreaterThan(36 + line!.height - 3.3);
+  });
+
+  it('raises an emoji in a shifted run with it', () => {
+    const thumbs: ImageAsset = { data: new Uint8Array([1]), width: 72, height: 72 };
+    const root = page([
+      el('pdf-text', { 'font-size': '10' }, [createNode('text', '', 'a'), sup('👍')]),
+    ]);
+    const ctx: LayoutContext = {
+      yoga,
+      metrics: writer,
+      images: new Map(),
+      emoji: new Map([['👍', thumbs]]),
+    };
+    const ops = list(paginatePage(root, resolveStyles(root), ctx)[0]!, 0, 1);
+    const [a] = only(ops, 'text');
+    const [image] = only(ops, 'image');
+    const descent = writer.descent!('Helvetica', 7);
+    expect(image!.y + image!.h).toBeCloseTo(baselineOf(a!) - 3.3 + descent, 6);
+  });
+});
