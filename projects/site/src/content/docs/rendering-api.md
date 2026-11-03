@@ -284,6 +284,7 @@ The returned promise rejects with an `Error`. Errors from ngpdf start with `ngpd
 | `ngpdf: text longer than 1 MB` | One text longer than 1,048,576 characters. |
 | `ngpdf: could not load font "<src>": <reason>` | A font from `providePdfFonts` could not be fetched or read. The URL is shown without its query string. |
 | `ngpdf: invalid font "<src>"` | The bytes are not a TrueType, OpenType, WOFF or WOFF2 font. |
+| `ngpdf: invalid font weight "<weight>" for "<family>"` | A `providePdfFonts` face whose `weight` is not `'normal'`, `'bold'` or a number from 1 to 1000. |
 | `ngpdf: <name> needs a browser; on the server, use renderToBuffer from @ngpdf/core/server` | `downloadPdf`, `PdfRenderer.download` or `PdfDownload` used on the server, or `pdfResource` given an `injector` there. See [Server rendering](/docs/server-rendering#what-needs-a-browser). |
 
 Errors from your own template, such as a missing required input or an exception in a binding, reject the render with Angular's own error.
@@ -298,11 +299,11 @@ Some problems still produce a PDF. ngpdf collects them during the render and pri
 | `ngpdf: characters missing from every font in their font-family, drawn as an empty box: <characters>` | See [Text and fonts](/docs/text-and-fonts#the-family-list-and-fallback). |
 | `ngpdf: emoji without an image, drawn as text: <emoji>` | Emoji whose image from `providePdfEmoji` was `null`, failed to load, took more than 10 seconds or was not a PNG or JPEG, or was a PNG cut off after its header. See [Emoji](/docs/text-and-fonts#emoji). |
 | `ngpdf: more than 500 distinct emoji; the rest are drawn as text` | See [Emoji](/docs/text-and-fonts#loading). |
-| `ngpdf: font "<family>" has no <face> face; using its <face> face` | A registered family without the weight or style asked for. See [Custom fonts](/docs/text-and-fonts#custom-fonts). |
+| `ngpdf: font "<family>" has no <face> face; using its <face> face` | A registered family without the weight or style asked for; the second face is the one drawn. See [Custom fonts](/docs/text-and-fonts#custom-fonts). |
 | `ngpdf: <element> is taller than a page and is cut at the bottom` | A unit is clipped. See [Pagination](/docs/pagination#units-taller-than-a-page). |
 | `ngpdf: ignored inside tables: <list>` | Row or cell styles that tables do not use. See [Tables](/docs/tables#padding-and-borders). |
 | `ngpdf: styles on <tag> are ignored; style a pdf-* element inside it` | Styles on a component host. See [Components in documents](/docs/components-in-documents#hosts-are-transparent). |
-| `ngpdf: border style "<style>" is not supported; drawing solid` | `dashed`, `dotted` and other styles are drawn solid. |
+| `ngpdf: border style "<style>" is not supported; drawing solid` | `double`, `groove`, `ridge`, `inset` and `outset` are drawn solid. |
 | `ngpdf: a fixed pdf-view must be a direct child of pdf-page` | A nested `fixed` view, laid out in the flow instead. |
 | `ngpdf: <property> has no effect on pdf-span` | A box property on a `pdf-span`. See [Styled runs](/docs/text-and-fonts#styled-runs-pdf-span). |
 | `ngpdf: a pdf-text inside a pdf-text is drawn in the outer style; use pdf-span` | A nested `pdf-text`. |

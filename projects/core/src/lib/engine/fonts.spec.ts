@@ -11,20 +11,33 @@ import type { CustomFont, FontName } from './writer';
 
 describe('fontFor', () => {
   it.each([
-    ['Helvetica', 'normal', 'normal', 'Helvetica'],
-    ['Helvetica', 'bold', 'normal', 'Helvetica-Bold'],
-    ['Helvetica', 'normal', 'italic', 'Helvetica-Oblique'],
-    ['Helvetica', 'bold', 'italic', 'Helvetica-BoldOblique'],
-    ['Times', 'normal', 'normal', 'Times-Roman'],
-    ['Times', 'bold', 'normal', 'Times-Bold'],
-    ['Times', 'normal', 'italic', 'Times-Italic'],
-    ['Times', 'bold', 'italic', 'Times-BoldItalic'],
-    ['Courier', 'normal', 'normal', 'Courier'],
-    ['Courier', 'bold', 'normal', 'Courier-Bold'],
-    ['Courier', 'normal', 'italic', 'Courier-Oblique'],
-    ['Courier', 'bold', 'italic', 'Courier-BoldOblique'],
+    ['Helvetica', 400, 'normal', 'Helvetica'],
+    ['Helvetica', 700, 'normal', 'Helvetica-Bold'],
+    ['Helvetica', 400, 'italic', 'Helvetica-Oblique'],
+    ['Helvetica', 700, 'italic', 'Helvetica-BoldOblique'],
+    ['Times', 400, 'normal', 'Times-Roman'],
+    ['Times', 700, 'normal', 'Times-Bold'],
+    ['Times', 400, 'italic', 'Times-Italic'],
+    ['Times', 700, 'italic', 'Times-BoldItalic'],
+    ['Courier', 400, 'normal', 'Courier'],
+    ['Courier', 700, 'normal', 'Courier-Bold'],
+    ['Courier', 400, 'italic', 'Courier-Oblique'],
+    ['Courier', 700, 'italic', 'Courier-BoldOblique'],
   ] as const)('maps %s %s %s to %s', (fontFamily, fontWeight, fontStyle, expected) => {
     expect(fontFor({ fontFamily, fontWeight, fontStyle })).toBe(expected);
+  });
+
+  it.each([
+    [1, 'Helvetica'],
+    [100, 'Helvetica'],
+    [300, 'Helvetica'],
+    [500, 'Helvetica'],
+    [501, 'Helvetica-Bold'],
+    [600, 'Helvetica-Bold'],
+    [900, 'Helvetica-Bold'],
+    [1000, 'Helvetica-Bold'],
+  ])('draws weight %d of a standard family in %s', (fontWeight, expected) => {
+    expect(fontFor({ fontFamily: 'Helvetica', fontWeight, fontStyle: 'normal' })).toBe(expected);
   });
 });
 
@@ -125,23 +138,23 @@ const INTER: FontRegistry = new Map([
   [
     'inter',
     [
-      { weight: 'normal', style: 'normal', font: 'font:0' },
-      { weight: 'bold', style: 'normal', font: 'font:1' },
+      { weight: 400, style: 'normal', font: 'font:0' },
+      { weight: 700, style: 'normal', font: 'font:1' },
     ],
   ],
-  ['noto sans jp', [{ weight: 'normal', style: 'normal', font: 'font:2' }]],
+  ['noto sans jp', [{ weight: 400, style: 'normal', font: 'font:2' }]],
 ]);
 
 const textStyle = (
   fontFamily: string,
-  fontWeight: 'normal' | 'bold' = 'normal',
+  fontWeight = 400,
   fontStyle: 'normal' | 'italic' = 'normal',
 ) => ({ fontFamily, fontWeight, fontStyle });
 
 describe('fontChain', () => {
   it('maps a list with no registered family to one standard font, as before', () => {
     expect(fontChain(textStyle('Georgia, serif'), INTER)).toEqual(['Times-Roman']);
-    expect(fontChain(textStyle('Courier New, monospace', 'bold'), INTER)).toEqual(['Courier-Bold']);
+    expect(fontChain(textStyle('Courier New, monospace', 700), INTER)).toEqual(['Courier-Bold']);
     expect(fontChain(textStyle('Arial'), new Map())).toEqual(['Helvetica']);
   });
 
@@ -168,7 +181,7 @@ describe('fontChain', () => {
 
   it('ends with a standard font when the list names none, for characters in WinAnsi', () => {
     expect(fontChain(textStyle('Inter'), INTER)).toEqual(['font:0', 'Helvetica']);
-    expect(fontChain(textStyle('Inter', 'bold'), INTER)).toEqual(['font:1', 'Helvetica-Bold']);
+    expect(fontChain(textStyle('Inter', 700), INTER)).toEqual(['font:1', 'Helvetica-Bold']);
   });
 
   it('matches family names in any case', () => {
@@ -177,7 +190,7 @@ describe('fontChain', () => {
 
   it('prefers a face of the same weight, then the regular face, and warns', () => {
     const warn = vi.fn();
-    expect(fontChain(textStyle('Inter', 'bold', 'italic'), INTER, warn)[0]).toBe('font:1');
+    expect(fontChain(textStyle('Inter', 700, 'italic'), INTER, warn)[0]).toBe('font:1');
     expect(warn).toHaveBeenCalledWith(
       'ngpdf: font "Inter" has no bold italic face; using its bold face',
     );
@@ -185,15 +198,90 @@ describe('fontChain', () => {
 
   it('uses the regular face when the asked-for one is missing, and warns', () => {
     const warn = vi.fn();
-    expect(fontChain(textStyle('Noto Sans JP', 'bold', 'italic'), INTER, warn)[0]).toBe('font:2');
+    expect(fontChain(textStyle('Noto Sans JP', 700, 'italic'), INTER, warn)[0]).toBe('font:2');
     expect(warn).toHaveBeenCalledWith(
       'ngpdf: font "Noto Sans JP" has no bold italic face; using its regular face',
     );
   });
 
+  // One face per weight, each named by it: font:300 is the 300 face.
+  const weights = (...list: number[]): FontRegistry =>
+    new Map([
+      [
+        'family',
+        list.map((weight) => ({
+          weight,
+          style: 'normal' as const,
+          font: `font:${String(weight)}`,
+        })),
+      ],
+    ]);
+  const pick = (registry: FontRegistry, weight: number, warn = vi.fn()) =>
+    fontChain(textStyle('Family', weight), registry, warn)[0];
+
+  it.each([
+    // Target 400: heavier up to 500 first, then lighter going down, then heavier going up.
+    [[300, 500, 600], 400, 'font:500'],
+    [[100, 300, 600], 400, 'font:300'],
+    [[600, 900], 400, 'font:600'],
+    [[450, 300], 400, 'font:450'],
+    // Target 500: lighter going down (400 first), then heavier.
+    [[300, 400, 600], 500, 'font:400'],
+    [[300, 600], 500, 'font:300'],
+    [[600, 900], 500, 'font:600'],
+    // Between 400 and 500: up to 500 first, then lighter, then heavier.
+    [[400, 480, 600], 450, 'font:480'],
+    [[400, 600], 450, 'font:400'],
+    // Below 400: lighter going down first, then heavier.
+    [[100, 200, 400], 300, 'font:200'],
+    [[400, 500], 300, 'font:400'],
+    [[100, 400], 250, 'font:100'],
+    // Above 500: heavier going up first, then lighter.
+    [[400, 700, 900], 600, 'font:700'],
+    [[300, 400], 800, 'font:400'],
+    [[700, 950], 800, 'font:950'],
+  ])('matches faces %j for weight %d as CSS does: %s', (list, weight, expected) => {
+    expect(pick(weights(...list), weight)).toBe(expected);
+  });
+
+  it('names the face it uses in the warning', () => {
+    const warn = vi.fn();
+    expect(pick(weights(400, 900), 300, warn)).toBe('font:400');
+    expect(warn).toHaveBeenCalledWith(
+      'ngpdf: font "Family" has no light face; using its regular face',
+    );
+    warn.mockClear();
+    expect(pick(weights(300, 900), 650, warn)).toBe('font:900');
+    expect(warn).toHaveBeenCalledWith('ngpdf: font "Family" has no 650 face; using its black face');
+  });
+
+  it('keeps the matched weight before the slant', () => {
+    const registry: FontRegistry = new Map([
+      [
+        'family',
+        [
+          { weight: 300, style: 'italic', font: 'font:0' },
+          { weight: 400, style: 'normal', font: 'font:1' },
+          { weight: 400, style: 'italic', font: 'font:2' },
+          { weight: 900, style: 'normal', font: 'font:3' },
+        ],
+      ],
+    ]);
+    const warn = vi.fn();
+    expect(fontChain(textStyle('Family', 400, 'italic'), registry, warn)[0]).toBe('font:2');
+    expect(fontChain(textStyle('Family', 300, 'normal'), registry, warn)[0]).toBe('font:0');
+    expect(warn).toHaveBeenCalledWith(
+      'ngpdf: font "Family" has no light face; using its light italic face',
+    );
+    expect(fontChain(textStyle('Family', 800, 'italic'), registry, warn)[0]).toBe('font:3');
+    expect(warn).toHaveBeenCalledWith(
+      'ngpdf: font "Family" has no extrabold italic face; using its black face',
+    );
+  });
+
   it('picks the face that matches weight and style', () => {
     const warn = vi.fn();
-    expect(fontChain(textStyle('Inter', 'bold'), INTER, warn)[0]).toBe('font:1');
+    expect(fontChain(textStyle('Inter', 700), INTER, warn)[0]).toBe('font:1');
     expect(warn).not.toHaveBeenCalled();
   });
 });

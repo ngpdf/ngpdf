@@ -53,6 +53,10 @@ describe('white-space', () => {
       [20, 10],
     ]);
     expect(texts('\na', 'pre')).toEqual(['', 'a']);
+    // With half-leading, an empty line's baseline sits where a line of its text would.
+    const spaced = layoutText('a\n\nb', styled('pre-line', { lineHeight: 1.5 }), Infinity, metrics);
+    expect(spaced.lines[1]?.ascent).toBe(spaced.lines[0]?.ascent);
+    expect(spaced.lines[1]?.height).toBe(15);
   });
 
   it('reads CRLF and a lone CR as one line break', () => {

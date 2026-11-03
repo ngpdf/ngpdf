@@ -1349,6 +1349,41 @@ describe('createPdfkitWriter', () => {
       expect(count(content, / d\n/g)).toBe(1);
     });
 
+    it('draws dotted strokes with a zero dash, a phase and round caps', async () => {
+      const content = contentOf(
+        await pdfText([
+          {
+            op: 'line',
+            x1: 0,
+            y1: 5,
+            x2: 40,
+            y2: 5,
+            width: 2,
+            color: '#000000',
+            opacity: 1,
+            dash: [0, 3.92],
+            dashPhase: 2.92,
+            cap: 'round',
+          },
+          {
+            op: 'path',
+            from: { x: 0, y: 0 },
+            segments: [{ kind: 'line', to: { x: 10, y: 0 } }],
+            width: 2,
+            color: '#000000',
+            opacity: 1,
+            dash: [6, 5.75],
+          },
+        ]),
+      );
+      expect(content).toMatch(
+        /\nq\n[^Q]*1 J\n[^Q]*\[0 3\.92\] 2\.92 d\n[^Q]*0 5 m\n40 5 l\nS\nQ\n/,
+      );
+      expect(content).toMatch(/\nq\n[^Q]*\[6 5\.75\] 0 d\n[^Q]*0 0 m\n10 0 l\nS\nQ\n/);
+      // Only the dotted line sets a cap.
+      expect(count(content, / J\n/g)).toBe(1);
+    });
+
     it('clips an image with re + W n and paints it with Do', async () => {
       const content = contentOf(
         await pdfText([

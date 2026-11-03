@@ -69,7 +69,7 @@ describe('numbers in exponent form', () => {
     expect(styleOf({ opacity: '1e-7' }).opacity).toBe(1e-7);
     expect(styleOf({ 'flex-grow': '2e0' }).flexGrow).toBe(2);
     expect(styleOf({ 'line-height': '1.5e0' }).lineHeight).toBe(1.5);
-    expect(styleOf({ 'font-weight': '7e2' }).fontWeight).toBe('bold');
+    expect(styleOf({ 'font-weight': '7e2' }).fontWeight).toBe(700);
     expect(styleOf({ transform: 'scale(1e-7)' }).transform).toEqual([
       { kind: 'scale', x: 1e-7, y: 1e-7 },
     ]);
@@ -130,7 +130,7 @@ describe('resolveStyles', () => {
       color: BLACK,
       fontFamily: 'Helvetica',
       fontSize: 10,
-      fontWeight: 'normal',
+      fontWeight: 400,
       fontStyle: 'normal',
       lineHeight: 1.2,
       textAlign: 'left',
@@ -215,20 +215,108 @@ describe('resolveStyles', () => {
     expect(style.borderColor.top).toEqual(BLACK);
   });
 
-  it('applies border to all sides and draws other styles solid', () => {
+  it('applies border to all sides with its style', () => {
     const warn = vi.fn();
     const style = styleOf({ border: '2pt dashed red' }, 'pdf-view', warn);
     expect(style.borderWidth).toEqual({ top: 2, right: 2, bottom: 2, left: 2 });
     expect(style.borderColor.left).toEqual(RED);
-    expect(warn).toHaveBeenCalledExactlyOnceWith(
-      'ngpdf: border style "dashed" is not supported; drawing solid',
+    expect(style.borderStyle).toEqual({
+      top: 'dashed',
+      right: 'dashed',
+      bottom: 'dashed',
+      left: 'dashed',
+    });
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it('defaults to solid, also when a shorthand gives no style', () => {
+    expect(styleOf({}).borderStyle.top).toBe('solid');
+    expect(styleOf({ 'border-width': '2' }).borderStyle.left).toBe('solid');
+    expect(styleOf({ border: '2 dotted', 'border-top': '1 red' }).borderStyle).toEqual({
+      top: 'solid',
+      right: 'dotted',
+      bottom: 'dotted',
+      left: 'dotted',
+    });
+  });
+
+  it('expands border-style like margin and sets one side with border-<side>-style', () => {
+    expect(styleOf({ 'border-style': 'dashed dotted' }).borderStyle).toEqual({
+      top: 'dashed',
+      right: 'dotted',
+      bottom: 'dashed',
+      left: 'dotted',
+    });
+    const side = styleOf({ border: '1 solid', 'border-left-style': 'DOTTED' });
+    expect(side.borderStyle).toEqual({
+      top: 'solid',
+      right: 'solid',
+      bottom: 'solid',
+      left: 'dotted',
+    });
+    const later = styleOf({ 'border-top-style': 'dotted', border: '1 dashed' });
+    expect(later.borderStyle.top).toBe('dashed');
+    expect(() => styleOf({ 'border-style': 'wavy' })).toThrow(/^ngpdf:/);
+    expect(() => styleOf({ 'border-style': 'solid solid solid solid solid' })).toThrow(/^ngpdf:/);
+    expect(() => styleOf({ 'border-top-style': 'solid dashed' })).toThrow(/^ngpdf:/);
+    // A shorthand takes one style, as in CSS.
+    expect(() => styleOf({ border: '1 double dashed' })).toThrow(
+      /^ngpdf: expected one border style/,
     );
+    expect(() => styleOf({ 'border-left': 'solid 1 none' })).toThrow(/^ngpdf:/);
+  });
+
+  it('gives a none or hidden side no width, in any declaration order', () => {
+    const style = styleOf({ border: '2 solid', 'border-style': 'none hidden solid dashed' });
+    expect(style.borderWidth).toEqual({ top: 0, right: 0, bottom: 2, left: 2 });
+    expect(style.borderStyle).toEqual({
+      top: 'none',
+      right: 'none',
+      bottom: 'solid',
+      left: 'dashed',
+    });
+    expect(styleOf({ border: 'none', 'border-width': '2' }).borderWidth.top).toBe(0);
+    // A later style brings back the width the shorthand gave.
+    const restyled = styleOf({ border: '2 none #000', 'border-top-style': 'dashed' });
+    expect(restyled.borderWidth).toEqual({ top: 2, right: 0, bottom: 0, left: 0 });
+    expect(restyled.borderStyle.top).toBe('dashed');
+    expect(styleOf({ 'border-left-style': 'hidden', 'border-width': '3' }).borderWidth).toEqual({
+      top: 3,
+      right: 3,
+      bottom: 3,
+      left: 0,
+    });
+  });
+
+  it('draws the other border styles solid with a warning', () => {
+    const warn = vi.fn();
+    const style = styleOf({ border: '2pt double red' }, 'pdf-view', warn);
+    expect(style.borderStyle.top).toBe('solid');
+    expect(warn).toHaveBeenCalledExactlyOnceWith(
+      'ngpdf: border style "double" is not supported; drawing solid',
+    );
+    const longhand = vi.fn();
+    const sides = styleOf(
+      { 'border-style': 'groove dashed', 'border-left-style': 'outset' },
+      'pdf-view',
+      longhand,
+    );
+    expect(sides.borderStyle).toEqual({
+      top: 'solid',
+      right: 'dashed',
+      bottom: 'solid',
+      left: 'solid',
+    });
+    expect(longhand.mock.calls).toEqual([
+      ['ngpdf: border style "groove" is not supported; drawing solid'],
+      ['ngpdf: border style "outset" is not supported; drawing solid'],
+    ]);
   });
 
   it('sends the border style warning to the sink only, never to the console', () => {
     const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-    styleOf({ border: '2pt dashed red' });
-    styleOf({ border: '2pt dashed red' }, 'pdf-view', vi.fn());
+    styleOf({ border: '2pt ridge red' });
+    styleOf({ border: '2pt ridge red' }, 'pdf-view', vi.fn());
     expect(consoleWarn).not.toHaveBeenCalled();
   });
 
@@ -287,10 +375,62 @@ describe('resolveStyles', () => {
     expect(styleOf({ 'flex-direction': 'row' }).flexDirection).toBe('row');
   });
 
-  it('resolves bold from keyword or weight >= 600', () => {
-    expect(styleOf({ 'font-weight': 'bold' }).fontWeight).toBe('bold');
-    expect(styleOf({ 'font-weight': '600' }).fontWeight).toBe('bold');
-    expect(styleOf({ 'font-weight': '500' }).fontWeight).toBe('normal');
+  it.each([
+    ['thin', 100],
+    ['extralight', 200],
+    ['light', 300],
+    ['normal', 400],
+    ['medium', 500],
+    ['semibold', 600],
+    ['bold', 700],
+    ['extrabold', 800],
+    ['black', 900],
+  ])('resolves font-weight %s to %d', (keyword, weight) => {
+    expect(styleOf({ 'font-weight': keyword }).fontWeight).toBe(weight);
+  });
+
+  it('keeps a numeric font-weight from 1 to 1000 as written', () => {
+    expect(styleOf({ 'font-weight': '1' }).fontWeight).toBe(1);
+    expect(styleOf({ 'font-weight': '350' }).fontWeight).toBe(350);
+    expect(styleOf({ 'font-weight': '450.5' }).fontWeight).toBe(450.5);
+    expect(styleOf({ 'font-weight': '1000' }).fontWeight).toBe(1000);
+  });
+
+  it.each(['0', '1001', '-100', 'heavy', '400px', 'bold 700', ''])(
+    'rejects font-weight "%s", naming the allowed values',
+    (value) => {
+      expect(() => styleOf({ 'font-weight': value })).toThrow(
+        `ngpdf: invalid value "${value}" for font-weight on pdf-view; expected a number from 1 to 1000, thin, extralight, light, normal, medium, semibold, bold, extrabold, black, bolder or lighter`,
+      );
+    },
+  );
+
+  it.each([
+    [1, 'bolder', 400],
+    [100, 'bolder', 400],
+    [349, 'bolder', 400],
+    [350, 'bolder', 700],
+    [549, 'bolder', 700],
+    [550, 'bolder', 900],
+    [899, 'bolder', 900],
+    [900, 'bolder', 900],
+    [950, 'bolder', 950],
+    [50, 'lighter', 50],
+    [100, 'lighter', 100],
+    [549, 'lighter', 100],
+    [550, 'lighter', 400],
+    [749, 'lighter', 400],
+    [750, 'lighter', 700],
+    [1000, 'lighter', 700],
+  ])('resolves an inherited %d made %s to %d', (inherited, keyword, weight) => {
+    const child = el('pdf-text', { 'font-weight': keyword });
+    const parent = el('pdf-view', { 'font-weight': String(inherited) }, [child]);
+    expect(resolveStyles(el('pdf-document', {}, [parent])).get(child)?.fontWeight).toBe(weight);
+  });
+
+  it('makes bolder and lighter relative to the root weight with no ancestor setting one', () => {
+    expect(styleOf({ 'font-weight': 'bolder' }).fontWeight).toBe(700);
+    expect(styleOf({ 'font-weight': 'lighter' }).fontWeight).toBe(100);
   });
 
   it('resolves line-height from a multiplier or a length', () => {
@@ -318,11 +458,11 @@ describe('resolveStyles', () => {
     const styles = resolveStyles(root);
 
     const rowText = row.children[0]!;
-    expect(styles.get(rowText)).toMatchObject({ color: rgb(255, 255, 255), fontWeight: 'bold' });
+    expect(styles.get(rowText)).toMatchObject({ color: rgb(255, 255, 255), fontWeight: 700 });
     expect(styles.get(rowText)?.backgroundColor).toBeNull();
     expect(styles.get(rowText)?.padding.top).toBe(0);
-    expect(styles.get(plain)).toMatchObject({ color: BLACK, fontWeight: 'normal' });
-    expect(styles.get(white)).toMatchObject({ color: rgb(255, 255, 255), fontWeight: 'bold' });
+    expect(styles.get(plain)).toMatchObject({ color: BLACK, fontWeight: 400 });
+    expect(styles.get(white)).toMatchObject({ color: rgb(255, 255, 255), fontWeight: 700 });
   });
 
   it('inherits through an intermediate that does not set the property', () => {
@@ -397,7 +537,7 @@ describe('resolveStyles', () => {
     ]);
     const text = el('pdf-text', { 'font-size': '14', color: 'blue' }, [span]);
     const style = resolveStyles(el('pdf-document', {}, [text])).get(span);
-    expect(style).toMatchObject({ fontSize: 14, fontWeight: 'bold', color: { r: 255, b: 0 } });
+    expect(style).toMatchObject({ fontSize: 14, fontWeight: 700, color: { r: 255, b: 0 } });
   });
 
   it('accepts a pdf-span inside a pdf-span and throws for one outside a pdf-text', () => {
@@ -412,6 +552,7 @@ describe('resolveStyles', () => {
     const warn = vi.fn();
     const span = el('pdf-span', {
       'font-style': 'italic',
+      display: 'flex',
       padding: '4',
       'text-align': 'right',
       'break-after': 'page',
@@ -429,7 +570,7 @@ describe('resolveStyles', () => {
     const span = el('pdf-span', { 'font-weight': 'bold' });
     const link = el('pdf-link', { color: 'blue', padding: '4' }, [span]);
     const styles = resolveStyles(el('pdf-document', {}, [el('pdf-text', {}, [link])]), warn);
-    expect(styles.get(span)).toMatchObject({ fontWeight: 'bold', color: BLUE });
+    expect(styles.get(span)).toMatchObject({ fontWeight: 700, color: BLUE });
     expect(warn).toHaveBeenCalledExactlyOnceWith('ngpdf: padding has no effect on pdf-link');
   });
 
@@ -516,13 +657,13 @@ describe('resolveStyles property coverage', () => {
     expect(style).toMatchObject({
       color: rgb(51, 102, 153),
       fontSize: 14,
-      fontWeight: 'bold',
+      fontWeight: 700,
       fontStyle: 'italic',
       textAlign: 'right',
       textDecoration: 'line-through',
     });
-    expect(styleOf({ 'font-weight': '400' }).fontWeight).toBe('normal');
-    expect(styleOf({ 'font-weight': 'bolder' }).fontWeight).toBe('bold');
+    expect(styleOf({ 'font-weight': '400' }).fontWeight).toBe(400);
+    expect(styleOf({ 'font-weight': 'bolder' }).fontWeight).toBe(700);
     expect(styleOf({ 'font-style': 'normal' }).fontStyle).toBe('normal');
   });
 
@@ -975,9 +1116,11 @@ describe('resolveStyles property coverage', () => {
     ['align-self', 'STRETCH', 'alignSelf', 'stretch'],
     ['object-fit', 'COVER', 'objectFit', 'cover'],
     ['object-fit', 'Contain', 'objectFit', 'contain'],
-    ['font-weight', 'BOLD', 'fontWeight', 'bold'],
-    ['font-weight', 'Bolder', 'fontWeight', 'bold'],
-    ['font-weight', ' 700 ', 'fontWeight', 'bold'],
+    ['font-weight', 'BOLD', 'fontWeight', 700],
+    ['font-weight', 'Bolder', 'fontWeight', 700],
+    ['font-weight', ' 700 ', 'fontWeight', 700],
+    ['font-weight', 'SemiBold', 'fontWeight', 600],
+    ['font-weight', ' Lighter ', 'fontWeight', 100],
     ['font-style', 'ITALIC', 'fontStyle', 'italic'],
     ['font-style', 'Oblique', 'fontStyle', 'italic'],
     ['break-before', 'PAGE', 'breakBefore', true],
@@ -1005,9 +1148,10 @@ describe('resolveStyles property coverage', () => {
     expect(styleOf({ border: '2 SOLID red' }).borderWidth.top).toBe(2);
     expect(styleOf({ border: '2 None red' }).borderWidth.top).toBe(0);
     const warn = vi.fn();
-    styleOf({ border: '1 Dashed red' }, 'pdf-view', warn);
+    expect(styleOf({ border: '1 Dashed red' }).borderStyle.top).toBe('dashed');
+    styleOf({ border: '1 Ridge red' }, 'pdf-view', warn);
     expect(warn).toHaveBeenCalledWith(
-      'ngpdf: border style "dashed" is not supported; drawing solid',
+      'ngpdf: border style "ridge" is not supported; drawing solid',
     );
   });
 
@@ -1015,7 +1159,9 @@ describe('resolveStyles property coverage', () => {
     expect(() => styleOf({ 'text-align': 'START' })).toThrow(
       'ngpdf: invalid value "START" for text-align on pdf-view',
     );
-    expect(styleOf({ 'font-weight': 'HEAVY' }).fontWeight).toBe('normal');
+    expect(() => styleOf({ 'font-weight': 'HEAVY' })).toThrow(
+      'ngpdf: invalid value "HEAVY" for font-weight on pdf-view',
+    );
   });
 
   it.each(['flex-grow', 'flex-shrink', 'opacity'])('rejects a non-numeric %s', (property) => {
@@ -1106,9 +1252,9 @@ describe('resolveStyles property coverage', () => {
 
   it('warns for an unsupported border style on a side shorthand too', () => {
     const warn = vi.fn();
-    styleOf({ 'border-top': '1 dotted red' }, 'pdf-view', warn);
+    styleOf({ 'border-top': '1 inset red' }, 'pdf-view', warn);
     expect(warn).toHaveBeenCalledExactlyOnceWith(
-      'ngpdf: border style "dotted" is not supported; drawing solid',
+      'ngpdf: border style "inset" is not supported; drawing solid',
     );
   });
 
@@ -1116,6 +1262,7 @@ describe('resolveStyles property coverage', () => {
     const warn = vi.fn();
     styleOf({ border: '1 solid red' }, 'pdf-view', warn);
     styleOf({ border: 'none' }, 'pdf-view', warn);
+    styleOf({ border: '1 dashed', 'border-style': 'dotted hidden' }, 'pdf-view', warn);
     expect(warn).not.toHaveBeenCalled();
   });
 
@@ -1522,7 +1669,15 @@ describe('resolveStyles: pdf-note', () => {
   it('warns about properties other than color and position', () => {
     const warn = vi.fn();
     styleOf(
-      { color: 'red', position: 'absolute', top: '0', right: '0', bottom: '0', left: '0' },
+      {
+        color: 'red',
+        display: 'flex',
+        position: 'absolute',
+        top: '0',
+        right: '0',
+        bottom: '0',
+        left: '0',
+      },
       'pdf-note',
       warn,
     );

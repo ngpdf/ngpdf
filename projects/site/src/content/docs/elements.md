@@ -72,6 +72,7 @@ A page template. Its content continues on as many sheets as it needs, all of the
 | --- | --- | --- | --- |
 | `size` | `PageSize` | `'A4'` | `'A3'`, `'A4'`, `'A5'`, `'Letter'`, `'Legal'`, or `readonly [width, height]` in points. |
 | `orientation` | `PageOrientation` | `'portrait'` | `'portrait'` or `'landscape'`. Landscape swaps width and height. |
+| `dpi` | `number` | `72` | The resolution images on the page are printed at: one without a `width` or `height` takes 72 / `dpi` points per pixel. A finite number above 0; `dpi="300"` works as an attribute. `px` stays 1pt. |
 
 `PageSize` and `PageOrientation` are exported types. Padding on the page is the margin of every sheet; background and border are drawn on every sheet. `width`, `height` and `margin` are ignored.
 
@@ -139,7 +140,7 @@ A comment on the page, like a sticky note in a PDF viewer: the viewer shows an i
 
 A note takes no space in the layout. Its icon sits at the left edge of its parent's content box, at the top of the next element, or at the bottom of the element before it when it is the last child. With `position: absolute` and `top`, `right`, `bottom` or `left` it can go anywhere on its containing block, for example next to a paragraph's top right corner. The annotation is 20pt square, kept inside the sheet; viewers draw the icon at their own size.
 
-The icon color is the note's own `color`, sticky-note yellow (`#ffd400`) by default; it does not inherit the text color around it. Only `color`, `position`, `top`, `right`, `bottom` and `left` apply to a note. Any other property is ignored without being read, so a `transform` doesn't move the note and an invalid value doesn't fail the render, and it warns in development mode.
+The icon color is the note's own `color`, sticky-note yellow (`#ffd400`) by default; it does not inherit the text color around it. Only `display`, `color`, `position`, `top`, `right`, `bottom` and `left` apply to a note. Any other property is ignored without being read, so a `transform` doesn't move the note and an invalid value doesn't fail the render, and it warns in development mode.
 
 The text is plain: text nodes only, with whitespace collapsed as in a `pdf-text`. Any character works, including those the standard fonts can't draw, because the viewer shows it, not ngpdf. An element inside a note fails the render with `ngpdf: pdf-note takes text only`, and a note anywhere inside a `pdf-text`, even inside a `pdf-view` in it, with `ngpdf: pdf-note inside a pdf-text`.
 

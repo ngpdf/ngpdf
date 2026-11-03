@@ -204,6 +204,75 @@ describe('renderDocument', () => {
     expect(warned).toContain('ngpdf: pdf-link href "#ch9" names no anchor; no link written');
   });
 
+  it('leaves an element with display: none out of layout, drawing, pages and anchors', async () => {
+    const writer = recordingWriter();
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const hidden = el(
+      'pdf-view',
+      { display: 'none', height: '300', 'background-color': '#ff0000' },
+      [
+        text('Hidden'),
+        el('pdf-view', { position: 'absolute', top: '0' }, [text('Stamp')]),
+        el('pdf-view', {}, [text('Head')], { fixed: 'top' }),
+        el('pdf-view', {}, [text('Chapter')], { anchor: 'secret', bookmark: 'Secret' }),
+        el('pdf-view', {}, [text('Broken')], { breakBefore: true }),
+      ],
+      { breakBefore: true },
+    );
+    const page = el(
+      'pdf-page',
+      {},
+      [
+        el('pdf-link', {}, [text('Go')], { href: '#secret' }),
+        hidden,
+        text('After'),
+        el('pdf-view', {}, [], { bookmark: 'Shown' }),
+      ],
+      { size: 'A4' },
+    );
+    await renderDocument(host({}, [page]), { writer, dev: true });
+    const [{ pages, info }] = writer.recorded as [Recorded];
+    expect(pages).toHaveLength(1);
+    const ops = pages[0]!.ops;
+    const texts = ops.flatMap((op) => (op.op === 'text' ? [op] : []));
+    expect(texts.map((op) => op.text)).toEqual(['Go', 'After']);
+    // "After" sits right under "Go": the hidden view takes no space.
+    expect(texts[1]!.y - texts[0]!.y).toBeLessThan(20);
+    expect(ops.some((op) => op.op === 'rect')).toBe(false);
+    expect(ops.some((op) => op.op === 'link')).toBe(false);
+    expect(info.outline).toEqual([{ title: 'Shown', anchor: 0, children: [] }]);
+    expect(warn.mock.calls.flat()).toContain(
+      'ngpdf: pdf-link href "#secret" names no anchor; no link written',
+    );
+  });
+
+  it('writes no annotation for a hidden pdf-note, or for a note inside a hidden element', async () => {
+    const writer = recordingWriter();
+    const note = (words: string, style: Record<string, string> = {}): PdfNode =>
+      el('pdf-note', style, [createNode('text', '', words)]);
+    const page = el(
+      'pdf-page',
+      {},
+      [
+        note('Hidden note', { display: 'none' }),
+        el('pdf-view', { display: 'none' }, [note('Note in a hidden view')]),
+        note('Shown note'),
+        text('Body'),
+      ],
+      { size: 'A4' },
+    );
+    await renderDocument(host({}, [page]), { writer, dev: false });
+    const ops = writer.recorded[0]!.pages[0]!.ops;
+    expect(ops.flatMap((op) => (op.op === 'note' ? [op.text] : []))).toEqual(['Shown note']);
+  });
+
+  it('rejects a display value other than flex or none', async () => {
+    const page = el('pdf-page', {}, [el('pdf-view', { display: 'block' })]);
+    await expect(
+      renderDocument(host({}, [page]), { writer: recordingWriter(), dev: false }),
+    ).rejects.toThrow('ngpdf: invalid value "block" for display on pdf-view; use flex or none');
+  });
+
   it('leaves unset metadata out of the info', async () => {
     const writer = recordingWriter();
     await renderDocument(twoPages(), { writer, dev: false });
@@ -742,18 +811,18 @@ describe('renderDocument', () => {
 
     it('routes the border style warning through the render, once and only in dev mode', async () => {
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-      const dashed = (): PdfNode =>
+      const grooved = (): PdfNode =>
         host({}, [
           el('pdf-page', {}, [
-            el('pdf-view', { border: '1 dashed red' }),
-            el('pdf-view', { border: '1 dashed blue' }),
+            el('pdf-view', { border: '1 groove red' }),
+            el('pdf-view', { border: '1 groove blue' }),
           ]),
         ]);
-      await renderDocument(dashed(), { writer: recordingWriter(), dev: false });
+      await renderDocument(grooved(), { writer: recordingWriter(), dev: false });
       expect(warn).not.toHaveBeenCalled();
-      await renderDocument(dashed(), { writer: recordingWriter(), dev: true });
+      await renderDocument(grooved(), { writer: recordingWriter(), dev: true });
       expect(warn).toHaveBeenCalledExactlyOnceWith(
-        'ngpdf: border style "dashed" is not supported; drawing solid',
+        'ngpdf: border style "groove" is not supported; drawing solid',
       );
     });
 
@@ -795,10 +864,10 @@ describe('renderDocument with fonts', () => {
     family: string,
     label: string,
     data: Uint8Array,
-    weight?: 'bold',
+    weight?: FontSource['weight'],
   ): FontSource & { load: ReturnType<typeof vi.fn> } => ({
     family,
-    ...(weight && { weight }),
+    ...(weight !== undefined && { weight }),
     load: vi.fn(() => Promise.resolve({ label, data })),
   });
   let fonts: (FontSource & { load: ReturnType<typeof vi.fn> })[];
@@ -813,7 +882,12 @@ describe('renderDocument with fonts', () => {
   /** A writer of its own, so registered fonts never leak between tests. */
   async function fontWriter() {
     real = await createPdfkitWriter({ compress: false });
-    return recordingWriter();
+    // With the real descent, so half-leading is split by each font's own metrics.
+    const writer: ReturnType<typeof recordingWriter> = {
+      ...recordingWriter(),
+      descent: (f, s) => real.descent!(f, s),
+    };
+    return writer;
   }
 
   const textOps = (writer: { recorded: Recorded[] }) =>
@@ -854,6 +928,39 @@ describe('renderDocument with fonts', () => {
     expect(textOps(writer)[0]?.font).toBe('font:1');
   });
 
+  it('matches numeric face weights as CSS does', async () => {
+    const writer = await fontWriter();
+    const weighted = [
+      face('Noto Sans', 'light.ttf', testFont('noto-sans-regular.ttf'), 300),
+      face('Noto Sans', 'black.ttf', testFont('noto-sans-bold.ttf'), 900),
+    ];
+    const doc = onePage(
+      text('Light', { 'font-family': 'Noto Sans', 'font-weight': 'light' }),
+      text('Normal', { 'font-family': 'Noto Sans' }),
+      text('Semibold', { 'font-family': 'Noto Sans', 'font-weight': '600' }),
+      text('Black', { 'font-family': 'Noto Sans', 'font-weight': 'black' }),
+    );
+    await renderDocument(doc, { writer, dev: false, fonts: weighted });
+    expect(textOps(writer).map((op) => [op.text, op.font])).toEqual([
+      ['Light', 'font:0'],
+      ['Normal', 'font:0'],
+      ['Semibold', 'font:1'],
+      ['Black', 'font:1'],
+    ]);
+  });
+
+  it.each([0, 1001, Number.NaN])('rejects a face weight of %d', async (weight) => {
+    const writer = await fontWriter();
+    const bad = [face('Noto Sans', 'regular.ttf', testFont('noto-sans-regular.ttf'), weight)];
+    await expect(
+      renderDocument(onePage(text('x', { 'font-family': 'Noto Sans' })), {
+        writer,
+        dev: false,
+        fonts: bad,
+      }),
+    ).rejects.toThrow(`ngpdf: invalid font weight "${String(weight)}" for "Noto Sans"`);
+  });
+
   it('leaves documents that name no registered family as they were', async () => {
     const writer = await fontWriter();
     await renderDocument(onePage(text('Plain', { 'font-family': 'Georgia, serif' })), {
@@ -871,6 +978,31 @@ describe('renderDocument with fonts', () => {
     });
     await renderDocument(onePage(text('a'), number), { writer, dev: false, fonts });
     expect(textOps(writer).at(-1)).toMatchObject({ text: 'Страница 1', font: 'font:0' });
+  });
+
+  it('puts the runs of a page number in two fonts on one baseline, past their half-leading', async () => {
+    const baselineOf = async (family: string, format: string) => {
+      const writer = await fontWriter();
+      const number = el('pdf-page-number', { 'font-family': family, 'line-height': '3' }, [], {
+        format,
+      });
+      await renderDocument(onePage(text('a'), number), { writer, dev: false, fonts });
+      return textOps(writer)
+        .slice(1)
+        .map((op) => [op.font, op.y + real.ascent(op.font, 10)] as const);
+    };
+    const mixed = await baselineOf('Noto Sans, "Noto Sans JP"', 'Zoë 日本');
+    expect(mixed.map(([font]) => font)).toEqual(['font:0', 'font:2']);
+    const [[, latin], [, cjk]] = mixed as [readonly [string, number], readonly [string, number]];
+    expect(cjk).toBeCloseTo(latin, 6);
+    // Noto Sans JP reaches higher above its baseline in a 30pt line, so it sets the baseline the
+    // Latin run sits on. The line is the bottom 30pt of the unpadded A4 page.
+    const reach = (font: 'font:0' | 'font:2') => {
+      const ascent = real.ascent(font, 10);
+      return ascent + (30 - ascent - real.descent!(font, 10)) / 2;
+    };
+    expect(reach('font:2')).toBeGreaterThan(reach('font:0') + 0.1);
+    expect(latin - (841.89 - 30)).toBeCloseTo(reach('font:2'), 6);
   });
 
   it('warns once, naming the characters no font in the list has', async () => {
@@ -927,6 +1059,71 @@ describe('renderDocument with fonts', () => {
     expect(fonts[0]!.load).toHaveBeenCalledTimes(1);
     expect(fonts[2]!.load).not.toHaveBeenCalled();
     expect(textOps(writer).map((op) => op.font)).toEqual(['Helvetica', 'font:0']);
+  });
+});
+
+describe('renderDocument with a page dpi', () => {
+  // 200 x 100 pixels.
+  const png = testPng({ width: 200, height: 100 });
+
+  const imageSizes = (writer: ReturnType<typeof recordingWriter>): number[][][] =>
+    writer.recorded[0]!.pages.map((sheet) =>
+      sheet.ops.flatMap((op) => (op.op === 'image' ? [[op.w, op.h]] : [])),
+    );
+
+  it('draws an image without a size at 72 / dpi points per pixel, page by page', async () => {
+    const writer = recordingWriter();
+    const image = (): PdfNode => el('pdf-image', {}, [], { src: png });
+    await renderDocument(
+      host({}, [
+        el('pdf-page', {}, [image()], { size: 'A4', dpi: 144 }),
+        el('pdf-page', {}, [image()], { size: 'A4' }),
+        el('pdf-page', {}, [image(), el('pdf-image', { width: '50' }, [], { src: png })], {
+          size: 'A4',
+          dpi: 300,
+        }),
+      ]),
+      { writer, dev: false },
+    );
+    expect(imageSizes(writer)).toEqual([
+      [[100, 50]],
+      [[200, 100]],
+      [
+        [48, 24],
+        [50, 25],
+      ],
+    ]);
+  });
+
+  it('sizes images in fixed views and pdfPerSheet content at the dpi of their page', async () => {
+    const writer = recordingWriter();
+    const header = el('pdf-view', {}, [el('pdf-image', {}, [], { src: png })], { fixed: 'top' });
+    const footer = el('pdf-view', {}, [perSheetSlot()], { fixed: 'bottom' });
+    const rows = [0, 1, 2].map(() => el('pdf-view', { height: '300' }));
+    const render = (): PdfNode => el('div', {}, [el('pdf-image', {}, [], { src: png })]);
+    await renderDocument(
+      host({}, [el('pdf-page', {}, [header, footer, ...rows], { size: 'A4', dpi: 288 })]),
+      { writer, dev: false, perSheet: render },
+    );
+    const sizes = imageSizes(writer);
+    expect(sizes).toHaveLength(2);
+    for (const sheet of sizes) {
+      expect(sheet).toEqual([
+        [50, 25],
+        [50, 25],
+      ]);
+    }
+  });
+
+  it('rejects a dpi that is not a number greater than 0', async () => {
+    for (const dpi of [0, -72, Number.NaN, Number.POSITIVE_INFINITY, '300', null]) {
+      await expect(
+        renderDocument(host({}, [el('pdf-page', {}, [text('x')], { size: 'A4', dpi })]), {
+          writer: recordingWriter(),
+          dev: false,
+        }),
+      ).rejects.toThrow(`ngpdf: invalid dpi "${String(dpi)}" on pdf-page`);
+    }
   });
 });
 
@@ -1037,6 +1234,41 @@ describe('renderDocument with pdfPerSheet', () => {
     const one = await yOf(1);
     const three = await yOf(3);
     expect(three - one).toBeCloseTo(2 * 12, 5);
+  });
+
+  it('leaves display: none content of a template out of the reservation and the drawing', async () => {
+    const run = async (
+      hidden: boolean,
+    ): Promise<{ y: number; texts: string[][]; warn: unknown[] }> => {
+      const writer = recordingWriter();
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+      const header = el('pdf-view', {}, [perSheetSlot()], { fixed: 'top' });
+      const rows = [0, 1, 2].map(() => el('pdf-view', { height: '370' }));
+      const page = el('pdf-page', {}, [header, text('Body'), ...rows], { size: 'A4' });
+      const render = (_slot: PdfNode, context: PdfPerSheetContext): PdfNode =>
+        el('div', {}, [
+          text(`Head ${String(context.sheet)}`),
+          ...(hidden
+            ? [el('pdf-view', { display: 'none' }, [text('Gone'), text('Gone'), text('Gone')])]
+            : []),
+        ]);
+      await renderDocument(host({}, [page]), { writer, dev: true, perSheet: render });
+      const [first] = writer.recorded[0]!.pages;
+      const body = first!.ops.find((op) => op.op === 'text' && op.text === 'Body');
+      const result = {
+        y: body?.op === 'text' ? body.y : NaN,
+        texts: writer.recorded[0]!.pages.map(texts),
+        warn: warn.mock.calls.flat(),
+      };
+      warn.mockRestore();
+      return result;
+    };
+    const shown = await run(false);
+    const withHidden = await run(true);
+    expect(withHidden.y).toBe(shown.y);
+    expect(withHidden.texts).toEqual(shown.texts);
+    expect(withHidden.texts.flat()).not.toContain('Gone');
+    expect(withHidden.warn).toEqual([]);
   });
 
   it('clips content taller than the reservation, with one warning naming the sheet', async () => {

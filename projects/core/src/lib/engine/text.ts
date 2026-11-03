@@ -22,6 +22,8 @@ export interface TextRun {
   readonly width: number;
   /** Height of the font above its baseline. */
   readonly ascent: number;
+  /** Depth of the font below its baseline. With its ascent, the content its half-leading splits. */
+  readonly descent: number;
   /** The URL of the pdf-link the run belongs to, or `#name` for one to an anchor. */
   readonly link?: string;
   /**
@@ -38,7 +40,10 @@ export interface TextLine {
   readonly y: number;
   /** The tallest run's font size times the paragraph's line height. */
   readonly height: number;
-  /** The baseline, below `y`: the largest ascent of the line's runs. */
+  /**
+   * The baseline, below `y`. Each run's line height is split evenly above and below its content
+   * (CSS half-leading), and the run that reaches highest above its baseline sets it.
+   */
   readonly ascent: number;
   /**
    * The paragraph's last line, or a line that ends at a kept line break: `text-align: justify`
@@ -424,6 +429,7 @@ interface Face {
   readonly decoration: TextStyle['textDecoration'];
   readonly letterSpacing: number;
   readonly ascent: number;
+  readonly descent: number;
   readonly link?: string;
   readonly emoji?: ImageAsset;
 }
@@ -578,6 +584,8 @@ function shapeRanges(ranges: readonly TextRange[], metrics: FontMetrics): Shaped
     if (index === undefined) {
       index = faces.length;
       const ascent = metrics.ascent(font, size);
+      // Without a descent, the content is taken as 1 em tall.
+      const descent = metrics.descent?.(font, size) ?? size - ascent;
       faces.push({
         font,
         size,
@@ -585,6 +593,7 @@ function shapeRanges(ranges: readonly TextRange[], metrics: FontMetrics): Shaped
         decoration,
         letterSpacing,
         ascent,
+        descent,
         ...(link !== undefined && { link }),
       });
       faceIndex.set(key, index);
@@ -609,7 +618,8 @@ function shapeRanges(ranges: readonly TextRange[], metrics: FontMetrics): Shaped
       index = faces.length;
       const font = faces[text]?.font ?? fontFor(range.style);
       // 1 em tall with its bottom on the font's descent.
-      const ascent = size - (metrics.descent?.(font, size) ?? 0);
+      const descent = metrics.descent?.(font, size) ?? 0;
+      const ascent = size - descent;
       faces.push({
         font,
         size,
@@ -617,6 +627,7 @@ function shapeRanges(ranges: readonly TextRange[], metrics: FontMetrics): Shaped
         decoration,
         letterSpacing,
         ascent,
+        descent,
         ...(range.link !== undefined && { link: range.link }),
         emoji: image,
       });
@@ -1202,13 +1213,19 @@ function breakLines(
     }
     // An empty cut line keeps the height of the text it replaces, and an empty line between kept
     // line breaks the height of its line break's face.
-    const sized = runs.length > 0 ? runs : runsOf(start, drawnEnd(start, end));
+    const drawn = runs.length > 0 ? runs : runsOf(start, drawnEnd(start, end));
     const breakFace = faces[fontAt[start] ?? 0];
-    let size = sized.length === 0 && breakFace ? breakFace.size : 0;
-    let ascent = sized.length === 0 && breakFace ? breakFace.ascent : 0;
+    const sized: readonly Pick<Face, 'size' | 'ascent' | 'descent'>[] =
+      drawn.length > 0 || !breakFace ? drawn : [breakFace];
+    let size = 0;
+    // A negative half-leading can put the baseline above every run's ascent.
+    let ascent = sized.length > 0 ? -Infinity : 0;
     for (const run of sized) {
       size = Math.max(size, run.size);
-      ascent = Math.max(ascent, run.ascent);
+      // Half-leading: half of what the line height adds to the content goes above it, and it is
+      // negative when the line height is smaller.
+      const leading = run.size * lineHeight - run.ascent - run.descent;
+      ascent = Math.max(ascent, run.ascent + leading / 2);
     }
     const height = size * lineHeight;
     lines.push({

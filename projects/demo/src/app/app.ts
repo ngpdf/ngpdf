@@ -12,6 +12,7 @@ import { PdfRenderer, providePdfEmoji, providePdfHyphenation, renderToBlob } fro
 import { captureChart } from './capture-chart';
 import { CHART_BARS, makeCommunicators, makeLicences } from './data';
 import { ArticleSample } from './documents/article-sample';
+import { BordersSample } from './documents/borders-sample';
 import { CanvasSample } from './documents/canvas-sample';
 import { CaptureReport } from './documents/capture-report';
 import { CommunicatorsList } from './documents/communicators-list';
@@ -48,6 +49,7 @@ const DOCUMENT_NAMES = [
   'canvas-sample',
   'emoji-sample',
   'per-sheet-sample',
+  'borders-sample',
   'white-space-sample',
 ] as const;
 export type DemoDocument = (typeof DOCUMENT_NAMES)[number];
@@ -170,6 +172,8 @@ export class App {
         return renderToBlob(EmojiSample, { injector: this.emoji });
       case 'per-sheet-sample':
         return this.pdf.toBlob(PerSheetSample);
+      case 'borders-sample':
+        return this.pdf.toBlob(BordersSample);
       case 'white-space-sample':
         return this.pdf.toBlob(WhiteSpaceSample);
     }

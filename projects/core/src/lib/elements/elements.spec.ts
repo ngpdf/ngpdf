@@ -54,8 +54,8 @@ const BLOB = new Blob(['x']);
   imports: [PDF_ELEMENTS],
   template: `
     <pdf-document debug>
-      <pdf-page size="Letter" orientation="landscape" />
-      <pdf-page [size]="[100, 200]" />
+      <pdf-page size="Letter" orientation="landscape" dpi="300" />
+      <pdf-page [size]="[100, 200]" [dpi]="144" />
       <pdf-view breakBefore />
       <pdf-view [breakBefore]="false" breakAfter />
       <pdf-text breakBefore="true" [breakAfter]="true" />
@@ -243,7 +243,7 @@ describe('pdf-* elements', () => {
   it('exposes the default input values through pdfProps', () => {
     const page = at(elementChildren(render(DefaultsDocument)), 0);
     const kids = elementChildren(page);
-    expect(propsOf(page)).toEqual({ size: 'A4', orientation: 'portrait' });
+    expect(propsOf(page)).toEqual({ size: 'A4', orientation: 'portrait', dpi: 72 });
     expect(propsOf(at(kids, 0))).toEqual({ breakBefore: false, breakAfter: false });
     expect(propsOf(at(kids, 1))).toEqual({ breakBefore: false, breakAfter: false });
     expect(propsOf(at(kids, 2))).toEqual({ src: 'data:image/png;base64,AAAA' });
@@ -265,8 +265,16 @@ describe('pdf-* elements', () => {
 
   it('exposes bound and attribute values, applying the input transforms', () => {
     const children = elementChildren(render(BoundDocument));
-    expect(propsOf(at(children, 0))).toEqual({ size: 'Letter', orientation: 'landscape' });
-    expect(propsOf(at(children, 1))['size']).toEqual([100, 200]);
+    expect(propsOf(at(children, 0))).toEqual({
+      size: 'Letter',
+      orientation: 'landscape',
+      dpi: 300,
+    });
+    expect(propsOf(at(children, 1))).toEqual({
+      size: [100, 200],
+      orientation: 'portrait',
+      dpi: 144,
+    });
     expect(propsOf(at(children, 2))).toEqual({ breakBefore: true, breakAfter: false });
     expect(propsOf(at(children, 3))).toEqual({ breakBefore: false, breakAfter: true });
     expect(propsOf(at(children, 4))).toEqual({ breakBefore: true, breakAfter: true });
