@@ -15,6 +15,7 @@ import {
 } from '@angular/core';
 import { PDF_ELEMENTS, providePdfFonts } from '@ngpdf/core';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { stubFetch } from '../src/testing/stub-fetch';
 import { testFont } from '../src/testing/test-fonts';
 import { renderToBuffer } from './render-to-buffer';
 
@@ -116,6 +117,27 @@ class ZoneDocument {
   protected readonly zone = inject(NgZone) instanceof NgZone ? 'zone' : 'noop zone';
 }
 
+@Component({
+  selector: 'pdf-per-sheet-server-document',
+  imports: [PDF_ELEMENTS],
+  template: `
+    <pdf-document>
+      <pdf-page>
+        <pdf-view fixed="bottom">
+          <ng-template pdfPerSheet let-sheet let-total="total">
+            <pdf-text>{{ greeting }}, sheet {{ sheet }} of {{ total }}</pdf-text>
+          </ng-template>
+        </pdf-view>
+        <pdf-view style="height: 500"><pdf-text>One</pdf-text></pdf-view>
+        <pdf-view style="height: 500"><pdf-text>Two</pdf-text></pdf-view>
+      </pdf-page>
+    </pdf-document>
+  `,
+})
+class PerSheetServerDocument {
+  protected readonly greeting = inject(GREETING, { optional: true }) ?? 'Hello';
+}
+
 @Component({ selector: 'pdf-no-document', imports: [PDF_ELEMENTS], template: '<pdf-page />' })
 class NoDocument {
   constructor() {
@@ -173,6 +195,16 @@ describe('renderToBuffer', () => {
     expect(pdf).toBeInstanceOf(Uint8Array);
     expect(latin1(pdf.slice(0, 5))).toBe('%PDF-');
     expect(shownText(pdf)).toEqual(['Hello', 'nobody 2026']);
+  });
+
+  it('renders a pdfPerSheet template on each sheet, with the app’s services', async () => {
+    const pdf = await renderToBuffer(PerSheetServerDocument, { injector: appInjector() });
+    expect(shownText(pdf)).toEqual([
+      'From the app, sheet 1 of 2',
+      'One',
+      'From the app, sheet 2 of 2',
+      'Two',
+    ]);
   });
 
   it('draws the standard fonts with pdfkit’s Node build', async () => {
@@ -237,7 +269,7 @@ describe('renderToBuffer', () => {
   describe('images', () => {
     it('refuses a remote URL without fetchImage, and never calls fetch', async () => {
       const fetchFn = vi.fn();
-      vi.stubGlobal('fetch', fetchFn);
+      stubFetch(fetchFn);
       await expect(
         renderToBuffer(ImageDocument, { inputs: { src: 'https://cdn.example.com/a.png?t=1' } }),
       ).rejects.toThrow(
@@ -253,6 +285,31 @@ describe('renderToBuffer', () => {
         fetchImage,
       });
       expect(fetchImage).toHaveBeenCalledWith('https://cdn.example.com/a.png');
+      expect(latin1(pdf)).toContain('/Subtype /Image');
+    });
+
+    it('rejects a fetchImage result over maxImageBytes, and loads one at it', async () => {
+      const fetchImage = () => Promise.resolve(PNG);
+      const src = 'https://cdn.example.com/a.png?t=1';
+      await expect(
+        renderToBuffer(ImageDocument, {
+          inputs: { src },
+          fetchImage,
+          maxImageBytes: PNG.length - 1,
+        }),
+      ).rejects.toThrow(
+        `ngpdf: could not load image "https://cdn.example.com/a.png": larger than ${String(PNG.length - 1)} bytes`,
+      );
+      const pdf = await renderToBuffer(ImageDocument, {
+        inputs: { src },
+        fetchImage,
+        maxImageBytes: PNG.length,
+      });
+      expect(latin1(pdf)).toContain('/Subtype /Image');
+    });
+
+    it('does not cap bytes passed in directly', async () => {
+      const pdf = await renderToBuffer(ImageDocument, { inputs: { src: PNG }, maxImageBytes: 1 });
       expect(latin1(pdf)).toContain('/Subtype /Image');
     });
 

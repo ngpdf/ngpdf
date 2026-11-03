@@ -164,9 +164,16 @@ describe('user component hosts', () => {
       expect(value.x).toBeCloseTo(amount.x, 6);
       expect(value.y).toBeCloseTo(row.y, 6);
     }
+    // Both header cells, in their columns, open every page.
     for (const page of pages) {
-      const first = texts(page)[0]!;
-      expect(first).toMatchObject({ text: 'Name', y: 40 });
+      expect(
+        texts(page)
+          .slice(0, 2)
+          .map(({ text, x, y }) => ({ text, x, y })),
+      ).toEqual([
+        { text: 'Name', x: name.x, y: 40 },
+        { text: 'Amount', x: amount.x, y: 40 },
+      ]);
     }
   });
 
@@ -175,7 +182,12 @@ describe('user component hosts', () => {
     const pages = await pagesOf(ListDocument, true);
     // 60 lines of 20pt in an A4 content box of 769.89pt: 38 lines per page.
     expect(pages.map((page) => texts(page).length)).toEqual([38, 22]);
-    expect(pages[1]!.ops.find((op) => op.op === 'text')).toMatchObject({ text: 'Item 39', y: 36 });
+    const [first] = texts(pages[1]!);
+    expect({ text: first?.text, x: first?.x, y: first?.y }).toEqual({
+      text: 'Item 39',
+      x: 36,
+      y: 36,
+    });
     expect(warn).toHaveBeenCalledExactlyOnceWith(
       'ngpdf: styles on <app-lines> are ignored; style a pdf-* element inside it',
     );

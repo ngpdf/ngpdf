@@ -113,7 +113,7 @@ The header row repeats on every page, rows are never split, and the text stays s
   `transparent`. Other forms, such as `hsl()`, throw.
 - A table header row is not repeated on a page whose first row fits only without it (with a
   dev-mode warning).
-- Images fetched from a URL have no size limit; a very large image is downloaded in full.
+- Images fetched from a URL have no size limit unless you set `maxImageBytes`.
 
 ## More
 

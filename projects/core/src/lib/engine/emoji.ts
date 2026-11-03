@@ -146,11 +146,18 @@ function loadInTime(
   });
 }
 
+export interface LoadedEmoji {
+  readonly images: ReadonlyMap<string, ImageAsset>;
+  readonly tried: ReadonlySet<string>;
+}
+
 /**
  * Loads one image per distinct emoji in the document's text, at most `MAX_EMOJI`, keyed by the
  * emoji. An emoji whose image is null, fails to load or takes longer than `EMOJI_TIMEOUT_MS` is
  * left out, so it is drawn as text, and one warning names them all: emoji usually come from user
- * data, so one should not fail a render.
+ * data, so one should not fail a render. Emoji in `seen` are skipped and count toward `MAX_EMOJI`,
+ * so a later call given the ones tried before (a `pdfPerSheet` sheet's content) loads only new
+ * ones. `tried` holds the ones this call tried, failed or not.
  */
 export async function loadEmoji(
   root: PdfNode,
@@ -159,13 +166,15 @@ export async function loadEmoji(
   warn: (message: string) => void,
   fetchFn?: typeof fetch,
   server?: ServerSources,
-): Promise<ReadonlyMap<string, ImageAsset>> {
-  if (source === undefined) return new Map();
-  const found = emojiIn(root);
-  if (found.length > MAX_EMOJI) {
+  seen: ReadonlySet<string> = new Set(),
+): Promise<LoadedEmoji> {
+  if (source === undefined) return { images: new Map(), tried: new Set() };
+  const found = emojiIn(root).filter((emoji) => !seen.has(emoji));
+  const room = Math.max(0, MAX_EMOJI - seen.size);
+  if (found.length > room) {
     warn(`ngpdf: more than ${String(MAX_EMOJI)} distinct emoji; the rest are drawn as text`);
   }
-  const wanted = found.slice(0, MAX_EMOJI);
+  const wanted = found.slice(0, room);
   const loaded: (ImageAsset | null)[] = [];
   // A few workers share one queue; each emoji's deadline starts when a worker takes it.
   const queue = wanted.entries();
@@ -189,5 +198,5 @@ export async function loadEmoji(
   if (failed.length > 0) {
     warn(`ngpdf: emoji without an image, drawn as text: ${failed.join(' ')}`);
   }
-  return images;
+  return { images, tried: new Set(wanted) };
 }

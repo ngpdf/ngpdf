@@ -8,6 +8,7 @@ import { PdfViewer } from './pdf-viewer';
 interface Render {
   readonly component: unknown;
   readonly inputs: Record<string, unknown> | undefined;
+  readonly maxImageBytes: number | undefined;
   resolve(): void;
   reject(error: Error): void;
 }
@@ -17,12 +18,16 @@ const renders = vi.hoisted(() => ({ calls: [] as Render[], manual: false }));
 // A stub renderer: the viewer is plumbing around pdfResource and renderToBlob, which have their
 // own specs. With `manual` set, each render waits until the test settles it.
 vi.mock('../src/lib/render/pdf-renderer', () => ({
-  renderToBlob: (component: unknown, options: { inputs?: Record<string, unknown> }) =>
+  renderToBlob: (
+    component: unknown,
+    options: { inputs?: Record<string, unknown>; maxImageBytes?: number },
+  ) =>
     new Promise<Blob>((resolve, reject) => {
       const blob = new Blob([JSON.stringify(options.inputs ?? {})], { type: 'application/pdf' });
       const call: Render = {
         component,
         inputs: options.inputs,
+        maxImageBytes: options.maxImageBytes,
         resolve: () => {
           resolve(blob);
         },
@@ -71,9 +76,14 @@ beforeEach(() => {
   urls = 0;
   revoked = [];
   makeUrl = (n) => `blob:test/${String(n)}`;
-  // jsdom has no object URLs.
-  URL.createObjectURL = () => makeUrl(++urls);
-  URL.revokeObjectURL = (url: string) => revoked.push(url);
+  // jsdom has no object URLs. A stubbed subclass, so the real URL is never changed.
+  vi.stubGlobal(
+    'URL',
+    Object.assign(class extends URL {}, {
+      createObjectURL: () => makeUrl(++urls),
+      revokeObjectURL: (url: string) => revoked.push(url),
+    }),
+  );
 });
 
 afterEach(() => {
@@ -160,7 +170,6 @@ describe('PdfViewer', () => {
     expect(renders.calls).toHaveLength(0);
     await vi.advanceTimersByTimeAsync(1);
     expect(renders.calls).toHaveLength(1);
-    fixture.destroy();
   });
 
   it('renders again when the inputs change, after the debounce, and keeps the old PDF meanwhile', async () => {
@@ -181,6 +190,18 @@ describe('PdfViewer', () => {
     ]);
     expect(iframeOf(fixture)?.getAttribute('src')).toBe('blob:test/2');
     expect(revoked).toEqual(['blob:test/1']);
+  });
+
+  it('passes maxImageBytes to the render, with no cap by default, and renders again when it changes', async () => {
+    const fixture = viewer({});
+    await settle();
+
+    fixture.componentRef.setInput('maxImageBytes', 3_000_000);
+    fixture.detectChanges();
+    await settle();
+
+    expect(renders.calls.map((call) => call.maxImageBytes)).toEqual([undefined, 3_000_000]);
+    expect(iframeOf(fixture)?.getAttribute('src')).toBe('blob:test/2');
   });
 
   it('renders the new document when the document changes', async () => {

@@ -10,7 +10,7 @@
 // other poppler major version fails the run, since its text layout may differ.
 /* global window, document */
 import { execFileSync, spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { extname, join, normalize, resolve, sep } from 'node:path';
 import { inflateSync } from 'node:zlib';
@@ -21,6 +21,10 @@ const SITE = join(ROOT, 'dist/demo/browser');
 const OUT = join(ROOT, 'e2e/out');
 const EXPECTED = join(ROOT, 'e2e/expected');
 const CHROME = process.env.CHROME_PATH ?? '/usr/bin/google-chrome';
+// Chrome's profile for this checkout. puppeteer starts Chrome in its own process group, so a run
+// killed with SIGKILL leaves it running; the next run finds it by this flag and stops it.
+const PROFILE = join(OUT, 'chrome-profile');
+const PROFILE_FLAG = `--user-data-dir=${PROFILE}`;
 const PDFTOTEXT = '/usr/bin/pdftotext';
 
 // Page counts follow from the row geometry: see the report of task 12.
@@ -127,6 +131,12 @@ const DOCUMENTS = [
   },
   // Emoji are images, not text: pdfimages lists each of the 7 drawn, from 5 embedded images.
   { name: 'emoji-sample', pages: 1, images: 7, contains: ['© 2026 Example Club stays text.'] },
+  // A pdfPerSheet footer: its text depends on the sheet it is drawn on.
+  {
+    name: 'per-sheet-sample',
+    pages: 3,
+    contains: ['Sheet 1 of 3', 'Continued on next page', 'Sheet 3 of 3', 'End of report'],
+  },
 ];
 
 const update = process.argv.includes('--update');
@@ -261,6 +271,34 @@ function checkPoppler(versionOutput) {
   throw new Error(
     `e2e: pdftotext is ${found}, but the expected files need poppler ${GOLDEN_POPPLER_MAJOR}.x${fix}`,
   );
+}
+
+/**
+ * Kills the Chrome processes on this checkout's profile, found in /proc (Linux, where the script
+ * runs): ones an earlier run left, or a launch stuck past its timeout. Matches the exact flag, so
+ * no other Chrome is touched.
+ */
+function stopLeftoverChrome() {
+  if (!existsSync('/proc')) return;
+  let stopped = 0;
+  for (const pid of readdirSync('/proc')) {
+    if (!/^\d+$/.test(pid)) continue;
+    let args;
+    try {
+      // Chrome rewrites its command line as one space-separated string.
+      args = readFileSync(`/proc/${pid}/cmdline`, 'utf8').replaceAll('\0', ' ');
+    } catch {
+      continue;
+    }
+    if (!` ${args} `.includes(` ${PROFILE_FLAG} `)) continue;
+    try {
+      process.kill(Number(pid), 'SIGKILL');
+      stopped++;
+    } catch {
+      // It exited meanwhile, or belongs to another user.
+    }
+  }
+  if (stopped > 0) console.log(`e2e: stopped ${stopped} Chrome processes on ${PROFILE}`);
 }
 
 /** Fails with a clear message when a browser step takes longer than TIMEOUT_MS. */
@@ -503,19 +541,22 @@ if (!process.argv.includes('--skip-build')) {
 mkdirSync(OUT, { recursive: true });
 mkdirSync(EXPECTED, { recursive: true });
 
+stopLeftoverChrome();
+rmSync(PROFILE, { recursive: true, force: true });
+
 const server = await serve();
 let browser;
+let launching;
 let failed = false;
 try {
-  browser = await within(
-    puppeteer.launch({
-      executablePath: CHROME,
-      headless: true,
-      args: ['--no-sandbox'],
-      timeout: TIMEOUT_MS,
-    }),
-    `launching ${CHROME}`,
-  );
+  launching = puppeteer.launch({
+    executablePath: CHROME,
+    headless: true,
+    args: ['--no-sandbox'],
+    userDataDir: PROFILE,
+    timeout: TIMEOUT_MS,
+  });
+  browser = await within(launching, `launching ${CHROME}`);
   const page = await browser.newPage();
   page.setDefaultTimeout(TIMEOUT_MS);
   page.on('pageerror', (error) => console.error('page error:', error.message));
@@ -602,7 +643,16 @@ try {
   failed = true;
   console.error(error instanceof Error ? error.message : error);
 } finally {
+  // A launch that outlives its timeout still starts a Chrome: give it one more timeout and close
+  // it. Puppeteer's own timeout does not cover the WebSocket handshake, so a launch still stuck
+  // after that has its processes killed by the profile flag instead.
+  if (!browser && launching) {
+    browser = await within(launching, `closing ${CHROME}`).catch(() => undefined);
+    if (!browser) stopLeftoverChrome();
+  }
   await browser?.close();
   server.close();
+  // Kept out of the e2e/out artifact CI uploads on failure.
+  rmSync(PROFILE, { recursive: true, force: true });
 }
 if (failed) process.exit(1);

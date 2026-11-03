@@ -6,8 +6,16 @@ import {
   type EnvironmentInjector,
   type Type,
 } from '@angular/core';
+import { PdfPerSheet } from '../elements/per-sheet';
 import { PdfRendererFactory } from '../tree/pdf-renderer-factory';
 import type { PdfNode } from '../tree/node';
+import type { RenderPerSheet } from '../tree/per-sheet';
+
+/** The engine's way back to a `pdfPerSheet` template, by the slot it left in the tree. */
+const renderPerSheet: RenderPerSheet = (slot, context) => {
+  if (!(slot.owner instanceof PdfPerSheet)) throw new Error('ngpdf: not a pdfPerSheet template');
+  return slot.owner.render(context);
+};
 
 /**
  * Renders a component into a PdfNode tree. The component gets its own child injector so each
@@ -17,7 +25,7 @@ export function renderTree<T>(
   component: Type<T>,
   parent: EnvironmentInjector,
   inputs: Record<string, unknown> = {},
-): { root: PdfNode; destroy(): void } {
+): { root: PdfNode; destroy(): void; perSheet: RenderPerSheet } {
   const environmentInjector = createEnvironmentInjector(
     [{ provide: RendererFactory2, useFactory: () => new PdfRendererFactory() }],
     parent,
@@ -46,5 +54,5 @@ export function renderTree<T>(
     destroy();
     throw error;
   }
-  return { root: ref.location.nativeElement as PdfNode, destroy };
+  return { root: ref.location.nativeElement as PdfNode, destroy, perSheet: renderPerSheet };
 }

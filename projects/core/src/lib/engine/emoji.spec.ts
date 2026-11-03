@@ -38,7 +38,13 @@ function doc(...texts: string[]): PdfNode {
 
 function load(root: PdfNode, source: EmojiSource | undefined, fetchFn?: typeof fetch) {
   const warnings: string[] = [];
-  const loading = loadEmoji(root, source, writer, (message) => warnings.push(message), fetchFn);
+  const loading = loadEmoji(
+    root,
+    source,
+    writer,
+    (message) => warnings.push(message),
+    fetchFn,
+  ).then(({ images }) => images);
   return { loading, warnings };
 }
 
@@ -146,12 +152,14 @@ describe('loadEmoji', () => {
     const fetchFn = vi.fn(() => Promise.resolve(new Response(bytes)));
     const fetchImage = vi.fn(() => Promise.resolve(bytes));
     const template = 'https://cdn.example/emoji/{codepoints}.png';
-    const read = await loadEmoji(doc('😀'), template, writer, vi.fn(), fetchFn, { fetchImage });
+    const { images: read } = await loadEmoji(doc('😀'), template, writer, vi.fn(), fetchFn, {
+      fetchImage,
+    });
     expect(fetchImage).toHaveBeenCalledWith('https://cdn.example/emoji/1f600.png');
     expect(read.size).toBe(1);
 
     const warnings: string[] = [];
-    const refused = await loadEmoji(
+    const { images: refused } = await loadEmoji(
       doc('😀 🙂'),
       (_emoji, codepoints) =>
         codepoints === '1f600' ? '/emoji/1f600.png' : 'http://169.254.169.254/x.png',
@@ -195,7 +203,7 @@ describe('loadEmoji', () => {
 
   it('leaves out bytes that are not an image', async () => {
     const seen: string[] = [];
-    const images = await loadEmoji(
+    const { images } = await loadEmoji(
       doc('😀'),
       () => new Uint8Array([1]),
       {
@@ -212,7 +220,7 @@ describe('loadEmoji', () => {
   it('leaves out an image the writer cannot embed, and checks each sequence once', async () => {
     const checkImage = vi.fn((data: Uint8Array) => Promise.resolve(data[0] !== 9));
     const seen: string[] = [];
-    const images = await loadEmoji(
+    const { images } = await loadEmoji(
       doc('😀 😃 😀'),
       (emoji) => (emoji === '😀' ? new Uint8Array([9]) : new Uint8Array([1])),
       { imageSize: () => ({ width: 1, height: 1 }), checkImage },
@@ -225,7 +233,7 @@ describe('loadEmoji', () => {
 
   it('leaves out an image with no width or no height', async () => {
     const seen: string[] = [];
-    const images = await loadEmoji(
+    const { images } = await loadEmoji(
       doc('😀 😃 😄'),
       () => new Uint8Array([1]),
       {
@@ -241,7 +249,7 @@ describe('loadEmoji', () => {
       { width: 5, height: 5 },
     ];
     const order = ['😀', '😃', '😄'];
-    const some = await loadEmoji(
+    const { images: some } = await loadEmoji(
       doc(order.join(' ')),
       (emoji) => new Uint8Array([order.indexOf(emoji)]),
       { imageSize: (data) => sizes[data[0] ?? 0] ?? { width: 0, height: 0 } },
@@ -308,7 +316,7 @@ describe('loadEmoji', () => {
 
   it('leaves out an image of a type it cannot read', async () => {
     const seen: string[] = [];
-    const images = await loadEmoji(
+    const { images } = await loadEmoji(
       doc('😀'),
       () => 42 as unknown as string,
       writer,
@@ -371,6 +379,31 @@ describe('loadEmoji', () => {
     expect(images.has(pair(499))).toBe(true);
     expect(images.has(pair(500))).toBe(false);
     expect(warnings).toEqual(['ngpdf: more than 500 distinct emoji; the rest are drawn as text']);
+  });
+
+  it(`skips the emoji in seen and counts them toward ${String(MAX_EMOJI)}, leaving seen unchanged`, async () => {
+    const pair = (n: number) =>
+      String.fromCodePoint(0x1f1e6 + Math.floor(n / 26), 0x1f1e6 + (n % 26));
+    const seen = new Set(Array.from({ length: MAX_EMOJI - 2 }, (_, n) => pair(n)));
+    const before = [...seen];
+    const source = vi.fn((emoji: string) => (emoji === pair(MAX_EMOJI - 2) ? null : PNG));
+    const warnings: string[] = [];
+    const text = [pair(0), pair(MAX_EMOJI - 2), pair(MAX_EMOJI - 1), pair(MAX_EMOJI)].join(' ');
+    const { images, tried } = await loadEmoji(
+      doc(text),
+      source,
+      writer,
+      (message) => warnings.push(message),
+      undefined,
+      undefined,
+      seen,
+    );
+    expect(source).toHaveBeenCalledTimes(2);
+    expect([...images.keys()]).toEqual([pair(MAX_EMOJI - 1)]);
+    // The failed one is tried too, so a later call does not ask for it again.
+    expect([...tried]).toEqual([pair(MAX_EMOJI - 2), pair(MAX_EMOJI - 1)]);
+    expect([...seen]).toEqual(before);
+    expect(warnings[0]).toBe('ngpdf: more than 500 distinct emoji; the rest are drawn as text');
   });
 
   it('finds emoji in text at any depth, and not in props', async () => {

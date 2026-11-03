@@ -14,9 +14,10 @@ import {
   input,
 } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import { afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { PDF_ELEMENTS } from '../elements';
 import { elementChildren, propsOf, textContent, type PdfNode } from '../tree/node';
+import type { PdfPerSheetContext } from '../tree/per-sheet';
 import { renderTree } from './render-tree';
 
 registerLocaleData(localePt);
@@ -78,6 +79,26 @@ const FIXED_DATE = new Date(2020, 0, 2);
 })
 class DatedDocument {
   readonly date = FIXED_DATE;
+}
+
+@Component({
+  selector: 'pdf-test-cascade',
+  imports: [PDF_ELEMENTS],
+  template: `
+    <pdf-document>
+      <pdf-page>
+        <pdf-view style="margin-top: 20; margin: 0; margin-top: 5" />
+        <pdf-view style="margin-top: 5; margin: 10" [style.margin-top.pt]="top" />
+        <pdf-view style="margin-top: 7" [style.margin-top.pt]="unset" />
+        <pdf-view style="margin-top: 7" [style.margin-top.pt]="removed" />
+      </pdf-page>
+    </pdf-document>
+  `,
+})
+class CascadeDocument {
+  readonly top = 20;
+  readonly unset = undefined;
+  readonly removed = null;
 }
 
 const seen: { injector?: EnvironmentInjector } = {};
@@ -157,6 +178,91 @@ class ChildThrowsDocument {
   }
 }
 
+const sheetLog: string[] = [];
+
+@Component({ selector: 'pdf-test-tracked', template: '' })
+class Tracked {
+  readonly label = input('');
+
+  constructor() {
+    sheetLog.push('create');
+    inject(DestroyRef).onDestroy(() => sheetLog.push('destroy'));
+  }
+}
+
+@Component({
+  selector: 'pdf-test-per-sheet',
+  imports: [PDF_ELEMENTS, Tracked],
+  template: `
+    <pdf-document>
+      <pdf-page>
+        <pdf-view fixed="bottom">
+          <pdf-text>Static</pdf-text>
+          <pdf-view>
+            <ng-template
+              pdfPerSheet
+              let-n
+              let-sheet="sheet"
+              let-total="total"
+              let-first="first"
+              let-last="last"
+              let-page="page"
+            >
+              <pdf-test-tracked />
+              <pdf-text>{{ n }} {{ sheet }}/{{ total }} {{ first }} {{ last }} {{ page }}</pdf-text>
+              <pdf-text>{{ greeting }}</pdf-text>
+              @if (sheet < total) {
+                <pdf-text>Continued on next page</pdf-text>
+              } @else {
+                <pdf-text>End of report</pdf-text>
+              }
+            </ng-template>
+          </pdf-view>
+        </pdf-view>
+        <pdf-text>Body</pdf-text>
+      </pdf-page>
+    </pdf-document>
+  `,
+})
+class PerSheetDocument {
+  readonly greeting = inject(GREETING, { optional: true }) ?? 'none';
+}
+
+@Component({
+  selector: 'pdf-test-per-sheet-in-flow',
+  imports: [PDF_ELEMENTS],
+  template: `
+    <pdf-document>
+      <pdf-page>
+        <pdf-view>
+          <ng-template pdfPerSheet let-sheet
+            ><pdf-text>{{ sheet }}</pdf-text></ng-template
+          >
+        </pdf-view>
+      </pdf-page>
+    </pdf-document>
+  `,
+})
+class PerSheetInFlowDocument {}
+
+function slotIn(node: PdfNode): PdfNode | undefined {
+  if (node.kind === 'comment' && propsOf(node)['perSheet'] === true) return node;
+  for (const child of node.children) {
+    const found = slotIn(child);
+    if (found) return found;
+  }
+  return undefined;
+}
+
+const sheetContext = (sheet: number, total: number, page = 1): PdfPerSheetContext => ({
+  $implicit: sheet,
+  sheet,
+  total,
+  first: sheet === 1,
+  last: sheet === total,
+  page,
+});
+
 describe('renderTree', () => {
   let parent: EnvironmentInjector;
   let rendered: { destroy(): void }[] = [];
@@ -171,11 +277,13 @@ describe('renderTree', () => {
   };
 
   afterEach(() => {
-    for (const result of rendered) result.destroy();
+    // Last made first: a tree goes before the injector it was rendered in.
+    for (const result of rendered.reverse()) result.destroy();
     rendered = [];
   });
 
-  beforeAll(async () => {
+  // TestBed's injector is torn down after each test, so each test takes the current one.
+  beforeEach(async () => {
     parent = TestBed.inject(EnvironmentInjector);
     await TestBed.inject(ApplicationRef).whenStable();
   });
@@ -212,6 +320,21 @@ describe('renderTree', () => {
     expect(at(rows, 1).rawStyle['padding']).toBe('6');
   });
 
+  it('lets a later longhand, static or bound, win over an earlier shorthand', async () => {
+    const { resolveStyles } = await import('../engine/style');
+    const result = render(CascadeDocument);
+    const views = find(result.root, 'pdf-view');
+    const styles = resolveStyles(result.root);
+    expect(styles.get(at(views, 0))?.margin).toEqual({ top: 5, right: 0, bottom: 0, left: 0 });
+    expect(styles.get(at(views, 1))?.margin).toEqual({ top: 20, right: 10, bottom: 10, left: 10 });
+  });
+
+  it('falls back to the static style for an undefined binding and removes it for null', () => {
+    const views = find(render(CascadeDocument).root, 'pdf-view');
+    expect(at(views, 2).rawStyle['margin-top']).toBe('7');
+    expect(at(views, 3).rawStyle['margin-top']).toBeUndefined();
+  });
+
   it('formats dates through pipes with the component locale', () => {
     const result = render(TestDocument, parent);
     expect(textContent(at(find(result.root, 'pdf-text'), 0))).toBe('22/10/2026');
@@ -222,6 +345,7 @@ describe('renderTree', () => {
       [{ provide: GREETING, useValue: 'hello' }],
       parent,
     );
+    rendered.push(withGreeting);
     const result = render(TestDocument, withGreeting);
     expect(textContent(at(find(result.root, 'pdf-text'), 1))).toBe('hello');
   });
@@ -267,5 +391,61 @@ describe('renderTree', () => {
     result.destroy();
     result.destroy();
     expect(destroyed).toEqual(['test-document']);
+  });
+
+  describe('pdfPerSheet', () => {
+    it('leaves the template unrendered, marking its slot inside the fixed view', () => {
+      const result = render(PerSheetDocument);
+      const fixed = at(find(result.root, 'pdf-view'), 0);
+      expect(textContent(fixed)).toBe('Static');
+      expect(slotIn(fixed)).toBeDefined();
+    });
+
+    it('renders the template with the sheet context, its pipes and its injector', () => {
+      const withGreeting = createEnvironmentInjector(
+        [{ provide: GREETING, useValue: 'hello' }],
+        parent,
+      );
+      const result = render(PerSheetDocument, withGreeting);
+      const slot = slotIn(result.root)!;
+      const middle = result.perSheet(slot, sheetContext(2, 3, 4));
+      expect(find(middle, 'pdf-text').map(textContent)).toEqual([
+        '2 2/3 false false 4',
+        'hello',
+        'Continued on next page',
+      ]);
+      const last = result.perSheet(slot, sheetContext(3, 3));
+      expect(find(last, 'pdf-text').map(textContent)).toEqual([
+        '3 3/3 false true 1',
+        'hello',
+        'End of report',
+      ]);
+    });
+
+    it('destroys each sheet view before the next one, and the last one with the tree', () => {
+      sheetLog.length = 0;
+      const result = render(PerSheetDocument);
+      const slot = slotIn(result.root)!;
+      expect(sheetLog).toEqual([]);
+      result.perSheet(slot, sheetContext(1, 2));
+      expect(sheetLog).toEqual(['create']);
+      result.perSheet(slot, sheetContext(2, 2));
+      expect(sheetLog).toEqual(['create', 'destroy', 'create']);
+      result.destroy();
+      expect(sheetLog).toEqual(['create', 'destroy', 'create', 'destroy']);
+    });
+
+    it('throws for a pdfPerSheet template outside a fixed pdf-view', () => {
+      expect(() => renderTree(PerSheetInFlowDocument, parent)).toThrow(
+        'ngpdf: pdfPerSheet must be inside a fixed pdf-view',
+      );
+    });
+
+    it('refuses a slot that is not a pdfPerSheet anchor', () => {
+      const result = render(PerSheetDocument);
+      expect(() =>
+        result.perSheet(at(find(result.root, 'pdf-text'), 0), sheetContext(1, 1)),
+      ).toThrow('ngpdf: not a pdfPerSheet template');
+    });
   });
 });

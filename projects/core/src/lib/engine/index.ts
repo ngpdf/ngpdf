@@ -4,15 +4,30 @@
 // eslint-disable-next-line @typescript-eslint/triple-slash-reference
 /// <reference path="./linebreak.d.ts" />
 import { elementChildren, propsOf, type PdfNode } from '../tree/node';
+import type { RenderPerSheet } from '../tree/per-sheet';
 import { collectAnchors } from './anchors';
+import type { ShapeOp } from './canvas-recorder';
 import { displayList, paintCanvases } from './display-list';
 export { loadFont } from './font-loading';
 import { loadEmoji, type EmojiSource } from './emoji';
-import { parseFontFamily, type FontRegistry, type RegisteredFace } from './fonts';
+import { parseFontFamily, type RegisteredFace } from './fonts';
 import { dissolveHosts } from './hosts';
-import { loadImages, type ServerSources } from './images';
-import type { LayoutContext } from './layout';
-import { paginatePage } from './paginate';
+import { loadImages, maxImageBytesOf, type ServerSources } from './images';
+import type { Box, LayoutContext } from './layout';
+import {
+  fixedViewWidth,
+  paginatePage,
+  type PageLayout as SheetLayout,
+  type PlacedBox,
+} from './paginate';
+import {
+  fillSlots,
+  marksOf,
+  placeSheetView,
+  reserveSheets,
+  sheetContext,
+  type PerSheetView,
+} from './per-sheet';
 import { securityOf } from './security';
 import { resolveStyles } from './style';
 import { TextMeasureCache, type Hyphenate } from './text';
@@ -57,6 +72,10 @@ export interface RenderDocumentOptions {
   readonly server?: ServerSources;
   /** Where emoji images come from; without it, emoji are text like any other character. */
   readonly emoji?: EmojiSource;
+  /** Renders a `pdfPerSheet` template for one sheet; the eager half passes it. */
+  readonly perSheet?: RenderPerSheet;
+  /** The most bytes a fetched `pdf-image` URL may have; no cap when undefined. */
+  readonly maxImageBytes?: number;
 }
 
 /** One face of a font family, with a way to get its bytes. */
@@ -71,26 +90,32 @@ export interface FontSource {
 const familyKey = (family: string): string => family.trim().toLowerCase();
 
 /**
- * Loads the faces of the families that some `font-family` in the document names, registers each
- * with the writer as `font:<index>` and groups them by family. A font the document never names is
- * never fetched, so a broken one cannot fail an unrelated render.
+ * Loads the faces of the families that some `font-family` in `styles` names and `registry` does
+ * not hold yet, registers each with the writer as `font:<index>` and adds them to `registry` by
+ * family. A font the document never names is never fetched, so a broken one cannot fail an
+ * unrelated render. Called again with the styles of each sheet's `pdfPerSheet` content.
  */
 async function registerUsedFonts(
   sources: readonly FontSource[],
   styles: ReadonlyMap<PdfNode, { readonly fontFamily: string }>,
   writer: PdfWriter,
-): Promise<FontRegistry> {
+  registry: Map<string, RegisteredFace[]>,
+): Promise<void> {
   const named = new Set<string>();
   for (const style of new Set([...styles.values()].map((resolved) => resolved.fontFamily))) {
     for (const name of parseFontFamily(style)) named.add(familyKey(name));
   }
-  const used = sources.filter((source) => named.has(familyKey(source.family)));
+  const used = sources.filter((source) => {
+    const key = familyKey(source.family);
+    return named.has(key) && !registry.has(key);
+  });
+  if (used.length === 0) return;
   const loaded = await Promise.all(
     used.map(async (source) => ({ source, ...(await source.load()) })),
   );
-  const registry = new Map<string, RegisteredFace[]>();
-  loaded.forEach(({ source, label, data }, index) => {
-    const font: CustomFont = `font:${String(index)}`;
+  let index = [...registry.values()].reduce((count, faces) => count + faces.length, 0);
+  for (const { source, label, data } of loaded) {
+    const font: CustomFont = `font:${String(index++)}`;
     try {
       writer.registerFont(font, data);
     } catch {
@@ -100,8 +125,7 @@ async function registerUsedFonts(
     const faces = registry.get(key) ?? [];
     faces.push({ weight: source.weight ?? 'normal', style: source.style ?? 'normal', font });
     registry.set(key, faces);
-  });
-  return registry;
+  }
 }
 
 // The one piece of module state: the Yoga WebAssembly module is compiled once per page load.
@@ -197,6 +221,7 @@ export async function renderDocument(
   const dev = options.dev ?? (typeof ngDevMode === 'undefined' || !!ngDevMode);
   const document = findDocument(root);
   if (!document) throw new Error('ngpdf: no pdf-document in the rendered component');
+  const maxImageBytes = maxImageBytesOf(options.maxImageBytes);
 
   const warnings = new Set<string>();
   const warn = (message: string): void => {
@@ -221,16 +246,27 @@ export async function renderDocument(
   if (debug) warn('ngpdf: debug outlines are on');
   try {
     // Component hosts are transparent: the stages below see only pdf-* elements.
-    const tree = dissolveHosts(document, warn);
+    const dissolved = dissolveHosts(document, warn);
+    // Before layout: a link to "#name" is checked against every name in the document. Taken
+    // before pdfPerSheet templates render, so an anchor inside one is not collected.
+    const collected = collectAnchors(dissolved, warn);
+    // Each pdfPerSheet template renders once here, and its fixed view reserves that height.
+    const { tree, views, origins } = options.perSheet
+      ? reserveSheets(dissolved, options.perSheet, warn)
+      : { tree: dissolved, views: new Map<PdfNode, PerSheetView>(), origins: new Map() };
+    const anchors = marksOf(origins, collected);
     const styles = resolveStyles(tree, warn);
-    // Before layout: a link to "#name" is checked against every name in the document.
-    const anchors = collectAnchors(tree, warn);
+    const fonts = new Map<string, RegisteredFace[]>();
     // Emoji images load with the others, before layout, so measuring stays synchronous.
-    const [images, fonts, emoji] = await Promise.all([
-      loadImages(tree, writer, undefined, options.server),
-      registerUsedFonts(options.fonts ?? [], styles, writer),
+    const [{ images, loads }, , found] = await Promise.all([
+      loadImages(tree, writer, undefined, options.server, maxImageBytes),
+      registerUsedFonts(options.fonts ?? [], styles, writer, fonts),
       loadEmoji(tree, options.emoji, writer, warn, undefined, options.server),
     ]);
+    // Image loads and emoji tried so far; a pdfPerSheet sheet's content loads only new ones.
+    const imageLoads = new Map(loads);
+    const seenEmoji = new Set(found.tried);
+    const emoji = new Map(found.images);
     // One text cache per render, passed down like the metrics and images, so renders share nothing.
     const language = languageOf(propsOf(document)['language']);
     const textCache = new TextMeasureCache({
@@ -252,23 +288,74 @@ export async function renderDocument(
       emoji,
     };
 
-    const layouts = elementChildren(tree)
+    const sheets = elementChildren(tree)
       .filter((child) => child.tag === 'pdf-page')
       .flatMap((child) => paginatePage(child, styles, ctx));
-    // Once for the whole document: a canvas drawn on several sheets reuses its shapes.
-    const canvases = paintCanvases(layouts);
-    const pages: PageOps[] = layouts.map((layout, index) => ({
-      width: layout.width,
-      height: layout.height,
-      ops: displayList(layout, index, layouts.length, undefined, {
-        metrics: writer,
-        warn: warnChars,
-        fonts,
-        warnMissing,
-        debug,
-        canvases,
-      }),
-    }));
+    let warnedTaller = false;
+    // A pdfPerSheet view renders, lays out and is drawn one sheet at a time, so the eager half
+    // holds at most one view per template.
+    const perSheetView = async (
+      placed: PlacedBox,
+      view: PerSheetView,
+      render: RenderPerSheet,
+      sheet: number,
+    ): Promise<PlacedBox> => {
+      const context = sheetContext(sheet, sheets.length, view.pageNumber);
+      const filled = fillSlots(view.template, view.page, context, render, warn);
+      const pageStyle = styles.get(view.page);
+      if (!pageStyle) throw new Error('ngpdf: no resolved style for <pdf-page>');
+      const viewStyles = resolveStyles(filled.view, warn, { style: pageStyle, depth: 3 });
+      const [viewImages, , viewEmoji] = await Promise.all([
+        loadImages(filled.view, writer, undefined, options.server, maxImageBytes, imageLoads),
+        registerUsedFonts(options.fonts ?? [], viewStyles, writer, fonts),
+        loadEmoji(filled.view, options.emoji, writer, warn, undefined, options.server, seenEmoji),
+      ]);
+      for (const [src, load] of viewImages.loads) imageLoads.set(src, load);
+      for (const sequence of viewEmoji.tried) seenEmoji.add(sequence);
+      for (const [sequence, asset] of viewEmoji.images) emoji.set(sequence, asset);
+      const width = fixedViewWidth(view.page, pageStyle, viewStyles.get(filled.view));
+      const viewCtx: LayoutContext = {
+        ...ctx,
+        images: viewImages.images,
+        anchors: marksOf(filled.origins, collected),
+      };
+      return placeSheetView(placed, filled.view, viewStyles, width, viewCtx, () => {
+        if (warnedTaller) return;
+        warnedTaller = true;
+        warn(
+          `ngpdf: pdfPerSheet content is taller on sheet ${String(sheet)} than on the first; set a height on the fixed view`,
+        );
+      });
+    };
+    const sheetOf = async (layout: SheetLayout, sheet: number): Promise<SheetLayout> => {
+      const render = options.perSheet;
+      if (!render || views.size === 0) return layout;
+      const placed: PlacedBox[] = [];
+      for (const item of layout.placed) {
+        const view = views.get(item.box.node);
+        placed.push(view ? await perSheetView(item, view, render, sheet) : item);
+      }
+      return { ...layout, placed };
+    };
+    // Shared by every sheet: a canvas drawn on several sheets reuses its shapes.
+    const canvases = new Map<Box, readonly ShapeOp[]>();
+    const pages: PageOps[] = [];
+    for (const [index, sheet] of sheets.entries()) {
+      const layout = await sheetOf(sheet, index + 1);
+      for (const [box, shapes] of paintCanvases([layout], canvases)) canvases.set(box, shapes);
+      pages.push({
+        width: layout.width,
+        height: layout.height,
+        ops: displayList(layout, index, sheets.length, undefined, {
+          metrics: writer,
+          warn: warnChars,
+          fonts,
+          warnMissing,
+          debug,
+          canvases,
+        }),
+      });
+    }
     const info = infoOf(document, now);
     const { outline } = anchors;
     return await writer.write(pages, outline.length > 0 ? { ...info, outline } : info);

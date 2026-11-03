@@ -12,7 +12,8 @@ it does not affect a correct document. Items that change behaviour need a design
   instead (`projects/demo/src/app/documents/capture-report.ts`).
 - **Half-leading.** Text sits at the top of its line box; CSS splits the extra line height above
   and below the text.
-- **A clipped border line** of a unit taller than a page can overshoot the cut by half its width.
+- **A clipped rounded border side** of a unit taller than a page can overshoot the cut by half its
+  width; straight border lines stop at the cut.
 - **A row-direction page** is one pagination unit whose box points at a copy of the page node.
 
 ## Text
@@ -25,7 +26,6 @@ it does not affect a correct document. Items that change behaviour need a design
 
 ## Images
 
-- **A size cap on fetched images.** An image URL is downloaded in full, however large.
 - **Cancel sibling fetches** with an `AbortController` when one image fails.
 
 ## Robustness
@@ -34,14 +34,9 @@ it does not affect a correct document. Items that change behaviour need a design
   `text-align` and the other `oneOf` properties, falls back to `normal` for `font-weight` and
   `font-style`, and is ignored by `break-before` and `break-inside`; pick one policy (fallback or
   throw).
-- `PdfRendererFactory.createRenderer()` has a narrower signature than `RendererFactory2`'s.
-- The nesting limit counts anonymous text boxes; document or exclude them.
 
 ## Tooling
 
-- **The bundle budget measures the demo build of the source**, splitting chunks by folder. Measure
-  the built package in `dist/core` instead, and grep its `fesm2022` files for a static import of
-  the engine, pdfkit or Yoga.
 - **The e2e Chrome can leak** when `puppeteer.launch` finishes after the script's timeout.
 - Spec hygiene: some component specs destroy in the test body instead of `finally`/`afterEach`,
   a global `URL` stub and the zone.js import leak into later tests, and a few assertions use loose

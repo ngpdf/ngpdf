@@ -2,6 +2,7 @@
 import { Component, EnvironmentInjector, createEnvironmentInjector } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { stubFetch } from '../../testing/stub-fetch';
 import { PDF_ELEMENTS } from '../elements';
 import { providePdfEmoji } from './pdf-emoji';
 import { PdfRenderer, renderToBlob } from './pdf-renderer';
@@ -52,7 +53,7 @@ describe('providePdfEmoji', () => {
   it('fetches the images of a URL template', async () => {
     const bytes = Uint8Array.from(atob(PNG_BASE64), (c) => c.charCodeAt(0));
     const fetchFn = vi.fn(() => Promise.resolve(new Response(bytes.slice().buffer)));
-    vi.stubGlobal('fetch', fetchFn);
+    stubFetch(fetchFn);
     TestBed.configureTestingModule({
       providers: [providePdfEmoji('/emoji/{codepoints}.png')],
     });
@@ -66,7 +67,7 @@ describe('providePdfEmoji', () => {
 
   it('fetches nothing without a provider, and draws emoji as text', async () => {
     const fetchFn = vi.fn();
-    vi.stubGlobal('fetch', fetchFn);
+    stubFetch(fetchFn);
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     const blob = await TestBed.inject(PdfRenderer).toBlob(EmojiDocument);
     expect(fetchFn).not.toHaveBeenCalled();

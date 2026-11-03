@@ -169,7 +169,8 @@ function linearFill(
     dx = (x * h) / norm;
     dy = (y * w) / norm;
   } else {
-    const angle = (gradient.direction.angle * Math.PI) / 180;
+    // Reduced first: the remainder is exact, and 1e308 * PI would overflow to Infinity.
+    const angle = ((gradient.direction.angle % 360) * Math.PI) / 180;
     // Rounded so the side keywords give exact axes.
     dx = Math.round(Math.sin(angle) * 1e12) / 1e12;
     dy = -Math.round(Math.cos(angle) * 1e12) / 1e12;

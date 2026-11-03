@@ -922,6 +922,18 @@ function rowPieceBox(
   };
 }
 
+/** The width a fixed view is laid out at: the page's content width less the view's margins. */
+export function fixedViewWidth(
+  page: PdfNode,
+  pageStyle: ResolvedStyle,
+  viewStyle: ResolvedStyle | undefined,
+): number {
+  const { contentWidth } = frameOf(page, pageStyle);
+  const margin = viewStyle?.margin ?? ZERO_EDGES;
+  const side = (edge: 'left' | 'right'): number => lengthIn(margin[edge], contentWidth);
+  return Math.max(0, contentWidth - side('left') - side('right'));
+}
+
 /**
  * Breaks one pdf-page's content into pages. The content is laid out once at the content width
  * with unbounded height; units keep the vertical offsets between them from that layout, and a
@@ -959,7 +971,7 @@ export function paginatePage(
   const fixedBox = (node: PdfNode): { box: Box; top: number; bottom: number; left: number } => {
     const margin = styles.get(node)?.margin ?? ZERO_EDGES;
     const side = (edge: keyof Edges<Length>): number => lengthIn(margin[edge], base.contentWidth);
-    const width = Math.max(0, base.contentWidth - side('left') - side('right'));
+    const width = fixedViewWidth(page, pageStyle, styles.get(node));
     const box = layoutBox(node, styles, width, ctx);
     return {
       box: { ...box, x: 0, y: 0 },
@@ -1412,6 +1424,9 @@ export function paginatePage(
   // An absolute box goes on the sheet where its top lands, moved like the unit at or above that
   // flow y. One whose top falls below that sheet goes to the top of the next unit's sheet.
   // Placements are in flow order, so each box is a binary search.
+  const spots: { page: number; y: number }[] = [];
+  // Boxes below the last unit's sheet, which get sheets of their own after the loop.
+  const beyond: { float: Float; spot: { page: number; y: number } }[] = [];
   for (const float of floats) {
     let lo = 0;
     let hi = placements.length - 1;
@@ -1434,14 +1449,35 @@ export function paginatePage(
         page = below.page;
         y = float.top + below.unitShift;
       } else {
-        startPage();
-        page = pages.length - 1;
-        y = frame.top;
+        const spot = { page, y };
+        spots.push(spot);
+        beyond.push({ float, spot });
+        continue;
       }
     }
+    spots.push({ page, y });
+  }
+  // They go on as the flow would: by their tops, the first one at the top of a new sheet and the
+  // rest moved with it, starting another sheet when the top falls below this one.
+  let beyondShift = 0;
+  let beyondPage = -1;
+  for (const { float, spot } of [...beyond].sort((a, b) => a.float.top - b.float.top)) {
+    // Yoga's tops are float32, off by up to half a step each, so two tops a content height apart
+    // can come out short of it by a few of the larger top's steps (2^-23 of it).
+    const slack = Math.max(EPSILON, float.top * 2 ** -21);
+    if (beyondPage < 0 || float.top + beyondShift >= frame.bottom - slack) {
+      startPage();
+      beyondPage = pages.length - 1;
+      beyondShift = frame.top - float.top;
+    }
+    spot.page = beyondPage;
+    spot.y = float.top + beyondShift;
+  }
+  floats.forEach((float, i) => {
+    const { page, y } = at(spots, i);
     // Never above the content top, as a unit moved to a new sheet.
     place(float, frame.left + float.x, Math.max(frame.top, y), float.groups, at(pages, page));
-  }
+  });
 
   // A note goes on the sheet of the unit it is attached to, moved as that unit was. Rows in a
   // table have no margins, so a table's first row moves as its repeated header does. For a split
