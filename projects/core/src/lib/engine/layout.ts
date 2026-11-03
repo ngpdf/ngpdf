@@ -233,7 +233,8 @@ function applyStyle(yoga: Yoga, node: YogaNode, style: ResolvedStyle): void {
   }
   if (style.alignItems !== 'stretch') node.setAlignItems(yoga[ALIGN[style.alignItems]]);
   if (style.alignSelf !== 'auto') node.setAlignSelf(yoga[ALIGN[style.alignSelf]]);
-  if (style.gap !== 0) node.setGap(yoga.GUTTER_ALL, style.gap);
+  if (style.rowGap !== 0) node.setGap(yoga.GUTTER_ROW, yogaLimit(style.rowGap));
+  if (style.columnGap !== 0) node.setGap(yoga.GUTTER_COLUMN, yogaLimit(style.columnGap));
   if (style.width !== 'auto') node.setWidth(yogaLength(style.width));
   if (style.height !== 'auto') node.setHeight(yogaLength(style.height));
   if (style.minWidth !== 'auto') node.setMinWidth(yogaLimit(style.minWidth));
@@ -400,7 +401,7 @@ function isZero(length: Length): boolean {
 /**
  * Inside a table, rows and cells give up the styles that would move cells off their columns:
  * a row keeps vertical padding and borders and its background, but its horizontal padding,
- * left/right border, margin, justify-content, direction and gap are fixed; a cell loses its margin
+ * left/right border, margin, justify-content, direction and column gap are fixed; a cell loses its margin
  * and min/max width. `ignored` collects the properties the author had set.
  */
 function tableStyle(style: ResolvedStyle, node: PdfNode, ignored: Set<string>): ResolvedStyle {
@@ -416,12 +417,13 @@ function tableStyle(style: ResolvedStyle, node: PdfNode, ignored: Set<string>): 
     }
     if (style.justifyContent !== 'flex-start') ignored.add('pdf-row justify-content');
     if (style.flexDirection !== 'row') ignored.add('pdf-row flex-direction');
-    if (style.gap !== 0) ignored.add('pdf-row gap');
+    // A row gap has nothing to space in a row that does not wrap, so only the column gap counts.
+    if (style.columnGap !== 0) ignored.add('pdf-row column-gap');
     return {
       ...style,
       flexDirection: 'row',
       justifyContent: 'flex-start',
-      gap: 0,
+      columnGap: 0,
       margin: { top: zeroEdge, right: zeroEdge, bottom: zeroEdge, left: zeroEdge },
       padding: { ...padding, left: zeroEdge, right: zeroEdge },
       borderWidth: { ...borderWidth, left: 0, right: 0 },

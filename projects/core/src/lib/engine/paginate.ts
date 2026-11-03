@@ -281,6 +281,22 @@ function isHeaderRow(node: PdfNode): boolean {
 }
 
 /**
+ * A table's row gap in points. Yoga resolves a percentage against the content height when that
+ * height is definite, and against a smaller one while it sizes an auto height. The distance
+ * between the first two rows (rows in a table have no margin) is the gap plus any space
+ * `justify-content` adds, so the smaller of the two is the gap Yoga used.
+ */
+function rowGapOf(table: Box): number {
+  const gap = table.style.rowGap;
+  if (typeof gap === 'number') return gap;
+  const [a, b] = table.children.filter((child) => !isFlowNote(child) && !isAbsolute(child));
+  if (!a || !b) return 0;
+  const { padding, border } = table;
+  const content = table.h - padding.top - padding.bottom - border.top - border.bottom;
+  return Math.min(b.y - (a.y + a.h), (gap.percent / 100) * content);
+}
+
+/**
  * Whether a table's header can go on a page with its first row. A row that does not fit under
  * the header but fits a page alone, and can't split below it, would go to a page of its own
  * without it. `trail` is the bottom of the wrappers that close with the row, kept below its last
@@ -424,7 +440,7 @@ function collectUnits(
         let repeats = height <= maxHeader + fitSlack(maxHeader);
         if (!repeats) {
           warn('ngpdf: pdf-table header rows are taller than a page and are not repeated');
-        } else if (!sharesPage(height, box.style.gap, first, maxHeader, trail)) {
+        } else if (!sharesPage(height, rowGapOf(box), first, maxHeader, trail)) {
           // Repeated, it would be left off the first row's page, and off every page when no row
           // fits under it.
           warn(
@@ -437,7 +453,7 @@ function collectUnits(
             rows,
             top: headerTop,
             height,
-            gap: box.style.gap,
+            gap: rowGapOf(box),
             groups: inside,
             breakBefore: rows.some((r) => asksForBreak(r.box)),
           };
