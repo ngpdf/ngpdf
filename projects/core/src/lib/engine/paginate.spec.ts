@@ -2607,14 +2607,15 @@ describe('paginatePage: flex-wrap', () => {
     const items = cards(40);
     const grid = el('pdf-view', { 'flex-flow': 'row wrap', position: 'relative' }, [
       marker,
-      ...items.slice(0, 20),
+      ...items.slice(0, 35),
       note,
-      ...items.slice(20),
+      ...items.slice(35),
     ]);
     const pages = paginate(page([grid, pageNumber()]));
     expect(pages).toHaveLength(2);
     expect(topsOn(pages[0]!, [marker])).toEqual([CONTENT_TOP]);
-    // The note after the fourth line goes with the fifth line's sheet.
-    expect(topsOn(pages[0]!, [note])).toHaveLength(1);
+    // The note after the seventh line goes with the eighth, which starts the second sheet.
+    expect(topsOn(pages[0]!, [note])).toHaveLength(0);
+    expect(topsOn(pages[1]!, [note])).toHaveLength(1);
   });
 });
