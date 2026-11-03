@@ -173,10 +173,10 @@ describe('paginatePage: tables', () => {
     expect(pages[0]!.placed).toHaveLength(1);
     expect(pages[0]!.placed[0]!.box.node).toBe(header);
     expect(pages[0]!.placed[0]!.clipBottom).toBeCloseTo(CONTENT_BOTTOM, 6);
-    expect(warn).toHaveBeenCalledTimes(1);
-    expect(warn).toHaveBeenCalledWith(
+    expect(warn.mock.calls.map(([message]) => message)).toEqual([
+      'ngpdf: pdf-table header rows are taller than a page and are not repeated',
       'ngpdf: pdf-row header is taller than a page and is cut at the bottom',
-    );
+    ]);
     const placed = pages.slice(1).flatMap((p) => p.placed);
     expect(placed.map((p) => p.box.node)).toEqual(rows);
     expect(placed.every((p) => p.clipBottom === undefined)).toBe(true);
@@ -193,7 +193,28 @@ describe('paginatePage: tables', () => {
       [rows[1]],
     ]);
     expect(pages[1]!.placed[0]!.y).toBeCloseTo(CONTENT_TOP, 6);
-    expect(warn).not.toHaveBeenCalled();
+    // Once per page here; the render keeps one of each warning.
+    expect(new Set(warn.mock.calls.map(([message]) => message))).toEqual(
+      new Set([
+        'ngpdf: a pdf-table header is not repeated above a row that fits a page only without it',
+      ]),
+    );
+  });
+
+  it('warns when several header rows together are too tall to repeat', () => {
+    const headers = [row(400, true), row(400, true)];
+    const rows = Array.from({ length: 50 }, () => row());
+    const warn = vi.fn<(message: string) => void>();
+    const root = page([
+      el('pdf-table', {}, [...headers, ...rows], { columns: ['1fr'] }),
+      pageNumber(),
+    ]);
+    const pages = paginate(root, warn);
+    const placed = pages.flatMap((p) => p.placed.map((laid) => laid.box.node));
+    expect(placed).toEqual([...headers, ...rows]);
+    expect(warn.mock.calls.map(([message]) => message)).toEqual([
+      'ngpdf: pdf-table header rows are taller than a page and are not repeated',
+    ]);
   });
 
   it('sends layout and pagination warnings to the same ctx.warn', () => {
@@ -599,13 +620,37 @@ describe('paginatePage: page breaks', () => {
     expect(pages[1]!.placed.map((p) => p.box.node)).toEqual([rowView]);
   });
 
-  it('ignores a break asked for inside a repeated header row', () => {
+  it('breaks before a table whose repeated header row has a cell that asks for it', () => {
     const header = el('pdf-row', { height: '20' }, [el('pdf-cell', { 'break-before': 'page' })], {
       header: true,
     });
-    const tableNode = el('pdf-table', {}, [header, row()], { columns: ['1fr'] });
-    const pages = paginate(page([el('pdf-view', { height: '20' }), tableNode]));
-    expect(pages).toHaveLength(1);
+    const body = row();
+    const tableNode = el('pdf-table', {}, [header, body], { columns: ['1fr'] });
+    const first = el('pdf-view', { height: '20' });
+    const pages = paginate(page([first, tableNode]));
+    expect(pages.map((laid) => laid.placed.map((p) => p.box.node))).toEqual([
+      [first],
+      [header, body],
+    ]);
+    expect(pages[1]!.placed[0]!.y).toBeCloseTo(CONTENT_TOP, 6);
+  });
+
+  it('breaks once before a table whose header row has break-before, not where it repeats', () => {
+    const header = el('pdf-row', { height: '20', 'break-before': 'page' }, [el('pdf-cell')], {
+      header: true,
+    });
+    const rows = Array.from({ length: 60 }, () => row());
+    const tableNode = el('pdf-table', {}, [header, ...rows], { columns: ['1fr'] });
+    const first = el('pdf-view', { height: '20' });
+    const pages = paginate(page([first, tableNode]));
+    expect(pages).toHaveLength(3);
+    expect(pages[0]!.placed.map((p) => p.box.node)).toEqual([first]);
+    expect(pages[1]!.placed[0]!.box.node).toBe(header);
+    expect(pages[1]!.placed[1]!.box.node).toBe(rows[0]);
+    // The second sheet is full: the header repeats on the third without a sheet of its own.
+    const rowsPerPage = Math.floor((A4_HEIGHT - 2 * PADDING - 20) / 20);
+    expect(pages[1]!.placed).toHaveLength(1 + rowsPerPage);
+    expect(pages[2]!.placed[0]!.box.node).toBe(header);
   });
 
   it('starts a new page after break-after: page', () => {

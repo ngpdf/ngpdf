@@ -43,7 +43,7 @@ ngpdf v0.1 covers documents built from text, tables, boxes and images. This page
 ### Tables
 
 - Inside a `pdf-table`, horizontal padding, borders and margins on a row are ignored. Put horizontal padding on the `pdf-cell`s.
-- A table header row is not repeated on a page whose first row fits only without it and can't split.
+- A table header row is not repeated on a page whose first row fits only without it and can't split. It warns in development mode.
 - A split table row draws every cell from the top of each piece: `align-items`, `align-self` and the space `justify-content` adds above a cell's content are ignored.
 
 ### Pagination
@@ -78,7 +78,6 @@ These items are in the [v0.2 roadmap](https://github.com/ngpdf/ngpdf/blob/main/d
 
 - Fill the remaining page height.
 - Half-leading: extra line height split above and below the text, as in CSS.
-- Table headers: a warning or a fix when a header is dropped or too tall to repeat, and `breakBefore` kept on header rows.
 
 ### Images
 

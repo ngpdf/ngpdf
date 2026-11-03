@@ -99,6 +99,8 @@ interface Header {
   readonly gap: number;
   /** The faded table and its faded ancestors, around the header rows. */
   readonly groups: readonly OpacityGroup[];
+  /** A header row asks for a page break, taken before the first row the header is drawn above. */
+  readonly breakBefore: boolean;
 }
 
 interface Unit extends Flowed {
@@ -275,6 +277,7 @@ function collectUnits(
   content: Box,
   maxHeader: number,
   pageGroups: readonly OpacityGroup[],
+  warn: (message: string) => void,
 ): Collected {
   const units: Unit[] = [];
   const wrappers: Wrapper[] = [];
@@ -383,8 +386,11 @@ function collectUnits(
             height: headerBottom - headerTop,
             gap: box.style.gap,
             groups: inside,
+            breakBefore: rows.some((r) => asksForBreak(r.box)),
           };
           children = body;
+        } else {
+          warn('ngpdf: pdf-table header rows are taller than a page and are not repeated');
         }
       }
     }
@@ -1005,7 +1011,12 @@ export function paginatePage(
   const contentStyles = new Map(styles).set(content, contentStyle);
   const laid = layoutBox(content, contentStyles, frame.contentWidth, ctx);
   const contentHeight = frame.bottom - frame.top;
-  const { units, wrappers, texts, floats, notes } = collectUnits(laid, contentHeight, pageGroups);
+  const { units, wrappers, texts, floats, notes } = collectUnits(
+    laid,
+    contentHeight,
+    pageGroups,
+    warn,
+  );
 
   // Per unit: the outermost wrapper top opening at it, the outermost wrapper bottom closing at
   // it, whether any of them asks for a page break before or after it or to stay with the next
@@ -1025,6 +1036,10 @@ export function paginatePage(
     if (wrapper.box.style.breakInside === 'avoid') {
       keptAt.set(wrapper.first, [...(keptAt.get(wrapper.first) ?? []), wrapper]);
     }
+  }
+  // A header row's break goes before the first unit under the header, not where it repeats.
+  for (const [i, unit] of units.entries()) {
+    if (unit.header?.breakBefore && units[i - 1]?.header !== unit.header) breaksAt.add(i);
   }
 
   const pages: PageBuilder[] = [];
@@ -1298,6 +1313,9 @@ export function paginatePage(
         unit.box.h <= contentHeight + EPSILON
       ) {
         // The rest of the page continues the table without a header.
+        warn(
+          'ngpdf: a pdf-table header is not repeated above a row that fits a page only without it',
+        );
         current.headers.add(header);
         return { header: null, leadFlow: unit.top, leadTop: cursor, top: cursor };
       }

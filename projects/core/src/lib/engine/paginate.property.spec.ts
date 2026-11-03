@@ -37,6 +37,9 @@ function rowOf(height: number, header = false): PdfNode {
   return adopt(el('pdf-row', { height: String(height) }, { header }), [el('pdf-cell', {})]);
 }
 
+const SKIPPED_HEADER =
+  'ngpdf: a pdf-table header is not repeated above a row that fits a page only without it';
+
 describe('paginatePage properties', () => {
   it('places every row once and in order, above the content bottom, under its header', () => {
     fc.assert(
@@ -74,6 +77,7 @@ describe('paginatePage properties', () => {
           if (!header) expect(others).toEqual(rows.length === 0 ? [table] : []);
 
           let clipped = 0;
+          let skipped = false;
           for (const laid of pages) {
             for (const placed of laid.placed) {
               if (placed.clipBottom === undefined) {
@@ -95,10 +99,13 @@ describe('paginatePage properties', () => {
                 expect(pageRows).toHaveLength(nodes.length);
                 expect(headerHeight! + pageRows[0]!.box.h).toBeGreaterThan(CONTENT_HEIGHT);
                 expect(pageRows[0]!.box.h).toBeLessThanOrEqual(CONTENT_HEIGHT + 1e-6);
+                skipped = true;
               }
             }
           }
-          expect(warnings).toHaveLength(clipped);
+          const cut = warnings.filter((message) => message.endsWith('cut at the bottom'));
+          expect(cut).toHaveLength(clipped);
+          expect(warnings.includes(SKIPPED_HEADER)).toBe(skipped);
           if (header && rows.length === 0) {
             expect(pages).toHaveLength(1);
             expect(pages[0]!.placed.map((placed) => placed.box.node)).toEqual([header]);
