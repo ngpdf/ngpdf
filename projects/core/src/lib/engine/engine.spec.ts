@@ -78,6 +78,26 @@ async function bytesOf(blob: Blob): Promise<string> {
 }
 
 describe('renderDocument', () => {
+  it('does not count the anonymous box of bare text towards the nesting limit', async () => {
+    // pdf-document > pdf-page > 62 pdf-views is 64 elements; the box around the bare text in
+    // the innermost view would be the 65th level.
+    let deepest = el('pdf-view', {}, [createNode('text', '', 'deepest')]);
+    for (let i = 1; i < 62; i++) deepest = el('pdf-view', {}, [deepest]);
+    const writer = recordingWriter();
+    await renderDocument(host({}, [el('pdf-page', {}, [deepest], { size: 'A4' })]), {
+      writer,
+      dev: false,
+    });
+    const [{ pages }] = writer.recorded as [Recorded];
+    expect(pages[0]!.ops.some((op) => op.op === 'text' && op.text === 'deepest')).toBe(true);
+    await expect(
+      renderDocument(host({}, [el('pdf-page', {}, [el('pdf-view', {}, [deepest])])]), {
+        writer,
+        dev: false,
+      }),
+    ).rejects.toThrow('ngpdf: nesting deeper than 64');
+  });
+
   it('hands the writer every page and the document metadata', async () => {
     const writer = recordingWriter();
     const props = {

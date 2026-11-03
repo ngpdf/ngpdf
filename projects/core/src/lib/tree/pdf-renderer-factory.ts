@@ -160,7 +160,7 @@ class PdfRenderer implements Renderer2 {
 export class PdfRendererFactory implements RendererFactory2 {
   private readonly renderer = new PdfRenderer();
 
-  createRenderer(): Renderer2 {
-    return this.renderer;
-  }
+  // Angular's full signature, so callers can pass the host and type; one renderer serves every
+  // component, since neither changes how nodes are built.
+  readonly createRenderer: RendererFactory2['createRenderer'] = () => this.renderer;
 }
