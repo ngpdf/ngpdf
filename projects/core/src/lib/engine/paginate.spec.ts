@@ -946,12 +946,31 @@ describe('paginatePage: units that fill the page exactly', () => {
     expect(paginate(page(views(30, 25.4), {}, { size: [200, 762] }))).toHaveLength(1);
   });
 
+  // The rounding grows with the page height and the number of boxes: these end over 0.001pt past.
+  it.each([
+    ['13 units on a 14340pt page', views(13, 14340 / 13), [200, 14340]],
+    ['48 units on a 4250.55pt page', views(48, 4250.55 / 48), [200, 4250.55]],
+    ['197 units on A4', views(197, 769.89 / 197), 'A4'],
+  ])('keeps %s on one sheet', (_, units, size) => {
+    const style = size === 'A4' ? undefined : {};
+    expect(paginate(page(units, style, { size }))).toHaveLength(1);
+  });
+
   it('still moves a unit 0.01pt too tall to the next sheet', () => {
     const tooTall = [...views(1, 384.945), ...views(1, 384.955)];
     expect(paginate(page(tooTall)).map((laid) => laid.placed.length)).toEqual([1, 1]);
     const rows = [...views(2, 11.1), ...views(1, 11.11)];
     const sheets = paginate(page(rows, {}, { size: [200, 33.3] }));
     expect(sheets.map((laid) => laid.placed.length)).toEqual([2, 1]);
+    // A3's content area is 1118.55pt with padding 36.
+    const a3 = page([...views(1, 559.275), ...views(1, 559.285)], undefined, { size: 'A3' });
+    expect(paginate(a3).map((laid) => laid.placed.length)).toEqual([1, 1]);
+  });
+
+  it('moves a unit that is visibly too tall on a tall page', () => {
+    const units = [...views(6, 2000), ...views(1, 2340.5)];
+    const sheets = paginate(page(units, {}, { size: [200, 14340] }));
+    expect(sheets.map((laid) => laid.placed.length)).toEqual([6, 1]);
   });
 });
 
