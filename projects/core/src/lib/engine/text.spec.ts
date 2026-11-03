@@ -1036,6 +1036,14 @@ describe('layoutRanges with heightLimit', () => {
     const one = calls({ maxLines: 1 });
     expect(calls({ maxLines: 1, heightLimit: 5 })).toEqual(one);
     expect(calls({ maxLines: 3, heightLimit: 30 }).lines).toEqual(calls({ maxLines: 2 }).lines);
+    // Words that never repeat, so each line of a full layout is a measure the cache cannot reuse.
+    const words = Array.from({ length: 2000 }, (_, i) => `w${String(i)}`).join(' ');
+    const measures = (paragraph: Partial<ParagraphStyle>) => {
+      const counting = { ...writer, widthOf: vi.fn(writer.widthOf.bind(writer)) };
+      layoutRanges([{ text: words, style }], { ...style, ...paragraph }, 120, counting);
+      return counting.widthOf.mock.calls.length;
+    };
+    expect(measures({ maxLines: 3, heightLimit: 30 })).toBeLessThan(measures({}) / 10);
   });
 
   it('counts each line at its own height when runs have different sizes', () => {
