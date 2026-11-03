@@ -97,8 +97,19 @@ describe('white-space', () => {
       ['abcdefgh', 0],
       ['b', 160],
     ]);
-    // Less than half a space to the stop: the tab goes to the one after it, as in CSS.
+    // A full space to the stop: the tab goes to it.
     expect(lay('abcdefg\tb', 'pre').lines[0]?.runs.at(-1)?.x).toBe(80);
+    // Less than half a space to the stop (79 of 80): the tab goes to the one after it, as in CSS.
+    const near = layoutRanges(
+      [
+        { text: 'a', style: styled('pre', { fontSize: 79 }) },
+        { text: '\tb', style: styled('pre') },
+      ],
+      styled('pre'),
+      Infinity,
+      metrics,
+    );
+    expect(near.lines[0]?.runs.at(-1)?.x).toBe(160);
     expect(lay('a\tb', 'pre-wrap').lines[0]?.width).toBe(90);
     expect(texts('a\tb', 'pre-wrap')).toEqual(['ab']);
     // Each line starts its own stops.

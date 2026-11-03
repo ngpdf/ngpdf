@@ -147,7 +147,7 @@ Some styles are ignored in specific places:
 - margins, `min-width` and `max-width` on a `pdf-cell` inside a table;
 - position and size styles other than `height` on `pdf-page-number`;
 - `position`, `top`, `right`, `bottom` and `left` on a `pdf-page`, a `pdf-row` and a `pdf-cell`;
-- everything except `display` and the nine text properties above on a `pdf-span` (with a warning).
+- everything except `display` and the ten text properties above on a `pdf-span` (with a warning).
 
 ## Throws
 
