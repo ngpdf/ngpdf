@@ -246,6 +246,26 @@ describe('renderDocument', () => {
     );
   });
 
+  it('writes no annotation for a hidden pdf-note, or for a note inside a hidden element', async () => {
+    const writer = recordingWriter();
+    const note = (words: string, style: Record<string, string> = {}): PdfNode =>
+      el('pdf-note', style, [createNode('text', '', words)]);
+    const page = el(
+      'pdf-page',
+      {},
+      [
+        note('Hidden note', { display: 'none' }),
+        el('pdf-view', { display: 'none' }, [note('Note in a hidden view')]),
+        note('Shown note'),
+        text('Body'),
+      ],
+      { size: 'A4' },
+    );
+    await renderDocument(host({}, [page]), { writer, dev: false });
+    const ops = writer.recorded[0]!.pages[0]!.ops;
+    expect(ops.flatMap((op) => (op.op === 'note' ? [op.text] : []))).toEqual(['Shown note']);
+  });
+
   it('rejects a display value other than flex or none', async () => {
     const page = el('pdf-page', {}, [el('pdf-view', { display: 'block' })]);
     await expect(
