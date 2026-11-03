@@ -171,6 +171,8 @@ invalidation would buy nothing here.
 - **Decision.** `dissolveHosts` copies the document's tree with every element that is not one of
   the thirteen `pdf-*` elements replaced by its children, like CSS `display: contents`. A host's
   own style is ignored, with one dev-mode warning per tag. The stages after it never see a host.
+  The same copy leaves out every element with `display: none` and all it holds, so no stage
+  lays out, draws or collects anchors from a hidden element.
 - **Alternative.** Teaching each stage to skip hosts. It loses because five places would each
   need the same rule, and missing one gives a silent wrong layout.
 

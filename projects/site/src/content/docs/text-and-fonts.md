@@ -30,10 +30,26 @@ You pick a face with three properties:
 | `font-family` | contains `courier` or `mono` | Courier |
 | | contains `times`, or `serif` but not `sans` | Times |
 | | anything else | Helvetica |
-| `font-weight` | `bold`, `bolder`, or a number of 600 or more | bold |
-| | anything else | regular |
+| `font-weight` | above 500 | bold |
+| | 500 or less | regular |
 | `font-style` | `italic` or `oblique` | italic |
 | | anything else | upright |
+
+`font-weight` is a number from 1 to 1000 or one of the names below, in any case. Any other value throws `ngpdf: invalid value "<value>" for font-weight on <tag>`, and the message lists the allowed values. The standard fonts have only a regular and a bold face, so 100 to 500 is regular and 600 to 900 is bold; a [registered family](#custom-fonts) can have a face for every weight.
+
+| Name | Weight |
+| --- | --- |
+| `thin` | 100 |
+| `extralight` | 200 |
+| `light` | 300 |
+| `normal` | 400 |
+| `medium` | 500 |
+| `semibold` | 600 |
+| `bold` | 700 |
+| `extrabold` | 800 |
+| `black` | 900 |
+| `bolder` | from the inherited weight: below 350 gives 400, below 550 gives 700, below 900 gives 900, and 900 or more stays |
+| `lighter` | from the inherited weight: below 100 stays, below 550 gives 100, below 750 gives 400, and 750 or more gives 700 |
 
 When the value names no [registered family](#custom-fonts), the family match ignores case and looks at the whole value, so `'Times New Roman', serif`, `Georgia, serif` and `serif` all give Times, and `Arial`, `Inter` or `sans-serif` give Helvetica. ngpdf never throws for a family name.
 
@@ -51,6 +67,7 @@ export const appConfig: ApplicationConfig = {
   providers: [
     providePdfFonts([
       { family: 'Inter', src: '/fonts/Inter-Regular.woff2' },
+      { family: 'Inter', src: '/fonts/Inter-Light.woff2', weight: 300 },
       { family: 'Inter', src: '/fonts/Inter-Bold.woff2', weight: 'bold' },
       { family: 'Noto Sans JP', src: '/fonts/NotoSansJP-Regular.ttf' },
     ]),
@@ -68,7 +85,7 @@ export const appConfig: ApplicationConfig = {
 interface PdfFont {
   readonly family: string;
   readonly src: string | ArrayBuffer | Uint8Array | Blob;
-  readonly weight?: 'normal' | 'bold'; // default 'normal'
+  readonly weight?: number | 'normal' | 'bold'; // 1 to 1000; 'normal' is 400 (default), 'bold' 700
   readonly style?: 'normal' | 'italic'; // default 'normal'
 }
 function providePdfFonts(fonts: readonly PdfFont[]): EnvironmentProviders;
@@ -77,8 +94,8 @@ function providePdfFonts(fonts: readonly PdfFont[]): EnvironmentProviders;
 - **Formats:** TrueType (`.ttf`), OpenType (`.otf`), WOFF and WOFF2. Font collections (`.ttc`) are not supported.
 - **Sources:** `src` is a URL, a data URL, or the bytes. A URL is fetched like an image (same-origin credentials only), on the first render whose document names its family. A font no document names is never fetched, so a broken font file fails only the documents that use it. It is fetched once per injector and reused by later renders. A failed fetch is not kept, so the next render tries again. With `renderToBuffer` from `@ngpdf/core/server`, a font URL is read only through its `fetchImage`, and kept for that render only; see [Server rendering](/docs/server-rendering#images-and-fonts-on-the-server). `renderToBlob` and `PdfRenderer.toBlob` fetch it as above, also on a server.
 - **Embedding:** each PDF embeds only the fonts its pages use, cut down to the characters it draws.
-- **Matching:** `family` is matched in any case. Each face is one `weight` and `style`; register one entry per face.
-- **Missing faces:** if a family has no face for the text's weight and style, ngpdf uses the closest one it has, keeping the weight first, then the regular face, and warns in development mode. It never makes a bold or italic face up.
+- **Matching:** `family` is matched in any case. Each face is one `weight` and `style`; register one entry per face. A `weight` outside 1 to 1000 rejects the first render that uses the family with `ngpdf: invalid font weight "<weight>" for "<family>"`.
+- **Missing faces:** if a family has no face for the text's weight, ngpdf picks a weight as CSS does. From 400 to 500 it tries heavier weights up to 500 first, going up, then lighter weights going down, then heavier weights above 500, so with only whole hundreds 400 tries 500 first and 500 tries 400 first. Below 400 it tries lighter weights first, then heavier; above 500, heavier first, then lighter. Among the faces of that weight it takes the text's style, or else the upright one. It warns in development mode, naming the face it used (`ngpdf: font "Inter" has no medium face; using its regular face`), and it never makes a bold or italic face up.
 - **Where they apply:** documents rendered with the injector that has the provider, or one below it. `providePdfFonts` in a route's `providers` adds fonts for that route's renders through `pdfResource`, `pdfDownload` and `renderToBlob`, on top of the app's. `PdfRenderer` is a root service, so it sees only the app's fonts. Several `providePdfFonts` calls in one injector add up.
 
 ### The family list and fallback
@@ -330,7 +347,9 @@ The box is as tall as the kept lines. `max-lines: none`, the default, keeps ever
 
 Write a length with its unit, such as `line-height: 14pt`, when you mean points. A length is divided by the element's own font size, and the resulting ratio is inherited.
 
-ngpdf places text at the top of its line box. Extra line height goes below the text, not half above and half below as in CSS. Each line is `font-size × line-height` high, using the largest font size on the line, so a block of text in one size is `number of lines × font-size × line-height` high.
+Each line is `font-size × line-height` high, using the largest font size on the line, so a block of text in one size is `number of lines × font-size × line-height` high. As in CSS, the space the line height adds to the text (the leading) is split in half: one half above the text, one half below. With `line-height: 3` a 10pt text sits in the middle of a 30pt line. A line height smaller than the font's height gives a negative half, so the text rises and can reach outside its line, as it does in a browser. Underlines and strike-throughs follow the text; a link's clickable area is the whole line.
+
+In a line with runs of several sizes, each run's leading is split around that run, and the run that reaches highest above the baseline sets where the baseline goes. The line stays as tall as its largest font size times `line-height`. CSS can make such a line a little taller when the runs are in fonts with different proportions above and below the baseline; ngpdf keeps the height, so the lower part of such a run can reach that little bit past the line.
 
 ## Alignment and decoration
 
@@ -356,7 +375,7 @@ Wrap part of a text in a `pdf-span` to draw it in other text styles:
 
 - A span inherits the text styles around it and can change `color`, `font-family`, `font-size`, `font-weight`, `font-style`, `text-decoration`, `letter-spacing`, `text-transform` and `hyphens`, and move its text up or down with `vertical-align` (below). Spans nest.
 - The paragraph wraps as one text: a span boundary is not a place to break, and a span wraps over lines like the rest of the text. Kerning is not applied across two spans.
-- Runs of different sizes share a baseline, and a line is as tall as its largest font size times the paragraph's `line-height`, or taller when a raised or lowered run sticks out of it.
+- Runs of different sizes share a baseline, and a line is as tall as its largest font size times the paragraph's `line-height`. The baseline goes where the [half-leading](#line-height) of the run that reaches highest puts it. A line grows when a raised or lowered run sticks out of it (see [Superscript and subscript](#superscript-and-subscript)).
 - `line-height` and `text-align` belong to the `pdf-text`. Other properties on a span, such as padding or a background, have no effect and get a warning in development mode.
 - A span is drawn in the fonts its own `font-family` names, with the same fallback as any text.
 - `@if`, `@for` and components work inside a `pdf-text` as anywhere else.
@@ -377,7 +396,7 @@ A `pdf-text` inside a `pdf-text` is drawn in the outer text's style, with a warn
 - `super` raises the span's baseline by 0.33 times the font size around it, and `sub` lowers it by 0.2 times. Both draw the span at 70% of the font size around it, unless the span sets its own `font-size`.
 - A length raises the text by that much, and a negative one lowers it: `vertical-align: 3pt`. A percentage is of the span's line height, its font size times the paragraph's `line-height`. Neither changes the size.
 - `baseline` is the default. Like CSS, `vertical-align` is not inherited, but a span inside a raised span sits on that span's baseline, so its own `vertical-align` adds to the move.
-- A line grows when a moved run sticks out above its baseline or below its bottom, as in CSS, so a line with a superscript can be a little taller than its neighbours. A lower `line-height` doesn't stop that.
+- A moved run keeps the box every run has, its font size times `line-height` split around it by [half-leading](#line-height), and that box moves with it. The line grows where the moved box sticks out above the line's baseline or below its bottom, as in CSS. In 10pt Helvetica at the default `line-height: 1.2`, a `super` span makes its line about 0.7pt taller and a `sub` span about 1pt.
 - The underline or strike of a moved span moves with its text. So does the clickable area of a link around it, cut to the line so it never reaches into the lines above or below.
 - `vertical-align` works only on a `pdf-span`. On any other element it has no effect, with a warning in development mode (`ngpdf: vertical-align has no effect on <tag>`). `middle`, `top`, `text-top` and the other CSS keywords throw.
 

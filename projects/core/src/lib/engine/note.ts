@@ -1,6 +1,6 @@
 import { propsOf, type PdfNode } from '../tree/node';
 import { NOTE_ICONS, type NoteIcon } from '../tree/note-icon';
-import { show } from './style';
+import { show } from './limits';
 import { collapseWhitespace } from './text';
 
 /** What a pdf-note box carries to the display list; its icon color is the note's `color`. */

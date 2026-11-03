@@ -24,6 +24,8 @@ export interface TextRun {
   readonly ascent: number;
   /** Points the run's baseline is above the line's (negative is below); absent for 0. */
   readonly shift?: number;
+  /** Depth of the font below its baseline. With its ascent, the content its half-leading splits. */
+  readonly descent: number;
   /** The URL of the pdf-link the run belongs to, or `#name` for one to an anchor. */
   readonly link?: string;
   /**
@@ -40,7 +42,10 @@ export interface TextLine {
   readonly y: number;
   /** The tallest run's font size times the paragraph's line height. */
   readonly height: number;
-  /** The baseline, below `y`: the largest ascent of the line's runs. */
+  /**
+   * The baseline, below `y`. Each run's line height is split evenly above and below its content
+   * (CSS half-leading), and the run that reaches highest above its baseline sets it.
+   */
   readonly ascent: number;
   /** The paragraph's last line, which `text-align: justify` leaves at the start. */
   readonly last: boolean;
@@ -365,6 +370,7 @@ interface Face {
   readonly letterSpacing: number;
   readonly ascent: number;
   readonly shift?: number;
+  readonly descent: number;
   readonly link?: string;
   readonly emoji?: ImageAsset;
 }
@@ -481,6 +487,8 @@ function shapeRanges(ranges: readonly TextRange[], metrics: FontMetrics): Shaped
     if (index === undefined) {
       index = faces.length;
       const ascent = metrics.ascent(font, size);
+      // Without a descent, the content is taken as 1 em tall.
+      const descent = metrics.descent?.(font, size) ?? size - ascent;
       faces.push({
         font,
         size,
@@ -489,6 +497,7 @@ function shapeRanges(ranges: readonly TextRange[], metrics: FontMetrics): Shaped
         letterSpacing,
         ascent,
         ...(shift !== 0 && { shift }),
+        descent,
         ...(link !== undefined && { link }),
       });
       faceIndex.set(key, index);
@@ -512,7 +521,8 @@ function shapeRanges(ranges: readonly TextRange[], metrics: FontMetrics): Shaped
       index = faces.length;
       const font = faces[text]?.font ?? fontFor(range.style);
       // 1 em tall with its bottom on the font's descent.
-      const ascent = size - (metrics.descent?.(font, size) ?? 0);
+      const descent = metrics.descent?.(font, size) ?? 0;
+      const ascent = size - descent;
       faces.push({
         font,
         size,
@@ -521,6 +531,7 @@ function shapeRanges(ranges: readonly TextRange[], metrics: FontMetrics): Shaped
         letterSpacing,
         ascent,
         ...(range.style.baselineShift !== 0 && { shift: range.style.baselineShift }),
+        descent,
         ...(range.link !== undefined && { link: range.link }),
         emoji: image,
       });
@@ -993,12 +1004,16 @@ function breakLines(
     // An empty cut line keeps the height of the text it replaces.
     const sized = runs.length > 0 ? runs : runsOf(start, drawnEnd(end));
     let size = 0;
-    let ascent = 0;
+    // A negative half-leading can put the baseline above every run's ascent.
+    let ascent = sized.length > 0 ? -Infinity : 0;
     for (const run of sized) {
       size = Math.max(size, run.size);
-      ascent = Math.max(ascent, run.ascent);
+      // Half-leading: half of what the line height adds to the content goes above it, and it is
+      // negative when the line height is smaller.
+      const leading = run.size * lineHeight - run.ascent - run.descent;
+      ascent = Math.max(ascent, run.ascent + leading / 2);
     }
-    const box = growForShifts(sized, size * lineHeight, ascent);
+    const box = growForShifts(sized, lineHeight, size * lineHeight, ascent);
     lines.push({
       text: runs.map((run) => run.text).join(''),
       width: runs.reduce((sum, run) => sum + run.width, 0),
@@ -1023,11 +1038,12 @@ function breakLines(
 
 /**
  * The line's height and baseline, grown as CSS grows a line box when a run moved by
- * `vertical-align` sticks out above its baseline or below its bottom. A run's extent is its em box:
- * `ascent` above its baseline and the rest of its size below it.
+ * `vertical-align` sticks out above its baseline or below its bottom. A run's box is the one
+ * half-leading gives it, `font-size × line-height` around its ascent and descent, moved by its shift.
  */
 function growForShifts(
   runs: readonly TextRun[],
+  lineHeight: number,
   height: number,
   ascent: number,
 ): { height: number; ascent: number } {
@@ -1037,8 +1053,9 @@ function growForShifts(
   let below = room;
   for (const run of runs) {
     if (!run.shift) continue;
-    above = Math.max(above, run.ascent + run.shift);
-    below = Math.max(below, run.size - run.ascent - run.shift);
+    const halfLeading = (run.size * lineHeight - run.ascent - run.descent) / 2;
+    above = Math.max(above, run.ascent + halfLeading + run.shift);
+    below = Math.max(below, run.descent + halfLeading - run.shift);
   }
   return { height: height + (above - ascent) + (below - room), ascent: above };
 }

@@ -13,7 +13,6 @@ ngpdf v0.1 covers documents built from text, tables, boxes and images. This page
 
 - In the standard PDF fonts (Helvetica, Times and Courier), only WinAnsi characters: any other is drawn as `?`, with a warning in development mode. [Custom fonts](/docs/text-and-fonts#custom-fonts) have no such limit.
 - No font collections (`.ttc`), no color emoji fonts (emoji can be [drawn as images](/docs/text-and-fonts#emoji)), and no kerning across two fonts in one line.
-- Text sits at the top of its line box: extra `line-height` goes below the text, not half above and half below as in CSS.
 - A bare number is in points, except in `line-height`, where it multiplies the font size as in CSS (`line-height: 1.4`). Write `line-height: 14pt` for points.
 - Bare text inside an element other than `pdf-text` (`<pdf-cell>{{ x }}</pdf-cell>`) is laid out as an anonymous `pdf-text` with its parent's text styles.
 - No right-to-left text. Automatic hyphenation needs a [hyphenation function](/docs/text-and-fonts#automatic-hyphenation) from your app: ngpdf ships no patterns. Justified text widens only the gaps between words, never the space between letters.
@@ -26,6 +25,7 @@ ngpdf v0.1 covers documents built from text, tables, boxes and images. This page
 - A box cannot fill the remaining height of a page. Use a fixed height.
 - `transform` takes 2D rotations, scales and translations only: no `skew()`, `matrix()` or 3D functions.
 - `position` is `static`, `relative` or `absolute`: no `fixed`, `sticky` or `z-index`. An absolute element is never split across sheets, and against the page its `bottom` is measured on the whole content, not on one sheet.
+- `display` is `flex` or `none` only: no `block`, `inline`, `grid` or `contents`.
 - Your own components inside a document are transparent, like `display: contents`. Styles on a component's host element are ignored with a warning. Style a `pdf-*` element inside it instead. The same goes for the document component you render.
 
 ### Links
@@ -77,7 +77,6 @@ These items are in the [v0.2 roadmap](https://github.com/ngpdf/ngpdf/blob/main/d
 ### Layout
 
 - Fill the remaining page height.
-- Half-leading: extra line height split above and below the text, as in CSS.
 
 ### Images
 
@@ -86,6 +85,6 @@ These items are in the [v0.2 roadmap](https://github.com/ngpdf/ngpdf/blob/main/d
 
 ### Robustness
 
-- One policy for unknown keywords, fallback or throw (still to be decided). Today `font-weight` and `font-style` fall back to `normal`, `break-before`, `break-after` and `break-inside` ignore them, and the other keyword properties throw.
+- One policy for unknown keywords, fallback or throw (still to be decided). Today `font-style` falls back to `normal`, `break-before`, `break-after` and `break-inside` ignore them, and the other keyword properties throw.
 
 Ideas and bug reports are welcome on [GitHub issues](https://github.com/ngpdf/ngpdf/issues).

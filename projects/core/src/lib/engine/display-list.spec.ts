@@ -67,6 +67,12 @@ function list(
 
 type Op<K extends DrawOp['op']> = Extract<DrawOp, { op: K }>;
 
+/** Half of what a line of `line-height` adds to Helvetica's content, above the text (CSS). */
+function halfLeading(size = 10, lineHeight = 1.2): number {
+  const content = writer.ascent('Helvetica', size) + writer.descent!('Helvetica', size);
+  return (size * lineHeight - content) / 2;
+}
+
 const SQUARE = { topLeft: 0, topRight: 0, bottomRight: 0, bottomLeft: 0 };
 
 function only<K extends DrawOp['op']>(ops: readonly DrawOp[], kind: K): Op<K>[] {
@@ -79,7 +85,8 @@ describe('displayList', () => {
     const ops = list(layout(root)[0]!, 0, 1);
     expect(ops.map((op) => op.op)).toEqual(['rect', 'text']);
     expect(ops[0]).toMatchObject({ op: 'rect', fill: '#dd0031', radii: SQUARE, opacity: 1 });
-    expect(ops[1]).toMatchObject({ op: 'text', text: 'Hello', x: 36, y: 36 });
+    expect(ops[1]).toMatchObject({ op: 'text', text: 'Hello', x: 36 });
+    expect((ops[1] as Op<'text'>).y).toBeCloseTo(36 + halfLeading(), 6);
   });
 
   it('writes colors as #rrggbb and their alpha as the op opacity', () => {
@@ -230,6 +237,161 @@ describe('displayList', () => {
     });
   });
 
+  describe('dashed and dotted borders', () => {
+    const box = (style: Record<string, string>) =>
+      list(layout(page([el('pdf-view', { width: '100', height: '40', ...style })]))[0]!, 0, 1);
+    const length = (op: Op<'line'>) => Math.hypot(op.x2 - op.x1, op.y2 - op.y1);
+    const expectWhole = (value: number) => {
+      expect(Math.abs(value - Math.round(value))).toBeLessThan(1e-6);
+    };
+
+    it('dashes each square side with 3w dashes, the gap fitted so it ends on a dash', () => {
+      const lines = only(box({ border: '2 dashed #f00' }), 'line');
+      expect(lines).toHaveLength(4);
+      const [top, right] = lines;
+      expect(top).toMatchObject({ x1: 36, x2: 136, y1: 37, width: 2, color: '#ff0000' });
+      expect(top!.cap).toBeUndefined();
+      expect(top!.dashPhase).toBeUndefined();
+      // 100pt: 9 dashes of 6 and 8 gaps of 5.75.
+      expect(top!.dash).toEqual([6, 5.75]);
+      // 40pt: 4 dashes and 3 gaps.
+      expect(right!.dash![0]).toBe(6);
+      expect(right!.dash![1]).toBeCloseTo(16 / 3, 9);
+      for (const line of lines) {
+        const [dash, gap] = line.dash!;
+        expectWhole((length(line) + gap!) / (dash! + gap!));
+      }
+    });
+
+    it('draws a side too short for two dashes solid', () => {
+      const lines = only(box({ width: '8', border: '2 dashed #000' }), 'line');
+      expect(lines[0]!.dash).toBeUndefined();
+      expect(lines[1]!.dash).toBeDefined();
+    });
+
+    it('dots each square side with round dots of the width, the first and last in the corners', () => {
+      const lines = only(box({ border: '2 dotted #00f' }), 'line');
+      expect(lines).toHaveLength(4);
+      for (const line of lines) {
+        expect(line.cap).toBe('round');
+        const [dash, spacing] = line.dash!;
+        expect(dash).toBe(0);
+        // About 2w apart, fitted so the dots run from 1pt inside one end to 1pt inside the other.
+        expect(spacing!).toBeGreaterThan(3.5);
+        expect(spacing!).toBeLessThan(4.5);
+        expect(spacing! - line.dashPhase!).toBeCloseTo(1, 9);
+        expectWhole((length(line) - 2) / spacing!);
+      }
+    });
+
+    it('strokes a uniform rounded border as one closed path, the pattern fitted to it', () => {
+      const perimeter = 2 * (98 - 14) + 2 * (38 - 14) + 2 * Math.PI * 7;
+      const dashed = box({ border: '2 dashed #f00', 'border-radius': '8' });
+      expect(only(dashed, 'line')).toEqual([]);
+      const [outline] = only(dashed, 'path');
+      expect(only(dashed, 'path')).toHaveLength(1);
+      expect(outline).toMatchObject({ width: 2, color: '#ff0000' });
+      const last = outline!.segments.at(-1)!.to;
+      expect(last.x).toBeCloseTo(outline!.from.x, 6);
+      expect(last.y).toBeCloseTo(outline!.from.y, 6);
+      expect(outline!.dash![0]).toBe(6);
+      const [dash, gap] = outline!.dash!;
+      expect(dash! + gap!).toBeCloseTo(perimeter / 22, 3);
+
+      const dotted = only(box({ border: '2 dotted #f00', 'border-radius': '8' }), 'path');
+      expect(dotted).toHaveLength(1);
+      expect(dotted[0]!.cap).toBe('round');
+      expect(dotted[0]!.dash![0]).toBe(0);
+      expect(dotted[0]!.dash![1]).toBeCloseTo(perimeter / 65, 3);
+    });
+
+    it('draws each side on its own when the rounded sides differ', () => {
+      const ops = box({
+        border: '2 dashed #000',
+        'border-left': '2 dotted #000',
+        'border-bottom': '2 solid #000',
+        'border-radius': '8',
+      });
+      const paths = only(ops, 'path');
+      expect(paths).toHaveLength(4);
+      const [top, right, bottom, left] = paths;
+      expect(top!.dash![0]).toBe(6);
+      expect(right!.dash![0]).toBe(6);
+      expect(bottom!.dash).toBeUndefined();
+      expect(left).toMatchObject({ cap: 'round' });
+      expect(left!.dash![0]).toBe(0);
+      // Each pattern starts at its own corner: the middle of the arc, with no phase.
+      expect(top!.dashPhase).toBeUndefined();
+      expect(left!.dashPhase).toBeUndefined();
+    });
+
+    it('starts the dots of a rounded side 1pt in at its square corner', () => {
+      const ops = box({
+        border: '2 dotted #00f',
+        'border-right': '2 solid #00f',
+        'border-radius': '0 8 0 0',
+      });
+      const [top] = only(ops, 'path');
+      // The top side runs from the square top left corner to the middle of the rounded one.
+      expect(top!.from).toEqual({ x: 36, y: 37 });
+      expect(top!.cap).toBe('round');
+      const [dash, spacing] = top!.dash!;
+      expect(dash).toBe(0);
+      expect(spacing! - top!.dashPhase!).toBeCloseTo(1, 9);
+    });
+
+    it('draws each side on its own when only the width or only the color differs', () => {
+      const widths = box({
+        border: '2 dashed #000',
+        'border-left-width': '3',
+        'border-radius': '8',
+      });
+      expect(only(widths, 'path')).toHaveLength(4);
+      const colors = box({
+        border: '2 dotted #000',
+        'border-left-color': '#f00',
+        'border-radius': '8',
+      });
+      expect(only(colors, 'path')).toHaveLength(4);
+      for (const path of only(colors, 'path')) expect(path.cap).toBe('round');
+    });
+
+    it('draws the sides of a rounded dashed box cut by a page break on their own', () => {
+      const rows = [0, 1, 2].map(() => el('pdf-view', { height: '300' }));
+      const style = { border: '2 dashed #123456', 'border-radius': '8' };
+      const pages = layout(page([el('pdf-view', style, rows)]));
+      expect(pages).toHaveLength(2);
+      for (const [index, laid] of pages.entries()) {
+        // Top, right and left on the first sheet; right, bottom and left on the second.
+        const paths = only(list(laid, index, 2), 'path');
+        expect(paths).toHaveLength(3);
+        for (const path of paths) expect(path.dash![0]).toBe(6);
+      }
+    });
+
+    it('draws the sides of a rounded dotted box below clipBottom on their own', () => {
+      const spacer = el('pdf-view', { height: '900' });
+      const style = { 'flex-direction': 'row', border: '2 dotted #000', 'border-radius': '8' };
+      const laid = layout(page([el('pdf-view', style, [spacer])]))[0]!;
+      const limit = laid.placed[0]!.clipBottom!;
+      const paths = only(list(laid, 0, 1), 'path');
+      // Top, right and left; the bottom side lies below the limit.
+      expect(paths).toHaveLength(3);
+      for (const path of paths) {
+        expect(path.cap).toBe('round');
+        const points = [path.from, ...path.segments.map((segment) => segment.to)];
+        for (const point of points) expect(point.y).toBeLessThanOrEqual(limit + 1e-6);
+      }
+    });
+
+    it('draws a none side not at all and keeps solid sides solid', () => {
+      const ops = box({ border: '2 solid #000', 'border-style': 'solid none' });
+      const lines = only(ops, 'line');
+      expect(lines).toHaveLength(2);
+      for (const line of lines) expect(line.dash).toBeUndefined();
+    });
+  });
+
   it('draws one line per border side with a width', () => {
     const style = { 'border-top': '2 solid #f00', 'border-left': '1 solid #0f0', height: '30' };
     const ops = list(layout(page([el('pdf-view', style)]))[0]!, 0, 1);
@@ -245,7 +407,7 @@ describe('displayList', () => {
     const [line] = only(ops, 'text');
     const lineWidth = writer.widthOf('Total', 'Helvetica', 10);
     expect(line!.x).toBeCloseTo(36 + 200 - 10 - lineWidth, 6);
-    expect(line!.y).toBe(46);
+    expect(line!.y).toBeCloseTo(46 + halfLeading(), 6);
   });
 
   it('centers text and sets underline and strike flags', () => {
@@ -352,9 +514,53 @@ describe('displayList', () => {
       [' ', 10, '#000000', false],
       ['here', 10, '#000000', true],
     ]);
-    const baseline = 36 + writer.ascent('Helvetica', 20);
+    // The 20pt run's half-leading puts the baseline: (24 - content) / 2 above its ascent.
+    const ascent = writer.ascent('Helvetica', 20);
+    const descent = writer.descent!('Helvetica', 20);
+    const baseline = 36 + ascent + (20 * 1.2 - ascent - descent) / 2;
     expect(ops[0]!.y).toBeCloseTo(baseline - writer.ascent('Helvetica', 10), 6);
-    expect(ops[1]!.y).toBeCloseTo(36, 6);
+    expect(ops[1]!.y).toBeCloseTo(baseline - ascent, 6);
+  });
+
+  describe('half-leading', () => {
+    it('draws text in the middle of a tall line, with its underline', () => {
+      const box = text('Hi', { 'line-height': '3', 'text-decoration': 'underline' });
+      const laid = layout(page([box]))[0]!;
+      const [op] = only(list(laid, 0, 1), 'text');
+      expect(laid.placed[0]!.box.text!.lines[0]!.height).toBe(30);
+      expect(op!.y).toBeCloseTo(36 + halfLeading(10, 3), 6);
+      expect(op!.underline).toBe(true);
+    });
+
+    it('raises text in a line shorter than its content', () => {
+      const [op] = only(
+        list(layout(page([text('Hi', { 'line-height': '0.5' })]))[0]!, 0, 1),
+        'text',
+      );
+      expect(halfLeading(10, 0.5)).toBeLessThan(0);
+      expect(op!.y).toBeCloseTo(36 + halfLeading(10, 0.5), 6);
+    });
+
+    it('keeps an inline link rectangle on the whole line box', () => {
+      const paragraph = el('pdf-text', { 'line-height': '3' }, [
+        el('pdf-link', {}, [createNode('text', '', 'docs')], { href: 'https://example.com/a' }),
+      ]);
+      const laid = layout(page([paragraph]))[0]!;
+      const [area] = only(list(laid, 0, 1), 'link');
+      expect(area).toMatchObject({ y: 36, h: 30 });
+      const [op] = only(list(laid, 0, 1), 'text');
+      expect(op!.y).toBeCloseTo(36 + halfLeading(10, 3), 6);
+    });
+
+    it('draws the page number in the middle of its line', () => {
+      const number = el('pdf-page-number', { 'line-height': '3', height: '30' }, [], {
+        format: '{page}',
+      });
+      const [first] = layout(page([text('a'), number]));
+      const last = only(list(first!, 0, 1), 'text').at(-1)!;
+      expect(last.text).toBe('1');
+      expect(last.y).toBeCloseTo(841.89 - 36 - 30 + halfLeading(10, 3), 6);
+    });
   });
 
   it('draws the page number from the format with page and total', () => {
@@ -397,7 +603,7 @@ describe('displayList', () => {
     const [first] = layout(page([el('pdf-view', { 'flex-direction': 'row' }, [number])]));
     const [op] = only(list(first!, 0, 1), 'text');
     expect(op!.x).toBeCloseTo(36 + 100 - writer.widthOf('1', 'Helvetica', 10), 3);
-    expect(op!.y).toBeCloseTo(36, 3);
+    expect(op!.y).toBeCloseTo(36 + halfLeading(), 3);
   });
 
   it('passes letter-spacing to the text op and aligns by the spaced width', () => {
@@ -482,7 +688,7 @@ describe('displayList', () => {
       const pad = ((595.28 - 72) * 10) / 100;
       const [line] = only(list(laid, 0, 1), 'text');
       expect(line!.x).toBeCloseTo(36 + pad, 3);
-      expect(line!.y).toBeCloseTo(36 + pad, 3);
+      expect(line!.y).toBeCloseTo(36 + pad + halfLeading(), 3);
     });
 
     it('resolves percent padding against the wrapper content width when nested', () => {
@@ -2231,7 +2437,8 @@ describe('notes', () => {
     expect(kinds).toEqual(['group', 'text', 'text', 'ungroup', 'note']);
     const after = only(ops, 'text')[1]!;
     expect(only(ops, 'note')[0]).toMatchObject({ x: 36, text: 'Check this' });
-    expect(only(ops, 'note')[0]!.y).toBeCloseTo(after.y, 6);
+    // At the top of the line box, above the text's half-leading.
+    expect(only(ops, 'note')[0]!.y).toBeCloseTo(after.y - halfLeading(), 6);
   });
 
   it('keeps a note in a faded unit inside its group, where the writer still lifts it out', () => {
@@ -2626,7 +2833,7 @@ describe('vertical-align', () => {
     expect(links[0]!.h).toBeCloseTo(line!.height, 6);
   });
 
-  it('keeps the whole linked superscript clickable in a short line', () => {
+  it('keeps a linked superscript clickable down to its glyph in a short line', () => {
     const paragraph = el('pdf-text', { 'font-size': '10', 'line-height': '0.5' }, [
       createNode('text', '', 'x'),
       el('pdf-link', {}, [sup('1')], { href: 'https://example.com/' }),
@@ -2636,10 +2843,15 @@ describe('vertical-align', () => {
     const ops = list(laid, 0, 1);
     const one = only(ops, 'text').find((op) => op.text === '1')!;
     const [area] = only(ops, 'link');
-    expect(area!.y).toBeLessThanOrEqual(one.y + 1e-6);
-    expect(area!.y + area!.h).toBeGreaterThanOrEqual(one.y + 7 - 1e-6);
-    expect(area!.y).toBeGreaterThanOrEqual(36 - 1e-6);
-    expect(area!.y + area!.h).toBeLessThanOrEqual(36 + line!.height + 1e-6);
+    // As with unshifted text, a glyph over the edge of a short line box is cut at it.
+    const glyph = writer.ascent('Helvetica', 7) + writer.descent!('Helvetica', 7);
+    const lineBottom = 36 + line!.height;
+    expect(area!.y).toBeCloseTo(Math.max(36, one.y), 6);
+    expect(area!.y + area!.h).toBeCloseTo(
+      Math.min(lineBottom, Math.max(one.y + glyph, lineBottom - 3.3)),
+      6,
+    );
+    expect(area!.y + area!.h).toBeGreaterThan(36 + line!.height - 3.3);
   });
 
   it('raises an emoji in a shifted run with it', () => {
