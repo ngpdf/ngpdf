@@ -360,7 +360,7 @@ describe('renderDocument', () => {
     const first = el('pdf-page', {}, [text('a'), number], { size: 'A4' });
     const second = el(
       'pdf-page',
-      { 'break-before': 'true' },
+      { 'break-before': 'page' },
       [text('b'), el('pdf-page-number', {}, [], { format: '{page}/{total}' })],
       { size: 'A4' },
     );

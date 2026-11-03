@@ -484,7 +484,7 @@ describe('resolveStyles', () => {
     expect(styleOf({}).breakBefore).toBe(false);
   });
 
-  it('reads breakAfter from props or break-after: page, and ignores other keywords', () => {
+  it('reads breakAfter from props or break-after: page', () => {
     const withProp = el('pdf-view');
     withProp.owner = { pdfProps: () => ({ breakAfter: true }) };
     const root = el('pdf-document', {}, [withProp, el('pdf-view', { 'break-after': 'page' })]);
@@ -500,7 +500,6 @@ describe('resolveStyles', () => {
     expect(styleOf({ 'break-after': 'avoid' }).keepWithNext).toBe(true);
     expect(styleOf({ 'break-after': 'avoid-page' }).keepWithNext).toBe(true);
     expect(styleOf({ 'break-after': 'page' }).keepWithNext).toBe(false);
-    expect(styleOf({ 'break-after': 'avoid-column' }).keepWithNext).toBe(false);
     const text = el('pdf-text');
     const view = el('pdf-view', { 'break-after': 'avoid' }, [text]);
     expect(resolveStyles(view).get(text)?.keepWithNext).toBe(false);
@@ -925,8 +924,6 @@ describe('resolveStyles property coverage', () => {
     expect(styleOf({ 'break-inside': 'avoid' }).breakInside).toBe('avoid');
     expect(styleOf({ 'break-inside': 'avoid-page' }).breakInside).toBe('avoid');
     expect(styleOf({ 'break-inside': 'auto' }).breakInside).toBe('auto');
-    // Columns don't exist here, so avoiding a column break avoids nothing.
-    expect(styleOf({ 'break-inside': 'avoid-column' }).breakInside).toBe('auto');
     const text = el('pdf-text');
     const view = el('pdf-view', { 'break-inside': 'avoid' }, [text]);
     expect(resolveStyles(view).get(text)?.breakInside).toBe('auto');
@@ -1113,11 +1110,14 @@ describe('resolveStyles property coverage', () => {
     });
 
     it('throws for a value it does not take', () => {
-      for (const value of ['middle', 'auto', 'top', '2em']) {
-        expect(() => spanStyles({ 'vertical-align': value })).toThrow(/^ngpdf: .* on pdf-span$/);
+      for (const value of ['middle', 'auto', 'top']) {
+        expect(() => spanStyles({ 'vertical-align': value })).toThrow(
+          /^ngpdf: .* on pdf-span; use /,
+        );
       }
+      expect(() => spanStyles({ 'vertical-align': '2em' })).toThrow(/^ngpdf: .* on pdf-span$/);
       expect(() => spanStyles({ 'vertical-align': 'middle' })).toThrow(
-        'ngpdf: invalid value "middle" for vertical-align on pdf-span',
+        'ngpdf: invalid value "middle" for vertical-align on pdf-span; use baseline, super, sub, a length or a percentage',
       );
     });
   });
@@ -1871,5 +1871,123 @@ describe('resolveStyles: pdf-note', () => {
       ['ngpdf: padding has no effect on pdf-note'],
       ['ngpdf: font-size has no effect on pdf-note'],
     ]);
+  });
+});
+
+// One rule for every keyword property: an unknown keyword throws, naming the value as written,
+// the property, the element and the keywords the property takes.
+describe('resolveStyles: unknown keywords', () => {
+  it.each([
+    ['font-style', 'bold', 'normal, italic or oblique'],
+    ['font-style', 'oblique 10deg', 'normal, italic or oblique'],
+    ['font-style', 'Slanted', 'normal, italic or oblique'],
+    ['break-before', 'always', 'auto or page'],
+    ['break-before', 'avoid', 'auto or page'],
+    ['break-before', 'LEFT', 'auto or page'],
+    ['break-after', 'column', 'auto, page, avoid or avoid-page'],
+    ['break-after', 'avoid-column', 'auto, page, avoid or avoid-page'],
+    ['break-inside', 'avoid-column', 'auto, avoid or avoid-page'],
+    ['break-inside', 'page', 'auto, avoid or avoid-page'],
+    ['text-align', 'start', 'left, center, right or justify'],
+    ['text-decoration', 'overline', 'none, underline or line-through'],
+    ['text-transform', 'full-width', 'none, uppercase, lowercase or capitalize'],
+    ['hyphens', 'all', 'none, manual or auto'],
+    ['flex-direction', 'row-reverse', 'row or column'],
+    [
+      'justify-content',
+      'start',
+      'flex-start, center, flex-end, space-between, space-around or space-evenly',
+    ],
+    ['align-items', 'baseline', 'stretch, flex-start, center or flex-end'],
+    ['align-self', 'baseline', 'auto, stretch, flex-start, center or flex-end'],
+    ['object-fit', 'fill', 'contain or cover'],
+    ['overflow', 'none', 'visible, hidden, clip, scroll or auto'],
+    ['position', 'float', 'static, relative or absolute'],
+    ['white-space', 'break-spaces', 'normal, nowrap, pre, pre-line or pre-wrap'],
+    ['text-overflow', 'fade', 'clip or ellipsis'],
+    ['flex-wrap', 'Wrap-Around', 'nowrap, wrap or wrap-reverse'],
+    [
+      'align-content',
+      'baseline',
+      'stretch, flex-start, center, flex-end, space-between, space-around or space-evenly',
+    ],
+    [
+      'border-style',
+      'wavy',
+      'none, hidden, solid, dashed, dotted, double, groove, ridge, inset or outset',
+    ],
+    [
+      'border-left-style',
+      'wavy',
+      'none, hidden, solid, dashed, dotted, double, groove, ridge, inset or outset',
+    ],
+  ])('throws on %s "%s", listing %s', (property, value, allowed) => {
+    expect(() => styleOf({ [property]: value }, 'pdf-text')).toThrow(
+      `ngpdf: invalid value "${value}" for ${property} on pdf-text; use ${allowed}`,
+    );
+  });
+
+  it.each([
+    ['font-style', ['normal', 'italic', 'oblique']],
+    ['break-before', ['auto', 'page']],
+    ['break-after', ['auto', 'page', 'avoid', 'avoid-page']],
+    ['break-inside', ['auto', 'avoid', 'avoid-page']],
+  ])('accepts every listed %s keyword, in any case', (property, keywords) => {
+    for (const keyword of keywords) {
+      expect(() => styleOf({ [property]: keyword })).not.toThrow();
+      expect(() => styleOf({ [property]: ` ${keyword.toUpperCase()} ` })).not.toThrow();
+    }
+  });
+
+  it('reads the break keywords that do nothing as no break', () => {
+    expect(styleOf({ 'break-before': 'auto' }).breakBefore).toBe(false);
+    expect(styleOf({ 'break-after': 'auto' })).toMatchObject({
+      breakAfter: false,
+      keepWithNext: false,
+    });
+    expect(styleOf({ 'break-inside': 'auto' }).breakInside).toBe('auto');
+  });
+
+  it('checks the keyword on a pdf-span too, where break-after has no effect', () => {
+    const span = el('pdf-span', { 'font-style': 'bold' });
+    expect(() => resolveStyles(el('pdf-document', {}, [el('pdf-text', {}, [span])]))).toThrow(
+      'ngpdf: invalid value "bold" for font-style on pdf-span; use normal, italic or oblique',
+    );
+  });
+
+  it('checks break-before and break-after when the element also has the breakBefore or breakAfter prop', () => {
+    for (const [prop, property] of [
+      ['breakBefore', 'break-before'],
+      ['breakAfter', 'break-after'],
+    ] as const) {
+      const view = el('pdf-view', { [property]: 'always' });
+      view.owner = { pdfProps: () => ({ [prop]: true }) };
+      expect(() => resolveStyles(el('pdf-document', {}, [view]))).toThrow(
+        `ngpdf: invalid value "always" for ${property} on pdf-view; use auto`,
+      );
+    }
+  });
+
+  it.each(['row-reverse', 'sideways', 'row column', 'wrap nowrap', 'row wrap row', ''])(
+    'throws on flex-flow "%s", listing its keywords',
+    (value) => {
+      expect(() => styleOf({ 'flex-flow': value }, 'pdf-text')).toThrow(
+        `ngpdf: invalid value "${value}" for flex-flow on pdf-text; use row or column, nowrap, wrap or wrap-reverse, or one of each`,
+      );
+    },
+  );
+
+  it.each(['middle', 'TOP', 'auto', 'text-bottom'])(
+    'throws on vertical-align "%s" on a pdf-span, listing its keywords',
+    (value) => {
+      const span = el('pdf-span', { 'vertical-align': value }, [createNode('text', '', 'x')]);
+      expect(() => resolveStyles(el('pdf-document', {}, [el('pdf-text', {}, [span])]))).toThrow(
+        `ngpdf: invalid value "${value}" for vertical-align on pdf-span; use baseline, super, sub, a length or a percentage`,
+      );
+    },
+  );
+
+  it('still ignores an unknown property', () => {
+    expect(() => styleOf({ 'font-stretch': 'wobbly', 'page-break-before': 'x' })).not.toThrow();
   });
 });

@@ -1,5 +1,6 @@
 import type { PdfNode } from '../tree/node';
-import { MAX_NESTING, show } from './limits';
+import { oneOf } from './keyword';
+import { MAX_NESTING } from './limits';
 
 const PDF_ELEMENTS = new Set([
   'pdf-document',
@@ -25,13 +26,7 @@ const PDF_ELEMENTS = new Set([
 function isHidden(node: PdfNode): boolean {
   const value = node.rawStyle['display'];
   if (value === undefined) return false;
-  const keyword = value.trim().toLowerCase();
-  if (keyword !== 'flex' && keyword !== 'none') {
-    throw new Error(
-      `ngpdf: invalid value "${show(value)}" for display on ${node.tag}; use flex or none`,
-    );
-  }
-  return keyword === 'none';
+  return oneOf(value, ['flex', 'none'], 'display', node.tag) === 'none';
 }
 
 /** A user component's host (or any element that is not one of the pdf-* elements). */
