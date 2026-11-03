@@ -797,6 +797,14 @@ describe('image natural size at the page dpi', () => {
     expect(size({ width: '40', height: '30' }, 144)).toEqual([40, 30]);
   });
 
+  it('rejects a dpi so small that the natural size is not a float32 number', () => {
+    expect(() => size({}, 1e-306)).toThrow(
+      /^ngpdf: pdf-image natural size is too large at dpi 1e-306; set a width or a larger dpi$/,
+    );
+    expect(() => size({}, 1e-35)).toThrow(/^ngpdf: pdf-image natural size is too large/);
+    expect(size({ width: '10' }, 1e-306)).toEqual([10, 5]);
+  });
+
   it('still caps the scaled size to the available width', () => {
     expect(size({}, 36, 100)).toEqual([100, 50]);
   });

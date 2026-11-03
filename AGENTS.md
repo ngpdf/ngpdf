@@ -277,7 +277,8 @@ NGPDF_APT=poppler-utils ./scripts/dev node scripts/server-check.mjs   # packed d
   - `object-fit` is `contain` (default) or `cover`.
   - An image with no `width` and no `height` takes 72 / `dpi` points per pixel, where `dpi` is
     its `pdf-page`'s (72 by default; anything but a finite number above 0 throws
-    `ngpdf: invalid dpi "<value>" on pdf-page`). `dpi` changes nothing else: no `/UserUnit`.
+    `ngpdf: invalid dpi "<value>" on pdf-page`; a natural size past float32 throws too). `dpi`
+    changes nothing else: no `/UserUnit`.
   - A failed load rejects the render with `ngpdf: could not load image "<src>": <reason>`.
   - The render option `maxImageBytes` (no cap by default) caps fetched image URLs only: past it,
     the reason is `larger than N bytes`. A `Content-Length` over it is refused before the body is

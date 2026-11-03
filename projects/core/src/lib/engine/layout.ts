@@ -305,12 +305,12 @@ export function pageDpi(page: PdfNode): number {
   return dpi;
 }
 
-/** Points per image pixel on the nearest pdf-page above `node`: 72 / its dpi, or 1 without one. */
-function pointsPerPixel(node: PdfNode): number {
+/** The dpi of the nearest pdf-page above `node`, or 72 without one. */
+function dpiAbove(node: PdfNode): number {
   for (let current = node.parent; current; current = current.parent) {
-    if (current.kind === 'element' && current.tag === 'pdf-page') return 72 / pageDpi(current);
+    if (current.kind === 'element' && current.tag === 'pdf-page') return pageDpi(current);
   }
-  return 1;
+  return 72;
 }
 
 /**
@@ -323,7 +323,7 @@ function sizeImage(
   asset: ImageAsset,
   yoga: Yoga,
   parent: ResolvedStyle | undefined,
-  scale: number,
+  dpi: number,
 ): void {
   const { width, height } = style;
   if (!(asset.width > 0 && asset.height > 0)) {
@@ -341,7 +341,13 @@ function sizeImage(
     if (style.alignSelf === 'auto' && parent?.alignItems === 'stretch') {
       node.setAlignSelf(yoga.ALIGN_FLEX_START);
     }
-    const natural = asset.width * scale;
+    const natural = (asset.width * 72) / dpi;
+    // Yoga works in float32: a tiny dpi must not hand it an infinite size.
+    if (!Number.isFinite(Math.fround(Math.max(natural, natural / ratio)))) {
+      throw new Error(
+        `ngpdf: pdf-image natural size is too large at dpi ${String(dpi)}; set a width or a larger dpi`,
+      );
+    }
     node.setMeasureFunc((available, mode) => {
       let fitted = Math.min(natural, available);
       if (mode === yoga.MEASURE_MODE_UNDEFINED) fitted = natural;
@@ -575,7 +581,7 @@ export function layoutBox(
         asset,
         yoga,
         current.parent ? styleFor(current.parent) : undefined,
-        pointsPerPixel(current),
+        dpiAbove(current),
       );
     }
     const isText = current.tag === 'pdf-text';
