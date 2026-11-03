@@ -121,6 +121,8 @@ interface Unit extends Flowed {
   readonly header: Header | null;
   /** A body row of a table that may split across sheets when it is taller than a page. */
   readonly splits?: true;
+  /** A line of a wrapping pdf-page, named so in the warning when it is taller than a page. */
+  readonly pageLine?: true;
 }
 
 /** A column pdf-view or a table the units were taken from; it covers units first..last. */
@@ -225,6 +227,30 @@ function contains(box: Box): boolean {
   return box.style.position !== 'static' || box.style.transform.length > 0;
 }
 
+/** The children that take part in the flow: not absolute, and not notes. */
+function flowOf(box: Box): Box[] {
+  return box.children.filter((child) => !isAbsolute(child) && !isFlowNote(child));
+}
+
+/** A row with `flex-wrap`: each of its lines is a unit, so it breaks between them. */
+function wrapsLines(box: Box): boolean {
+  return box.style.flexDirection === 'row' && box.style.flexWrap !== 'nowrap';
+}
+
+/**
+ * A column with `flex-wrap` whose children went into more than one column, side by side: a
+ * child that starts above the end of the one before it. Cutting between its children would cut
+ * through the columns, so it is one unit.
+ */
+function wrapsColumns(box: Box): boolean {
+  if (box.style.flexDirection !== 'column' || box.style.flexWrap === 'nowrap') return false;
+  const flow = flowOf(box);
+  return flow.some((child, i) => {
+    const previous = flow[i - 1];
+    return previous !== undefined && child.y < previous.y + previous.h - EPSILON;
+  });
+}
+
 /**
  * A transformed box is drawn as a whole, so it is never split. A view of absolute boxes only has
  * no flow to split.
@@ -236,9 +262,75 @@ function isWrapper(box: Box): boolean {
     box.node.tag === 'pdf-table' ||
     // A clipping view is one unit, like a row view: its clip can't be cut across sheets.
     ((box.node.tag === 'pdf-view' || box.node.tag === 'pdf-link') &&
-      box.style.flexDirection === 'column' &&
-      box.style.overflow === 'visible')
+      box.style.overflow === 'visible' &&
+      (box.style.flexDirection === 'column' ? !wrapsColumns(box) : wrapsLines(box)))
   );
+}
+
+/**
+ * The lines of a wrapping row, as runs of its flow children. Yoga does not report them, so a
+ * child starts a new line when it starts left of where the child before it ended and lies wholly
+ * past the line so far on the cross axis: below it, or above it with `wrap-reverse`. Where the
+ * boxes leave it unclear, as with negative margins, two lines stay one, which only means no
+ * break between them.
+ */
+function linesOf(box: Box): Box[][] {
+  const reverse = box.style.flexWrap === 'wrap-reverse';
+  const lines: Box[][] = [];
+  let line: Box[] = [];
+  let top = Infinity;
+  let bottom = -Infinity;
+  for (const child of flowOf(box)) {
+    const previous = line.at(-1);
+    const past = reverse ? child.y + child.h <= top + EPSILON : child.y >= bottom - EPSILON;
+    if (previous && past && child.x < previous.x + previous.w - EPSILON) {
+      lines.push(line);
+      line = [];
+      top = Infinity;
+      bottom = -Infinity;
+    }
+    line.push(child);
+    top = Math.min(top, child.y);
+    bottom = Math.max(bottom, child.y + child.h);
+  }
+  if (line.length > 0) lines.push(line);
+  return lines;
+}
+
+/**
+ * One line of a wrapping row as a box: as wide as the row's content box, from the top of its
+ * highest child to the bottom of its lowest, holding the line's children. It draws nothing of the
+ * row: the row is a wrapper and draws its own background and border, sliced per sheet.
+ */
+function lineBox(row: Box, line: readonly Box[]): Box {
+  const left = row.padding.left + row.border.left;
+  const right = row.padding.right + row.border.right;
+  const top = Math.min(...line.map((child) => child.y));
+  const bottom = Math.max(...line.map((child) => child.y + child.h));
+  return {
+    node: row.node,
+    style: {
+      ...row.style,
+      flexWrap: 'nowrap',
+      position: 'static',
+      padding: ZERO_EDGES,
+      borderWidth: NO_BORDER,
+      backgroundColor: null,
+      backgroundImage: null,
+      breakBefore: false,
+      breakAfter: false,
+      keepWithNext: false,
+      // The row's group, with its background, carries its opacity.
+      opacity: 1,
+    },
+    x: left,
+    y: top,
+    w: Math.max(0, row.w - left - right),
+    h: bottom - top,
+    padding: NO_BORDER,
+    border: NO_BORDER,
+    children: line.map((child) => ({ ...child, x: child.x - left, y: child.y - top })),
+  };
 }
 
 /**
@@ -461,6 +553,11 @@ function collectUnits(
         }
       }
     }
+    if (wrapsLines(box)) {
+      visitLines(box, x, top, childHeader, inside, innerDx, innerDy);
+      wrapper.last = units.length - 1;
+      return;
+    }
     const last = lastInFlow(children);
     for (const [i, child] of children.entries()) {
       const [childX, childTop] = [x + child.x, top + child.y];
@@ -483,6 +580,48 @@ function collectUnits(
       }
     }
     wrapper.last = units.length - 1;
+  };
+
+  // A wrapping row's units are its lines, top to bottom. A note goes with the line of the next flow child, or
+  // with the last line when none follows; absolute children are placed with the flow.
+  const visitLines = (
+    box: Box,
+    x: number,
+    top: number,
+    header: Header | null,
+    groups: readonly OpacityGroup[],
+    dx: number,
+    dy: number,
+  ): void => {
+    // Lines go on the sheets top to bottom: with wrap-reverse, the first line is the lowest.
+    const lines = linesOf(box);
+    if (box.style.flexWrap === 'wrap-reverse') lines.reverse();
+    const lineOf = new Map<Box, number>();
+    lines.forEach((line, i) => {
+      for (const child of line) lineOf.set(child, i);
+    });
+    const base = units.length;
+    // A note after the last flow child goes with that child's line: the lowest one, or the top
+    // one with wrap-reverse. With no line at all, -1 as on a page with no units.
+    const lastChild = flowOf(box).at(-1);
+    let next = (lastChild && lineOf.get(lastChild)) ?? lines.length - 1;
+    const after: number[] = [];
+    for (let i = box.children.length - 1; i >= 0; i--) {
+      after[i] = next;
+      next = lineOf.get(at(box.children, i)) ?? next;
+    }
+    for (const [i, child] of box.children.entries()) {
+      const flowed = { box: child, x: x + child.x, top: top + child.y, dx, dy };
+      if (isFlowNote(child)) notes.push({ ...flowed, unit: base + at(after, i) });
+      else if (isAbsolute(child)) floats.push({ ...flowed, groups });
+    }
+    for (const line of lines) {
+      const unit = lineBox(box, line);
+      visit(unit, x + unit.x, top + unit.y, header, groups, dx, dy);
+      // A line is one unit; a page's line is named as such when it is too tall.
+      const index = units.length - 1;
+      if (box.node.tag === 'pdf-page') units[index] = { ...at(units, index), pageLine: true };
+    }
   };
 
   // A splittable text is a wrapper whose units are its line groups. The wrapper keeps the text's
@@ -575,7 +714,9 @@ function collectUnits(
     });
   };
 
-  if (content.style.flexDirection === 'row') {
+  if (wrapsLines(content)) {
+    visitLines(content, 0, 0, null, pageGroups, 0, 0);
+  } else if (content.style.flexDirection === 'row') {
     // The unit is the content box itself, in the page's group like the rest of the sheet.
     units.push({
       box: content,
@@ -765,6 +906,7 @@ function breaksBetween(box: Box, pageHeight: number): boolean {
   return (
     (tag === 'pdf-view' || tag === 'pdf-link' || tag === 'pdf-cell') &&
     style.flexDirection === 'column' &&
+    !wrapsColumns(box) &&
     !kept &&
     canBreak({ ...style, breakInside: 'auto' })
   );
@@ -1281,7 +1423,12 @@ export function paginatePage(
     const { box } = at;
     const drawn = { box, x: x + at.dx, y: y + at.dy, ...grouped(groups) };
     if (y + box.h > frame.bottom + slack) {
-      const what = isHeaderRow(box.node) ? `${box.node.tag} header` : box.node.tag;
+      const what =
+        'pageLine' in at && at.pageLine
+          ? `a wrapped line of ${box.node.tag}`
+          : isHeaderRow(box.node)
+            ? `${box.node.tag} header`
+            : box.node.tag;
       warn(`ngpdf: ${what} is taller than a page and is cut at the bottom`);
       on.placed.push({ ...drawn, clipBottom: frame.bottom });
     } else {

@@ -138,8 +138,10 @@ NGPDF_APT=poppler-utils ./scripts/dev node scripts/server-check.mjs   # packed d
   value throws `ngpdf: invalid value "<v>" for display on <tag>; use flex or none`. Not inherited.
 - **Keywords:** every style property that takes keywords reads them trimmed and in any case, and
   throws on any other keyword through `oneOf` in `engine/keyword.ts`:
-  `ngpdf: invalid value "<v>" for <property> on <tag>; use a, b or c`. No property falls back or
-  ignores an unknown keyword. Unknown properties are ignored.
+  `ngpdf: invalid value "<v>" for <property> on <tag>; use a, b or c`. A property that mixes
+  keywords with other values (`vertical-align`) or takes several (`flex-flow`) throws through
+  `invalidKeyword`, saying what it takes after `; use`. No property falls back or ignores an
+  unknown keyword. Unknown properties are ignored.
 - **Page sizes, in points:** A3 841.89×1190.55, A4 595.28×841.89, A5 419.53×595.28, Letter
   612×792, Legal 612×1008, or `[width, height]`. Landscape swaps them.
 - **Fonts:**
@@ -232,10 +234,17 @@ NGPDF_APT=poppler-utils ./scripts/dev node scripts/server-check.mjs   # packed d
   - Wrapper backgrounds and borders are sliced per page; a gradient runs over the whole wrapper,
     so each sheet shows its part.
 - **Text wrapping:** text wraps at Unicode line-break opportunities. A word wider than its box breaks
-  at the box edge, unless it can be hyphenated. `max-lines` keeps at most N lines of a `pdf-text`;
-  when text was cut, the last line ends with `…` in the face of its last run, or else in the first
+  at the box edge, unless it can be hyphenated. `white-space` (`normal`, `nowrap`, `pre`,
+  `pre-line`, `pre-wrap`, inherited, a `pdf-span` can set it) works as in CSS: kept line breaks
+  (LF, CRLF, CR) force a break, tabs under `pre` and `pre-wrap` go to stops every 8 spaces of
+  their font from the line start, and text that does not wrap overflows its box. `max-lines`
+  keeps at most N lines of a `pdf-text`; when text was cut, the last line ends with `…` in the face of its last run, or else in the first
   font of its `font-family` list that has `…`; failing that, `...` the same way. When no font has
   either, `…` takes the first font's fallback and the missing-character warning.
+  `text-overflow: ellipsis` (default `clip`, not inherited) on a `pdf-text` with its own fixed
+  `height` or `max-height` keeps the lines that fit fully in its content height, cut the same way;
+  with `max-lines` too, the smaller count wins. The first line is kept even when it does not fit;
+  it ends with `…` only when text was cut.
 - **Hyphenation:** `hyphens` is `manual` (default), `none` or `auto`, inherited, and a `pdf-span`
   can set it.
   - A soft hyphen (U+00AD) is never drawn. Under `manual` and `auto` it is a break point.
@@ -251,8 +260,19 @@ NGPDF_APT=poppler-utils ./scripts/dev node scripts/server-check.mjs   # packed d
     font).
 - **Styled runs:** a `pdf-span` inside a `pdf-text` changes only `color`, `font-family`,
   `font-size`, `font-weight`, `font-style`, `text-decoration`, `letter-spacing`,
-  `text-transform` and `hyphens`. The paragraph breaks as one text, and runs of different sizes
-  share a baseline. A `pdf-span` outside a `pdf-text` throws.
+  `text-transform`, `hyphens`, `vertical-align` and `white-space`. The paragraph breaks as one
+  text, and runs of different sizes share a baseline. A `pdf-span` outside a `pdf-text` throws.
+- **Line height:** a line is its largest run's `font-size × line-height` tall. As in CSS, each
+  run's leading is its own `font-size × line-height` less its ascent and descent, split half
+  above and half below it, and negative when that run's height is less than its ascent plus
+  descent. The run that reaches highest above its baseline sets the line's baseline. The page
+  number's line is split the same way. Pagination only sees the line heights.
+- **Superscript and subscript:** `vertical-align` (not inherited) applies to a `pdf-span` only and
+  warns elsewhere. `super` raises the baseline 0.33em and `sub` lowers it 0.2em of the parent's
+  font size, both at 70% of that size unless the span sets `font-size`; a length raises by it, a
+  percentage is of the span's line height. A nested span adds its move to its parent's. A line
+  grows where a moved run's box (its `font-size × line-height` around it by half-leading) sticks
+  out of it; decorations move with the run, and link areas too, cut to the line box.
 - **Links:** `<pdf-link [href]>` is a column `pdf-view` where a view can go and an inline run like
   a `pdf-span` inside a `pdf-text`. It changes nothing visually.
   - Only absolute `http:`, `https:` and `mailto:` URLs are written, normalized by `URL`. Any other

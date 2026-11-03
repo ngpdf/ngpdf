@@ -2408,3 +2408,231 @@ describe('paginatePage: pdf-note', () => {
     expect(placedOf(pages, marked).y).toBeCloseTo(CONTENT_TOP + 20 + 30, 6);
   });
 });
+
+describe('paginatePage: flex-wrap', () => {
+  const CUT = 'ngpdf: pdf-view is taller than a page and is cut at the bottom';
+  // 523.28pt of content width: five 100pt cards to a line.
+  const cards = (count: number, size = 100): PdfNode[] =>
+    Array.from({ length: count }, () =>
+      el('pdf-view', { width: String(size), height: String(size) }),
+    );
+
+  /** The page y of every box whose node is in `nodes`, on one sheet. */
+  function topsOn(laid: PageLayout, nodes: readonly PdfNode[]): number[] {
+    const tops: number[] = [];
+    const walk = (box: Box, y: number): void => {
+      if (nodes.includes(box.node)) tops.push(y);
+      for (const child of box.children) walk(child, y + child.y);
+    };
+    for (const placed of laid.placed) walk(placed.box, placed.y);
+    return tops;
+  }
+
+  it('breaks a wrapped grid between its lines, with the row gap dropped at the break', () => {
+    const items = cards(40);
+    const grid = el('pdf-view', { 'flex-flow': 'row wrap', 'row-gap': '10' }, items);
+    const warn = vi.fn<(message: string) => void>();
+    const pages = paginate(page([grid, pageNumber()]), warn);
+    expect(warn).not.toHaveBeenCalled();
+    expect(pages).toHaveLength(2);
+    const [first, second] = pages.map((laid) => topsOn(laid, items));
+    // Seven lines of five fit 760.89pt: 6 * 110 + 100.
+    expect(first).toHaveLength(35);
+    expect(second).toHaveLength(5);
+    expect(Math.max(...first!) + 100).toBeLessThanOrEqual(CONTENT_BOTTOM);
+    expect(first![5]! - first![0]!).toBeCloseTo(110, 6);
+    for (const top of second!) expect(top).toBeCloseTo(CONTENT_TOP, 6);
+  });
+
+  it('places the lines of wrap-reverse top to bottom, the first line last', () => {
+    const items = cards(40);
+    const grid = el('pdf-view', { 'flex-flow': 'row wrap-reverse', 'row-gap': '10' }, items);
+    const warn = vi.fn<(message: string) => void>();
+    const pages = paginate(page([grid, pageNumber()]), warn);
+    expect(warn).not.toHaveBeenCalled();
+    expect(pages).toHaveLength(2);
+    expect(topsOn(pages[0]!, items.slice(35))).toEqual(Array(5).fill(CONTENT_TOP));
+    expect(topsOn(pages[1]!, items.slice(0, 5))).toEqual(Array(5).fill(CONTENT_TOP));
+    expect(topsOn(pages[1]!, items)).toHaveLength(5);
+  });
+
+  it('makes each line a unit, so it moves whole', () => {
+    // Lines of different heights: the tall card takes its line to the next sheet.
+    const items = [...cards(30), el('pdf-view', { width: '100', height: '300' }), ...cards(4)];
+    const grid = el('pdf-view', { 'flex-flow': 'row wrap' }, items);
+    const pages = paginate(page([grid, pageNumber()]));
+    expect(pages).toHaveLength(2);
+    const second = topsOn(pages[1]!, items);
+    expect(second).toHaveLength(5);
+    for (const top of second) expect(top).toBeCloseTo(CONTENT_TOP, 6);
+  });
+
+  it('puts a line taller than a page on a sheet of its own, cut at the bottom', () => {
+    const tall = el('pdf-view', { width: '100', height: '900' });
+    const items = [...cards(5), tall, ...cards(9)];
+    const grid = el('pdf-view', { 'flex-flow': 'row wrap' }, items);
+    const warn = vi.fn<(message: string) => void>();
+    const pages = paginate(page([grid, pageNumber()]), warn);
+    expect(warn).toHaveBeenCalledWith(CUT);
+    expect(pages).toHaveLength(3);
+    expect(topsOn(pages[0]!, items)).toHaveLength(5);
+    // The tall card's line: it and four cards.
+    expect(topsOn(pages[1]!, [tall])).toEqual([CONTENT_TOP]);
+    expect(topsOn(pages[1]!, items)).toHaveLength(5);
+    expect(pages[1]!.placed[0]!.clipBottom).toBe(CONTENT_BOTTOM);
+    expect(topsOn(pages[2]!, items)).toHaveLength(5);
+  });
+
+  it('slices the background and border of a wrapped row across sheets', () => {
+    const grid = el(
+      'pdf-view',
+      {
+        'flex-flow': 'row wrap',
+        padding: '5',
+        'border-width': '1',
+        'background-color': '#eeeeee',
+      },
+      cards(40),
+    );
+    const pages = paginate(page([grid, pageNumber()]));
+    expect(pages).toHaveLength(2);
+    const pieces = pages.map((laid) => laid.decorations.filter((d) => d.box.node === grid));
+    expect(pieces.map((list) => list.length)).toEqual([1, 1]);
+    const [head, tail] = pieces.map((list) => list[0]!);
+    expect(head).toMatchObject({ y: CONTENT_TOP, sliceTop: false, sliceBottom: true });
+    expect(tail).toMatchObject({ y: CONTENT_TOP, sliceTop: true, sliceBottom: false });
+    // The lines are drawn in the content box, without the row's own background a second time.
+    for (const placed of pages[0]!.placed) {
+      expect(placed.box.style.backgroundColor).toBeNull();
+      expect(placed.x).toBeCloseTo(PADDING + 6, 6);
+    }
+  });
+
+  it('keeps break-inside: avoid on a wrapped row that fits a page', () => {
+    const grid = el('pdf-view', { 'flex-flow': 'row wrap', 'break-inside': 'avoid' }, cards(10));
+    const pages = paginate(page([el('pdf-view', { height: '700' }), grid, pageNumber()]));
+    expect(pages).toHaveLength(2);
+    expect(topsOn(pages[1]!, grid.children)).toHaveLength(10);
+  });
+
+  it('breaks a wrapping page between its lines', () => {
+    const items = cards(40);
+    const root = page([...items, pageNumber()], {
+      padding: String(PADDING),
+      'flex-flow': 'row wrap',
+      'row-gap': '10',
+    });
+    const pages = paginate(root);
+    expect(pages).toHaveLength(2);
+    expect(topsOn(pages[0]!, items)).toHaveLength(35);
+    const second = topsOn(pages[1]!, items);
+    expect(second).toHaveLength(5);
+    for (const top of second) expect(top).toBeCloseTo(CONTENT_TOP, 6);
+  });
+
+  it('names a wrapped line of a page that is taller than a page in the warning', () => {
+    const tall = el('pdf-view', { width: '100', height: '900' });
+    const items = [...cards(5), tall];
+    const root = page([...items, pageNumber()], {
+      padding: String(PADDING),
+      'flex-flow': 'row wrap',
+    });
+    const warn = vi.fn<(message: string) => void>();
+    const pages = paginate(root, warn);
+    expect(warn).toHaveBeenCalledWith(
+      'ngpdf: a wrapped line of pdf-page is taller than a page and is cut at the bottom',
+    );
+    expect(warn).not.toHaveBeenCalledWith(
+      'ngpdf: pdf-page is taller than a page and is cut at the bottom',
+    );
+    expect(pages).toHaveLength(2);
+    expect(topsOn(pages[1]!, [tall])).toEqual([CONTENT_TOP]);
+  });
+
+  it('puts a note after the last child of a wrap-reverse row on that child sheet', () => {
+    const items = cards(40);
+    const note = el('pdf-note');
+    const grid = el('pdf-view', { 'flex-flow': 'row wrap-reverse', 'row-gap': '10' }, [
+      ...items,
+      note,
+    ]);
+    const pages = paginate(page([grid, pageNumber()]));
+    expect(pages).toHaveLength(2);
+    // The last card is on the top line, on the first sheet.
+    expect(topsOn(pages[0]!, [items.at(-1)!])).toEqual([CONTENT_TOP]);
+    expect(topsOn(pages[0]!, [note])).toHaveLength(1);
+    expect(topsOn(pages[1]!, [note])).toHaveLength(0);
+  });
+
+  it('puts a note between lines of a wrap-reverse row with the line after it', () => {
+    const items = cards(40);
+    const note = el('pdf-note');
+    const grid = el('pdf-view', { 'flex-flow': 'row wrap-reverse', 'row-gap': '10' }, [
+      ...items.slice(0, 5),
+      note,
+      ...items.slice(5),
+    ]);
+    const pages = paginate(page([grid, pageNumber()]));
+    expect(pages).toHaveLength(2);
+    // The first line is the lowest, alone on the second sheet; the next one ends the first sheet.
+    expect(topsOn(pages[1]!, items.slice(0, 5))).toHaveLength(5);
+    expect(topsOn(pages[0]!, items.slice(5, 10))).toHaveLength(5);
+    expect(topsOn(pages[0]!, [note])).toHaveLength(1);
+    expect(topsOn(pages[1]!, [note])).toHaveLength(0);
+  });
+
+  it('keeps a row without flex-wrap as one unit', () => {
+    const items = cards(3);
+    const row = el('pdf-view', { 'flex-direction': 'row' }, items);
+    const pages = paginate(page([row, pageNumber()]));
+    expect(pages[0]!.placed.filter((placed) => placed.box.node === row)).toHaveLength(1);
+  });
+
+  it('keeps a column that wraps into columns as one unit', () => {
+    const items = Array.from({ length: 20 }, () => el('pdf-view', { height: '100' }));
+    const column = el(
+      'pdf-view',
+      { 'flex-wrap': 'wrap', height: '1000', 'align-content': 'flex-start' },
+      items.map((item) => {
+        item.rawStyle = { width: '100', height: '100' };
+        return item;
+      }),
+    );
+    const warn = vi.fn<(message: string) => void>();
+    const pages = paginate(page([column, pageNumber()]), warn);
+    expect(pages).toHaveLength(1);
+    expect(pages[0]!.placed.filter((placed) => placed.box.node === column)).toHaveLength(1);
+    expect(warn).toHaveBeenCalledWith(CUT);
+  });
+
+  it('still splits a column with flex-wrap whose children stay in one column', () => {
+    const items = Array.from({ length: 50 }, () => el('pdf-view', { height: '20' }));
+    const column = el('pdf-view', { 'flex-wrap': 'wrap' }, items);
+    const pages = paginate(page([column, pageNumber()]));
+    expect(pages).toHaveLength(2);
+  });
+
+  it('keeps absolute children and notes of a wrapped row', () => {
+    const marker = el('pdf-view', {
+      position: 'absolute',
+      top: '0',
+      left: '0',
+      width: '5',
+      height: '5',
+    });
+    const note = el('pdf-note');
+    const items = cards(40);
+    const grid = el('pdf-view', { 'flex-flow': 'row wrap', position: 'relative' }, [
+      marker,
+      ...items.slice(0, 35),
+      note,
+      ...items.slice(35),
+    ]);
+    const pages = paginate(page([grid, pageNumber()]));
+    expect(pages).toHaveLength(2);
+    expect(topsOn(pages[0]!, [marker])).toEqual([CONTENT_TOP]);
+    // The note after the seventh line goes with the eighth, which starts the second sheet.
+    expect(topsOn(pages[0]!, [note])).toHaveLength(0);
+    expect(topsOn(pages[1]!, [note])).toHaveLength(1);
+  });
+});

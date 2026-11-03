@@ -306,6 +306,7 @@ Some problems still produce a PDF. ngpdf collects them during the render and pri
 | `ngpdf: border style "<style>" is not supported; drawing solid` | `double`, `groove`, `ridge`, `inset` and `outset` are drawn solid. |
 | `ngpdf: a fixed pdf-view must be a direct child of pdf-page` | A nested `fixed` view, laid out in the flow instead. |
 | `ngpdf: <property> has no effect on pdf-span` | A box property on a `pdf-span`. See [Styled runs](/docs/text-and-fonts#styled-runs-pdf-span). |
+| `ngpdf: vertical-align has no effect on <tag>` | `vertical-align` on an element other than a `pdf-span`. See [Superscript and subscript](/docs/text-and-fonts#superscript-and-subscript). |
 | `ngpdf: a pdf-text inside a pdf-text is drawn in the outer style; use pdf-span` | A nested `pdf-text`. |
 | `ngpdf: hyphens: auto needs providePdfHyphenation; words break only at soft hyphens` | Text with `hyphens: auto` and no hyphenation function. See [Hyphenation](/docs/text-and-fonts#automatic-hyphenation). |
 | `ngpdf: the hyphenation function failed or returned pieces that are not the word, for "<word>"; words it fails on are not hyphenated` | The function threw or returned pieces that do not join back to the word. Named for the first such word. |

@@ -138,6 +138,8 @@ describe('resolveStyles', () => {
       letterSpacing: 0,
       textTransform: 'none',
       hyphens: 'manual',
+      baselineShift: 0,
+      whiteSpace: 'normal',
       orphans: 2,
       widows: 2,
     });
@@ -689,6 +691,72 @@ describe('resolveStyles property coverage', () => {
     });
   });
 
+  describe('wrapping', () => {
+    it('defaults to nowrap and a stretched align-content', () => {
+      expect(styleOf({})).toMatchObject({ flexWrap: 'nowrap', alignContent: 'stretch' });
+    });
+
+    it('takes every flex-wrap and align-content keyword, in any case', () => {
+      for (const wrap of ['nowrap', 'wrap', 'wrap-reverse'] as const) {
+        expect(styleOf({ 'flex-wrap': wrap.toUpperCase() }).flexWrap).toBe(wrap);
+      }
+      const aligns = [
+        'flex-start',
+        'flex-end',
+        'center',
+        'space-between',
+        'space-around',
+        'space-evenly',
+        'stretch',
+      ] as const;
+      for (const align of aligns) {
+        expect(styleOf({ 'align-content': align }).alignContent).toBe(align);
+      }
+    });
+
+    it('reads flex-flow as a direction and a wrap, in any order', () => {
+      expect(styleOf({ 'flex-flow': 'row wrap' })).toMatchObject({
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+      });
+      expect(styleOf({ 'flex-flow': 'wrap-reverse column' })).toMatchObject({
+        flexDirection: 'column',
+        flexWrap: 'wrap-reverse',
+      });
+    });
+
+    it('resets the part flex-flow leaves out to its default', () => {
+      expect(styleOf({ 'flex-direction': 'row', 'flex-flow': 'wrap' })).toMatchObject({
+        flexDirection: 'column',
+        flexWrap: 'wrap',
+      });
+      expect(styleOf({ 'flex-flow': 'wrap' }, 'pdf-row').flexDirection).toBe('row');
+      expect(styleOf({ 'flex-wrap': 'wrap', 'flex-flow': 'row' })).toMatchObject({
+        flexDirection: 'row',
+        flexWrap: 'nowrap',
+      });
+      expect(styleOf({ 'flex-flow': 'row', 'flex-wrap': 'wrap' }).flexWrap).toBe('wrap');
+    });
+
+    it('rejects bad values', () => {
+      expect(() => styleOf({ 'flex-wrap': 'yes' })).toThrow(
+        'ngpdf: invalid value "yes" for flex-wrap on pdf-view',
+      );
+      expect(() => styleOf({ 'align-content': 'baseline' })).toThrow(
+        'ngpdf: invalid value "baseline" for align-content on pdf-view',
+      );
+      expect(() => styleOf({ 'flex-flow': 'row column' })).toThrow(
+        'ngpdf: invalid value "row column" for flex-flow on pdf-view',
+      );
+      expect(() => styleOf({ 'flex-flow': 'wrap nowrap' })).toThrow(
+        /^ngpdf: invalid value "wrap nowrap" for flex-flow/,
+      );
+      expect(() => styleOf({ 'flex-flow': 'row wrap row' })).toThrow(/^ngpdf: invalid value/);
+      expect(() => styleOf({ 'flex-flow': 'sideways' })).toThrow(/^ngpdf: invalid value/);
+      expect(() => styleOf({ 'flex-flow': '' })).toThrow(/^ngpdf: invalid value/);
+    });
+  });
+
   describe('gaps', () => {
     it('sets both gaps from one gap value', () => {
       expect(styleOf({ gap: '6' })).toMatchObject({ rowGap: 6, columnGap: 6 });
@@ -839,6 +907,18 @@ describe('resolveStyles property coverage', () => {
     }
   });
 
+  it('reads text-overflow as clip or ellipsis, not inherited', () => {
+    expect(styleOf({}, 'pdf-text').textOverflow).toBe('clip');
+    expect(styleOf({ 'text-overflow': ' Ellipsis ' }, 'pdf-text').textOverflow).toBe('ellipsis');
+    expect(styleOf({ 'text-overflow': 'clip' }, 'pdf-text').textOverflow).toBe('clip');
+    const text = el('pdf-text');
+    const view = el('pdf-view', { 'text-overflow': 'ellipsis' }, [text]);
+    expect(resolveStyles(view).get(text)?.textOverflow).toBe('clip');
+    expect(() => styleOf({ 'text-overflow': 'fade' }, 'pdf-text')).toThrow(
+      'ngpdf: invalid value "fade" for text-overflow on pdf-text',
+    );
+  });
+
   it('reads break-inside: avoid, not inherited', () => {
     expect(styleOf({}).breakInside).toBe('auto');
     expect(styleOf({ 'break-inside': 'avoid' }).breakInside).toBe('avoid');
@@ -904,6 +984,25 @@ describe('resolveStyles property coverage', () => {
     expect(warn).not.toHaveBeenCalled();
   });
 
+  it('reads white-space keywords, normal by default', () => {
+    expect(styleOf({}).whiteSpace).toBe('normal');
+    for (const keyword of ['normal', 'nowrap', 'pre', 'pre-line', 'pre-wrap'] as const) {
+      expect(styleOf({ 'white-space': keyword }).whiteSpace).toBe(keyword);
+    }
+    expect(styleOf({ 'white-space': ' Pre-Line ' }).whiteSpace).toBe('pre-line');
+  });
+
+  it('inherits white-space and lets a pdf-span set it', () => {
+    const warn = vi.fn();
+    const span = el('pdf-span', { 'white-space': 'nowrap' });
+    const text = el('pdf-text', {}, [span]);
+    const view = el('pdf-view', { 'white-space': 'pre-line' }, [text]);
+    const styles = resolveStyles(el('pdf-document', {}, [view]), warn);
+    expect(styles.get(text)?.whiteSpace).toBe('pre-line');
+    expect(styles.get(span)?.whiteSpace).toBe('nowrap');
+    expect(warn).not.toHaveBeenCalled();
+  });
+
   it('inherits letter-spacing and text-transform, and lets a pdf-span set them', () => {
     const warn = vi.fn();
     const span = el('pdf-span', { 'letter-spacing': '1', 'text-transform': 'lowercase' });
@@ -913,6 +1012,114 @@ describe('resolveStyles property coverage', () => {
     expect(styles.get(text)).toMatchObject({ letterSpacing: 4, textTransform: 'uppercase' });
     expect(styles.get(span)).toMatchObject({ letterSpacing: 1, textTransform: 'lowercase' });
     expect(warn).not.toHaveBeenCalled();
+  });
+
+  describe('vertical-align', () => {
+    function spanStyles(
+      spanStyle: Record<string, string>,
+      textStyle: Record<string, string> = { 'font-size': '10' },
+      warn?: (message: string) => void,
+    ) {
+      const span = el('pdf-span', spanStyle, [createNode('text', '', 'x')]);
+      const text = el('pdf-text', textStyle, [span]);
+      const styles = resolveStyles(el('pdf-document', {}, [text]), warn);
+      return { span: styles.get(span), text: styles.get(text) };
+    }
+
+    it('raises super by 0.33em and lowers sub by 0.2em of the parent, at 70% of its size', () => {
+      expect(spanStyles({ 'vertical-align': 'super' }).span).toMatchObject({ fontSize: 7 });
+      expect(spanStyles({ 'vertical-align': 'super' }).span?.baselineShift).toBeCloseTo(3.3, 9);
+      expect(spanStyles({ 'vertical-align': 'SUB' }).span).toMatchObject({ fontSize: 7 });
+      expect(spanStyles({ 'vertical-align': 'sub' }).span?.baselineShift).toBeCloseTo(-2, 9);
+    });
+
+    it('keeps a font-size the span sets itself, and moves by the parent size', () => {
+      const { span } = spanStyles({ 'vertical-align': 'super', 'font-size': '12' });
+      expect(span?.fontSize).toBe(12);
+      expect(span?.baselineShift).toBeCloseTo(3.3, 9);
+    });
+
+    it('moves by a length or a percentage of the line height, without shrinking', () => {
+      expect(spanStyles({ 'vertical-align': '3pt' }).span).toMatchObject({
+        fontSize: 10,
+        baselineShift: 3,
+      });
+      expect(spanStyles({ 'vertical-align': '-2' }).span?.baselineShift).toBe(-2);
+      expect(spanStyles({ 'vertical-align': '1in' }).span?.baselineShift).toBe(72);
+      const percent = spanStyles(
+        { 'vertical-align': '50%', 'font-size': '20' },
+        { 'line-height': '1.5' },
+      ).span;
+      expect(percent).toMatchObject({ fontSize: 20, baselineShift: 15 });
+    });
+
+    it('leaves baseline, and a pdf-text, where they are', () => {
+      expect(spanStyles({ 'vertical-align': 'baseline' }).span).toMatchObject({
+        fontSize: 10,
+        baselineShift: 0,
+      });
+      expect(spanStyles({}).text?.baselineShift).toBe(0);
+      expect(ROOT_TEXT_STYLE.baselineShift).toBe(0);
+    });
+
+    it('carries a span on the shifted baseline of the span around it', () => {
+      const inner = el('pdf-span', { 'vertical-align': 'super' }, [createNode('text', '', 'x')]);
+      const plain = el('pdf-span', {}, [createNode('text', '', 'y')]);
+      const outer = el('pdf-span', { 'vertical-align': 'super' }, [inner, plain]);
+      const after = el('pdf-span', {}, [createNode('text', '', 'z')]);
+      const text = el('pdf-text', { 'font-size': '10' }, [outer, after]);
+      const styles = resolveStyles(el('pdf-document', {}, [text]));
+      expect(styles.get(plain)?.fontSize).toBeCloseTo(7, 9);
+      expect(styles.get(plain)?.baselineShift).toBeCloseTo(3.3, 9);
+      expect(styles.get(inner)?.fontSize).toBeCloseTo(4.9, 9);
+      expect(styles.get(inner)?.baselineShift).toBeCloseTo(3.3 + 0.33 * 7, 9);
+      expect(styles.get(after)).toMatchObject({ fontSize: 10, baselineShift: 0 });
+    });
+
+    it('does not warn on a pdf-span, and warns and is ignored anywhere else', () => {
+      const warn = vi.fn();
+      spanStyles({ 'vertical-align': 'super' }, {}, warn);
+      expect(warn).not.toHaveBeenCalled();
+      const linked = el('pdf-link', { 'vertical-align': 'super' }, [createNode('text', '', 'x')]);
+      const text = el('pdf-text', { 'vertical-align': 'sub' }, [linked]);
+      const view = el('pdf-view', { 'vertical-align': '3pt' }, [text]);
+      const styles = resolveStyles(el('pdf-document', {}, [view]), warn);
+      expect(warn.mock.calls).toEqual([
+        ['ngpdf: vertical-align has no effect on pdf-view'],
+        ['ngpdf: vertical-align has no effect on pdf-text'],
+        ['ngpdf: vertical-align has no effect on pdf-link'],
+      ]);
+      for (const node of [view, text, linked]) {
+        expect(styles.get(node)).toMatchObject({ fontSize: 10, baselineShift: 0 });
+      }
+    });
+
+    it('throws when nested shifts add up to more than a number can hold', () => {
+      const inner = el('pdf-span', { 'vertical-align': '1e308pt' }, [createNode('text', '', 'x')]);
+      const outer = el('pdf-span', { 'vertical-align': '1e308pt' }, [inner]);
+      const text = el('pdf-text', {}, [outer]);
+      expect(() => resolveStyles(el('pdf-document', {}, [text]))).toThrow(
+        'ngpdf: invalid value "1e308pt" for vertical-align on pdf-span',
+      );
+      const huge = el('pdf-span', { 'vertical-align': '1e308%', 'font-size': '1e10' }, [
+        createNode('text', '', 'x'),
+      ]);
+      expect(() => resolveStyles(el('pdf-document', {}, [el('pdf-text', {}, [huge])]))).toThrow(
+        'ngpdf: invalid value "1e308%" for vertical-align on pdf-span',
+      );
+    });
+
+    it('throws for a value it does not take', () => {
+      for (const value of ['middle', 'auto', 'top']) {
+        expect(() => spanStyles({ 'vertical-align': value })).toThrow(
+          /^ngpdf: .* on pdf-span; use /,
+        );
+      }
+      expect(() => spanStyles({ 'vertical-align': '2em' })).toThrow(/^ngpdf: .* on pdf-span$/);
+      expect(() => spanStyles({ 'vertical-align': 'middle' })).toThrow(
+        'ngpdf: invalid value "middle" for vertical-align on pdf-span; use baseline, super, sub, a length or a percentage',
+      );
+    });
   });
 
   describe('transform', () => {
@@ -1069,6 +1276,7 @@ describe('resolveStyles property coverage', () => {
     ['object-fit', 'fill'],
     ['text-transform', 'full-width'],
     ['hyphens', 'all'],
+    ['white-space', 'break-spaces'],
     ['overflow', 'none'],
     ['position', 'float'],
   ])('rejects an invalid %s value "%s"', (property, value) => {
@@ -1695,6 +1903,14 @@ describe('resolveStyles: unknown keywords', () => {
     ['object-fit', 'fill', 'contain or cover'],
     ['overflow', 'none', 'visible, hidden, clip, scroll or auto'],
     ['position', 'float', 'static, relative or absolute'],
+    ['white-space', 'break-spaces', 'normal, nowrap, pre, pre-line or pre-wrap'],
+    ['text-overflow', 'fade', 'clip or ellipsis'],
+    ['flex-wrap', 'Wrap-Around', 'nowrap, wrap or wrap-reverse'],
+    [
+      'align-content',
+      'baseline',
+      'stretch, flex-start, center, flex-end, space-between, space-around or space-evenly',
+    ],
     [
       'border-style',
       'wavy',
@@ -1751,6 +1967,25 @@ describe('resolveStyles: unknown keywords', () => {
       );
     }
   });
+
+  it.each(['row-reverse', 'sideways', 'row column', 'wrap nowrap', 'row wrap row', ''])(
+    'throws on flex-flow "%s", listing its keywords',
+    (value) => {
+      expect(() => styleOf({ 'flex-flow': value }, 'pdf-text')).toThrow(
+        `ngpdf: invalid value "${value}" for flex-flow on pdf-text; use row or column, nowrap, wrap or wrap-reverse, or one of each`,
+      );
+    },
+  );
+
+  it.each(['middle', 'TOP', 'auto', 'text-bottom'])(
+    'throws on vertical-align "%s" on a pdf-span, listing its keywords',
+    (value) => {
+      const span = el('pdf-span', { 'vertical-align': value }, [createNode('text', '', 'x')]);
+      expect(() => resolveStyles(el('pdf-document', {}, [el('pdf-text', {}, [span])]))).toThrow(
+        `ngpdf: invalid value "${value}" for vertical-align on pdf-span; use baseline, super, sub, a length or a percentage`,
+      );
+    },
+  );
 
   it('still ignores an unknown property', () => {
     expect(() => styleOf({ 'font-stretch': 'wobbly', 'page-break-before': 'x' })).not.toThrow();

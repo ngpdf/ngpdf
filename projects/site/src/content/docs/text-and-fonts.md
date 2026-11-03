@@ -235,12 +235,38 @@ The same applies to the text of `pdf-page-number`.
 
 ## Wrapping
 
-- Whitespace collapses as in CSS `white-space: normal`: runs of spaces, tabs and line breaks become one space, and the ends are trimmed. A line break in your data does not start a new line. Use one `pdf-text` per paragraph or line.
+- By default, whitespace collapses as in CSS `white-space: normal`: runs of spaces, tabs and line breaks become one space, and the ends are trimmed. A line break in your data does not start a new line unless you set [`white-space`](#white-space).
 - Lines wrap at Unicode line-break opportunities (UAX #14), so they break after spaces and hyphens, and not inside words.
 - A word wider than its box is broken at the box edge, between characters as you see them (grapheme clusters), so an accent stays with its letter.
 - Widths include the font's kerning, and the ligatures of a custom font.
 - Words break with a hyphen at soft hyphens, and with `hyphens: auto` where your hyphenation function allows. See [Hyphenation](#hyphenation).
 - There is no right-to-left text.
+
+## White space
+
+`white-space` sets which spaces and line breaks of the text are kept, and whether lines wrap at the box edge. It is inherited, and a `pdf-span` can set it. The values mean what they mean in CSS:
+
+| Value | Spaces and tabs | Line breaks | Wraps |
+| --- | --- | --- | --- |
+| `normal` (default) | collapse | collapse | yes |
+| `nowrap` | collapse | collapse | no |
+| `pre` | kept | kept | no |
+| `pre-line` | collapse | kept | yes |
+| `pre-wrap` | kept | kept | yes |
+
+An address or a note typed with line breaks keeps them with `pre-line`:
+
+```html
+<pdf-text style="white-space: pre-line">{{ customer.address }}</pdf-text>
+```
+
+- A line break is LF, CRLF or CR. Where line breaks are kept, each one starts a new line, and two in a row leave an empty line. A line break at the very end of the text adds no line.
+- Under `pre-line`, the spaces around a line break are dropped, and the ends of the text are trimmed. Under `pre` and `pre-wrap`, nothing is trimmed, so put the binding right against the tags: `<pdf-text>{{ text }}</pdf-text>`.
+- Under `pre` and `pre-wrap`, a tab moves to the next tab stop. Stops are every 8 space widths of the tab's font, counted from the start of the line, as with CSS's default `tab-size`. A tab is not underlined. There is no `tab-size` property.
+- Under `pre-wrap`, spaces and tabs at the end of a line hang past it and are not drawn. Under `pre`, they count in the line's width.
+- Text that does not wrap (`nowrap`, `pre`) and is wider than its box is drawn past the edge, or clipped with `overflow: hidden`. A word in it is never cut at the box edge or hyphenated.
+- A `nowrap` or `pre` `pdf-span` inside a wrapping paragraph does not break inside.
+- A kept line break ends the line before it, so `text-align: justify` leaves that line at the start, as it does the last line. `max-lines` counts lines across kept line breaks.
 
 A long `pdf-text` breaks between lines at a page break, keeping `orphans` lines (default 2) before the break and `widows` lines (default 2) after it. `break-inside: avoid` keeps it whole. See [Text across pages](/docs/pagination#text-across-pages).
 
@@ -336,6 +362,21 @@ async save(): Promise<void> {
 
 The box is as tall as the kept lines. `max-lines: none`, the default, keeps every line. The property is not inherited, so set it on the `pdf-text` itself.
 
+## Cutting text to its height
+
+`text-overflow: ellipsis` on a `pdf-text` with a fixed `height` or `max-height` keeps the lines that fit fully in its content box (the height less padding and border). When text was cut, the last kept line ends with `…`, the same way as with `max-lines`.
+
+```html
+<pdf-text style="height: 40; text-overflow: ellipsis">{{ product.description }}</pdf-text>
+```
+
+- With `max-lines` as well, the smaller number of lines wins.
+- The box keeps its height; only the lines drawn in it change.
+- Without a fixed `height` or `max-height` on the `pdf-text` itself, `ellipsis` does nothing. The height of a parent with `overflow: hidden` does not count.
+- When not even the first line fits, it is still drawn and sticks out of the box, ending with `…` when more text follows it. CSS would clip it; ngpdf keeps a line that can be read. A text of one line has nothing cut, so it gets no `…`.
+- `clip`, the default, keeps every line, and lines past the height are drawn past the box unless `overflow: hidden` clips them. The property is not inherited.
+- A text with a fixed height or `max-height` is never split across pages, so a cut text stays on one page.
+
 ## Line height
 
 | Value | Meaning |
@@ -347,7 +388,9 @@ The box is as tall as the kept lines. `max-lines: none`, the default, keeps ever
 
 Write a length with its unit, such as `line-height: 14pt`, when you mean points. A length is divided by the element's own font size, and the resulting ratio is inherited.
 
-ngpdf places text at the top of its line box. Extra line height goes below the text, not half above and half below as in CSS. Each line is `font-size × line-height` high, using the largest font size on the line, so a block of text in one size is `number of lines × font-size × line-height` high.
+Each line is `font-size × line-height` high, using the largest font size on the line, so a block of text in one size is `number of lines × font-size × line-height` high. As in CSS, the space the line height adds to the text (the leading) is split in half: one half above the text, one half below. With `line-height: 3` a 10pt text sits in the middle of a 30pt line. A line height smaller than the font's height gives a negative half, so the text rises and can reach outside its line, as it does in a browser. Underlines and strike-throughs follow the text; a link's clickable area is the whole line.
+
+In a line with runs of several sizes, each run's leading is split around that run, and the run that reaches highest above the baseline sets where the baseline goes. The line stays as tall as its largest font size times `line-height`. CSS can make such a line a little taller when the runs are in fonts with different proportions above and below the baseline; ngpdf keeps the height, so the lower part of such a run can reach that little bit past the line.
 
 ## Alignment and decoration
 
@@ -371,14 +414,32 @@ Wrap part of a text in a `pdf-span` to draw it in other text styles:
 </pdf-text>
 ```
 
-- A span inherits the text styles around it and can change `color`, `font-family`, `font-size`, `font-weight`, `font-style`, `text-decoration`, `letter-spacing`, `text-transform` and `hyphens`. Spans nest.
+- A span inherits the text styles around it and can change `color`, `font-family`, `font-size`, `font-weight`, `font-style`, `text-decoration`, `letter-spacing`, `text-transform`, `hyphens` and `white-space`, and move its text up or down with `vertical-align` (below). Spans nest.
 - The paragraph wraps as one text: a span boundary is not a place to break, and a span wraps over lines like the rest of the text. Kerning is not applied across two spans.
-- Runs of different sizes share a baseline, and a line is as tall as its largest font size times the paragraph's `line-height`.
+- Runs of different sizes share a baseline, and a line is as tall as its largest font size times the paragraph's `line-height`. The baseline goes where the [half-leading](#line-height) of the run that reaches highest puts it. A line grows when a raised or lowered run sticks out of it (see [Superscript and subscript](#superscript-and-subscript)).
 - `line-height` and `text-align` belong to the `pdf-text`. Other properties on a span, such as padding or a background, have no effect and get a warning in development mode.
 - A span is drawn in the fonts its own `font-family` names, with the same fallback as any text.
 - `@if`, `@for` and components work inside a `pdf-text` as anywhere else.
 
 A `pdf-text` inside a `pdf-text` is drawn in the outer text's style, with a warning in development mode: use `pdf-span` instead. Elements other than `pdf-span`, `pdf-link` and text inside a `pdf-text` are not laid out.
+
+### Superscript and subscript
+
+`vertical-align` on a `pdf-span` raises or lowers its text, for units, formulas and footnote markers:
+
+```html
+<pdf-text>
+  42 m<pdf-span style="vertical-align: super">2</pdf-span> of floor, sealed against
+  H<pdf-span style="vertical-align: sub">2</pdf-span>O<pdf-span style="vertical-align: super">1</pdf-span>
+</pdf-text>
+```
+
+- `super` raises the span's baseline by 0.33 times the font size around it, and `sub` lowers it by 0.2 times. Both draw the span at 70% of the font size around it, unless the span sets its own `font-size`.
+- A length raises the text by that much, and a negative one lowers it: `vertical-align: 3pt`. A percentage is of the span's line height, its font size times the paragraph's `line-height`. Neither changes the size.
+- `baseline` is the default. Like CSS, `vertical-align` is not inherited, but a span inside a raised span sits on that span's baseline, so its own `vertical-align` adds to the move.
+- A moved run keeps the box every run has, its font size times `line-height` split around it by [half-leading](#line-height), and that box moves with it. The line grows where the moved box sticks out above the line's baseline or below its bottom, as in CSS. In 10pt Helvetica at the default `line-height: 1.2`, a `super` span makes its line about 0.7pt taller and a `sub` span about 1pt.
+- The underline or strike of a moved span moves with its text. So does the clickable area of a link around it, cut to the line so it never reaches into the lines above or below.
+- `vertical-align` works only on a `pdf-span`. On any other element it has no effect, with a warning in development mode (`ngpdf: vertical-align has no effect on <tag>`). `middle`, `top`, `text-top` and the other CSS keywords throw.
 
 ## Links: pdf-link
 

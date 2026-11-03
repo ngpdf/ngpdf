@@ -13,14 +13,16 @@ For a property that takes keywords, a keyword outside its list throws, for every
 ngpdf: invalid value "middle" for text-align on pdf-text; use left, center, right or justify
 ```
 
-A typo or a CSS keyword ngpdf doesn't support, such as `break-before: left` or `font-style: oblique 10deg`, fails the render instead of being dropped without a sign.
+`flex-flow` and `vertical-align` follow the same rule. Their messages say what they take, since `flex-flow` takes up to two keywords and `vertical-align` also takes a length or a percentage: `use baseline, super, sub, a length or a percentage`.
+
+A typo or a CSS keyword ngpdf doesn't support, such as `break-before: left`, `font-style: oblique 10deg` or `vertical-align: middle`, fails the render instead of being dropped without a sign.
 
 In the tables:
 
 - **length** is a number with an optional unit: none or `pt` (points), `px` (= 1pt, whatever the page's `dpi`), `in`, `cm` or `mm`. Any other unit throws.
 - **length/%** also accepts a percentage of the parent's content box.
 - **color** is hex (3, 4, 6 or 8 digits), `rgb()`/`rgba()`, a CSS named color or `transparent`.
-- Keywords are matched in any case, as in CSS: `CENTER` is `center`. That covers the keywords of `text-align`, `text-decoration`, `text-transform`, `hyphens`, `normal` in `letter-spacing` and `line-height`, `display`, `flex-direction`, `justify-content`, `align-items`, `align-self`, `object-fit`, `overflow`, `position`, `font-weight`, `font-style`, `break-before`, `break-after` and `break-inside`, `none` in `max-lines`, `none` and the function names in `transform`, the keywords of `transform-origin`, `auto` in lengths, `auto` and `none` in `flex`, and the border styles, and the gradient function names and keywords in `background` and `background-image`.
+- Keywords are matched in any case, as in CSS: `CENTER` is `center`. That covers the keywords of `text-align`, `text-decoration`, `text-transform`, `text-overflow`, `hyphens`, `vertical-align`, `white-space`, `normal` in `letter-spacing` and `line-height`, `display`, `flex-direction`, `flex-wrap`, `flex-flow`, `justify-content`, `align-items`, `align-self`, `align-content`, `object-fit`, `overflow`, `position`, `font-weight`, `font-style`, `break-before`, `break-after` and `break-inside`, `none` in `max-lines`, `none` and the function names in `transform`, the keywords of `transform-origin`, `auto` in lengths, `auto` and `none` in `flex`, and the border styles, and the gradient function names and keywords in `background` and `background-image`.
 
 ## Text
 
@@ -39,14 +41,17 @@ All text properties are inherited by child elements.
 | `letter-spacing` | length, negative allowed, or `normal` (0): space after each character | `0` |
 | `text-transform` | `none`, `uppercase`, `lowercase`, `capitalize` | `none` |
 | `hyphens` | `manual` (break at soft hyphens), `none`, `auto` (also where the [hyphenation function](/docs/text-and-fonts#automatic-hyphenation) allows) | `manual` |
+| `white-space` | `normal`, `nowrap`, `pre`, `pre-line`, `pre-wrap`: which spaces and line breaks are kept, and whether the text wraps. See [White space](/docs/text-and-fonts#white-space) | `normal` |
 
-`max-lines` is not inherited:
+`max-lines`, `text-overflow` and `vertical-align` are not inherited:
 
 | Property | Values | Default |
 | --- | --- | --- |
 | `max-lines` | integer ≥ 1: the most lines a `pdf-text` keeps, the last ending in `…` when text was cut; `none` | `none` |
+| `text-overflow` | `clip`, `ellipsis`: with a fixed `height` or `max-height` on the same `pdf-text`, keep the lines that fit, the last ending in `…` when text was cut (see [Cutting text to its height](/docs/text-and-fonts#cutting-text-to-its-height)) | `clip` |
+| `vertical-align` | on a `pdf-span` only: `baseline`, `super`, `sub`, a length (raises; negative lowers) or `N%` of the span's line height. See [Superscript and subscript](/docs/text-and-fonts#superscript-and-subscript) | `baseline` |
 
-A `pdf-span` takes `display`, `color`, `font-family`, `font-size`, `font-weight`, `font-style`, `text-decoration`, `letter-spacing`, `text-transform` and `hyphens`; `line-height`, `text-align` and `max-lines` come from its `pdf-text`. See [Styled runs](/docs/text-and-fonts#styled-runs-pdf-span).
+A `pdf-span` takes `display`, `color`, `font-family`, `font-size`, `font-weight`, `font-style`, `text-decoration`, `letter-spacing`, `text-transform`, `hyphens`, `vertical-align` and `white-space`; `line-height`, `text-align`, `max-lines` and `text-overflow` come from its `pdf-text`. See [Styled runs](/docs/text-and-fonts#styled-runs-pdf-span).
 
 Without a registered family in the list: `font-family` contains `courier` or `mono`: Courier. Contains `times`, or `serif` without `sans`: Times. Otherwise Helvetica. With one, each character takes the first font in the list that has it. See [Text and fonts](/docs/text-and-fonts).
 
@@ -56,12 +61,15 @@ Without a registered family in the list: `font-family` contains `courier` or `mo
 | --- | --- | --- |
 | `display` | `flex`; `none` leaves the element and everything in it out of the document; any other value throws | `flex` |
 | `flex-direction` | `row`, `column` | `column`; `row` on `pdf-row` |
+| `flex-wrap` | `nowrap`, `wrap`, `wrap-reverse` | `nowrap` |
+| `flex-flow` | `<direction> \|\| <wrap>`: one or two keywords in any order; the part left out goes back to its default | |
 | `justify-content` | `flex-start`, `center`, `flex-end`, `space-between`, `space-around`, `space-evenly` | `flex-start` |
 | `align-items` | `stretch`, `flex-start`, `center`, `flex-end` | `stretch` |
 | `align-self` | `auto`, `stretch`, `flex-start`, `center`, `flex-end` | `auto` |
+| `align-content` | `stretch`, `flex-start`, `center`, `flex-end`, `space-between`, `space-around`, `space-evenly`: where the lines of a wrapping container go in its free cross space | `stretch` |
 | `gap` | `<row> [<column>]`: one or two lengths/% ≥ 0; one value sets both | `0` |
-| `row-gap` | length/% ≥ 0: space between the children of a column; a % is of the container's content height | `0` |
-| `column-gap` | length/% ≥ 0: space between the children of a row; a % is of the container's content width | `0` |
+| `row-gap` | length/% ≥ 0: space between the children of a column, or between the lines of a wrapping row; a % is of the container's content height | `0` |
+| `column-gap` | length/% ≥ 0: space between the children of a row, or between the columns of a wrapping column; a % is of the container's content width | `0` |
 | `flex` | see below | |
 | `flex-grow` | number | `0` |
 | `flex-shrink` | number | `1` |
@@ -141,20 +149,21 @@ In `border`, a missing width is 1 and a missing color is black. The width keywor
 Everything else is ignored, including:
 
 - `z-index`, `overflow-x`, `overflow-y`;
-- `flex-wrap`, `align-content`, `order`;
+- `order`;
 - `box-shadow`;
-- `font`, `word-spacing`, `white-space`, `vertical-align`;
+- `font`, `word-spacing`;
 - custom properties (`--name`).
 
 Some styles are ignored in specific places:
 
 - on a component host element (with a warning);
 - `width`, `height`, the `min-`/`max-` sizes and `margin` on a `pdf-page`;
-- horizontal padding, left and right borders, margins, `justify-content`, `flex-direction` and the column gap (`column-gap`, or the column part of `gap`) on a `pdf-row` inside a table;
+- horizontal padding, left and right borders, margins, `justify-content`, `flex-direction`, `flex-wrap` and the column gap (`column-gap`, or the column part of `gap`) on a `pdf-row` inside a table;
 - margins, `min-width` and `max-width` on a `pdf-cell` inside a table;
 - position and size styles other than `height` on `pdf-page-number`;
 - `position`, `top`, `right`, `bottom` and `left` on a `pdf-page`, a `pdf-row` and a `pdf-cell`;
-- everything except `display` and the nine text properties above on a `pdf-span` (with a warning).
+- everything except `display` and the eleven text properties above on a `pdf-span` (with a warning);
+- `vertical-align` on anything but a `pdf-span` (with a warning).
 
 ## Throws
 
@@ -165,7 +174,7 @@ Some styles are ignored in specific places:
 - `auto` in `padding` or a `padding-*` side;
 - a negative `font-size`, padding, gap, border width or radius (margins can be negative, as in CSS);
 - a color that is not one of the forms above, including `hsl()`, `currentColor` and `var()`;
-- a keyword outside the lists above for any keyword property: `font-weight`, `font-style`, `text-align`, `text-decoration`, `text-transform`, `hyphens`, `display`, `flex-direction`, `justify-content`, `align-items`, `align-self`, `border-style` and its sides, `object-fit`, `overflow`, `position`, `break-before`, `break-after` and `break-inside`, in any case;
+- a keyword outside the lists above for any keyword property: `font-weight`, `font-style`, `text-align`, `text-decoration`, `text-transform`, `text-overflow`, `hyphens`, `white-space`, `display`, `flex-direction`, `flex-wrap`, `flex-flow`, `justify-content`, `align-items`, `align-self`, `align-content`, `border-style` and its sides, `object-fit`, `overflow`, `position`, `break-before`, `break-after` and `break-inside`, in any case, and for `vertical-align` on a `pdf-span` (`middle`, `top` and the like);
 - `position: fixed` and `position: sticky`;
 - a `transform` function other than the seven above, such as `skew()`, `matrix()` or `rotate3d()`, an angle without a unit (other than `0`) and a `transform-origin` with three values;
 - a value that is not a number for `flex-grow`, `flex-shrink` and `opacity`;

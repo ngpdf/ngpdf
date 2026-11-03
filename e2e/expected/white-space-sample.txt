@@ -1,0 +1,19 @@
+White space
+pre-line
+Marta Quintela
+Rua das Acácias, 42
+Apt. 3B
+Lagoa Serena, 01234-000
+
+pre-wrap
+Delivery window: 9:00 to 12:00.
+Leave the parcel with the porter.
+
+pre
+Item       Qty        Price
+Paper      2          4.50
+Ink        10         32.00
+
+nowrap span
+Quote the reference
+REF 2026 0417 B when you call.

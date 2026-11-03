@@ -16,10 +16,12 @@ Starting from the children of the `pdf-page`, ngpdf looks inside some elements a
 | Element | Treated as |
 | --- | --- |
 | `pdf-view` or block `pdf-link` with `flex-direction: column` (the default) and children | a wrapper: its children are looked at in turn |
+| `pdf-view` or block `pdf-link` with `flex-direction: row` and `flex-wrap: wrap` or `wrap-reverse` | a wrapper: each of its lines is one unit (see [Wrapping rows](#wrapping-rows)) |
 | `pdf-view` with a `transform` | one unit, with everything inside it, so it is never cut across sheets |
 | `pdf-view` with `overflow: hidden`, `clip`, `scroll` or `auto` | one unit, with everything inside it, so its clip is never split |
 | `pdf-table` | a wrapper: each of its rows is a unit; a row taller than a page splits instead (see [Rows taller than a page](#rows-taller-than-a-page)) |
-| `pdf-view` with `flex-direction: row` | one unit, with everything inside it |
+| `pdf-view` with `flex-direction: row` that does not wrap | one unit, with everything inside it |
+| column `pdf-view` with `flex-wrap` whose children went into more than one column | one unit, with everything inside it |
 | `pdf-text` | its lines, grouped by `orphans` and `widows`; one unit if it is short, has `break-inside: avoid`, a fixed height, a `transform` or an `overflow` other than `visible` |
 | `pdf-row`, `pdf-image`, an empty `pdf-view` or one that holds only absolute elements and notes | one unit |
 | an element with `position: absolute` | never a unit; see [Positioned elements](#positioned-elements) |
@@ -29,11 +31,22 @@ Wrappers can nest to any depth, so a table inside a column `pdf-view` inside ano
 
 When the next unit does not fit below the previous one, it moves to the top of a new sheet. The vertical space between units (margins, gaps, the padding of wrappers) is kept as it was in the layout, except that a unit moved to a new sheet starts at the top of the content area. The bottom padding and border of wrappers that close right after a unit move with that unit. An `auto` margin counts as the space Yoga gave it in that single layout: a box with `margin-top: auto` or `margin-bottom: auto` in a column split across sheets keeps that position, and the free space is not shared out again on each sheet.
 
-If the page's own `flex-direction` is `row`, its whole content is one unit.
+If the page's own `flex-direction` is `row`, its whole content is one unit, unless the page wraps: then each of its lines is a unit.
+
+### Wrapping rows
+
+A row with `flex-wrap: wrap` or `wrap-reverse` breaks between its lines and never through one. Each line is a unit with every child on it, so a card on a line is never cut from the rest of the line.
+
+- A line goes to the next sheet whole when it does not fit. The row gap (or `align-content` space) before it is dropped there, and the line starts at the top of the content area, as a child of a column does.
+- A line taller than the content area goes on a sheet of its own and is clipped, as any [unit taller than a page](#units-taller-than-a-page). On a wrapping `pdf-page` the warning names the line: `ngpdf: a wrapped line of pdf-page is taller than a page and is cut at the bottom`.
+- The row's background and border are sliced per sheet like a [wrapper's](#wrapper-backgrounds-and-borders), and `break-inside: avoid`, `break-before`, `break-after` work on it as on a column `pdf-view`.
+- With `wrap-reverse`, the lines go on the sheets top to bottom as drawn, so the first children end up last.
+- `align-content` is not worked out again per sheet: lines keep the places Yoga gave them in the single layout of the page, apart from the space dropped before a line that moves to a new sheet. It only matters when the row has free space on the cross axis, such as a fixed `height` taller than its lines.
+- A wrapping row inside a table cell or inside a row `pdf-view` is part of that unit and does not break.
 
 ### Keep units small
 
-A row `pdf-view` or a `pdf-view` with a `transform` or an `overflow` other than `visible` is never split, with everything inside it, text included. A table row is split only when it is taller than a page. Avoid wrapping long lists in a row `pdf-view`.
+A row `pdf-view` that does not wrap or a `pdf-view` with a `transform` or an `overflow` other than `visible` is never split, with everything inside it, text included. A table row is split only when it is taller than a page. Avoid putting long lists in a row `pdf-view`; give it `flex-wrap: wrap` and it breaks between its lines.
 
 ## Text across pages
 
@@ -253,7 +266,7 @@ A `pdf-page-number` shows the sheet's number. Put it directly inside a `pdf-page
 
 - `format` replaces `{page}` with the sheet's number and `{total}` with the number of sheets in the whole document, across all `pdf-page` elements. Each token can appear any number of times. The default format is `{page} / {total}`.
 - It sits at the bottom of the content area, inside the page padding, across the content width, on every sheet that `pdf-page` produces. It is taken out of the flow wherever you write it among the page's children, so `break-before` and `break-after` on it do nothing.
-- It reserves its height on every sheet: one line of its font (`font-size × line-height`) plus its own vertical padding and borders, or its `height` if you set one. Content and bottom fixed views stop above it.
+- It reserves its height on every sheet: one line of its font (`font-size × line-height`) plus its own vertical padding and borders, or its `height` if you set one. Content and bottom fixed views stop above it. Its text sits in the middle of that line, as in a `pdf-text`.
 - It is right-aligned unless it, or an element above it, sets `text-align`.
 - Text styles apply: `font-size`, `color`, `font-weight` and the rest. Other position styles are ignored.
 - The text is drawn on one line and does not wrap. Content you put inside the element is ignored.

@@ -163,6 +163,84 @@ describe('layoutBox', () => {
     expect(lay(root, 200).children.map((child) => child.y)).toEqual([10, 58]);
   });
 
+  describe('flex-wrap', () => {
+    const cards = (count: number, size = '60'): PdfNode[] =>
+      Array.from({ length: count }, () => el('pdf-view', { width: size, height: size }));
+    const at = (box: Box): number[][] => box.children.map((child) => [child.x, child.y]);
+
+    it('wraps a row onto lines, with the row gap between them', () => {
+      const root = el('pdf-view', { 'flex-flow': 'row wrap', gap: '10 5' }, cards(4));
+      const box = lay(root, 200);
+      expect(at(box)).toEqual([
+        [0, 0],
+        [65, 0],
+        [130, 0],
+        [0, 70],
+      ]);
+      expect(box.h).toBe(130);
+    });
+
+    it('keeps a row on one line without flex-wrap', () => {
+      const root = el('pdf-view', { 'flex-direction': 'row', 'flex-shrink': '0' }, cards(4));
+      expect(lay(root, 200).children.map((child) => child.y)).toEqual([0, 0, 0, 0]);
+    });
+
+    it('stacks the lines upwards with wrap-reverse', () => {
+      const root = el('pdf-view', { 'flex-flow': 'row wrap-reverse' }, cards(4));
+      expect(at(lay(root, 200))).toEqual([
+        [0, 60],
+        [60, 60],
+        [120, 60],
+        [0, 0],
+      ]);
+    });
+
+    it('places the lines in the free cross space with align-content', () => {
+      const tops = (alignContent: string): number[] => {
+        const root = el(
+          'pdf-view',
+          { 'flex-flow': 'row wrap', height: '200', 'align-content': alignContent },
+          cards(4),
+        );
+        return lay(root, 200).children.map((child) => child.y);
+      };
+      expect(tops('flex-start')).toEqual([0, 0, 0, 60]);
+      expect(tops('flex-end')).toEqual([80, 80, 80, 140]);
+      expect(tops('center')).toEqual([40, 40, 40, 100]);
+      expect(tops('space-between')).toEqual([0, 0, 0, 140]);
+      expect(tops('space-around')).toEqual([20, 20, 20, 120]);
+      expect(tops('space-evenly').map((y) => Math.round(y * 1000) / 1000)).toEqual([
+        26.667, 26.667, 26.667, 113.333,
+      ]);
+    });
+
+    it('stretches the lines by default', () => {
+      const root = el('pdf-view', { 'flex-flow': 'row wrap', height: '200' }, [
+        el('pdf-view', { width: '120', height: '20' }),
+        el('pdf-view', { width: '120' }),
+      ]);
+      const box = lay(root, 200);
+      // The 180pt left over goes half to each line; the second item stretches to its line.
+      expect(box.children.map((child) => [child.y, child.h])).toEqual([
+        [0, 20],
+        [110, 90],
+      ]);
+    });
+
+    it('wraps a column with a fixed height into columns', () => {
+      const root = el(
+        'pdf-view',
+        { 'flex-wrap': 'wrap', height: '130', 'align-content': 'flex-start' },
+        cards(3),
+      );
+      expect(at(lay(root, 200))).toEqual([
+        [0, 0],
+        [0, 60],
+        [60, 0],
+      ]);
+    });
+  });
+
   it('measures text: height equals the block and lines fit the box', () => {
     const root = el('pdf-view', { width: '120' }, [
       el('pdf-text', {}, [textNode('Gabriela Teixeira de Albuquerque Cavalcanti')]),
@@ -603,6 +681,16 @@ describe('table box model', () => {
     }
   });
 
+  it('ignores flex-wrap on a row, with a warning', () => {
+    const warn = vi.fn();
+    const root = el('pdf-table', {}, [el('pdf-row', { 'flex-wrap': 'wrap' }, cells([1, 1, 1]))], {
+      columns: [80, 80, 80],
+    });
+    const box = lay(root, 200, warn);
+    expect(warn).toHaveBeenCalledWith('ngpdf: ignored inside tables: pdf-row flex-wrap');
+    expect(box.children[0]?.children.map((cell) => cell.y)).toEqual([0, 0, 0]);
+  });
+
   it('does not warn for a row gap on a row', () => {
     const warn = vi.fn();
     lay(tableOf([styledRow({ 'row-gap': '10' })]), 200, warn);
@@ -850,6 +938,68 @@ function place(
   const child = box.children[0];
   return [child?.x ?? NaN, child?.w ?? NaN, child?.h ?? NaN];
 }
+
+describe('text-overflow: ellipsis', () => {
+  // 9pt at line-height 1.5: each line is 13.5pt tall.
+  const words =
+    'Gabriela Teixeira de Albuquerque Cavalcanti mora em Recife desde 2019 com a família';
+  const text = (style: Record<string, string>) =>
+    lay(
+      el('pdf-view', {}, [
+        el('pdf-text', { 'font-size': '9', 'line-height': '1.5', width: '120', ...style }, [
+          textNode(words),
+        ]),
+      ]),
+      400,
+    ).children[0];
+
+  it('keeps the lines that fit a fixed height, the last ending with an ellipsis', () => {
+    const leaf = text({ height: '40', 'text-overflow': 'ellipsis' });
+    expect(leaf?.h).toBe(40);
+    expect(leaf?.text?.lines).toHaveLength(2);
+    expect(leaf?.text?.lines[1]?.text.endsWith('…')).toBe(true);
+  });
+
+  it('measures the height inside the padding and border', () => {
+    const leaf = text({
+      height: '50',
+      padding: '5',
+      'border-width': '1',
+      'text-overflow': 'ellipsis',
+    });
+    // 50 - 10 - 2 = 38pt: two lines.
+    expect(leaf?.text?.lines).toHaveLength(2);
+  });
+
+  it('keeps the lines that fit a max-height', () => {
+    const leaf = text({ 'max-height': '30', 'text-overflow': 'ellipsis' });
+    expect(leaf?.h).toBe(30);
+    expect(leaf?.text?.lines).toHaveLength(2);
+    expect(leaf?.text?.lines[1]?.text.endsWith('…')).toBe(true);
+  });
+
+  it('keeps every line with clip, or without a fixed height or max-height', () => {
+    const all = text({})?.text?.lines.length ?? 0;
+    expect(all).toBeGreaterThan(3);
+    expect(text({ height: '40' })?.text?.lines).toHaveLength(all);
+    expect(text({ height: '40', 'text-overflow': 'clip' })?.text?.lines).toHaveLength(all);
+    expect(text({ 'text-overflow': 'ellipsis' })?.text?.lines).toHaveLength(all);
+    expect(text({ 'min-height': '10', 'text-overflow': 'ellipsis' })?.text?.lines).toHaveLength(
+      all,
+    );
+  });
+
+  it('ignores the height of an overflow: hidden parent', () => {
+    const root = el('pdf-view', { height: '20', overflow: 'hidden' }, [
+      el('pdf-text', { 'font-size': '9', width: '120', 'text-overflow': 'ellipsis' }, [
+        textNode(words),
+      ]),
+    ]);
+    const lines = lay(root, 400).children[0]?.text?.lines ?? [];
+    expect(lines.length).toBeGreaterThan(3);
+    expect(lines.some((line) => line.text.endsWith('…'))).toBe(false);
+  });
+});
 
 describe('anonymous text', () => {
   const linesOf = (box: Box | undefined): string[] =>

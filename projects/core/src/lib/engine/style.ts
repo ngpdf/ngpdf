@@ -1,5 +1,5 @@
 import { createNode, propsOf, type PdfNode } from '../tree/node';
-import { keywordOf, oneOf } from './keyword';
+import { invalidKeyword, keywordOf, oneOf } from './keyword';
 import { MAX_NESTING, show } from './limits';
 import { parseColor, type Color } from './color';
 
@@ -55,6 +55,14 @@ export interface TextStyle {
   /** Where words may break with a hyphen: at soft hyphens (`manual`), also by the app's
    * hyphenation function (`auto`), or nowhere (`none`). */
   readonly hyphens: 'none' | 'manual' | 'auto';
+  /**
+   * Points the baseline of the text is raised above its paragraph's (negative lowers it), from the
+   * `vertical-align` of its pdf-span and the spans around it. Not `vertical-align` itself: a nested
+   * span sits on the shifted baseline of its parent, so the shift is passed down.
+   */
+  readonly baselineShift: number;
+  /** CSS `white-space`: which spaces and line breaks of the text are kept, and whether it wraps. */
+  readonly whiteSpace: 'normal' | 'nowrap' | 'pre' | 'pre-line' | 'pre-wrap';
   /** The fewest lines of a split text left at the bottom of a page. */
   readonly orphans: number;
   /** The fewest lines of a split text carried to the top of the next page. */
@@ -95,6 +103,7 @@ type AlignItems = 'stretch' | 'flex-start' | 'center' | 'flex-end';
 
 export interface ResolvedStyle extends TextStyle {
   readonly flexDirection: 'row' | 'column';
+  readonly flexWrap: 'nowrap' | 'wrap' | 'wrap-reverse';
   readonly flexGrow: number;
   readonly flexShrink: number;
   readonly flexBasis: Length;
@@ -102,6 +111,15 @@ export interface ResolvedStyle extends TextStyle {
     'flex-start' | 'center' | 'flex-end' | 'space-between' | 'space-around' | 'space-evenly';
   readonly alignItems: AlignItems;
   readonly alignSelf: 'auto' | AlignItems;
+  /** Where the lines of a wrapping container go in its free cross space. */
+  readonly alignContent:
+    | 'stretch'
+    | 'flex-start'
+    | 'center'
+    | 'flex-end'
+    | 'space-between'
+    | 'space-around'
+    | 'space-evenly';
   /** Space between lines of a column's children (CSS `row-gap`). */
   readonly rowGap: Gap;
   /** Space between a row's children (CSS `column-gap`). */
@@ -143,6 +161,11 @@ export interface ResolvedStyle extends TextStyle {
    * no limit.
    */
   readonly maxLines: number | null;
+  /**
+   * `ellipsis` keeps the lines of a text that fit its fixed `height` or `max-height`, the last
+   * ending in an ellipsis as with `maxLines`. `clip` (the default) keeps them all.
+   */
+  readonly textOverflow: 'clip' | 'ellipsis';
 }
 
 export interface FlexParts {
@@ -182,6 +205,8 @@ export const ROOT_TEXT_STYLE: TextStyle = Object.freeze({
   letterSpacing: 0,
   textTransform: 'none',
   hyphens: 'manual',
+  baselineShift: 0,
+  whiteSpace: 'normal',
   orphans: 2,
   widows: 2,
 });
@@ -923,18 +948,59 @@ function fontWeightOf(value: string, inherited: number, tag: string): number {
   );
 }
 
+const WRAPS = ['nowrap', 'wrap', 'wrap-reverse'] as const;
+
+/** The direction an element has without `flex-direction`: `row` on a pdf-row, else `column`. */
+function defaultDirection(tag: string | undefined): 'row' | 'column' {
+  return tag === 'pdf-row' ? 'row' : 'column';
+}
+
+/**
+ * `flex-flow: <direction> || <wrap>`: one or two keywords in any order, each kind at most once.
+ * A part left out is undefined, and the caller resets it to its default, as CSS does.
+ */
+function parseFlexFlow(
+  value: string,
+  tag: string,
+): { direction?: 'row' | 'column'; wrap?: (typeof WRAPS)[number] } {
+  const tokens = tokenize(value);
+  const bad = (): never =>
+    invalidKeyword(
+      value,
+      'flex-flow',
+      tag,
+      'row or column, nowrap, wrap or wrap-reverse, or one of each',
+    );
+  if (tokens.length < 1 || tokens.length > 2) return bad();
+  let direction: 'row' | 'column' | undefined;
+  let wrap: (typeof WRAPS)[number] | undefined;
+  for (const token of tokens) {
+    const keyword = keywordOf(token);
+    if ((keyword === 'row' || keyword === 'column') && direction === undefined) {
+      direction = keyword;
+    } else {
+      const found = WRAPS.find((candidate) => candidate === keyword);
+      if (found === undefined || wrap !== undefined) return bad();
+      wrap = found;
+    }
+  }
+  return { ...(direction && { direction }), ...(wrap && { wrap }) };
+}
+
 const SIDES: readonly Side[] = ['top', 'right', 'bottom', 'left'];
 
 function defaultStyle(node: PdfNode, inherited: TextStyle): Mutable<ResolvedStyle> {
   return {
     ...inherited,
-    flexDirection: node.tag === 'pdf-row' ? 'row' : 'column',
+    flexDirection: defaultDirection(node.tag),
+    flexWrap: 'nowrap',
     flexGrow: 0,
     flexShrink: 1,
     flexBasis: 'auto',
     justifyContent: 'flex-start',
     alignItems: 'stretch',
     alignSelf: 'auto',
+    alignContent: 'stretch',
     rowGap: 0,
     columnGap: 0,
     width: 'auto',
@@ -963,6 +1029,7 @@ function defaultStyle(node: PdfNode, inherited: TextStyle): Mutable<ResolvedStyl
     keepWithNext: false,
     breakInside: 'auto',
     maxLines: null,
+    textOverflow: 'clip',
   };
 }
 
@@ -1052,8 +1119,41 @@ function apply(
     case 'hyphens':
       style.hyphens = oneOf(value, ['none', 'manual', 'auto'], property, tag);
       break;
+    case 'white-space':
+      style.whiteSpace = oneOf(
+        value,
+        ['normal', 'nowrap', 'pre', 'pre-line', 'pre-wrap'],
+        property,
+        tag,
+      );
+      break;
     case 'flex-direction':
       style.flexDirection = oneOf(value, ['row', 'column'], property, tag);
+      break;
+    case 'flex-wrap':
+      style.flexWrap = oneOf(value, WRAPS, property, tag);
+      break;
+    case 'flex-flow': {
+      const flow = parseFlexFlow(value, tag);
+      style.flexDirection = flow.direction ?? defaultDirection(tag);
+      style.flexWrap = flow.wrap ?? 'nowrap';
+      break;
+    }
+    case 'align-content':
+      style.alignContent = oneOf(
+        value,
+        [
+          'stretch',
+          'flex-start',
+          'center',
+          'flex-end',
+          'space-between',
+          'space-around',
+          'space-evenly',
+        ],
+        property,
+        tag,
+      );
       break;
     case 'flex': {
       const flex = parseFlex(value, tag);
@@ -1249,6 +1349,9 @@ function apply(
     case 'max-lines':
       style.maxLines = keywordOf(value) === 'none' ? null : lineCountOf(value, property, tag);
       break;
+    case 'text-overflow':
+      style.textOverflow = oneOf(value, ['clip', 'ellipsis'], property, tag);
+      break;
     default:
       break;
   }
@@ -1314,11 +1417,13 @@ function resolveOne(node: PdfNode, inherited: TextStyle, warn: Warn): ResolvedSt
   const isNote = node.tag === 'pdf-note';
   const style = defaultStyle(node, isNote ? { ...inherited, color: NOTE_YELLOW } : inherited);
   let lineHeight: string | null = null;
+  let verticalAlign: string | null = null;
   for (const [property, value] of Object.entries(node.rawStyle)) {
     // Dropped unparsed, so it neither moves the note nor fails the render.
     if (isNote && !NOTE_PROPERTIES.includes(property)) {
       warn(`ngpdf: ${property} has no effect on pdf-note`);
     } else if (property === 'line-height') lineHeight = value.trim();
+    else if (property === 'vertical-align') verticalAlign = value;
     else apply(style, property, value, node.tag, warn);
   }
   // Resolved last because a length depends on this element's own font size.
@@ -1331,7 +1436,55 @@ function resolveOne(node: PdfNode, inherited: TextStyle, warn: Warn): ResolvedSt
       style.borderWidth = withSide(style.borderWidth, side, 0);
     }
   }
+  if (verticalAlign === null) return style;
+  if (node.tag === 'pdf-span') {
+    applyVerticalAlign(style, verticalAlign, inherited.fontSize, 'font-size' in node.rawStyle);
+  } else {
+    warn(`ngpdf: vertical-align has no effect on ${node.tag}`);
+  }
   return style;
+}
+
+// What browsers commonly use for <sup> and <sub>; CSS leaves both to the user agent.
+const SUPER_RAISE = 0.33;
+const SUB_DROP = 0.2;
+const SCRIPT_SIZE = 0.7;
+
+/**
+ * Moves a pdf-span's baseline: `super` and `sub` by a share of the parent's font size, drawn at 70%
+ * of it unless the span sets its own; a length by that much; a percentage of the span's line height.
+ */
+function applyVerticalAlign(
+  style: Mutable<ResolvedStyle>,
+  value: string,
+  parentSize: number,
+  ownSize: boolean,
+): void {
+  const keyword = keywordOf(value);
+  if (keyword === 'super' || keyword === 'sub') {
+    style.baselineShift += (keyword === 'super' ? SUPER_RAISE : -SUB_DROP) * parentSize;
+    if (!ownSize) style.fontSize = parentSize * SCRIPT_SIZE;
+    return;
+  }
+  if (keyword === 'baseline') return;
+  const code = keyword.charCodeAt(0);
+  const length = code >= 97 && code <= 122 ? 'auto' : parseLength(value, 'pdf-span');
+  if (length === 'auto') {
+    invalidKeyword(
+      value,
+      'vertical-align',
+      'pdf-span',
+      'baseline, super, sub, a length or a percentage',
+    );
+  }
+  style.baselineShift +=
+    typeof length === 'number'
+      ? length
+      : (length.percent / 100) * style.lineHeight * style.fontSize;
+  // Each value is finite, but nested spans or a large percentage can add up past it.
+  if (!Number.isFinite(style.baselineShift)) {
+    fail(`invalid value "${show(value)}" for vertical-align`, 'pdf-span');
+  }
 }
 
 function textPartOf(style: ResolvedStyle): TextStyle {
@@ -1347,6 +1500,8 @@ function textPartOf(style: ResolvedStyle): TextStyle {
     letterSpacing: style.letterSpacing,
     textTransform: style.textTransform,
     hyphens: style.hyphens,
+    baselineShift: style.baselineShift,
+    whiteSpace: style.whiteSpace,
     orphans: style.orphans,
     widows: style.widows,
   };
@@ -1394,6 +1549,8 @@ const SPAN_PROPERTIES = new Set([
   'letter-spacing',
   'text-transform',
   'hyphens',
+  'vertical-align',
+  'white-space',
 ]);
 
 /** Whether the node is part of a line: inside a pdf-text, or a span or link that is. */

@@ -23,10 +23,14 @@ export function oneOf<T extends string>(
 ): T {
   const keyword = keywordOf(value);
   const found = allowed.find((candidate) => candidate === keyword);
-  if (found === undefined) {
-    throw new Error(
-      `ngpdf: invalid value "${show(value)}" for ${property} on ${tag}; use ${listOf(allowed)}`,
-    );
-  }
-  return found;
+  return found ?? invalidKeyword(value, property, tag, listOf(allowed));
+}
+
+/**
+ * The error for a value outside what `property` takes, for a property whose values are not a
+ * plain keyword list (keywords mixed with lengths, or several keywords at once): `use` says what
+ * it takes, in the words of the message.
+ */
+export function invalidKeyword(value: string, property: string, tag: string, use: string): never {
+  throw new Error(`ngpdf: invalid value "${show(value)}" for ${property} on ${tag}; use ${use}`);
 }
