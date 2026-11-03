@@ -982,6 +982,27 @@ describe('renderDocument with pdfPerSheet', () => {
     ]);
   });
 
+  it('lays out each sheet at the width of a fixed view centred with margin: 0 auto', async () => {
+    const writer = recordingWriter();
+    const footer = el(
+      'pdf-view',
+      { width: '200', margin: '0 auto', 'background-color': '#eee' },
+      [perSheetSlot()],
+      { fixed: 'bottom' },
+    );
+    await renderDocument(host({}, [pageOf(2, footer)]), {
+      writer,
+      dev: false,
+      perSheet: footerRender(),
+    });
+    const left = (595.28 - 200) / 2;
+    for (const sheet of writer.recorded[0]!.pages) {
+      const [rect] = sheet.ops.flatMap((op) => (op.op === 'rect' ? [op] : []));
+      expect(rect!.x).toBeCloseTo(left, 2);
+      expect(rect!.w).toBeCloseTo(200, 2);
+    }
+  });
+
   it("keeps the view's other content and draws the template where its slot is", async () => {
     const writer = recordingWriter();
     const footer = el('pdf-view', {}, [text('Before'), perSheetSlot(), text('After')], {
