@@ -416,6 +416,31 @@ describe('createPdfkitWriter', () => {
     expect(() => writer.imageSize(new Uint8Array([0xff, 0xd8, 0xff, 0xd9]))).toThrow();
   });
 
+  it('skips stray bytes before a JPEG marker, as browsers and pdfkit do', () => {
+    // One stray byte before the APP0 segment, three before the frame header.
+    const jpeg = new Uint8Array([
+      0xff, 0xd8, 0x00, 0xff, 0xe0, 0x00, 0x04, 0x4a, 0x46, 0x12, 0x00, 0x34, 0xff, 0xc0, 0x00,
+      0x0b, 0x08, 0x00, 0x07, 0x00, 0x09, 0x01, 0x01, 0x11, 0x00,
+    ]);
+    expect(writer.imageSize(jpeg)).toEqual({ width: 9, height: 7 });
+  });
+
+  it('lays out a JPEG with a stray byte at the size pdfkit embeds it', async () => {
+    const whole = orientedJpeg(5, 3, 1);
+    // A stray byte between the Exif APP1 segment and the next marker.
+    const app1End = 4 + ((whole[4] ?? 0) << 8) + (whole[5] ?? 0);
+    const jpeg = Uint8Array.from([...whole.subarray(0, app1End), 0x00, ...whole.subarray(app1End)]);
+    const { width: w, height: h } = writer.imageSize(jpeg);
+    expect({ w, h }).toEqual({ w: 5, h: 3 });
+    const ops: DrawOp[] = [
+      { op: 'image', x: 0, y: 0, w, h, clip: { x: 0, y: 0, w: 20, h: 20 }, data: jpeg },
+    ];
+    const blob = await writer.write([{ width: 20, height: 20, ops }], info);
+    const pdf = new TextDecoder('latin1').decode(new Uint8Array(await blob.arrayBuffer()));
+    expect(pdf).toMatch(/\/Width 5\b/);
+    expect(pdf).toMatch(/\/Height 3\b/);
+  });
+
   it('swaps a JPEG size for EXIF orientations 5 to 8, as browsers display it', () => {
     for (const orientation of [1, 2, 3, 4]) {
       expect(writer.imageSize(orientedJpeg(40, 20, orientation))).toEqual({
@@ -496,7 +521,7 @@ describe('createPdfkitWriter', () => {
     expect(() => writer.imageSize(new Uint8Array(cutLate))).toThrow(/frame/);
     expect(() =>
       writer.imageSize(new Uint8Array([0xff, 0xd8, ...Array<number>(20).fill(0)])),
-    ).toThrow(/marker/);
+    ).toThrow(/frame/);
     // A standalone RST marker before the Exif APP1 has no length to skip.
     expect(writer.imageSize(orientedJpeg(40, 20, 6, { before: [0xff, 0xd0] }))).toEqual({
       width: 20,

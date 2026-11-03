@@ -419,7 +419,11 @@ function jpegSize(data: Uint8Array): { width: number; height: number } {
   let at = 2;
   const orientation = jpegOrientation(data);
   while (at + 4 <= data.length) {
-    if (data[at] !== 0xff) throw new Error('ngpdf: invalid JPEG marker');
+    // A stray byte between segments is skipped up to the next 0xFF, as pdfkit and libjpeg do.
+    if (data[at] !== 0xff) {
+      at += 1;
+      continue;
+    }
     const marker = data[at + 1] ?? 0;
     if (marker === 0xff) {
       at += 1; // fill byte
