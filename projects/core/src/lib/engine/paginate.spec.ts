@@ -1075,9 +1075,73 @@ describe('page geometry', () => {
     });
   });
 
+  // Millimetres × 72 / 25.4, rounded to 2 decimals like A4; inches × 72.
+  it.each([
+    ['A0', 2383.94, 3370.39],
+    ['A6', 297.64, 419.53],
+    ['A10', 73.7, 104.88],
+    ['B5', 498.9, 708.66],
+    ['C4', 649.13, 918.43],
+    ['2A0', 3370.39, 4767.87],
+    ['4A0', 4767.87, 6740.79],
+    ['RA4', 609.45, 864.57],
+    ['SRA3', 907.09, 1275.59],
+    ['JIS-B5', 515.91, 728.5],
+    ['JIS-B10', 90.71, 127.56],
+    ['Executive', 522, 756],
+    ['Folio', 612, 936],
+    ['Tabloid', 792, 1224],
+    ['Ledger', 792, 1224],
+    ['ID1', 153.01, 242.65],
+  ])('takes the %s paper size', (size, width, height) => {
+    expect(pageSize(el('pdf-page', {}, [], { size }))).toEqual({ width, height });
+  });
+
+  it('turns Ledger to its traditional landscape form', () => {
+    const ledger = el('pdf-page', {}, [], { size: 'Ledger', orientation: 'landscape' });
+    expect(pageSize(ledger)).toEqual({ width: 1224, height: 792 });
+  });
+
+  it('matches size names in any case', () => {
+    for (const size of ['a4', 'letter', 'jis-b5', 'Sra3', 'tabloid']) {
+      const upper = pageSize(el('pdf-page', {}, [], { size: size.toUpperCase() }));
+      expect(pageSize(el('pdf-page', {}, [], { size }))).toEqual(upper);
+    }
+    expect(pageSize(el('pdf-page', {}, [], { size: 'a4' }))).toEqual({
+      width: 595.28,
+      height: A4_HEIGHT,
+    });
+  });
+
+  it('has every size of each series', () => {
+    const names = [
+      ...['A', 'B', 'C', 'JIS-B'].flatMap((series) =>
+        Array.from({ length: 11 }, (_, n) => `${series}${String(n)}`),
+      ),
+      ...['0', '1', '2', '3', '4'].flatMap((n) => [`RA${n}`, `SRA${n}`]),
+      '2A0',
+      '4A0',
+      'Letter',
+      'Legal',
+    ];
+    for (const size of names) {
+      const { width, height } = pageSize(el('pdf-page', {}, [], { size }));
+      expect(width, size).toBeLessThan(height);
+    }
+  });
+
   it('rejects an unknown or empty page size', () => {
-    expect(() => pageSize(el('pdf-page', {}, [], { size: 'B5' }))).toThrow(
-      'ngpdf: unknown page size "B5" on pdf-page',
+    expect(() => pageSize(el('pdf-page', {}, [], { size: 'B11' }))).toThrow(
+      'ngpdf: unknown page size "B11" on pdf-page',
+    );
+    expect(() => pageSize(el('pdf-page', {}, [], { size: 'JIS-B11' }))).toThrow(
+      'ngpdf: unknown page size "JIS-B11" on pdf-page',
+    );
+    expect(() => pageSize(el('pdf-page', {}, [], { size: 'jisb5' }))).toThrow(
+      'ngpdf: unknown page size "jisb5" on pdf-page',
+    );
+    expect(() => pageSize(el('pdf-page', {}, [], { size: 'constructor' }))).toThrow(
+      'ngpdf: unknown page size "constructor" on pdf-page',
     );
     expect(() => pageSize(el('pdf-page', {}, [], { size: [0, 400] }))).toThrow(
       'ngpdf: unknown page size "[0,400]" on pdf-page',

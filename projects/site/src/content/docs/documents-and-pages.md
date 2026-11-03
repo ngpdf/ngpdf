@@ -146,17 +146,81 @@ How it behaves:
 
 `size` takes a named size or a `[width, height]` pair in points. The default is `A4`.
 
-| Size | Width × height (pt) |
-| --- | --- |
-| `A3` | 841.89 × 1190.55 |
-| `A4` | 595.28 × 841.89 |
-| `A5` | 419.53 × 595.28 |
-| `Letter` | 612 × 792 |
-| `Legal` | 612 × 1008 |
+Every named size is portrait. Sizes in millimetres are converted at 72 / 25.4 points per millimetre and rounded to 2 decimals; sizes in inches are 72 points per inch.
+
+| Size | Paper | Width × height (pt) |
+| --- | --- | --- |
+| `A0` | 841 × 1189 mm | 2383.94 × 3370.39 |
+| `A1` | 594 × 841 mm | 1683.78 × 2383.94 |
+| `A2` | 420 × 594 mm | 1190.55 × 1683.78 |
+| `A3` | 297 × 420 mm | 841.89 × 1190.55 |
+| `A4` | 210 × 297 mm | 595.28 × 841.89 |
+| `A5` | 148 × 210 mm | 419.53 × 595.28 |
+| `A6` | 105 × 148 mm | 297.64 × 419.53 |
+| `A7` | 74 × 105 mm | 209.76 × 297.64 |
+| `A8` | 52 × 74 mm | 147.4 × 209.76 |
+| `A9` | 37 × 52 mm | 104.88 × 147.4 |
+| `A10` | 26 × 37 mm | 73.7 × 104.88 |
+| `B0` | 1000 × 1414 mm | 2834.65 × 4008.19 |
+| `B1` | 707 × 1000 mm | 2004.09 × 2834.65 |
+| `B2` | 500 × 707 mm | 1417.32 × 2004.09 |
+| `B3` | 353 × 500 mm | 1000.63 × 1417.32 |
+| `B4` | 250 × 353 mm | 708.66 × 1000.63 |
+| `B5` | 176 × 250 mm | 498.9 × 708.66 |
+| `B6` | 125 × 176 mm | 354.33 × 498.9 |
+| `B7` | 88 × 125 mm | 249.45 × 354.33 |
+| `B8` | 62 × 88 mm | 175.75 × 249.45 |
+| `B9` | 44 × 62 mm | 124.72 × 175.75 |
+| `B10` | 31 × 44 mm | 87.87 × 124.72 |
+| `C0` | 917 × 1297 mm | 2599.37 × 3676.54 |
+| `C1` | 648 × 917 mm | 1836.85 × 2599.37 |
+| `C2` | 458 × 648 mm | 1298.27 × 1836.85 |
+| `C3` | 324 × 458 mm | 918.43 × 1298.27 |
+| `C4` | 229 × 324 mm | 649.13 × 918.43 |
+| `C5` | 162 × 229 mm | 459.21 × 649.13 |
+| `C6` | 114 × 162 mm | 323.15 × 459.21 |
+| `C7` | 81 × 114 mm | 229.61 × 323.15 |
+| `C8` | 57 × 81 mm | 161.57 × 229.61 |
+| `C9` | 40 × 57 mm | 113.39 × 161.57 |
+| `C10` | 28 × 40 mm | 79.37 × 113.39 |
+| `4A0` | 1682 × 2378 mm | 4767.87 × 6740.79 |
+| `2A0` | 1189 × 1682 mm | 3370.39 × 4767.87 |
+| `RA0` | 860 × 1220 mm | 2437.8 × 3458.27 |
+| `RA1` | 610 × 860 mm | 1729.13 × 2437.8 |
+| `RA2` | 430 × 610 mm | 1218.9 × 1729.13 |
+| `RA3` | 305 × 430 mm | 864.57 × 1218.9 |
+| `RA4` | 215 × 305 mm | 609.45 × 864.57 |
+| `SRA0` | 900 × 1280 mm | 2551.18 × 3628.35 |
+| `SRA1` | 640 × 900 mm | 1814.17 × 2551.18 |
+| `SRA2` | 450 × 640 mm | 1275.59 × 1814.17 |
+| `SRA3` | 320 × 450 mm | 907.09 × 1275.59 |
+| `SRA4` | 225 × 320 mm | 637.8 × 907.09 |
+| `JIS-B0` | 1030 × 1456 mm | 2919.69 × 4127.24 |
+| `JIS-B1` | 728 × 1030 mm | 2063.62 × 2919.69 |
+| `JIS-B2` | 515 × 728 mm | 1459.84 × 2063.62 |
+| `JIS-B3` | 364 × 515 mm | 1031.81 × 1459.84 |
+| `JIS-B4` | 257 × 364 mm | 728.5 × 1031.81 |
+| `JIS-B5` | 182 × 257 mm | 515.91 × 728.5 |
+| `JIS-B6` | 128 × 182 mm | 362.83 × 515.91 |
+| `JIS-B7` | 91 × 128 mm | 257.95 × 362.83 |
+| `JIS-B8` | 64 × 91 mm | 181.42 × 257.95 |
+| `JIS-B9` | 45 × 64 mm | 127.56 × 181.42 |
+| `JIS-B10` | 32 × 45 mm | 90.71 × 127.56 |
+| `Letter` | 8.5 × 11 in | 612 × 792 |
+| `Legal` | 8.5 × 14 in | 612 × 1008 |
+| `Executive` | 7.25 × 10.5 in | 522 × 756 |
+| `Folio` | 8.5 × 13 in | 612 × 936 |
+| `Tabloid` | 11 × 17 in | 792 × 1224 |
+| `Ledger` | 11 × 17 in | 792 × 1224 |
+| `ID1` | 53.98 × 85.6 mm | 153.01 × 242.65 |
+
+`A`, `B`, `C`, `2A0` and `4A0` are ISO 216, `RA` and `SRA` are ISO 217, and `JIS-B` is the Japanese B series, spelled as in CSS Paged Media (`jis-b5`). `ID1` is the credit card size.
+
+`Ledger` follows CSS Paged Media: it is the same 11 × 17 in sheet as `Tabloid`, portrait. The traditional ledger is the landscape form, 1224 × 792: write `size="Ledger" orientation="landscape"`.
 
 `orientation` is `portrait` (the default) or `landscape`. Landscape swaps width and height.
 
-The size names are case-sensitive: `a4` does not type-check, and at run time an unknown name or a pair with a value that is not a positive number fails with `ngpdf: unknown page size "<size>" on pdf-page`.
+Size names match in any case at run time, so `a4`, `A4` and `jis-b5` all work in a size that comes from data. The `PageSize` type lists the spellings in the table, so a type-checked template or binding should use those. An unknown name, or a pair with a value that is not a positive number, fails with `ngpdf: unknown page size "<size>" on pdf-page`.
 
 For a custom size, use the exported `PageSize` type:
 

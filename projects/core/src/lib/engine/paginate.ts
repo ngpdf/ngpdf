@@ -54,13 +54,52 @@ export interface PageLayout {
   };
 }
 
-const PAGE_SIZES = new Map<string, readonly [number, number]>([
-  ['A3', [841.89, 1190.55]],
-  ['A4', [595.28, 841.89]],
-  ['A5', [419.53, 595.28]],
-  ['Letter', [612, 792]],
-  ['Legal', [612, 1008]],
-]);
+const MM = 72 / 25.4;
+const INCH = 72;
+
+type NamedSize = readonly [name: string, width: number, height: number, unit: number];
+
+/**
+ * An ISO-style series in millimetres from its sides, longest first: size N is `sides[N + 1]` wide
+ * and `sides[N]` tall, each size being the one before cut in half.
+ */
+function series(prefix: string, [first, ...rest]: readonly [number, ...number[]]): NamedSize[] {
+  const sizes: NamedSize[] = [];
+  let height = first;
+  for (const width of rest) {
+    sizes.push([`${prefix}${String(sizes.length)}`, width, height, MM]);
+    height = width;
+  }
+  return sizes;
+}
+
+/** Every named size, portrait, in its own unit. */
+const NAMED_SIZES: readonly NamedSize[] = [
+  ['4A0', 1682, 2378, MM],
+  ['2A0', 1189, 1682, MM],
+  ...series('A', [1189, 841, 594, 420, 297, 210, 148, 105, 74, 52, 37, 26]),
+  ...series('B', [1414, 1000, 707, 500, 353, 250, 176, 125, 88, 62, 44, 31]),
+  ...series('C', [1297, 917, 648, 458, 324, 229, 162, 114, 81, 57, 40, 28]),
+  ...series('RA', [1220, 860, 610, 430, 305, 215]),
+  ...series('SRA', [1280, 900, 640, 450, 320, 225]),
+  ...series('JIS-B', [1456, 1030, 728, 515, 364, 257, 182, 128, 91, 64, 45, 32]),
+  ['Letter', 8.5, 11, INCH],
+  ['Legal', 8.5, 14, INCH],
+  ['Executive', 7.25, 10.5, INCH],
+  ['Folio', 8.5, 13, INCH],
+  ['Tabloid', 11, 17, INCH],
+  // CSS Paged Media's ledger is Tabloid's sheet, portrait; landscape gives the traditional form.
+  ['Ledger', 11, 17, INCH],
+  ['ID1', 53.98, 85.6, MM],
+];
+
+/** Named sizes in points, keyed in lower case; rounded to 2 decimals (A4 is 595.28×841.89). */
+const PAGE_SIZES = new Map<string, readonly [number, number]>(
+  NAMED_SIZES.map(([name, width, height, unit]) => [
+    name.toLowerCase(),
+    [Math.round(width * unit * 100) / 100, Math.round(height * unit * 100) / 100],
+  ]),
+);
 
 // Two positions this close are the same point.
 const EPSILON = 0.001;
@@ -69,8 +108,8 @@ const EPSILON = 0.001;
  * How far past the bottom a box may end and still fit, on a content area `height` tall. Yoga
  * returns float32 positions, and each box in a column can add half a float32 step of rounding:
  * a few hundred boxes that fill the area exactly can end some 60 steps past it. 64 steps
- * (`height / 2^17`) covers that, and stays under 0.01pt up to A3 height, so a box that much too
- * tall still moves on every named page size.
+ * (`height / 2^17`) covers that. It stays under 0.01pt up to A3 height and under 0.06pt on 4A0,
+ * the largest named size, so a box a tenth of a point too tall still moves on every one.
  */
 function fitSlack(height: number): number {
   return Math.max(EPSILON, height * 2 ** -17);
@@ -81,7 +120,7 @@ export function pageSize(page: PdfNode): { width: number; height: number } {
   const props = propsOf(page);
   const size = props['size'] ?? 'A4';
   const label = typeof size === 'string' ? size : JSON.stringify(size);
-  const pair = Array.isArray(size) ? size : PAGE_SIZES.get(label);
+  const pair = Array.isArray(size) ? size : PAGE_SIZES.get(label.toLowerCase());
   const [width, height] = (pair ?? []) as unknown[];
   if (typeof width !== 'number' || typeof height !== 'number' || !(width > 0 && height > 0)) {
     throw new Error(`ngpdf: unknown page size "${label}" on pdf-page`);
