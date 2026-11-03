@@ -25,6 +25,9 @@ export default defineConfig({
     environment: 'node',
     exclude: ['**/node_modules/**', '**/dist/**', '.stryker-tmp/**'],
     setupFiles: ['projects/core/src/testing/setup.ts'],
+    // Spies and stubbed globals never outlive the test that made them.
+    restoreMocks: true,
+    unstubGlobals: true,
     include: [
       'projects/core/src/**/*.spec.ts',
       'projects/core/viewer/**/*.spec.ts',

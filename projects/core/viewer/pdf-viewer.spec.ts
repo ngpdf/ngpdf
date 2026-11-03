@@ -76,9 +76,14 @@ beforeEach(() => {
   urls = 0;
   revoked = [];
   makeUrl = (n) => `blob:test/${String(n)}`;
-  // jsdom has no object URLs.
-  URL.createObjectURL = () => makeUrl(++urls);
-  URL.revokeObjectURL = (url: string) => revoked.push(url);
+  // jsdom has no object URLs. A stubbed subclass, so the real URL is never changed.
+  vi.stubGlobal(
+    'URL',
+    Object.assign(class extends URL {}, {
+      createObjectURL: () => makeUrl(++urls),
+      revokeObjectURL: (url: string) => revoked.push(url),
+    }),
+  );
 });
 
 afterEach(() => {
@@ -165,7 +170,6 @@ describe('PdfViewer', () => {
     expect(renders.calls).toHaveLength(0);
     await vi.advanceTimersByTimeAsync(1);
     expect(renders.calls).toHaveLength(1);
-    fixture.destroy();
   });
 
   it('renders again when the inputs change, after the debounce, and keeps the old PDF meanwhile', async () => {

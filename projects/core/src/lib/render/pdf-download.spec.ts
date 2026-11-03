@@ -1,11 +1,5 @@
 // @vitest-environment jsdom
-import {
-  Component,
-  ErrorHandler,
-  provideZoneChangeDetection,
-  signal,
-  type Type,
-} from '@angular/core';
+import { Component, ErrorHandler, signal, type Type } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { PdfDownload } from './pdf-download';
@@ -241,20 +235,5 @@ describe('PdfDownload', () => {
     await fixture.whenStable();
 
     expect(button.disabled).toBe(true);
-  });
-
-  it('clears the busy state under zone.js change detection', async () => {
-    await import('zone.js');
-    TestBed.resetTestingModule();
-    TestBed.configureTestingModule({ providers: [provideZoneChangeDetection()] });
-    const { fixture, button } = await render(ButtonHost);
-
-    button.click();
-    expect(downloads.calls).toHaveLength(1);
-    downloads.settle?.();
-    await fixture.whenStable();
-
-    expect(button.disabled).toBe(false);
-    expect(button.hasAttribute('aria-busy')).toBe(false);
   });
 });

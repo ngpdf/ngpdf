@@ -14,7 +14,7 @@ import {
   input,
 } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import { afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { PDF_ELEMENTS } from '../elements';
 import { elementChildren, propsOf, textContent, type PdfNode } from '../tree/node';
 import { renderTree } from './render-tree';
@@ -191,11 +191,13 @@ describe('renderTree', () => {
   };
 
   afterEach(() => {
-    for (const result of rendered) result.destroy();
+    // Last made first: a tree goes before the injector it was rendered in.
+    for (const result of rendered.reverse()) result.destroy();
     rendered = [];
   });
 
-  beforeAll(async () => {
+  // TestBed's injector is torn down after each test, so each test takes the current one.
+  beforeEach(async () => {
     parent = TestBed.inject(EnvironmentInjector);
     await TestBed.inject(ApplicationRef).whenStable();
   });
@@ -257,6 +259,7 @@ describe('renderTree', () => {
       [{ provide: GREETING, useValue: 'hello' }],
       parent,
     );
+    rendered.push(withGreeting);
     const result = render(TestDocument, withGreeting);
     expect(textContent(at(find(result.root, 'pdf-text'), 1))).toBe('hello');
   });
