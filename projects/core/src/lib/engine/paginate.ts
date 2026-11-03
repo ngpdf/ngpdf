@@ -1698,8 +1698,8 @@ export function paginatePage(
     }
     // An element that lands whole on this sheet with less room below it than its
     // `min-presence-ahead` moves to the next one, with the `break-after: avoid` chain that ends at
-    // it. Checked where the chain starts, or at the unit when there is no chain. The last unit
-    // has nothing after it to make room for.
+    // it. Checked where the chain starts, or at the unit when there is no chain. The last unit,
+    // and one a forced page break follows, have nothing after them on this sheet to make room for.
     if (!(index > 0 && joined(index - 1)) && current.units > 0 && !carriedTail) {
       let end = index;
       while (joined(end)) end++;
@@ -1709,6 +1709,7 @@ export function paginatePage(
         tooClose = (presenceAt.get(k) ?? []).some(
           (element) =>
             element.last < units.length - 1 &&
+            !breaksBetween(element.last) &&
             shift + element.bottom <= frame.bottom + slack &&
             shift + element.bottom + element.room > frame.bottom + slack,
         );

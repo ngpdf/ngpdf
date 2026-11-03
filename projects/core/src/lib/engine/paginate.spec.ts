@@ -701,6 +701,21 @@ describe('paginatePage: min-presence-ahead', () => {
     expect(nodesOn(paginate(page([first, last])))).toEqual([[first, last]]);
   });
 
+  it('never moves an element a forced page break follows', () => {
+    const first = filler(50);
+    const [own, body] = [block(20, { ...ahead(40), 'break-after': 'page' }), block(10)];
+    expect(nodesOn(paginate(page([first, own, body])))).toEqual([[first, own], [body]]);
+    const tight = filler(50);
+    const [heading, next] = [block(20, ahead(40)), block(10, { 'break-before': 'page' })];
+    expect(nodesOn(paginate(page([tight, heading, next])))).toEqual([[tight, heading], [next]]);
+    // On a column view, its own break after counts too.
+    const roomy = filler(70);
+    const [a, b] = [block(), block()];
+    const section = el('pdf-view', { ...ahead(40), 'break-after': 'page' }, [a, b]);
+    const after = block(5);
+    expect(nodesOn(paginate(page([roomy, section, after])))).toEqual([[roomy, a, b], [after]]);
+  });
+
   it('measures the room above the page number and fixed bottom views', () => {
     // 60pt left of the padding box, but the page number and footer take 9 + 15 of it.
     const first = filler(60);
