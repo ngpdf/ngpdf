@@ -1,5 +1,5 @@
 import { propsOf, type PdfNode } from '../tree/node';
-import { show } from './style';
+import { show } from './limits';
 
 const SCHEMES = new Set(['http:', 'https:', 'mailto:']);
 

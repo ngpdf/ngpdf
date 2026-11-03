@@ -115,6 +115,20 @@ describe('providePdfFonts', () => {
     );
   });
 
+  it('passes numeric face weights to the engine, 0 included', async () => {
+    TestBed.configureTestingModule({
+      providers: [
+        providePdfFonts([
+          { family: 'Noto Sans', src: REGULAR, weight: 300 },
+          { family: 'Noto Sans', src: REGULAR, weight: 0 },
+        ]),
+      ],
+    });
+    await expect(TestBed.inject(PdfRenderer).toBlob(FontDocument)).rejects.toThrow(
+      'ngpdf: invalid font weight "0" for "Noto Sans"',
+    );
+  });
+
   it('adds the fonts of a child injector to those of its parent', async () => {
     TestBed.configureTestingModule({
       providers: [providePdfFonts([{ family: 'Noto Sans', src: REGULAR }])],
