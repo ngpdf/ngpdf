@@ -1404,6 +1404,16 @@ describe('paginatePage: position', () => {
     expect(placedOf(pages, lower).y).toBeCloseTo(CONTENT_TOP, 6);
   });
 
+  it('starts a new sheet for an absolute box a page apart that float32 rounds short', () => {
+    const last = block();
+    // In float32 the lower top lands some 0.00005pt above one content height past the upper.
+    const upper = badge({ top: '900.05' });
+    const lower = badge({ top: String(900.05 + AREA) });
+    const pages = paginate(page([last, upper, lower]));
+    expect(nodesOn(pages)).toEqual([[last], [upper], [lower]]);
+    expect(placedOf(pages, lower).y).toBeCloseTo(CONTENT_TOP, 3);
+  });
+
   it('groups an absolute box taken out of a unit with the faded views it leaves', () => {
     const stamp = badge({ top: '0', left: '0' });
     const inner = el('pdf-view', { opacity: '0.4' }, [block(), stamp]);

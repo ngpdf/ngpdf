@@ -1432,7 +1432,10 @@ export function paginatePage(
   let beyondShift = 0;
   let beyondPage = -1;
   for (const { float, spot } of [...beyond].sort((a, b) => a.float.top - b.float.top)) {
-    if (beyondPage < 0 || float.top + beyondShift >= frame.bottom - EPSILON) {
+    // Yoga's tops are float32, off by up to half a step each, so two tops a content height apart
+    // can come out short of it by a few of the larger top's steps (2^-23 of it).
+    const slack = Math.max(EPSILON, float.top * 2 ** -21);
+    if (beyondPage < 0 || float.top + beyondShift >= frame.bottom - slack) {
       startPage();
       beyondPage = pages.length - 1;
       beyondShift = frame.top - float.top;

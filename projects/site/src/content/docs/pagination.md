@@ -152,7 +152,7 @@ On a wrapper, the break happens before its first unit. A break on a sheet that h
 An element with [`position: absolute`](/docs/layout-and-styling#positioning) is never a unit. It never moves, splits or pushes other units, and page breaks asked for on it or inside it do nothing.
 
 - When its containing block is one unit (a row `pdf-view`, or a view with a `transform` or an `overflow` other than `visible`), it is drawn with that unit, on the same sheet.
-- When its containing block is split across sheets (a column `pdf-view`, a `pdf-table` or the page itself), it goes on the sheet where its own top lands, moved like the units around it. One whose top falls in the space a page break skips goes to the top of the next sheet, and one below all the units goes on a new sheet, at its top. Others below all the units go on that sheet too, moved with it, until one's top falls below it and starts the next. It is never drawn above the top of the content area.
+- When its containing block is split across sheets (a column `pdf-view`, a `pdf-table` or the page itself), it goes on the sheet where its own top lands, moved like the units around it. One whose top falls in the space a page break skips goes to the top of the next sheet. One whose top falls below the last unit's sheet goes on a new sheet, at its top, and the others below that sheet go on the new one too, moved with it, until one's top falls below it and starts the next. It is never drawn above the top of the content area.
 - It is never split: one taller than what is left of its sheet is cut at the bottom, with a dev-mode warning.
 - Against the page, `bottom` and percentages of the height are measured on the page's whole content, all sheets together, not on one sheet.
 - Inside a [fixed view](#fixed-headers-and-footers) it is drawn with the view on every sheet, and the view is its containing block.
@@ -167,7 +167,7 @@ A [`pdf-note`](/docs/elements#pdf-note) takes no space and is never a unit of it
 - Inside a unit, such as a row `pdf-view`, it is drawn with that unit.
 - Inside a [table row split across sheets](#rows-taller-than-a-page), it goes on the piece where its point falls: with the content after it at a break, or on the last piece of its cell when it is that cell's last child. A note right after a split row goes on the row's last piece, at its bottom.
 - Inside a [fixed view](#fixed-headers-and-footers) it is written on every sheet.
-- With `position: absolute` it follows the rules of [positioned elements](#positioned-elements) instead, so one placed below all the content goes on a new sheet.
+- With `position: absolute` it follows the rules of [positioned elements](#positioned-elements) instead, so one placed below the sheet of the last content goes on a new sheet.
 
 ## Fixed headers and footers
 
