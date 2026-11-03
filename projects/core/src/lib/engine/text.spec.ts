@@ -12,7 +12,7 @@ import {
   type TextRange,
 } from './text';
 import { testFont } from '../../testing/test-fonts';
-import { createPdfkitWriter, type FontMetrics, type PdfWriter } from './writer';
+import { createPdfkitWriter, type FontMetrics, type FontName, type PdfWriter } from './writer';
 
 const MEASURE_MODE_UNDEFINED = 0;
 const MEASURE_MODE_AT_MOST = 2;
@@ -762,6 +762,8 @@ describe('layoutRanges with maxLines', () => {
   beforeAll(async () => {
     writer = await createPdfkitWriter({ compress: false });
     writer.registerFont('font:0', testFont('inter-basic.otf'));
+    writer.registerFont('font:jp', testFont('noto-sans-jp-subset.ttf'));
+    writer.registerFont('font:noto', testFont('noto-sans-regular.ttf'));
   });
   const text = 'Gabriela Teixeira de Albuquerque Cavalcanti mora em Recife desde 2019';
   const clamped = (maxLines: number | null, maxWidth = 120, ranges?: readonly TextRange[]) =>
@@ -864,6 +866,75 @@ describe('layoutRanges with maxLines', () => {
     const [line] = clamped(1, 120, [{ text, style, fonts: { chain: ['font:0'] } }]).lines;
     expect(line?.text.endsWith('...')).toBe(true);
     expect(line?.width).toBeLessThanOrEqual(120);
+  });
+
+  // The Japanese subset has neither "…" nor ".".
+  const japanese = '日本語の文字テスト日本語の文字テスト日本語の文字テスト';
+  const japaneseLine = (chain: readonly FontName[], missing?: (chars: string[]) => void) =>
+    clamped(1, 60, [{ text: japanese, style, fonts: { chain, ...(missing && { missing }) } }])
+      .lines[0];
+
+  it('draws the ellipsis in the next font of the list when the last run lacks it', () => {
+    const line = japaneseLine(['font:jp', 'Helvetica']);
+    const last = line?.runs.at(-1);
+    expect(last?.text).toBe('…');
+    expect(last?.font).toBe('Helvetica');
+    expect(last?.size).toBe(style.fontSize);
+    expect(line?.runs.slice(0, -1).every((run) => run.font === 'font:jp')).toBe(true);
+    expect(line?.width).toBeLessThanOrEqual(60);
+  });
+
+  it('draws three dots in the next font of the list with "." when no font has "…"', () => {
+    const last = japaneseLine(['font:jp', 'font:0'])?.runs.at(-1);
+    expect(last?.text).toBe('...');
+    expect(last?.font).toBe('font:0');
+  });
+
+  it('keeps the ellipsis in the font of the last run when an earlier font of the list has it too', () => {
+    // Helvetica has "…" but no Cyrillic, so the words are drawn in Noto, which has "…" as well.
+    const cyrillic = 'Жук ест листья Жук ест листья Жук ест листья';
+    const [line] = clamped(1, 60, [
+      { text: cyrillic, style, fonts: { chain: ['Helvetica', 'font:noto'] } },
+    ]).lines;
+    const last = line?.runs.at(-1);
+    expect(last?.text.endsWith('…')).toBe(true);
+    expect(last?.font).toBe('font:noto');
+  });
+
+  it('keeps the color, decoration and link of the last run on an ellipsis in another font', () => {
+    const marked: TextStyle = {
+      ...style,
+      color: { r: 255, g: 0, b: 0, a: 1 },
+      textDecoration: 'underline',
+    };
+    const url = 'https://example.com/docs';
+    const [line] = clamped(1, 60, [
+      { text: japanese, style: marked, fonts: { chain: ['font:jp', 'Helvetica'] }, link: url },
+    ]).lines;
+    const last = line?.runs.at(-1);
+    expect(last?.text).toBe('…');
+    expect(last?.font).toBe('Helvetica');
+    expect(last?.color).toEqual(marked.color);
+    expect(last?.decoration).toBe('underline');
+    expect(last?.link).toBe(url);
+  });
+
+  it('takes the ellipsis font from the list of the range the cut ends in', () => {
+    const line = clamped(1, 60, [
+      { text: '日本語', style, fonts: { chain: ['font:jp', 'Helvetica'] } },
+      { text: japanese, style, fonts: { chain: ['font:jp', 'Times-Roman'] } },
+    ]).lines[0];
+    const last = line?.runs.at(-1);
+    expect(last?.text).toBe('…');
+    expect(last?.font).toBe('Times-Roman');
+  });
+
+  it('reports the ellipsis as missing when no font of the list has "…" or "."', () => {
+    const missing = vi.fn();
+    const line = japaneseLine(['font:jp'], missing);
+    expect(line?.text.endsWith('…')).toBe(true);
+    expect(line?.runs.at(-1)?.font).toBe('font:jp');
+    expect(missing).toHaveBeenCalledWith(['…']);
   });
 
   it('keeps the ellipsis alone when not even one character fits beside it', () => {
