@@ -31,6 +31,9 @@ Nothing a test sets up outlives it:
 - `vitest.config.ts` sets `restoreMocks` and `unstubGlobals`, so spies and `vi.stubGlobal` stubs
   are undone after each test. A stub replaces a global with a new value (for `URL`, a subclass)
   and never writes onto the real one, which unstubbing could not undo.
+- A spec that renders stubs `fetch` with `stubFetch` from `projects/core/src/testing`, not
+  `vi.stubGlobal`. Yoga fetches its WebAssembly through the global `fetch` on the first render of
+  a file, and `stubFetch` sends that request to the real one.
 - A spec destroys what it creates outside TestBed (an environment injector, a render's tree) in
   `afterEach` or `finally`, not at the end of the test body.
 - zone.js is loaded only in a `*.zone.spec.ts` file of its own. It patches `Promise` and the

@@ -1,5 +1,6 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createNode, type PdfNode } from '../tree/node';
+import { stubFetch } from '../../testing/stub-fetch';
 import { testFont } from '../../testing/test-fonts';
 import { testPng } from '../../testing/test-png';
 import { renderDocument, type FontSource } from './index';
@@ -414,7 +415,7 @@ describe('renderDocument', () => {
 
   it('rejects a pdf-image with children before fetching it, naming the element', async () => {
     const fetchFn = vi.fn(() => Promise.reject(new TypeError('Failed to fetch')));
-    vi.stubGlobal('fetch', fetchFn);
+    stubFetch(fetchFn);
     const image = el('pdf-image', {}, [text('caption')], { src: '/logo.png' });
     const page = el('pdf-page', {}, [image], { size: 'A4' });
     await expect(renderDocument(host({}, [page]), { writer: recordingWriter() })).rejects.toThrow(
