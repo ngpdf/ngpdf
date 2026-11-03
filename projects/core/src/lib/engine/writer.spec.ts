@@ -1,4 +1,5 @@
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { deflateSync } from 'node:zlib';
 import {
   createPdfkitWriter,
   type DocumentInfo,
@@ -265,6 +266,36 @@ describe('createPdfkitWriter', () => {
       );
       expect(await writer.checkImage?.(testPng({ idat: testRows(2, 2, 4, 1) }))).toBe(false);
       expect(await writer.checkImage?.(testPng({ idat: testRows(2, 2, 4, 3) }))).toBe(false);
+    });
+
+    it.each([
+      ['RGBA', 6, 4],
+      ['gray with alpha', 4, 2],
+      ['a palette with tRNS', 3, 1],
+    ] as const)(
+      'rejects %s whose row has a filter byte above 4',
+      async (_, colorType, channels) => {
+        const whole = testPng({ colorType, idat: testRows(2, 2, channels) });
+        expect(await writer.checkImage?.(whole)).toBe(true);
+        const bad = testPng({ colorType, idat: testRows(2, 2, channels, 2, 9) });
+        expect(await writer.checkImage?.(bad)).toBe(false);
+        expect(
+          await writer.checkImage?.(testPng({ colorType, idat: testRows(2, 2, channels, 2, 4) })),
+        ).toBe(true);
+      },
+    );
+
+    it('checks the filter byte of every row of every interlaced pass', async () => {
+      // 2×2 RGBA in Adam7: one-row passes 1, 6 and 7 of 5, 5 and 9 bytes. The last row starts at 10.
+      const rows = new Uint8Array(5 + 5 + 9);
+      const interlaced = (data: Uint8Array) =>
+        testPng({ interlaced: true, idat: new Uint8Array(deflateSync(data)) });
+      expect(await writer.checkImage?.(interlaced(rows))).toBe(true);
+      rows[10] = 5;
+      expect(await writer.checkImage?.(interlaced(rows))).toBe(false);
+      rows[10] = 0;
+      rows[11] = 5;
+      expect(await writer.checkImage?.(interlaced(rows))).toBe(true);
     });
 
     it('expects an interlaced PNG to hold each of its seven passes', async () => {
