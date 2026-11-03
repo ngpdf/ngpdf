@@ -663,9 +663,15 @@ describe('paginatePage: page breaks', () => {
     const header = el('pdf-row', { height: '20' }, [el('pdf-cell', {}, [marker])], {
       header: true,
     });
-    const tableNode = el('pdf-table', {}, [header, row()], { columns: ['1fr'] });
-    const pages = paginate(page([el('pdf-view', { height: '20' }), tableNode]));
-    expect(pages).toHaveLength(1);
+    const rows = Array.from({ length: 40 }, () => row());
+    const tableNode = el('pdf-table', {}, [header, ...rows], { columns: ['1fr'] });
+    const first = el('pdf-view', { height: '20' });
+    const pages = paginate(page([first, tableNode]));
+    // No break before the table, and none where the header repeats on the second sheet.
+    expect(pages).toHaveLength(2);
+    expect(pages[0]!.placed.slice(0, 2).map((p) => p.box.node)).toEqual([first, header]);
+    expect(pages[1]!.placed[0]!.box.node).toBe(header);
+    expect(pages[1]!.placed[0]!.y).toBeCloseTo(CONTENT_TOP, 6);
   });
 
   it('starts a new page after break-after: page', () => {
