@@ -378,7 +378,7 @@ A `pdf-text` inside a `pdf-text` is drawn in the outer text's style, with a warn
 - A length raises the text by that much, and a negative one lowers it: `vertical-align: 3pt`. A percentage is of the span's line height, its font size times the paragraph's `line-height`. Neither changes the size.
 - `baseline` is the default. Like CSS, `vertical-align` is not inherited, but a span inside a raised span sits on that span's baseline, so its own `vertical-align` adds to the move.
 - A line grows when a moved run sticks out above its baseline or below its bottom, as in CSS, so a line with a superscript can be a little taller than its neighbours. A lower `line-height` doesn't stop that.
-- The underline or strike of a moved span, and the clickable area of a link around it, move with its text.
+- The underline or strike of a moved span moves with its text. So does the clickable area of a link around it, cut to the line so it never reaches into the lines above or below.
 - `vertical-align` works only on a `pdf-span`. On any other element it has no effect, with a warning in development mode (`ngpdf: vertical-align has no effect on <tag>`). `middle`, `top`, `text-top` and the other CSS keywords throw.
 
 ## Links: pdf-link

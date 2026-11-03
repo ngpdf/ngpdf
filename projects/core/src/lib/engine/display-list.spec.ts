@@ -2561,7 +2561,7 @@ describe('vertical-align', () => {
     expect(baselineOf(one!)).toBeCloseTo(baselineOf(a!) - 3.3, 6);
   });
 
-  it('moves the link area of a shifted run with it', () => {
+  it('moves the link area of a shifted run with it, inside the line box', () => {
     const paragraph = el('pdf-text', { 'font-size': '10' }, [
       createNode('text', '', 'Note'),
       el('pdf-link', {}, [sup('1')], { href: 'https://example.com/n1' }),
@@ -2569,8 +2569,8 @@ describe('vertical-align', () => {
     const laid = layout(page([paragraph]))[0]!;
     const [line] = laid.placed[0]!.box.text!.lines;
     const [area] = only(list(laid, 0, 1), 'link');
-    expect(area!.y).toBeCloseTo(36 - 3.3, 6);
-    expect(area!.h).toBeCloseTo(line!.height, 6);
+    expect(area!.y).toBeCloseTo(36, 6);
+    expect(area!.h).toBeCloseTo(line!.height - 3.3, 6);
     expect(area!.w).toBeCloseTo(writer.widthOf('1', 'Helvetica', 7), 6);
   });
 
@@ -2584,8 +2584,27 @@ describe('vertical-align', () => {
     const [line] = laid.placed[0]!.box.text!.lines;
     const links = only(list(laid, 0, 1), 'link');
     expect(links).toHaveLength(1);
-    expect(links[0]!.y).toBeCloseTo(36 - 3.3, 6);
-    expect(links[0]!.h).toBeCloseTo(line!.height + 3.3, 6);
+    expect(links[0]!.y).toBeCloseTo(36, 6);
+    expect(links[0]!.h).toBeCloseTo(line!.height, 6);
+  });
+
+  it('keeps the link area of a lowered run inside the line box', () => {
+    const paragraph = el('pdf-text', { 'font-size': '10' }, [
+      createNode('text', '', 'x'),
+      el(
+        'pdf-link',
+        {},
+        [el('pdf-span', { 'vertical-align': 'sub' }, [createNode('text', '', '2')])],
+        {
+          href: 'https://example.com/',
+        },
+      ),
+    ]);
+    const laid = layout(page([paragraph]))[0]!;
+    const [line] = laid.placed[0]!.box.text!.lines;
+    const [area] = only(list(laid, 0, 1), 'link');
+    expect(area!.y).toBeCloseTo(36 + 2, 6);
+    expect(area!.y + area!.h).toBeCloseTo(36 + line!.height, 6);
   });
 
   it('raises an emoji in a shifted run with it', () => {

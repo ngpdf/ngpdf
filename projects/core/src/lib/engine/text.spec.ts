@@ -1146,6 +1146,22 @@ describe('layoutRanges with vertical-align', () => {
     expect(line?.height).toBe(plain?.height);
   });
 
+  it('grows a short line to the bottom of a lowered run, past the line box', () => {
+    const tight: ParagraphStyle = { ...style, fontSize: 10, lineHeight: 0.5 };
+    const [line] = layoutRanges(
+      [
+        { text: 'a', style: tight },
+        { text: '2', style: { ...tight, baselineShift: -2 } },
+      ],
+      tight,
+      Infinity,
+      writer,
+    ).lines;
+    const ascent = writer.ascent('Helvetica', 10);
+    expect(line?.ascent).toBeCloseTo(ascent, 9);
+    expect(line?.height).toBeCloseTo(12, 9);
+  });
+
   it('moves the next line down by the grown height', () => {
     const width = writer.widthOf('one two', 'Helvetica', 9) + 1;
     const block = lay(

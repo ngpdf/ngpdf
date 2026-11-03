@@ -1297,6 +1297,10 @@ function applyVerticalAlign(
     typeof length === 'number'
       ? length
       : (length.percent / 100) * style.lineHeight * style.fontSize;
+  // Each value is finite, but nested spans or a large percentage can add up past it.
+  if (!Number.isFinite(style.baselineShift)) {
+    fail(`invalid value "${show(value)}" for vertical-align`, 'pdf-span');
+  }
 }
 
 function textPartOf(style: ResolvedStyle): TextStyle {

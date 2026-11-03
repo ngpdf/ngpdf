@@ -858,6 +858,21 @@ describe('resolveStyles property coverage', () => {
       }
     });
 
+    it('throws when nested shifts add up to more than a number can hold', () => {
+      const inner = el('pdf-span', { 'vertical-align': '1e308pt' }, [createNode('text', '', 'x')]);
+      const outer = el('pdf-span', { 'vertical-align': '1e308pt' }, [inner]);
+      const text = el('pdf-text', {}, [outer]);
+      expect(() => resolveStyles(el('pdf-document', {}, [text]))).toThrow(
+        'ngpdf: invalid value "1e308pt" for vertical-align on pdf-span',
+      );
+      const huge = el('pdf-span', { 'vertical-align': '1e308%', 'font-size': '1e10' }, [
+        createNode('text', '', 'x'),
+      ]);
+      expect(() => resolveStyles(el('pdf-document', {}, [el('pdf-text', {}, [huge])]))).toThrow(
+        'ngpdf: invalid value "1e308%" for vertical-align on pdf-span',
+      );
+    });
+
     it('throws for a value it does not take', () => {
       for (const value of ['middle', 'auto', 'top', '2em']) {
         expect(() => spanStyles({ 'vertical-align': value })).toThrow(/^ngpdf: .* on pdf-span$/);

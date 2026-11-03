@@ -318,16 +318,19 @@ function drawBox(
       const spacing = style.textAlign === 'justify' ? wordSpacing(textLine, contentWidth) : 0;
       let gapsBefore = 0;
       // The link being followed along the line: one area per line fragment of a pdf-link, the
-      // line box moved up and down to cover its shifted runs.
+      // line box moved up and down with its shifted runs and cut back to the line box, which
+      // already holds them, so it never reaches into the lines around it.
       let linked:
         { url: string; left: number; right: number; up: number; down: number } | undefined;
       const closeLink = (): void => {
         if (!linked) return;
+        const top = Math.max(0, -linked.up);
+        const bottom = textLine.height - Math.max(0, -linked.down);
         const area = {
           x: linked.left,
-          y: lineTop - linked.up,
+          y: lineTop + top,
           w: linked.right - linked.left,
-          h: textLine.height + linked.up + linked.down,
+          h: bottom - top,
         };
         pushLink(out, matrix, area, linked.url);
         linked = undefined;

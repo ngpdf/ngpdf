@@ -1032,9 +1032,8 @@ function growForShifts(
   ascent: number,
 ): { height: number; ascent: number } {
   let above = ascent;
-  // Room below the baseline: the line box, or the unshifted runs where they reach further.
-  let room = height - ascent;
-  for (const run of runs) if (!run.shift) room = Math.max(room, run.size - run.ascent);
+  // Unshifted runs that overflow a short line box keep overflowing it, as before.
+  const room = height - ascent;
   let below = room;
   for (const run of runs) {
     if (!run.shift) continue;
