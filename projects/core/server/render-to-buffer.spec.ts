@@ -15,6 +15,7 @@ import {
 } from '@angular/core';
 import { PDF_ELEMENTS, providePdfFonts } from '@ngpdf/core';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { stubFetch } from '../src/testing/stub-fetch';
 import { testFont } from '../src/testing/test-fonts';
 import { renderToBuffer } from './render-to-buffer';
 
@@ -268,7 +269,7 @@ describe('renderToBuffer', () => {
   describe('images', () => {
     it('refuses a remote URL without fetchImage, and never calls fetch', async () => {
       const fetchFn = vi.fn();
-      vi.stubGlobal('fetch', fetchFn);
+      stubFetch(fetchFn);
       await expect(
         renderToBuffer(ImageDocument, { inputs: { src: 'https://cdn.example.com/a.png?t=1' } }),
       ).rejects.toThrow(

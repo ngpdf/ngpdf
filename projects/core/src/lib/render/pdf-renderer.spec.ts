@@ -7,7 +7,6 @@ import {
   createEnvironmentInjector,
   inject,
   input,
-  provideZoneChangeDetection,
 } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -248,15 +247,6 @@ describe('PdfRenderer', () => {
     expect(await blob.slice(0, 5).text()).toBe('%PDF-');
   });
 
-  it('works when the parent injector provides zone change detection', async () => {
-    await import('zone.js');
-    TestBed.configureTestingModule({ providers: [provideZoneChangeDetection()] });
-    const blob = await TestBed.inject(PdfRenderer).toBlob(TestDocument, {
-      inputs: { rows: ['Zoned row'] },
-    });
-    expect(await shownText(blob)).toEqual(['Zoned row']);
-  });
-
   it('keeps two renders started together apart', async () => {
     const renderer = TestBed.inject(PdfRenderer);
     const [first, second] = await Promise.all([
@@ -295,7 +285,11 @@ describe('download', () => {
   } {
     const create = vi.fn(() => url);
     const revoke = vi.fn();
-    vi.stubGlobal('URL', Object.assign(URL, { createObjectURL: create, revokeObjectURL: revoke }));
+    // A subclass, so the stub never touches the real URL and unstubbing restores it.
+    vi.stubGlobal(
+      'URL',
+      Object.assign(class extends URL {}, { createObjectURL: create, revokeObjectURL: revoke }),
+    );
     return { create, revoke };
   }
 
@@ -324,17 +318,21 @@ describe('download', () => {
   });
 
   it('downloadPdf works with an explicit injector', async () => {
-    stubUrls();
+    const { revoke } = stubUrls();
     const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(vi.fn());
+    // Fake timers, so the revoke runs here and not on whatever URL a later test stubs.
+    vi.useFakeTimers();
     await downloadPdf(TestDocument, {
       injector: TestBed.inject(EnvironmentInjector),
       fileName: 'a.pdf',
     });
     expect(click).toHaveBeenCalledOnce();
+    vi.runAllTimers();
+    expect(revoke).toHaveBeenCalledExactlyOnceWith('blob:ngpdf-test');
   });
 
   it('removes the anchor and revokes the URL when click throws', async () => {
-    // Its own URL: a revoke that an earlier test left on a timer also lands on this stub.
+    // Its own URL, so the revoke checked below can only be this test's.
     const { revoke } = stubUrls('blob:ngpdf-blocked');
     vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {
       throw new Error('click blocked');

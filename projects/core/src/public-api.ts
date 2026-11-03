@@ -46,3 +46,4 @@ export type {
   RenderOptions,
   RenderToBlobOptions,
 } from './lib/render/pdf-renderer';
+export { VERSION } from './version';
