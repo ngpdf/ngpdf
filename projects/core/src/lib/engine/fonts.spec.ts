@@ -220,12 +220,12 @@ describe('fontChain', () => {
     fontChain(textStyle('Family', weight), registry, warn)[0];
 
   it.each([
-    // Target 400: 500 first, then lighter going down, then heavier going up.
+    // Target 400: heavier up to 500 first, then lighter going down, then heavier going up.
     [[300, 500, 600], 400, 'font:500'],
     [[100, 300, 600], 400, 'font:300'],
     [[600, 900], 400, 'font:600'],
     [[450, 300], 400, 'font:450'],
-    // Target 500: 400 first, then lighter, then heavier.
+    // Target 500: lighter going down (400 first), then heavier.
     [[300, 400, 600], 500, 'font:400'],
     [[300, 600], 500, 'font:300'],
     [[600, 900], 500, 'font:600'],
