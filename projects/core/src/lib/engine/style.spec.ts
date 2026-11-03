@@ -411,6 +411,7 @@ describe('resolveStyles', () => {
     const warn = vi.fn();
     const span = el('pdf-span', {
       'font-style': 'italic',
+      display: 'flex',
       padding: '4',
       'text-align': 'right',
       'break-after': 'page',
@@ -1450,7 +1451,15 @@ describe('resolveStyles: pdf-note', () => {
   it('warns about properties other than color and position', () => {
     const warn = vi.fn();
     styleOf(
-      { color: 'red', position: 'absolute', top: '0', right: '0', bottom: '0', left: '0' },
+      {
+        color: 'red',
+        display: 'flex',
+        position: 'absolute',
+        top: '0',
+        right: '0',
+        bottom: '0',
+        left: '0',
+      },
       'pdf-note',
       warn,
     );

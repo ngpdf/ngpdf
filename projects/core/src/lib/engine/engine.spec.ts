@@ -204,6 +204,55 @@ describe('renderDocument', () => {
     expect(warned).toContain('ngpdf: pdf-link href "#ch9" names no anchor; no link written');
   });
 
+  it('leaves an element with display: none out of layout, drawing, pages and anchors', async () => {
+    const writer = recordingWriter();
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const hidden = el(
+      'pdf-view',
+      { display: 'none', height: '300', 'background-color': '#ff0000' },
+      [
+        text('Hidden'),
+        el('pdf-view', { position: 'absolute', top: '0' }, [text('Stamp')]),
+        el('pdf-view', {}, [text('Head')], { fixed: 'top' }),
+        el('pdf-view', {}, [text('Chapter')], { anchor: 'secret', bookmark: 'Secret' }),
+        el('pdf-view', {}, [text('Broken')], { breakBefore: true }),
+      ],
+      { breakBefore: true },
+    );
+    const page = el(
+      'pdf-page',
+      {},
+      [
+        el('pdf-link', {}, [text('Go')], { href: '#secret' }),
+        hidden,
+        text('After'),
+        el('pdf-view', {}, [], { bookmark: 'Shown' }),
+      ],
+      { size: 'A4' },
+    );
+    await renderDocument(host({}, [page]), { writer, dev: true });
+    const [{ pages, info }] = writer.recorded as [Recorded];
+    expect(pages).toHaveLength(1);
+    const ops = pages[0]!.ops;
+    const texts = ops.flatMap((op) => (op.op === 'text' ? [op] : []));
+    expect(texts.map((op) => op.text)).toEqual(['Go', 'After']);
+    // "After" sits right under "Go": the hidden view takes no space.
+    expect(texts[1]!.y - texts[0]!.y).toBeLessThan(20);
+    expect(ops.some((op) => op.op === 'rect')).toBe(false);
+    expect(ops.some((op) => op.op === 'link')).toBe(false);
+    expect(info.outline).toEqual([{ title: 'Shown', anchor: 0, children: [] }]);
+    expect(warn.mock.calls.flat()).toContain(
+      'ngpdf: pdf-link href "#secret" names no anchor; no link written',
+    );
+  });
+
+  it('rejects a display value other than flex or none', async () => {
+    const page = el('pdf-page', {}, [el('pdf-view', { display: 'block' })]);
+    await expect(
+      renderDocument(host({}, [page]), { writer: recordingWriter(), dev: false }),
+    ).rejects.toThrow('ngpdf: invalid value "block" for display on pdf-view; use flex or none');
+  });
+
   it('leaves unset metadata out of the info', async () => {
     const writer = recordingWriter();
     await renderDocument(twoPages(), { writer, dev: false });

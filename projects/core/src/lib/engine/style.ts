@@ -870,6 +870,20 @@ function oneOf<T extends string>(
   return found;
 }
 
+/**
+ * Whether an element is shown: `display` is `flex` (the default) or `none`, and any other value
+ * throws. Not inherited, as in CSS; a hidden element takes its children with it.
+ */
+export function isHidden(node: PdfNode): boolean {
+  const value = node.rawStyle['display'];
+  if (value === undefined) return false;
+  const keyword = keywordOf(value);
+  if (keyword !== 'flex' && keyword !== 'none') {
+    fail(`invalid value "${show(value)}" for display on ${node.tag}; use flex or none`);
+  }
+  return keyword === 'none';
+}
+
 function fontWeightOf(value: string): TextStyle['fontWeight'] {
   const keyword = keywordOf(value);
   if (keyword === 'bold' || keyword === 'bolder') return 'bold';
@@ -1201,6 +1215,7 @@ function lineHeightOf(value: string, fontSize: number, tag: string): number {
 
 // A note takes no space: only its icon color and where it sits apply to it.
 const NOTE_PROPERTIES: readonly string[] = Object.freeze([
+  'display',
   'color',
   'position',
   'top',
@@ -1280,6 +1295,7 @@ function checkLeafChildren(node: PdfNode): void {
 const INLINE = new Set(['pdf-text', 'pdf-span']);
 // A pdf-span is part of a line: only what changes how its characters are drawn applies to it.
 const SPAN_PROPERTIES = new Set([
+  'display',
   'color',
   'font-family',
   'font-size',

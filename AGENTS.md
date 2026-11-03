@@ -132,6 +132,10 @@ NGPDF_APT=poppler-utils ./scripts/dev node scripts/server-check.mjs   # packed d
   - `px` = 1pt;
   - `%` is of the parent's content box;
   - any other unit throws.
+- **Display:** `display: none` leaves an element and all it holds out of the document before
+  any stage reads it (`dissolveHosts`): no space, no sheet, no drawing, no anchors or bookmarks;
+  a link to an anchor in it warns like one to a missing name. `flex` is the default; any other
+  value throws `ngpdf: invalid value "<v>" for display on <tag>; use flex or none`. Not inherited.
 - **Page sizes, in points:** A3 841.89×1190.55, A4 595.28×841.89, A5 419.53×595.28, Letter
   612×792, Legal 612×1008, or `[width, height]`. Landscape swaps them.
 - **Fonts:**

@@ -1,5 +1,5 @@
 import type { PdfNode } from '../tree/node';
-import { MAX_NESTING } from './style';
+import { isHidden, MAX_NESTING } from './style';
 
 const PDF_ELEMENTS = new Set([
   'pdf-document',
@@ -51,7 +51,8 @@ export function copyWithoutHosts(
       ignoreStyle(child, warn);
       // Not push(...children): spreading a host with a huge number of rows overflows too.
       for (const grandchild of [...child.children].reverse()) pending.push(grandchild);
-    } else {
+    } else if (child.kind !== 'element' || !isHidden(child)) {
+      // display: none drops the element and all it holds before anything reads them.
       out.children.push(copyWithoutHosts(child, out, depth + 1, warn));
     }
   }
@@ -62,13 +63,18 @@ export function copyWithoutHosts(
  * A copy of the document's tree in which every component host is replaced by its children, like
  * CSS `display: contents`. Every later stage then sees pages under the document, rows under a
  * table and cells under a row however the template splits them into components. A host's own
- * style is dropped, with a warning. The input tree is left unchanged.
+ * style is dropped, with a warning. An element with `display: none` is left out with all it
+ * holds, so no later stage lays it out, draws it or collects its anchors. The input tree is left
+ * unchanged.
  */
 export function dissolveHosts(document: PdfNode, warn: (message: string) => void): PdfNode {
   for (let above = document.parent; above; above = above.parent) {
     if (isHost(above)) ignoreStyle(above, warn);
   }
-  const root = copyWithoutHosts(document, null, 1, warn);
+  // A hidden document keeps no pages, so the error below explains it.
+  const root = isHidden(document)
+    ? { ...document, parent: null, children: [] }
+    : copyWithoutHosts(document, null, 1, warn);
   if (!root.children.some((child) => child.kind === 'element' && child.tag === 'pdf-page')) {
     throw new Error('ngpdf: pdf-document has no pdf-page');
   }

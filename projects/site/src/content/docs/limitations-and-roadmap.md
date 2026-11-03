@@ -26,6 +26,7 @@ ngpdf v0.1 covers documents built from text, tables, boxes and images. This page
 - A box cannot fill the remaining height of a page. Use a fixed height.
 - `transform` takes 2D rotations, scales and translations only: no `skew()`, `matrix()` or 3D functions.
 - `position` is `static`, `relative` or `absolute`: no `fixed`, `sticky` or `z-index`. An absolute element is never split across sheets, and against the page its `bottom` is measured on the whole content, not on one sheet.
+- `display` is `flex` or `none` only: no `block`, `inline`, `grid` or `contents`.
 - Your own components inside a document are transparent, like `display: contents`. Styles on a component's host element are ignored with a warning. Style a `pdf-*` element inside it instead. The same goes for the document component you render.
 
 ### Links

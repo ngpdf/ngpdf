@@ -12,7 +12,7 @@ In the tables:
 - **length** is a number with an optional unit: none or `pt` (points), `px` (= 1pt), `in`, `cm` or `mm`. Any other unit throws.
 - **length/%** also accepts a percentage of the parent's content box.
 - **color** is hex (3, 4, 6 or 8 digits), `rgb()`/`rgba()`, a CSS named color or `transparent`.
-- Keywords are matched in any case, as in CSS: `CENTER` is `center`. That covers the keywords of `text-align`, `text-decoration`, `text-transform`, `hyphens`, `normal` in `letter-spacing` and `line-height`, `flex-direction`, `justify-content`, `align-items`, `align-self`, `object-fit`, `overflow`, `position`, `font-weight`, `font-style`, `break-before`, `break-after` and `break-inside`, `none` in `max-lines`, `none` and the function names in `transform`, the keywords of `transform-origin`, `auto` in lengths, `auto` and `none` in `flex`, and the border styles, and the gradient function names and keywords in `background` and `background-image`.
+- Keywords are matched in any case, as in CSS: `CENTER` is `center`. That covers the keywords of `text-align`, `text-decoration`, `text-transform`, `hyphens`, `normal` in `letter-spacing` and `line-height`, `display`, `flex-direction`, `justify-content`, `align-items`, `align-self`, `object-fit`, `overflow`, `position`, `font-weight`, `font-style`, `break-before`, `break-after` and `break-inside`, `none` in `max-lines`, `none` and the function names in `transform`, the keywords of `transform-origin`, `auto` in lengths, `auto` and `none` in `flex`, and the border styles, and the gradient function names and keywords in `background` and `background-image`.
 
 ## Text
 
@@ -46,6 +46,7 @@ Without a registered family in the list: `font-family` contains `courier` or `mo
 
 | Property | Values | Default |
 | --- | --- | --- |
+| `display` | `flex`; `none` leaves the element and everything in it out of the document; any other value throws | `flex` |
 | `flex-direction` | `row`, `column` | `column`; `row` on `pdf-row` |
 | `justify-content` | `flex-start`, `center`, `flex-end`, `space-between`, `space-around`, `space-evenly` | `flex-start` |
 | `align-items` | `stretch`, `flex-start`, `center`, `flex-end` | `stretch` |
@@ -55,6 +56,8 @@ Without a registered family in the list: `font-family` contains `courier` or `mo
 | `flex-grow` | number | `0` |
 | `flex-shrink` | number | `1` |
 | `flex-basis` | length/%, `auto` | `auto` |
+
+`display` is not inherited, and it applies to every element, `pdf-span` and `pdf-note` included. See [Hiding elements](/docs/layout-and-styling#hiding-elements).
 
 `flex` takes:
 
@@ -125,7 +128,7 @@ In `border`, a missing width is 1 and a missing color is black. The width keywor
 
 Everything else is ignored, including:
 
-- `display`, `z-index`, `overflow-x`, `overflow-y`;
+- `z-index`, `overflow-x`, `overflow-y`;
 - `flex-wrap`, `align-content`, `row-gap`, `column-gap`, `order`;
 - `box-shadow`, `border-style`;
 - `font`, `word-spacing`, `white-space`, `vertical-align`;
