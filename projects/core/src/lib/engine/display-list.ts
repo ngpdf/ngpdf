@@ -317,15 +317,17 @@ function drawBox(
       const lineLeft = alignedX(contentLeft, contentWidth, textLine.width, style.textAlign);
       const spacing = style.textAlign === 'justify' ? wordSpacing(textLine, contentWidth) : 0;
       let gapsBefore = 0;
-      // The link being followed along the line: one area per line fragment of a pdf-link, the
-      // line box moved up and down with its shifted runs and cut back to the line box, which
-      // already holds them, so it never reaches into the lines around it.
+      // The link being followed along the line: one area per line fragment of a pdf-link. Each
+      // run adds the line box moved with its shift and its own em box, so a shifted glyph stays
+      // clickable in a short line; the area is cut to the line box, which already holds the
+      // shifted runs, so it never reaches into the lines around it. `top` and `bottom` are from
+      // the line's top.
       let linked:
-        { url: string; left: number; right: number; up: number; down: number } | undefined;
+        { url: string; left: number; right: number; top: number; bottom: number } | undefined;
       const closeLink = (): void => {
         if (!linked) return;
-        const top = Math.max(0, -linked.up);
-        const bottom = textLine.height - Math.max(0, -linked.down);
+        const top = Math.max(0, linked.top);
+        const bottom = Math.min(textLine.height, linked.bottom);
         const area = {
           x: linked.left,
           y: lineTop + top,
@@ -341,15 +343,16 @@ function drawBox(
         gapsBefore += gaps;
         const right = x + run.width + gaps * spacing;
         const shift = run.shift ?? 0;
+        const emTop = textLine.ascent - shift - run.ascent;
+        const top = Math.min(-shift, emTop);
+        const bottom = Math.max(textLine.height - shift, emTop + run.size);
         if (run.link !== undefined && linked?.url === run.link) {
           linked.right = right;
-          linked.up = Math.max(linked.up, shift);
-          linked.down = Math.max(linked.down, -shift);
+          linked.top = Math.min(linked.top, top);
+          linked.bottom = Math.max(linked.bottom, bottom);
         } else {
           closeLink();
-          if (run.link !== undefined) {
-            linked = { url: run.link, left: x, right, up: shift, down: -shift };
-          }
+          if (run.link !== undefined) linked = { url: run.link, left: x, right, top, bottom };
         }
         const baseline = lineTop + textLine.ascent - shift;
         if (run.emoji) {

@@ -2607,6 +2607,22 @@ describe('vertical-align', () => {
     expect(area!.y + area!.h).toBeCloseTo(36 + line!.height, 6);
   });
 
+  it('keeps the whole linked superscript clickable in a short line', () => {
+    const paragraph = el('pdf-text', { 'font-size': '10', 'line-height': '0.5' }, [
+      createNode('text', '', 'x'),
+      el('pdf-link', {}, [sup('1')], { href: 'https://example.com/' }),
+    ]);
+    const laid = layout(page([paragraph]))[0]!;
+    const [line] = laid.placed[0]!.box.text!.lines;
+    const ops = list(laid, 0, 1);
+    const one = only(ops, 'text').find((op) => op.text === '1')!;
+    const [area] = only(ops, 'link');
+    expect(area!.y).toBeLessThanOrEqual(one.y + 1e-6);
+    expect(area!.y + area!.h).toBeGreaterThanOrEqual(one.y + 7 - 1e-6);
+    expect(area!.y).toBeGreaterThanOrEqual(36 - 1e-6);
+    expect(area!.y + area!.h).toBeLessThanOrEqual(36 + line!.height + 1e-6);
+  });
+
   it('raises an emoji in a shifted run with it', () => {
     const thumbs: ImageAsset = { data: new Uint8Array([1]), width: 72, height: 72 };
     const root = page([
