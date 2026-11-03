@@ -813,7 +813,12 @@ describe('renderDocument with fonts', () => {
   /** A writer of its own, so registered fonts never leak between tests. */
   async function fontWriter() {
     real = await createPdfkitWriter({ compress: false });
-    return recordingWriter();
+    // With the real descent, so half-leading is split by each font's own metrics.
+    const writer: ReturnType<typeof recordingWriter> = {
+      ...recordingWriter(),
+      descent: (f, s) => real.descent!(f, s),
+    };
+    return writer;
   }
 
   const textOps = (writer: { recorded: Recorded[] }) =>
@@ -922,14 +927,13 @@ describe('renderDocument with fonts', () => {
     const [[, latin], [, cjk]] = mixed as [readonly [string, number], readonly [string, number]];
     expect(cjk).toBeCloseTo(latin, 6);
     // Noto Sans JP reaches higher above its baseline in a 30pt line, so it sets the baseline the
-    // Latin run sits on: the same as a page number in Noto Sans JP alone.
+    // Latin run sits on. The line is the bottom 30pt of the unpadded A4 page.
     const reach = (font: 'font:0' | 'font:2') => {
       const ascent = real.ascent(font, 10);
       return ascent + (30 - ascent - real.descent!(font, 10)) / 2;
     };
     expect(reach('font:2')).toBeGreaterThan(reach('font:0') + 0.1);
-    const [[, alone]] = (await baselineOf('"Noto Sans JP"', '日本')) as [readonly [string, number]];
-    expect(latin).toBeCloseTo(alone, 6);
+    expect(latin - (841.89 - 30)).toBeCloseTo(reach('font:2'), 6);
   });
 
   it('warns once, naming the characters no font in the list has', async () => {
