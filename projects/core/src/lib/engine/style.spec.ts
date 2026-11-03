@@ -214,20 +214,108 @@ describe('resolveStyles', () => {
     expect(style.borderColor.top).toEqual(BLACK);
   });
 
-  it('applies border to all sides and draws other styles solid', () => {
+  it('applies border to all sides with its style', () => {
     const warn = vi.fn();
     const style = styleOf({ border: '2pt dashed red' }, 'pdf-view', warn);
     expect(style.borderWidth).toEqual({ top: 2, right: 2, bottom: 2, left: 2 });
     expect(style.borderColor.left).toEqual(RED);
-    expect(warn).toHaveBeenCalledExactlyOnceWith(
-      'ngpdf: border style "dashed" is not supported; drawing solid',
+    expect(style.borderStyle).toEqual({
+      top: 'dashed',
+      right: 'dashed',
+      bottom: 'dashed',
+      left: 'dashed',
+    });
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it('defaults to solid, also when a shorthand gives no style', () => {
+    expect(styleOf({}).borderStyle.top).toBe('solid');
+    expect(styleOf({ 'border-width': '2' }).borderStyle.left).toBe('solid');
+    expect(styleOf({ border: '2 dotted', 'border-top': '1 red' }).borderStyle).toEqual({
+      top: 'solid',
+      right: 'dotted',
+      bottom: 'dotted',
+      left: 'dotted',
+    });
+  });
+
+  it('expands border-style like margin and sets one side with border-<side>-style', () => {
+    expect(styleOf({ 'border-style': 'dashed dotted' }).borderStyle).toEqual({
+      top: 'dashed',
+      right: 'dotted',
+      bottom: 'dashed',
+      left: 'dotted',
+    });
+    const side = styleOf({ border: '1 solid', 'border-left-style': 'DOTTED' });
+    expect(side.borderStyle).toEqual({
+      top: 'solid',
+      right: 'solid',
+      bottom: 'solid',
+      left: 'dotted',
+    });
+    const later = styleOf({ 'border-top-style': 'dotted', border: '1 dashed' });
+    expect(later.borderStyle.top).toBe('dashed');
+    expect(() => styleOf({ 'border-style': 'wavy' })).toThrow(/^ngpdf:/);
+    expect(() => styleOf({ 'border-style': 'solid solid solid solid solid' })).toThrow(/^ngpdf:/);
+    expect(() => styleOf({ 'border-top-style': 'solid dashed' })).toThrow(/^ngpdf:/);
+    // A shorthand takes one style, as in CSS.
+    expect(() => styleOf({ border: '1 double dashed' })).toThrow(
+      /^ngpdf: expected one border style/,
     );
+    expect(() => styleOf({ 'border-left': 'solid 1 none' })).toThrow(/^ngpdf:/);
+  });
+
+  it('gives a none or hidden side no width, in any declaration order', () => {
+    const style = styleOf({ border: '2 solid', 'border-style': 'none hidden solid dashed' });
+    expect(style.borderWidth).toEqual({ top: 0, right: 0, bottom: 2, left: 2 });
+    expect(style.borderStyle).toEqual({
+      top: 'none',
+      right: 'none',
+      bottom: 'solid',
+      left: 'dashed',
+    });
+    expect(styleOf({ border: 'none', 'border-width': '2' }).borderWidth.top).toBe(0);
+    // A later style brings back the width the shorthand gave.
+    const restyled = styleOf({ border: '2 none #000', 'border-top-style': 'dashed' });
+    expect(restyled.borderWidth).toEqual({ top: 2, right: 0, bottom: 0, left: 0 });
+    expect(restyled.borderStyle.top).toBe('dashed');
+    expect(styleOf({ 'border-left-style': 'hidden', 'border-width': '3' }).borderWidth).toEqual({
+      top: 3,
+      right: 3,
+      bottom: 3,
+      left: 0,
+    });
+  });
+
+  it('draws the other border styles solid with a warning', () => {
+    const warn = vi.fn();
+    const style = styleOf({ border: '2pt double red' }, 'pdf-view', warn);
+    expect(style.borderStyle.top).toBe('solid');
+    expect(warn).toHaveBeenCalledExactlyOnceWith(
+      'ngpdf: border style "double" is not supported; drawing solid',
+    );
+    const longhand = vi.fn();
+    const sides = styleOf(
+      { 'border-style': 'groove dashed', 'border-left-style': 'outset' },
+      'pdf-view',
+      longhand,
+    );
+    expect(sides.borderStyle).toEqual({
+      top: 'solid',
+      right: 'dashed',
+      bottom: 'solid',
+      left: 'solid',
+    });
+    expect(longhand.mock.calls).toEqual([
+      ['ngpdf: border style "groove" is not supported; drawing solid'],
+      ['ngpdf: border style "outset" is not supported; drawing solid'],
+    ]);
   });
 
   it('sends the border style warning to the sink only, never to the console', () => {
     const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-    styleOf({ border: '2pt dashed red' });
-    styleOf({ border: '2pt dashed red' }, 'pdf-view', vi.fn());
+    styleOf({ border: '2pt ridge red' });
+    styleOf({ border: '2pt ridge red' }, 'pdf-view', vi.fn());
     expect(consoleWarn).not.toHaveBeenCalled();
   });
 
@@ -463,6 +551,7 @@ describe('resolveStyles', () => {
     const warn = vi.fn();
     const span = el('pdf-span', {
       'font-style': 'italic',
+      display: 'flex',
       padding: '4',
       'text-align': 'right',
       'break-after': 'page',
@@ -1038,9 +1127,10 @@ describe('resolveStyles property coverage', () => {
     expect(styleOf({ border: '2 SOLID red' }).borderWidth.top).toBe(2);
     expect(styleOf({ border: '2 None red' }).borderWidth.top).toBe(0);
     const warn = vi.fn();
-    styleOf({ border: '1 Dashed red' }, 'pdf-view', warn);
+    expect(styleOf({ border: '1 Dashed red' }).borderStyle.top).toBe('dashed');
+    styleOf({ border: '1 Ridge red' }, 'pdf-view', warn);
     expect(warn).toHaveBeenCalledWith(
-      'ngpdf: border style "dashed" is not supported; drawing solid',
+      'ngpdf: border style "ridge" is not supported; drawing solid',
     );
   });
 
@@ -1141,9 +1231,9 @@ describe('resolveStyles property coverage', () => {
 
   it('warns for an unsupported border style on a side shorthand too', () => {
     const warn = vi.fn();
-    styleOf({ 'border-top': '1 dotted red' }, 'pdf-view', warn);
+    styleOf({ 'border-top': '1 inset red' }, 'pdf-view', warn);
     expect(warn).toHaveBeenCalledExactlyOnceWith(
-      'ngpdf: border style "dotted" is not supported; drawing solid',
+      'ngpdf: border style "inset" is not supported; drawing solid',
     );
   });
 
@@ -1151,6 +1241,7 @@ describe('resolveStyles property coverage', () => {
     const warn = vi.fn();
     styleOf({ border: '1 solid red' }, 'pdf-view', warn);
     styleOf({ border: 'none' }, 'pdf-view', warn);
+    styleOf({ border: '1 dashed', 'border-style': 'dotted hidden' }, 'pdf-view', warn);
     expect(warn).not.toHaveBeenCalled();
   });
 
@@ -1557,7 +1648,15 @@ describe('resolveStyles: pdf-note', () => {
   it('warns about properties other than color and position', () => {
     const warn = vi.fn();
     styleOf(
-      { color: 'red', position: 'absolute', top: '0', right: '0', bottom: '0', left: '0' },
+      {
+        color: 'red',
+        display: 'flex',
+        position: 'absolute',
+        top: '0',
+        right: '0',
+        bottom: '0',
+        left: '0',
+      },
       'pdf-note',
       warn,
     );
