@@ -998,6 +998,13 @@ describe('layoutRanges with heightLimit', () => {
     expect(block.lines[0]?.text.endsWith('…')).toBe(true);
   });
 
+  it('adds no ellipsis to a one-line text taller than the height, since nothing was cut', () => {
+    const short = [{ text: 'Recife', style }];
+    const block = lay({ heightLimit: 5 }, short);
+    expect(block).toEqual(lay({}, short));
+    expect(block.lines[0]?.text).toBe('Recife');
+  });
+
   it('counts each line at its own height when runs have different sizes', () => {
     // A 30pt first line is 45pt tall, so 50pt holds it and nothing more.
     const big: TextStyle = { ...style, fontSize: 30 };

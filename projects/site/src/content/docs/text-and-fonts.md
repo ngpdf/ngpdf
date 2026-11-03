@@ -347,7 +347,7 @@ The box is as tall as the kept lines. `max-lines: none`, the default, keeps ever
 - With `max-lines` as well, the smaller number of lines wins.
 - The box keeps its height; only the lines drawn in it change.
 - Without a fixed `height` or `max-height` on the `pdf-text` itself, `ellipsis` does nothing. The height of a parent with `overflow: hidden` does not count.
-- When not even the first line fits, it is still drawn, ending with `…`, and sticks out of the box. CSS would clip it; ngpdf keeps a line that can be read.
+- When not even the first line fits, it is still drawn and sticks out of the box, ending with `…` when more text follows it. CSS would clip it; ngpdf keeps a line that can be read. A text of one line has nothing cut, so it gets no `…`.
 - `clip`, the default, keeps every line, and lines past the height are drawn past the box unless `overflow: hidden` clips them. The property is not inherited.
 - A text with a fixed height or `max-height` is never split across pages, so a cut text stays on one page.
 

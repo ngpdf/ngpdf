@@ -234,7 +234,8 @@ NGPDF_APT=poppler-utils ./scripts/dev node scripts/server-check.mjs   # packed d
   either, `…` takes the first font's fallback and the missing-character warning.
   `text-overflow: ellipsis` (default `clip`, not inherited) on a `pdf-text` with its own fixed
   `height` or `max-height` keeps the lines that fit fully in its content height, cut the same way;
-  with `max-lines` too, the smaller count wins. The first line is kept even when it does not fit.
+  with `max-lines` too, the smaller count wins. The first line is kept even when it does not fit;
+  it ends with `…` only when text was cut.
 - **Hyphenation:** `hyphens` is `manual` (default), `none` or `auto`, inherited, and a `pdf-span`
   can set it.
   - A soft hyphen (U+00AD) is never drawn. Under `manual` and `auto` it is a break point.
