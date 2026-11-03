@@ -1067,6 +1067,41 @@ describe('renderDocument with pdfPerSheet', () => {
     expect(three - one).toBeCloseTo(2 * 12, 5);
   });
 
+  it('leaves display: none content of a template out of the reservation and the drawing', async () => {
+    const run = async (
+      hidden: boolean,
+    ): Promise<{ y: number; texts: string[][]; warn: unknown[] }> => {
+      const writer = recordingWriter();
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+      const header = el('pdf-view', {}, [perSheetSlot()], { fixed: 'top' });
+      const rows = [0, 1, 2].map(() => el('pdf-view', { height: '370' }));
+      const page = el('pdf-page', {}, [header, text('Body'), ...rows], { size: 'A4' });
+      const render = (_slot: PdfNode, context: PdfPerSheetContext): PdfNode =>
+        el('div', {}, [
+          text(`Head ${String(context.sheet)}`),
+          ...(hidden
+            ? [el('pdf-view', { display: 'none' }, [text('Gone'), text('Gone'), text('Gone')])]
+            : []),
+        ]);
+      await renderDocument(host({}, [page]), { writer, dev: true, perSheet: render });
+      const [first] = writer.recorded[0]!.pages;
+      const body = first!.ops.find((op) => op.op === 'text' && op.text === 'Body');
+      const result = {
+        y: body?.op === 'text' ? body.y : NaN,
+        texts: writer.recorded[0]!.pages.map(texts),
+        warn: warn.mock.calls.flat(),
+      };
+      warn.mockRestore();
+      return result;
+    };
+    const shown = await run(false);
+    const withHidden = await run(true);
+    expect(withHidden.y).toBe(shown.y);
+    expect(withHidden.texts).toEqual(shown.texts);
+    expect(withHidden.texts.flat()).not.toContain('Gone');
+    expect(withHidden.warn).toEqual([]);
+  });
+
   it('clips content taller than the reservation, with one warning naming the sheet', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     const writer = recordingWriter();
