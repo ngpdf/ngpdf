@@ -881,7 +881,7 @@ function oneOf<T extends string>(
 }
 
 /** The named weights, in order; each is 100 times its place plus 100. */
-export const WEIGHT_NAMES = [
+export const WEIGHT_NAMES = Object.freeze([
   'thin',
   'extralight',
   'light',
@@ -891,7 +891,7 @@ export const WEIGHT_NAMES = [
   'bold',
   'extrabold',
   'black',
-] as const;
+] as const);
 
 /** `bolder` and `lighter` against the inherited weight, as the CSS table has them. */
 function bolder(weight: number): number {
