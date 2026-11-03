@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { createNode, type PdfNode } from '../tree/node';
-import { fitImage, loadImages } from './images';
+import { fitImage, loadImages, maxImageBytesOf } from './images';
 import { createPdfkitWriter, type PdfWriter } from './writer';
 
 /** PNG signature plus an IHDR chunk: all `imageSize` reads. */
@@ -379,5 +379,207 @@ describe('loadImages on the server', () => {
     ];
     const assets = await loadImages(root(...nodes), writer, undefined, {});
     for (const node of nodes) expect(assets.get(node)?.width).toBe(200);
+  });
+});
+
+/** A streamed body that hands out `bytes` in `chunk`-byte pieces, one per read, and counts them. */
+function streamed(bytes: Uint8Array, chunk: number) {
+  const stats = { reads: 0, cancelled: false };
+  let at = 0;
+  const body = new ReadableStream<Uint8Array>(
+    {
+      pull(controller) {
+        stats.reads++;
+        if (at >= bytes.length) {
+          controller.close();
+          return;
+        }
+        controller.enqueue(bytes.slice(at, at + chunk));
+        at += chunk;
+      },
+      cancel() {
+        stats.cancelled = true;
+      },
+    },
+    // No read ahead: the stream is pulled only when ngpdf reads it.
+    { highWaterMark: 0 },
+  );
+  return { body, stats };
+}
+
+describe('loadImages with maxImageBytes', () => {
+  /** The PNG header followed by `extra` bytes, which imageSize never reads. */
+  const padded = (extra: number) => {
+    const bytes = new Uint8Array(png.length + extra);
+    bytes.set(png);
+    return bytes;
+  };
+  const big = padded(1000);
+
+  /** A fetch that answers with `response` and keeps the signal it was given. */
+  function fetchWith(response: Response) {
+    const seen: { signal?: AbortSignal | null | undefined } = {};
+    const fetchFn = vi.fn((_url: string, init?: RequestInit) => {
+      seen.signal = init?.signal;
+      return Promise.resolve(response);
+    });
+    return { fetchFn: fetchFn as unknown as typeof fetch, seen };
+  }
+
+  it('stops reading a streamed body once it passes the cap, and aborts the fetch', async () => {
+    const { body, stats } = streamed(big, 10);
+    const { fetchFn, seen } = fetchWith(new Response(body));
+    const load = loadImages(root(imageNode('/big.png')), writer, fetchFn, undefined, 25);
+    await expect(load).rejects.toThrow(
+      /^ngpdf: could not load image "\/big\.png": larger than 25 bytes$/,
+    );
+    // 30 bytes read out of 1,033: the rest is never downloaded.
+    expect(stats.reads).toBe(3);
+    expect(stats.cancelled).toBe(true);
+    expect(seen.signal?.aborted).toBe(true);
+  });
+
+  it('loads a streamed body exactly at the cap, and one under it', async () => {
+    for (const cap of [big.length, big.length + 1]) {
+      const { body } = streamed(big, 100);
+      const node = imageNode('/big.png');
+      const assets = await loadImages(
+        root(node),
+        writer,
+        fetchWith(new Response(body)).fetchFn,
+        undefined,
+        cap,
+      );
+      expect(assets.get(node)).toEqual({ data: big, width: 200, height: 100 });
+    }
+  });
+
+  it('rejects a body one byte over the cap', async () => {
+    const { body } = streamed(big, 100);
+    const load = loadImages(
+      root(imageNode('/big.png')),
+      writer,
+      fetchWith(new Response(body)).fetchFn,
+      undefined,
+      big.length - 1,
+    );
+    await expect(load).rejects.toThrow(`larger than ${String(big.length - 1)} bytes`);
+  });
+
+  it('rejects on a Content-Length over the cap without reading the body', async () => {
+    const { body, stats } = streamed(big, 10);
+    const response = new Response(body, { headers: { 'content-length': String(big.length) } });
+    const { fetchFn, seen } = fetchWith(response);
+    const load = loadImages(root(imageNode('/big.png')), writer, fetchFn, undefined, 100);
+    await expect(load).rejects.toThrow(
+      'ngpdf: could not load image "/big.png": larger than 100 bytes',
+    );
+    expect(stats.reads).toBe(0);
+    expect(seen.signal?.aborted).toBe(true);
+  });
+
+  it('falls back to arrayBuffer() for a response without a body, and checks its length', async () => {
+    const bodiless = (bytes: Uint8Array) =>
+      ({
+        ok: true,
+        status: 200,
+        headers: new Headers(),
+        body: null,
+        arrayBuffer: () => Promise.resolve(bytes.slice().buffer),
+      }) as unknown as Response;
+    const node = imageNode('/a.png');
+    const assets = await loadImages(
+      root(node),
+      writer,
+      fetchWith(bodiless(big)).fetchFn,
+      undefined,
+      big.length,
+    );
+    expect(assets.get(node)?.width).toBe(200);
+    await expect(
+      loadImages(
+        root(imageNode('/a.png')),
+        writer,
+        fetchWith(bodiless(big)).fetchFn,
+        undefined,
+        50,
+      ),
+    ).rejects.toThrow('ngpdf: could not load image "/a.png": larger than 50 bytes');
+  });
+
+  it('leaves the query string out of the message', async () => {
+    const { body } = streamed(big, 10);
+    const load = loadImages(
+      root(imageNode('https://cdn.example.com/a.png?token=secret')),
+      writer,
+      fetchWith(new Response(body)).fetchFn,
+      undefined,
+      25,
+    );
+    await expect(load).rejects.toThrow(
+      /^ngpdf: could not load image "https:\/\/cdn\.example\.com\/a\.png": larger than 25 bytes$/,
+    );
+  });
+
+  it('checks the bytes of the server fetchImage', async () => {
+    const fetchImage = vi.fn(() => Promise.resolve(big));
+    const load = (cap: number) =>
+      loadImages(
+        root(imageNode('https://cdn.example.com/a.png')),
+        writer,
+        undefined,
+        {
+          fetchImage,
+        },
+        cap,
+      );
+    await expect(load(100)).rejects.toThrow(
+      'ngpdf: could not load image "https://cdn.example.com/a.png": larger than 100 bytes',
+    );
+    await expect(load(big.length)).resolves.toBeInstanceOf(Map);
+  });
+
+  it('does not cap data URLs, Blobs, ArrayBuffers or Uint8Arrays, which are already in memory', async () => {
+    const sources = [
+      `data:image/png;base64,${base64(big)}`,
+      new Blob([big]),
+      big.slice().buffer,
+      big,
+    ];
+    const nodes = sources.map(imageNode);
+    const assets = await loadImages(root(...nodes), writer, undefined, undefined, 10);
+    expect(nodes.map((node) => assets.get(node)?.width)).toEqual([200, 200, 200, 200]);
+  });
+
+  it('has no cap by default, and fetches as before', async () => {
+    const { body, stats } = streamed(big, 10);
+    const fetchFn = vi.fn(() => Promise.resolve(new Response(body)));
+    const node = imageNode('/big.png');
+    const assets = await loadImages(root(node), writer, fetchFn);
+    expect(fetchFn).toHaveBeenCalledWith('/big.png', { credentials: 'same-origin' });
+    expect(stats.cancelled).toBe(false);
+    expect(assets.get(node)?.data).toEqual(big);
+  });
+});
+
+describe('maxImageBytesOf', () => {
+  it('takes undefined as no cap and a positive integer as the cap', () => {
+    expect(maxImageBytesOf(undefined)).toBeUndefined();
+    expect(maxImageBytesOf(1)).toBe(1);
+    expect(maxImageBytesOf(10_000_000)).toBe(10_000_000);
+  });
+
+  it.each([
+    [0, '0'],
+    [-1, '-1'],
+    [1.5, '1.5'],
+    [Number.NaN, 'NaN'],
+    [Number.POSITIVE_INFINITY, 'Infinity'],
+    [2 ** 53, String(2 ** 53)],
+    ['10MB', '10MB'],
+    [null, 'object'],
+    [{}, 'object'],
+  ])('rejects %s', (value, shown) => {
+    expect(() => maxImageBytesOf(value)).toThrow(`ngpdf: invalid maxImageBytes "${shown}"`);
   });
 });

@@ -23,6 +23,8 @@ export interface PdfResourceOptions {
   readonly debounce?: number;
   /** Needed outside an injection context. The document resolves its services from it. */
   readonly injector?: Injector;
+  /** The most bytes a fetched image may have, as in `RenderOptions`. No cap by default. */
+  readonly maxImageBytes?: number;
 }
 
 export interface PdfResourceRef extends Resource<Blob | undefined> {
@@ -54,13 +56,18 @@ export function pdfResource<T>(
   const browser = isBrowser(injector);
   const environment = injector.get(EnvironmentInjector);
   const debounce = options.debounce ?? 0;
+  const { maxImageBytes } = options;
   const inputs = browser ? (options.inputs ?? (() => ({}))) : () => undefined;
 
   const pdf = resource({
     params: inputs,
     loader: async ({ params, abortSignal }) => {
       if (debounce > 0) await wait(debounce, abortSignal);
-      return renderToBlob(component, { inputs: params, injector: environment });
+      return renderToBlob(component, {
+        inputs: params,
+        injector: environment,
+        ...(maxImageBytes !== undefined && { maxImageBytes }),
+      });
     },
     injector,
   });

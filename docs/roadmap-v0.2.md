@@ -30,7 +30,6 @@ it does not affect a correct document. Items that change behaviour need a design
 
 ## Images
 
-- **A size cap on fetched images.** An image URL is downloaded in full, however large.
 - **Cancel sibling fetches** with an `AbortController` when one image fails.
 
 ## Robustness

@@ -256,6 +256,31 @@ describe('renderToBuffer', () => {
       expect(latin1(pdf)).toContain('/Subtype /Image');
     });
 
+    it('rejects a fetchImage result over maxImageBytes, and loads one at it', async () => {
+      const fetchImage = () => Promise.resolve(PNG);
+      const src = 'https://cdn.example.com/a.png?t=1';
+      await expect(
+        renderToBuffer(ImageDocument, {
+          inputs: { src },
+          fetchImage,
+          maxImageBytes: PNG.length - 1,
+        }),
+      ).rejects.toThrow(
+        `ngpdf: could not load image "https://cdn.example.com/a.png": larger than ${String(PNG.length - 1)} bytes`,
+      );
+      const pdf = await renderToBuffer(ImageDocument, {
+        inputs: { src },
+        fetchImage,
+        maxImageBytes: PNG.length,
+      });
+      expect(latin1(pdf)).toContain('/Subtype /Image');
+    });
+
+    it('does not cap bytes passed in directly', async () => {
+      const pdf = await renderToBuffer(ImageDocument, { inputs: { src: PNG }, maxImageBytes: 1 });
+      expect(latin1(pdf)).toContain('/Subtype /Image');
+    });
+
     it('refuses a relative URL', async () => {
       await expect(
         renderToBuffer(ImageDocument, {
