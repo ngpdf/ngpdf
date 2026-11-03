@@ -270,7 +270,7 @@ NGPDF_APT=poppler-utils ./scripts/dev node scripts/server-check.mjs   # packed d
     outline panel opens only with `pageMode="UseOutlines"`.
 - **Notes:** `<pdf-note>` is a Text annotation where a view can go, with `author`, `icon` and
   `open`. Text only, any character, no space in the layout, no action, never printed; under a
-  `pdf-text` at any depth it throws, and properties other than `color`, `position` and the offsets
+  `pdf-text` at any depth it throws, and properties other than `display`, `color`, `position` and the offsets
   are dropped with a warning. It is never
   a unit: it goes on the sheet of the content after it, or before it when it is the last child;
   an absolute note follows the absolute rules. Its color is its own, `#ffd400` by default.

@@ -1,5 +1,5 @@
 import type { PdfNode } from '../tree/node';
-import { isHidden, MAX_NESTING } from './style';
+import { MAX_NESTING, show } from './limits';
 
 const PDF_ELEMENTS = new Set([
   'pdf-document',
@@ -16,6 +16,23 @@ const PDF_ELEMENTS = new Set([
   'pdf-page-number',
   'pdf-canvas',
 ]);
+
+/**
+ * Whether an element is hidden: `display` is `flex` (the default) or `none`, and any other value
+ * throws. Read here, before styles resolve, so no later stage sees a hidden element. Not
+ * inherited, as in CSS; a hidden element takes its children with it.
+ */
+function isHidden(node: PdfNode): boolean {
+  const value = node.rawStyle['display'];
+  if (value === undefined) return false;
+  const keyword = value.trim().toLowerCase();
+  if (keyword !== 'flex' && keyword !== 'none') {
+    throw new Error(
+      `ngpdf: invalid value "${show(value)}" for display on ${node.tag}; use flex or none`,
+    );
+  }
+  return keyword === 'none';
+}
 
 /** A user component's host (or any element that is not one of the pdf-* elements). */
 function isHost(node: PdfNode): boolean {

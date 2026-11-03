@@ -38,7 +38,7 @@ All text properties are inherited by child elements.
 | --- | --- | --- |
 | `max-lines` | integer ≥ 1: the most lines a `pdf-text` keeps, the last ending in `…` when text was cut; `none` | `none` |
 
-A `pdf-span` takes `color`, `font-family`, `font-size`, `font-weight`, `font-style`, `text-decoration`, `letter-spacing`, `text-transform` and `hyphens`; `line-height`, `text-align` and `max-lines` come from its `pdf-text`. See [Styled runs](/docs/text-and-fonts#styled-runs-pdf-span).
+A `pdf-span` takes `display`, `color`, `font-family`, `font-size`, `font-weight`, `font-style`, `text-decoration`, `letter-spacing`, `text-transform` and `hyphens`; `line-height`, `text-align` and `max-lines` come from its `pdf-text`. See [Styled runs](/docs/text-and-fonts#styled-runs-pdf-span).
 
 Without a registered family in the list: `font-family` contains `courier` or `mono`: Courier. Contains `times`, or `serif` without `sans`: Times. Otherwise Helvetica. With one, each character takes the first font in the list that has it. See [Text and fonts](/docs/text-and-fonts).
 
@@ -57,7 +57,7 @@ Without a registered family in the list: `font-family` contains `courier` or `mo
 | `flex-shrink` | number | `1` |
 | `flex-basis` | length/%, `auto` | `auto` |
 
-`display` is not inherited, and it applies to every element, `pdf-span` and `pdf-note` included. See [Hiding elements](/docs/layout-and-styling#hiding-elements).
+`display` is not inherited. It applies to every `pdf-*` element, `pdf-span` and `pdf-note` included, and is ignored on a component host element like its other styles. See [Hiding elements](/docs/layout-and-styling#hiding-elements).
 
 `flex` takes:
 
@@ -142,7 +142,7 @@ Some styles are ignored in specific places:
 - margins, `min-width` and `max-width` on a `pdf-cell` inside a table;
 - position and size styles other than `height` on `pdf-page-number`;
 - `position`, `top`, `right`, `bottom` and `left` on a `pdf-page`, a `pdf-row` and a `pdf-cell`;
-- everything except the nine text properties above on a `pdf-span` (with a warning).
+- everything except `display` and the nine text properties above on a `pdf-span` (with a warning).
 
 ## Throws
 

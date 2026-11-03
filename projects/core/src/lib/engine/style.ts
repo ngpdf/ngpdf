@@ -1,4 +1,5 @@
 import { createNode, propsOf, type PdfNode } from '../tree/node';
+import { MAX_NESTING, show } from './limits';
 import { parseColor, type Color } from './color';
 
 export type { Color };
@@ -144,8 +145,6 @@ export interface BorderParts {
   readonly unsupportedStyle: string | null;
 }
 
-export const MAX_NESTING = 64;
-
 const BLACK: Color = Object.freeze({ r: 0, g: 0, b: 0, a: 1 });
 const BORDER_WIDTHS: ReadonlyMap<string, number> = new Map([
   ['thin', 1],
@@ -194,11 +193,6 @@ const BORDER_STYLES = new Set([
 
 function fail(message: string, tag?: string): never {
   throw new Error(`ngpdf: ${message}${tag ? ` on ${tag}` : ''}`);
-}
-
-/** Cuts long values so an error message stays readable. */
-export function show(value: string): string {
-  return value.length > 60 ? `${value.slice(0, 60)}...` : value;
 }
 
 function isDigit(code: number): boolean {
@@ -868,20 +862,6 @@ function oneOf<T extends string>(
   const found = allowed.find((candidate) => candidate === keyword);
   if (found === undefined) return fail(`invalid value "${show(value)}" for ${property}`, tag);
   return found;
-}
-
-/**
- * Whether an element is shown: `display` is `flex` (the default) or `none`, and any other value
- * throws. Not inherited, as in CSS; a hidden element takes its children with it.
- */
-export function isHidden(node: PdfNode): boolean {
-  const value = node.rawStyle['display'];
-  if (value === undefined) return false;
-  const keyword = keywordOf(value);
-  if (keyword !== 'flex' && keyword !== 'none') {
-    fail(`invalid value "${show(value)}" for display on ${node.tag}; use flex or none`);
-  }
-  return keyword === 'none';
 }
 
 function fontWeightOf(value: string): TextStyle['fontWeight'] {
