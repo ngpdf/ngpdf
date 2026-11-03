@@ -20,6 +20,22 @@ Tests are written first and must fail without the change they cover (see `AGENTS
 | Performance | No regression on a 1,000-row table | `vitest bench` | `engine/*.bench.ts`, weekly CI job |
 | Mutation | The tests catch real faults in the engine | StrykerJS | weekly CI job |
 
+### Test isolation
+
+Nothing a test sets up outlives it:
+
+- `projects/core/src/testing/setup.ts` resets TestBed after every test, which destroys its
+  fixtures and its injector. Angular only does this by itself when `afterEach` is a global, and
+  Vitest globals are off. A spec takes TestBed's injector in `beforeEach` or in the test, never in
+  `beforeAll`.
+- `vitest.config.ts` sets `restoreMocks` and `unstubGlobals`, so spies and `vi.stubGlobal` stubs
+  are undone after each test. A stub replaces a global with a new value (for `URL`, a subclass)
+  and never writes onto the real one, which unstubbing could not undo.
+- A spec destroys what it creates outside TestBed (an environment injector, a render's tree) in
+  `afterEach` or `finally`, not at the end of the test body.
+- zone.js is loaded only in a `*.zone.spec.ts` file of its own. It patches `Promise` and the
+  timers for the rest of the file, and Vitest runs each spec file in a fresh environment.
+
 ### Property tests (fast-check)
 
 These invariants are checked for any input:

@@ -123,9 +123,12 @@ describe('providePdfFonts', () => {
       [providePdfFonts([{ family: 'Noto Sans JP', src: JP }])],
       parent,
     );
-    expect(await embedded(await renderToBlob(FontDocument, { injector: route }))).toBe(2);
-    expect(await embedded(await renderToBlob(FontDocument, { injector: parent }))).toBe(1);
-    route.destroy();
+    try {
+      expect(await embedded(await renderToBlob(FontDocument, { injector: route }))).toBe(2);
+      expect(await embedded(await renderToBlob(FontDocument, { injector: parent }))).toBe(1);
+    } finally {
+      route.destroy();
+    }
   });
 
   it('merges two providePdfFonts calls in the same injector', async () => {
