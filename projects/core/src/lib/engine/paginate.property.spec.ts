@@ -37,6 +37,10 @@ function rowOf(height: number, header = false): PdfNode {
   return adopt(el('pdf-row', { height: String(height) }, { header }), [el('pdf-cell', {})]);
 }
 
+const HEADER_WITHOUT_FIRST_ROW =
+  'ngpdf: pdf-table header rows do not fit on a page with the first row and are not repeated';
+const CUT = 'ngpdf: pdf-row is taller than a page and is cut at the bottom';
+
 describe('paginatePage properties', () => {
   it('places every row once and in order, above the content bottom, under its header', () => {
     fc.assert(
@@ -73,6 +77,14 @@ describe('paginatePage properties', () => {
           const others = placedNodes.filter((node) => !isRow.has(node));
           if (!header) expect(others).toEqual(rows.length === 0 ? [table] : []);
 
+          // A header that can't go on a page with the first row is placed once, as a row.
+          const once =
+            headerHeight !== undefined &&
+            heights.length > 0 &&
+            headerHeight + heights[0]! > CONTENT_HEIGHT &&
+            heights[0]! <= CONTENT_HEIGHT;
+          if (once) expect(others).toEqual([header]);
+
           let clipped = 0;
           for (const laid of pages) {
             for (const placed of laid.placed) {
@@ -85,7 +97,7 @@ describe('paginatePage properties', () => {
             }
             const pageRows = laid.placed.filter((placed) => isRow.has(placed.box.node));
             const nodes = laid.placed.map((placed) => placed.box.node);
-            if (header && pageRows.length > 0) {
+            if (header && !once && pageRows.length > 0) {
               if (nodes[0] === header) {
                 // The header once, then only rows.
                 expect(nodes.filter((node) => node === header)).toHaveLength(1);
@@ -98,7 +110,10 @@ describe('paginatePage properties', () => {
               }
             }
           }
-          expect(warnings).toHaveLength(clipped);
+          expect(warnings).toEqual([
+            ...(once ? [HEADER_WITHOUT_FIRST_ROW] : []),
+            ...Array<string>(clipped).fill(CUT),
+          ]);
           if (header && rows.length === 0) {
             expect(pages).toHaveLength(1);
             expect(pages[0]!.placed.map((placed) => placed.box.node)).toEqual([header]);

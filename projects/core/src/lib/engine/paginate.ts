@@ -279,13 +279,31 @@ function isHeaderRow(node: PdfNode): boolean {
 }
 
 /**
+ * Whether a table's header can go on a page with its first row. A row that does not fit under
+ * the header but fits a page alone, and can't split, would go to a page of its own without it.
+ */
+function sharesPage(
+  height: number,
+  gap: number,
+  first: Box | undefined,
+  maxHeader: number,
+): boolean {
+  if (!first) return true;
+  const slack = fitSlack(maxHeader);
+  if (height + gap + first.h <= maxHeader + slack || first.h > maxHeader + slack) return true;
+  return first.node.tag === 'pdf-row' && canBreak(first.style) && !!splitCells(first, maxHeader);
+}
+
+/**
  * Units in flow order, and the wrappers they came from in pre-order (outer first). A header
- * taller than `maxHeader` (the content area) is not repeated: its rows become plain units.
+ * taller than `maxHeader` (the content area), or one that can't go on a page with the table's
+ * first row, is not repeated: its rows become plain units.
  */
 function collectUnits(
   content: Box,
   maxHeader: number,
   pageGroups: readonly OpacityGroup[],
+  warn: (message: string) => void,
 ): Collected {
   const units: Unit[] = [];
   const wrappers: Wrapper[] = [];
@@ -387,11 +405,22 @@ function collectUnits(
         }));
         const headerTop = Math.min(...rows.map((r) => r.top));
         const headerBottom = Math.max(...rows.map((r) => r.top + r.box.h));
-        if (headerBottom - headerTop <= maxHeader + fitSlack(maxHeader)) {
+        const height = headerBottom - headerTop;
+        const first = body.find((child) => !isFlowNote(child) && !isAbsolute(child));
+        let repeats = height <= maxHeader + fitSlack(maxHeader);
+        // Repeated, it would be left off the first row's page, and off every page when no row fits
+        // under it.
+        if (repeats && !sharesPage(height, box.style.gap, first, maxHeader)) {
+          warn(
+            'ngpdf: pdf-table header rows do not fit on a page with the first row and are not repeated',
+          );
+          repeats = false;
+        }
+        if (repeats) {
           childHeader = {
             rows,
             top: headerTop,
-            height: headerBottom - headerTop,
+            height,
             gap: box.style.gap,
             groups: inside,
           };
@@ -1020,7 +1049,12 @@ export function paginatePage(
   const laid = layoutBox(content, contentStyles, frame.contentWidth, ctx);
   const contentHeight = frame.bottom - frame.top;
   const slack = fitSlack(contentHeight);
-  const { units, wrappers, texts, floats, notes } = collectUnits(laid, contentHeight, pageGroups);
+  const { units, wrappers, texts, floats, notes } = collectUnits(
+    laid,
+    contentHeight,
+    pageGroups,
+    warn,
+  );
 
   // Per unit: the outermost wrapper top opening at it, the outermost wrapper bottom closing at
   // it, whether any of them asks for a page break before or after it or to stay with the next

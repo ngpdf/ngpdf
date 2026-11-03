@@ -69,6 +69,9 @@ function bottom(placed: PlacedBox): number {
   return placed.y + placed.box.h;
 }
 
+const HEADER_WITHOUT_FIRST_ROW =
+  'ngpdf: pdf-table header rows do not fit on a page with the first row and are not repeated';
+
 function isHeader(node: PdfNode): boolean {
   return node.owner?.pdfProps()['header'] === true;
 }
@@ -184,15 +187,58 @@ describe('paginatePage: tables', () => {
 
   it('drops the header on a page whose row fits only without it', () => {
     const header = row(100, true);
-    const rows = [row(700), row(700)];
+    const rows = [row(20), row(700), row(20)];
     const warn = vi.fn<(message: string) => void>();
     const root = page([el('pdf-table', {}, [header, ...rows], { columns: ['1fr'] }), pageNumber()]);
     const pages = paginate(root, warn);
     expect(pages.map((p) => p.placed.map((placed) => placed.box.node))).toEqual([
-      [rows[0]],
-      [rows[1]],
+      [header, rows[0]],
+      [rows[1], rows[2]],
     ]);
     expect(pages[1]!.placed[0]!.y).toBeCloseTo(CONTENT_TOP, 6);
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  // Repeated, the header would be left off the only row's page, so it was never drawn.
+  it.each([999.5, 1000, 1000.0005, 1000.004])(
+    'draws a %spt header that cannot share a page with the first row once, as a row',
+    (height) => {
+      const header = row(height, true);
+      const body = row(10);
+      const warn = vi.fn<(message: string) => void>();
+      const root = page(
+        [el('pdf-table', {}, [header, body], { columns: ['1fr'] })],
+        {},
+        { size: [200, 1000] },
+      );
+      const pages = paginate(root, warn);
+      expect(pages.map((p) => p.placed.map((placed) => placed.box.node))).toEqual([
+        [header],
+        [body],
+      ]);
+      expect(pages[0]!.placed[0]!.clipBottom).toBeUndefined();
+      expect(warn.mock.calls.map(([message]) => message)).toEqual([HEADER_WITHOUT_FIRST_ROW]);
+    },
+  );
+
+  it('does not repeat a header that cannot share a page with the first row', () => {
+    const header = row(100, true);
+    const rows = [row(700), ...Array.from({ length: 40 }, () => row())];
+    const warn = vi.fn<(message: string) => void>();
+    const root = page([el('pdf-table', {}, [header, ...rows], { columns: ['1fr'] }), pageNumber()]);
+    const placed = paginate(root, warn).flatMap((p) => p.placed.map((laid) => laid.box.node));
+    expect(placed).toEqual([header, ...rows]);
+    expect(warn.mock.calls.map(([message]) => message)).toEqual([HEADER_WITHOUT_FIRST_ROW]);
+  });
+
+  it('still repeats a header that shares a page with the first row', () => {
+    const header = row(100, true);
+    const rows = [row(600), ...Array.from({ length: 40 }, () => row())];
+    const warn = vi.fn<(message: string) => void>();
+    const root = page([el('pdf-table', {}, [header, ...rows], { columns: ['1fr'] }), pageNumber()]);
+    const pages = paginate(root, warn);
+    expect(pages.length).toBeGreaterThan(1);
+    for (const laid of pages) expect(laid.placed[0]!.box.node).toBe(header);
     expect(warn).not.toHaveBeenCalled();
   });
 
