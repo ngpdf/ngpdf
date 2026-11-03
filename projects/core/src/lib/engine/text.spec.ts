@@ -209,6 +209,15 @@ describe('layoutText', () => {
     expect(warn).toHaveBeenCalledExactlyOnceWith(['\u{1F600}']);
   });
 
+  it('measures and draws a decomposed accented letter composed, after text-transform (#230)', () => {
+    const warn = vi.fn();
+    const upper: TextStyle = { ...style, textTransform: 'uppercase' };
+    const block = layoutText('Cafe\u0301', upper, Infinity, writer, warn);
+    expect(block.lines.map((line) => line.text)).toEqual(['CAFÉ']);
+    expect(block.width).toBeCloseTo(writer.widthOf('CAFÉ', 'Helvetica', 9), 6);
+    expect(warn).not.toHaveBeenCalled();
+  });
+
   it('treats each whitespace character trim() strips as whitespace, not as ?', () => {
     for (const space of ['\v', '\f', '\u1680', '\u2028', '\u2029', '\u3000', '\uFEFF']) {
       expect(layoutText(space, style, 500, writer).lines).toEqual([]);
