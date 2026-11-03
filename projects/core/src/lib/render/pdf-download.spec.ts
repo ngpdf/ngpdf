@@ -5,7 +5,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { PdfDownload } from './pdf-download';
 
 const downloads = vi.hoisted(() => ({
-  calls: [] as { component: unknown; inputs: unknown; fileName: string }[],
+  calls: [] as {
+    component: unknown;
+    inputs: unknown;
+    fileName: string;
+    maxImageBytes: number | undefined;
+  }[],
   settle: undefined as ((error?: Error) => void) | undefined,
 }));
 
@@ -13,9 +18,14 @@ const downloads = vi.hoisted(() => ({
 vi.mock('./pdf-renderer', () => ({
   downloadPdf: (
     component: unknown,
-    options: { inputs?: unknown; fileName: string },
+    options: { inputs?: unknown; fileName: string; maxImageBytes?: number },
   ): Promise<void> => {
-    downloads.calls.push({ component, inputs: options.inputs, fileName: options.fileName });
+    downloads.calls.push({
+      component,
+      inputs: options.inputs,
+      fileName: options.fileName,
+      maxImageBytes: options.maxImageBytes,
+    });
     return new Promise((resolve, reject) => {
       downloads.settle = (error) => {
         if (error) reject(error);
@@ -87,6 +97,22 @@ class SubmitHost {
   submits = 0;
 }
 
+@Component({
+  imports: [PdfDownload],
+  template: `<button
+    type="button"
+    [pdfDownload]="document"
+    pdfFileName="a.pdf"
+    [pdfMaxImageBytes]="maxImageBytes()"
+  >
+    Download
+  </button>`,
+})
+class CappedHost {
+  readonly document: Type<unknown> = TestDocument;
+  readonly maxImageBytes = signal<number | undefined>(2_000_000);
+}
+
 const handled: unknown[] = [];
 
 beforeEach(() => {
@@ -119,6 +145,20 @@ describe('PdfDownload', () => {
     expect(downloads.calls).toEqual([
       { component: TestDocument, inputs: { customer: 'ACME' }, fileName: 'invoice.pdf' },
     ]);
+  });
+
+  it('passes pdfMaxImageBytes to the download, and no cap once it is cleared', async () => {
+    const { fixture, button } = await render(CappedHost);
+    button.click();
+    downloads.settle?.();
+    await fixture.whenStable();
+    fixture.componentInstance.maxImageBytes.set(undefined);
+    fixture.detectChanges();
+    button.click();
+    downloads.settle?.();
+    await fixture.whenStable();
+
+    expect(downloads.calls.map((call) => call.maxImageBytes)).toEqual([2_000_000, undefined]);
   });
 
   it('uses the inputs as they are at the time of the click', async () => {

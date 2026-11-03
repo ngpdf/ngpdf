@@ -10,6 +10,7 @@ import {
 } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { testPng } from '../../testing/test-png';
 import { PDF_ELEMENTS } from '../elements';
 import { PdfRenderer, downloadPdf, renderToBlob } from './pdf-renderer';
 
@@ -26,8 +27,9 @@ vi.mock('../engine', async (importOriginal) => {
   const { createPdfkitWriter } = await import('../engine/writer');
   return {
     ...actual,
-    renderDocument: async (root: Parameters<typeof actual.renderDocument>[0]) =>
+    renderDocument: async (...[root, options]: Parameters<typeof actual.renderDocument>) =>
       actual.renderDocument(root, {
+        ...options,
         dev: false,
         writer: await createPdfkitWriter({ compress: false }),
       }),
@@ -77,6 +79,44 @@ class BareTextDocument {
   readonly cell = input('');
 }
 
+// Math.sin(Math.PI) * 10 is 1.2246467991473533e-15, and a binding passes it on as String(n).
+@Component({
+  selector: 'pdf-exponent-document',
+  imports: [PDF_ELEMENTS],
+  template: `
+    <pdf-document>
+      <pdf-page>
+        <pdf-view style="position: relative" [style.left.pt]="nearZero" [style.opacity]="faint">
+          <pdf-text>Nearly zero</pdf-text>
+        </pdf-view>
+      </pdf-page>
+    </pdf-document>
+  `,
+})
+class ExponentDocument {
+  readonly nearZero = Math.sin(Math.PI) * 10;
+  readonly faint = 1e-7;
+}
+
+// Strings in exponent form whose values survive the writer's rounding, so the PDF shows them.
+@Component({
+  selector: 'pdf-exponent-string-document',
+  imports: [PDF_ELEMENTS],
+  template: `
+    <pdf-document>
+      <pdf-page>
+        <pdf-view style="position: relative" [style.left]="shift" [style.opacity]="half">
+          <pdf-text>Shifted</pdf-text>
+        </pdf-view>
+      </pdf-page>
+    </pdf-document>
+  `,
+})
+class ExponentStringDocument {
+  readonly shift = '1.5e1pt';
+  readonly half = '5e-1';
+}
+
 @Component({
   selector: 'pdf-no-document',
   imports: [PDF_ELEMENTS],
@@ -87,6 +127,17 @@ class NoDocument {
     inject(DestroyRef).onDestroy(() => destroyed.push('no-document'));
   }
 }
+
+@Component({
+  selector: 'pdf-image-document',
+  imports: [PDF_ELEMENTS],
+  template: `
+    <pdf-document>
+      <pdf-page><pdf-image src="https://cdn.example.test/logo.png" style="width: 20px" /></pdf-page>
+    </pdf-document>
+  `,
+})
+class ImageDocument {}
 
 /** The strings the PDF shows: each `[<hex> kern <hex>] TJ` line joined and decoded. */
 async function shownText(blob: Blob): Promise<string[]> {
@@ -127,6 +178,19 @@ describe('PdfRenderer', () => {
       inputs: { cell: 'In a cell' },
     });
     expect(await shownText(blob)).toEqual(['In a cell', 'a', 'b', 'c']);
+  });
+
+  it('renders numbers that bindings write in exponent form', async () => {
+    const blob = await TestBed.inject(PdfRenderer).toBlob(ExponentDocument);
+    expect(await shownText(blob)).toEqual(['Nearly zero']);
+  });
+
+  it('applies exponent-form strings that bindings pass on', async () => {
+    const blob = await TestBed.inject(PdfRenderer).toBlob(ExponentStringDocument);
+    const pdf = new TextDecoder('latin1').decode(new Uint8Array(await blob.arrayBuffer()));
+    expect(await shownText(blob)).toEqual(['Shifted']);
+    expect(pdf).toMatch(/^1 0 0 1 15 [\d.]+ Tm$/m);
+    expect(pdf).toMatch(/^\/ca 0\.5$/m);
   });
 
   it('renders without inputs', async () => {
@@ -265,5 +329,59 @@ describe('injection', () => {
     const renderer = TestBed.inject(PdfRenderer);
     const again = TestBed.runInInjectionContext(() => inject(PdfRenderer));
     expect(again).toBe(renderer);
+  });
+});
+
+describe('maxImageBytes', () => {
+  const png = testPng();
+  const cap = png.length - 1;
+  const message = `ngpdf: could not load image "https://cdn.example.test/logo.png": larger than ${String(cap)} bytes`;
+
+  beforeEach(() => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => Promise.resolve(new Response(png as BodyInit))),
+    );
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('has no cap by default', async () => {
+    const blob = await TestBed.inject(PdfRenderer).toBlob(ImageDocument);
+    expect(await blob.slice(0, 5).text()).toBe('%PDF-');
+  });
+
+  it('reaches the engine from PdfRenderer.toBlob and renderToBlob', async () => {
+    await expect(
+      TestBed.inject(PdfRenderer).toBlob(ImageDocument, { maxImageBytes: cap }),
+    ).rejects.toThrow(message);
+    await expect(
+      renderToBlob(ImageDocument, {
+        injector: TestBed.inject(EnvironmentInjector),
+        maxImageBytes: cap,
+      }),
+    ).rejects.toThrow(message);
+    await expect(
+      TestBed.inject(PdfRenderer).toBlob(ImageDocument, { maxImageBytes: png.length }),
+    ).resolves.toBeInstanceOf(Blob);
+  });
+
+  it('reaches the engine from download and downloadPdf, which then save nothing', async () => {
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(vi.fn());
+    await expect(
+      TestBed.inject(PdfRenderer).download(ImageDocument, {
+        fileName: 'a.pdf',
+        maxImageBytes: cap,
+      }),
+    ).rejects.toThrow(message);
+    await expect(
+      downloadPdf(ImageDocument, {
+        injector: TestBed.inject(EnvironmentInjector),
+        fileName: 'a.pdf',
+        maxImageBytes: cap,
+      }),
+    ).rejects.toThrow(message);
+    expect(click).not.toHaveBeenCalled();
   });
 });

@@ -15,14 +15,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { pdfResource } from './pdf-resource';
 
 const renders = vi.hoisted(() => ({
-  calls: [] as { inputs: Record<string, unknown> | undefined }[],
+  calls: [] as { inputs: Record<string, unknown> | undefined; maxImageBytes: number | undefined }[],
   fail: false,
 }));
 
 // The resource is only plumbing around renderToBlob, which has its own specs.
 vi.mock('./pdf-renderer', () => ({
-  renderToBlob: (_component: unknown, options: { inputs?: Record<string, unknown> }) => {
-    renders.calls.push({ inputs: options.inputs });
+  renderToBlob: (
+    _component: unknown,
+    options: { inputs?: Record<string, unknown>; maxImageBytes?: number },
+  ) => {
+    renders.calls.push({ inputs: options.inputs, maxImageBytes: options.maxImageBytes });
     if (renders.fail) return Promise.reject(new Error('ngpdf: render failed'));
     return Promise.resolve(new Blob([JSON.stringify(options.inputs ?? {})]));
   },
@@ -82,6 +85,21 @@ describe('pdfResource', () => {
     expect(renders.calls).toEqual([{ inputs: { customer: 'ACME' } }]);
     expect(await pdf.value()?.text()).toBe('{"customer":"ACME"}');
     expect(pdf.url()).toBe('blob:test/1');
+  });
+
+  it('passes maxImageBytes to every render, and no cap by default', async () => {
+    const capped = pdfResource(TestDocument, { maxImageBytes: 5_000_000, injector: scope() });
+    await settle();
+    capped.reload();
+    await settle();
+    pdfResource(TestDocument, { injector: scope() });
+    await settle();
+
+    expect(renders.calls.map((call) => call.maxImageBytes)).toEqual([
+      5_000_000,
+      5_000_000,
+      undefined,
+    ]);
   });
 
   it('renders with no inputs when none are given', async () => {

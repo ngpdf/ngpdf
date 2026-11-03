@@ -1,0 +1,12 @@
+/* The demo built against the packed @ngpdf/core in dist/core, as an app gets it from npm, with no
+   fallback to the sources: scripts/bundle-budget.mjs measures this build. */
+{
+  "extends": "./tsconfig.app.json",
+  "compilerOptions": {
+    "paths": {
+      "@ngpdf/core": ["../../dist/core"],
+      "@ngpdf/core/viewer": ["../../dist/core/viewer"]
+    }
+  },
+  "include": ["src/**/*.ts"]
+}

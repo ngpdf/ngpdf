@@ -137,8 +137,14 @@ These invariants are checked for any input:
    README's usage sections differ from the repository README's.
 4. **Typecheck:** `tsc -p projects/core/tsconfig.lib.json --noEmit` and `ng build demo`.
 5. **Tests:** `npm test -- --coverage`, with the coverage gates above.
-6. **Bundle budget:** `node scripts/bundle-budget.mjs`. It also fails when `@ngpdf/core/viewer`
-   reaches an initial chunk of the demo, which loads its preview in a deferred chunk.
+6. **Bundle budget:** `node scripts/bundle-budget.mjs`. It measures the built package, as an app
+   gets it from npm: it runs `npm run build:core`, fails when an entry point of `dist/core`
+   (`ngpdf-core.mjs`, `-viewer`, `-server`) reaches pdfkit, Yoga, linebreak or the engine chunk
+   through static imports, then builds the
+   demo against `dist/core` (`ng build demo -c production,budget`, to `dist/demo-budget`) and
+   counts the gzipped share of `dist/core` in its initial chunks. It also fails when
+   `@ngpdf/core/viewer` reaches an initial chunk of the demo, which loads its preview in a
+   deferred chunk, or when the demo build reads `@ngpdf/core` from the sources.
 7. **End to end:** `node scripts/e2e.mjs`, using Chrome from `browser-actions/setup-chrome`.
 8. **Library build:** `npm run build:core` (ng-packagr, then `scripts/build-schematics.mjs` for the
    `ng add` schematic), then `node scripts/check-pack.mjs`, which reads the file list of

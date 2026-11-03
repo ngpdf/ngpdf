@@ -29,6 +29,8 @@ export class PdfDownload {
   readonly pdfDownload = input.required<Type<unknown>>();
   readonly pdfInputs = input<Record<string, unknown>>({});
   readonly pdfFileName = input.required<string>();
+  /** The most bytes a fetched image may have, as in `RenderOptions`. No cap by default. */
+  readonly pdfMaxImageBytes = input<number>();
   /** The render's error. It also goes to the app's `ErrorHandler`. */
   readonly pdfError = output<unknown>();
 
@@ -45,11 +47,13 @@ export class PdfDownload {
     }
     this.busy.set(true);
     const done = this.pendingTasks.add();
+    const maxImageBytes = this.pdfMaxImageBytes();
     try {
       await downloadPdf(this.pdfDownload(), {
         inputs: this.pdfInputs(),
         fileName: this.pdfFileName(),
         injector: this.injector,
+        ...(maxImageBytes !== undefined && { maxImageBytes }),
       });
     } catch (error: unknown) {
       this.errorHandler.handleError(error);
