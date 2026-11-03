@@ -158,6 +158,11 @@ export interface ResolvedStyle extends TextStyle {
    * no limit.
    */
   readonly maxLines: number | null;
+  /**
+   * `ellipsis` keeps the lines of a text that fit its fixed `height` or `max-height`, the last
+   * ending in an ellipsis as with `maxLines`. `clip` (the default) keeps them all.
+   */
+  readonly textOverflow: 'clip' | 'ellipsis';
 }
 
 export interface FlexParts {
@@ -1031,6 +1036,7 @@ function defaultStyle(node: PdfNode, inherited: TextStyle): Mutable<ResolvedStyl
     keepWithNext: false,
     breakInside: 'auto',
     maxLines: null,
+    textOverflow: 'clip',
   };
 }
 
@@ -1327,6 +1333,9 @@ function apply(
       break;
     case 'max-lines':
       style.maxLines = keywordOf(value) === 'none' ? null : lineCountOf(value, property, tag);
+      break;
+    case 'text-overflow':
+      style.textOverflow = oneOf(value, ['clip', 'ellipsis'], property, tag);
       break;
     default:
       break;

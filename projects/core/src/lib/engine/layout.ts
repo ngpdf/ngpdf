@@ -11,6 +11,7 @@ import {
   layoutRanges,
   measureRanges,
   TextMeasureCache,
+  type ParagraphStyle,
   type TextBlock,
   type TextFonts,
   type TextRange,
@@ -756,7 +757,7 @@ export function layoutBox(
         ? {
             text: layoutRanges(
               rangesOf(current),
-              style,
+              heightLimited(style, content.h),
               contentWidthOf(yogaNode),
               ctx.metrics,
               ctx.warnChars,
@@ -797,6 +798,16 @@ export function layoutBox(
     freeAll(created);
     config.free();
   }
+}
+
+/**
+ * The paragraph style of a text: with `text-overflow: ellipsis` and its own fixed `height` or
+ * `max-height`, its lines are kept to its content height.
+ */
+function heightLimited(style: ResolvedStyle, contentHeight: number): ParagraphStyle {
+  const fixed = style.height !== 'auto' || style.maxHeight !== 'auto';
+  if (style.textOverflow !== 'ellipsis' || !fixed) return style;
+  return { ...style, heightLimit: contentHeight };
 }
 
 const NO_EDGES: Edges<number> = Object.freeze({ top: 0, right: 0, bottom: 0, left: 0 });

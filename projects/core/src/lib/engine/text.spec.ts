@@ -954,6 +954,112 @@ describe('layoutRanges with maxLines', () => {
   });
 });
 
+describe('layoutRanges with heightLimit', () => {
+  let writer: PdfWriter;
+  beforeAll(async () => {
+    writer = await createPdfkitWriter({ compress: false });
+  });
+  // 9pt Helvetica at line-height 1.5: each line is 13.5pt tall.
+  const text =
+    'Gabriela Teixeira de Albuquerque Cavalcanti mora em Recife desde 2019 com a família';
+  const lay = (paragraph: Partial<ParagraphStyle>, ranges?: readonly TextRange[]) =>
+    layoutRanges(ranges ?? [{ text, style }], { ...style, ...paragraph }, 120, writer);
+
+  it('keeps the lines that fit fully in the height and ends the last with an ellipsis', () => {
+    const all = lay({});
+    expect(all.lines.length).toBeGreaterThan(3);
+    const block = lay({ heightLimit: 40 });
+    expect(block).toEqual(lay({ maxLines: 2 }));
+    expect(block.lines).toHaveLength(2);
+    expect(block.lines[1]?.text.endsWith('…')).toBe(true);
+    expect(block.height).toBe(27);
+  });
+
+  it('keeps a line whose bottom is exactly at the limit', () => {
+    const block = lay({ heightLimit: 40.5 });
+    expect(block.lines).toHaveLength(3);
+    expect(block.lines[2]?.text.endsWith('…')).toBe(true);
+  });
+
+  it('changes nothing when every line fits, or without a limit', () => {
+    const all = lay({});
+    expect(lay({ heightLimit: all.height })).toEqual(all);
+    expect(lay({ heightLimit: null })).toEqual(all);
+  });
+
+  it('takes the smaller line count of maxLines and the height', () => {
+    expect(lay({ heightLimit: 40, maxLines: 1 }).lines).toHaveLength(1);
+    expect(lay({ heightLimit: 40, maxLines: 3 }).lines).toHaveLength(2);
+  });
+
+  it('keeps the first line, with an ellipsis, when not even one fits', () => {
+    const block = lay({ heightLimit: 5 });
+    expect(block).toEqual(lay({ maxLines: 1 }));
+    expect(block.lines[0]?.text.endsWith('…')).toBe(true);
+  });
+
+  it('adds no ellipsis to a one-line text taller than the height, since nothing was cut', () => {
+    const short = [{ text: 'Recife', style }];
+    const block = lay({ heightLimit: 5 }, short);
+    expect(block).toEqual(lay({}, short));
+    expect(block.lines[0]?.text).toBe('Recife');
+  });
+
+  it('counts the lines that fit before max-lines cuts the last one', () => {
+    // Each character is as wide as its font size. The second line is "cc dd X" with a 30pt "X",
+    // 45pt tall, so only the first line fits in 30pt. Cut by max-lines, the second line loses
+    // the "X" and is 13.5pt tall, but it still does not fit the text as laid out.
+    const sized: FontMetrics = {
+      widthOf: (chunk, _font, size) => size * chunk.length,
+      ascent: () => 0,
+      hasGlyph: () => false,
+    };
+    const ranges = [
+      { text: 'aaaa bbbb cc dd ', style },
+      { text: 'X', style: { ...style, fontSize: 30 } },
+      { text: ' ff gg', style },
+    ];
+    const at = (paragraph: Partial<ParagraphStyle>) =>
+      layoutRanges(ranges, { ...style, ...paragraph }, 100, sized).lines;
+    expect(at({}).map((line) => line.height)).toEqual([13.5, 45, 13.5]);
+    expect(at({ maxLines: 2 })[1]?.height).toBe(13.5);
+    expect(at({ heightLimit: 30, maxLines: 2 })).toEqual(at({ maxLines: 1 }));
+  });
+
+  it('skips the height count for max-lines: 1, and counts past a larger max-lines', () => {
+    const long = [{ text: `${text} `.repeat(200), style }];
+    const calls = (paragraph: Partial<ParagraphStyle>) => {
+      const counting = { ...writer, widthOf: vi.fn(writer.widthOf.bind(writer)) };
+      const lines = layoutRanges(long, { ...style, ...paragraph }, 120, counting).lines;
+      return { lines, calls: counting.widthOf.mock.calls.length };
+    };
+    const one = calls({ maxLines: 1 });
+    expect(calls({ maxLines: 1, heightLimit: 5 })).toEqual(one);
+    expect(calls({ maxLines: 3, heightLimit: 30 }).lines).toEqual(calls({ maxLines: 2 }).lines);
+    // Words that never repeat, so each line of a full layout is a measure the cache cannot reuse.
+    const words = Array.from({ length: 2000 }, (_, i) => `w${String(i)}`).join(' ');
+    const measures = (paragraph: Partial<ParagraphStyle>) => {
+      const counting = { ...writer, widthOf: vi.fn(writer.widthOf.bind(writer)) };
+      layoutRanges([{ text: words, style }], { ...style, ...paragraph }, 120, counting);
+      return counting.widthOf.mock.calls.length;
+    };
+    expect(measures({ maxLines: 3, heightLimit: 30 })).toBeLessThan(measures({}) / 10);
+  });
+
+  it('counts each line at its own height when runs have different sizes', () => {
+    // A 30pt first line is 45pt tall, so 50pt holds it and nothing more.
+    const big: TextStyle = { ...style, fontSize: 30 };
+    const ranges = [
+      { text: 'Grande ', style: big },
+      { text: text, style },
+    ];
+    const block = lay({ heightLimit: 50 }, ranges);
+    expect(block.lines).toHaveLength(1);
+    expect(block.lines[0]?.text.endsWith('…')).toBe(true);
+    expect(lay({ heightLimit: 59 }, ranges).lines).toHaveLength(2);
+  });
+});
+
 describe('layoutRanges with emoji images', () => {
   const asset = (n: number): ImageAsset => ({ data: new Uint8Array([n]), width: 1, height: 1 });
   const thumbs = asset(1);
