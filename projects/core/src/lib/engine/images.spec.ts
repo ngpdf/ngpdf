@@ -2,37 +2,7 @@ import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { createNode, type PdfNode } from '../tree/node';
 import { fitImage, loadImages } from './images';
 import { createPdfkitWriter, type PdfWriter } from './writer';
-
-/** PNG signature plus an IHDR chunk: all `imageSize` reads. */
-function pngHeader(width: number, height: number): Uint8Array {
-  const u32 = (n: number) => [(n >>> 24) & 255, (n >>> 16) & 255, (n >>> 8) & 255, n & 255];
-  return Uint8Array.from([
-    0x89,
-    0x50,
-    0x4e,
-    0x47,
-    0x0d,
-    0x0a,
-    0x1a,
-    0x0a,
-    ...u32(13),
-    0x49,
-    0x48,
-    0x44,
-    0x52,
-    ...u32(width),
-    ...u32(height),
-    8,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-  ]);
-}
+import { testPng, testRows } from '../../testing/test-png';
 
 function base64(bytes: Uint8Array): string {
   return btoa(String.fromCharCode(...bytes));
@@ -58,7 +28,7 @@ beforeAll(async () => {
   writer = await createPdfkitWriter({ compress: false });
 });
 
-const png = pngHeader(200, 100);
+const png = testPng({ width: 200, height: 100 });
 
 describe('loadImages', () => {
   it('loads a base64 PNG data URL with its natural size', async () => {
@@ -104,7 +74,7 @@ describe('loadImages', () => {
 
   it('keeps a literal percent byte that is not an escape', async () => {
     // Width 37 is 0x25, the byte for '%'; it is written as a bare '%' followed by an escape.
-    const bytes = pngHeader(37, 100);
+    const bytes = testPng({ width: 37, height: 100 });
     const encoded = Array.from(bytes, (b) =>
       b === 0x25 ? '%' : `%${b.toString(16).padStart(2, '0')}`,
     ).join('');
@@ -116,7 +86,8 @@ describe('loadImages', () => {
   it('decodes a percent-encoded data URL of a few hundred KB, mixing escapes and plain bytes', async () => {
     // 300 KB after the PNG header; bytes that are letters or digits stay as they are, the rest
     // are escaped, so the encoded text is longer than the bytes and the output must be cut to fit.
-    const header = pngHeader(640, 480);
+    // The signature and IHDR are the first 33 bytes.
+    const header = testPng({ width: 640, height: 480 }).subarray(0, 33);
     const bytes = new Uint8Array(header.length + 300_000);
     bytes.set(header);
     for (let i = header.length; i < bytes.length; i++) bytes[i] = (i * 31) & 0xff;
@@ -125,8 +96,10 @@ describe('loadImages', () => {
       plain(b) ? String.fromCharCode(b) : `%${b.toString(16).padStart(2, '0')}`,
     ).join('');
     const node = imageNode(`data:image/png,${encoded}`);
+    // Only the header is a PNG, so this writer measures it and checks nothing else.
+    const measuring = { imageSize: (data: Uint8Array) => writer.imageSize(data) };
     const started = performance.now();
-    const assets = await loadImages(root(node), writer);
+    const assets = await loadImages(root(node), measuring);
     // About 90 ms on a developer machine. As with the text budget, the margin only has to separate
     // a linear decode on a busy CI runner with coverage on from a quadratic one.
     expect(performance.now() - started).toBeLessThan(2000);
@@ -258,6 +231,17 @@ describe('loadImages', () => {
     await expect(loadImages(root(imageNode(new Uint8Array([1, 2, 3]))), writer)).rejects.toThrow(
       'ngpdf: could not load image "Uint8Array": ngpdf: image is neither PNG nor JPEG',
     );
+  });
+
+  it('rejects a PNG whose pixel data the writer cannot decode', async () => {
+    const bad = testPng({ idat: testRows(2, 2, 4, 2, 9) });
+    await expect(loadImages(root(imageNode(bad)), writer)).rejects.toThrow(
+      'ngpdf: could not load image "Uint8Array": the image data is corrupt or cut off',
+    );
+    // A writer without checkImage reads the header only.
+    const measuring = { imageSize: (data: Uint8Array) => writer.imageSize(data) };
+    const node = imageNode(bad);
+    expect((await loadImages(root(node), measuring)).get(node)?.width).toBe(2);
   });
 
   it('rejects a source of the wrong type', async () => {

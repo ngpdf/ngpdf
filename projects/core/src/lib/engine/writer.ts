@@ -326,8 +326,8 @@ export interface PdfWriter extends FontMetrics {
    */
   imageSize(data: Uint8Array): { width: number; height: number };
   /**
-   * Whether `write` can embed the image: false for bytes the writer would fail on. Emoji images,
-   * which fall back to text, are checked with it; a failed pdf-image still rejects the render.
+   * Whether `write` can embed the image: false for bytes the writer would fail on. An emoji image
+   * that fails it is drawn as text, and a pdf-image that fails it rejects the render.
    */
   checkImage?(data: Uint8Array): Promise<boolean>;
   write(pages: readonly PageOps[], info: DocumentInfo): Promise<Blob>;
@@ -419,7 +419,11 @@ function jpegSize(data: Uint8Array): { width: number; height: number } {
   let at = 2;
   const orientation = jpegOrientation(data);
   while (at + 4 <= data.length) {
-    if (data[at] !== 0xff) throw new Error('ngpdf: invalid JPEG marker');
+    // A stray byte between segments is skipped up to the next 0xFF, as pdfkit and libjpeg do.
+    if (data[at] !== 0xff) {
+      at += 1;
+      continue;
+    }
     const marker = data[at + 1] ?? 0;
     if (marker === 0xff) {
       at += 1; // fill byte
@@ -493,23 +497,38 @@ const ADAM7 = [
   [0, 1, 1, 2],
 ] as const;
 
-/** The bytes a PNG's pixel data inflates to: each row of each pass, with its filter byte. */
-function pngDataLength(width: number, height: number, bitsPerPixel: number, interlaced: boolean) {
-  const rows = (w: number, h: number): number =>
-    w > 0 && h > 0 ? h * (1 + Math.ceil((w * bitsPerPixel) / 8)) : 0;
-  if (!interlaced) return rows(width, height);
-  return ADAM7.reduce(
-    (sum, [x0, y0, dx, dy]) =>
-      sum + rows(Math.ceil((width - x0) / dx), Math.ceil((height - y0) / dy)),
-    0,
+/** A run of rows of the same length (filter byte included), as PNG pixel data holds them. */
+interface RowRun {
+  readonly length: number;
+  readonly count: number;
+}
+
+/** The rows a PNG's pixel data inflates to: those of the image, or of each Adam7 pass. */
+function pngRows(
+  width: number,
+  height: number,
+  bitsPerPixel: number,
+  interlaced: boolean,
+): RowRun[] {
+  const run = (w: number, h: number): RowRun[] =>
+    w > 0 && h > 0 ? [{ length: 1 + Math.ceil((w * bitsPerPixel) / 8), count: h }] : [];
+  if (!interlaced) return run(width, height);
+  return ADAM7.flatMap(([x0, y0, dx, dy]) =>
+    run(Math.ceil((width - x0) / dx), Math.ceil((height - y0) / dy)),
   );
 }
 
+/** PNG's filter types: none, sub, up, average and Paeth. png-js throws on any other. */
+const LAST_FILTER = 4;
+
 /**
- * Whether `data` inflates (zlib) to exactly `expected` bytes. It reads the stream to its end, so a
- * corrupt or cut-off stream fails, and stops as soon as it has more than `expected`.
+ * Whether `data` inflates (zlib) to exactly `rows`, each starting with a known filter byte. It
+ * reads the stream to its end, so a corrupt or cut-off stream fails, and stops as soon as it has
+ * more bytes than the rows hold or a filter byte is wrong.
  */
-async function inflatesTo(data: Uint8Array, expected: number): Promise<boolean> {
+async function inflatesTo(data: Uint8Array, rows: readonly RowRun[]): Promise<boolean> {
+  const expected = rows.reduce((sum, { length, count }) => sum + length * count, 0);
+  if (expected === 0) return false;
   const source = new ReadableStream<BufferSource>({
     start(controller) {
       controller.enqueue(data as Uint8Array<ArrayBuffer>);
@@ -518,15 +537,32 @@ async function inflatesTo(data: Uint8Array, expected: number): Promise<boolean> 
   });
   const reader = source.pipeThrough(new DecompressionStream('deflate')).getReader();
   let length = 0;
+  // The offset of the next row's filter byte, and how many rows of the current run are left.
+  let next = 0;
+  let run = 0;
+  let left = rows[0]?.count ?? 0;
   try {
     for (;;) {
       const { done, value } = await reader.read();
       if (done) return length === expected;
-      length += value.length;
-      if (length > expected) {
+      const end = length + value.length;
+      if (end > expected) {
         await reader.cancel();
         return false;
       }
+      let row = rows[run];
+      while (row && next < end) {
+        if ((value[next - length] ?? 0) > LAST_FILTER) {
+          await reader.cancel();
+          return false;
+        }
+        next += row.length;
+        if (--left === 0) {
+          row = rows[++run];
+          left = row?.count ?? 0;
+        }
+      }
+      length = end;
     }
   } catch {
     return false;
@@ -736,8 +772,9 @@ export async function createPdfkitWriter(options: { compress?: boolean } = {}): 
 
     imageSize,
 
-    // pdfkit fails on a PNG its parser rejects, or whose pixel data does not inflate when it has
-    // to decode it (alpha, transparency, interlacing). It embeds a JPEG as is.
+    // pdfkit fails on a PNG its parser rejects, or whose pixel data does not inflate or has a bad
+    // filter byte when it has to decode it (alpha, transparency, interlacing). It throws that in
+    // a zlib callback, out of reach of write(), so it is checked here. It embeds a JPEG as is.
     async checkImage(data) {
       let opened: ImageInternals;
       try {
@@ -748,8 +785,7 @@ export async function createPdfkitWriter(options: { compress?: boolean } = {}): 
       const png = opened.image;
       if (!png) return true;
       const { width, height, pixelBitlength, interlaceMethod, imgData } = png;
-      const expected = pngDataLength(width, height, pixelBitlength, interlaceMethod === 1);
-      return expected > 0 && (await inflatesTo(imgData, expected));
+      return inflatesTo(imgData, pngRows(width, height, pixelBitlength, interlaceMethod === 1));
     },
 
     async write(pages, info) {

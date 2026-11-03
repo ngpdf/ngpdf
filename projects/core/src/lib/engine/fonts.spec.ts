@@ -79,6 +79,25 @@ describe('toWinAnsi', () => {
     expect(warn).not.toHaveBeenCalled();
   });
 
+  it('composes decomposed accented letters before the WinAnsi check (#230)', () => {
+    const warn = vi.fn();
+    expect(toWinAnsi('Cafe\u0301 man\u0303ana u\u0308ber', warn)).toBe('Café mañana über');
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it('still replaces a combining mark with no composed form', () => {
+    const warn = vi.fn();
+    expect(toWinAnsi('x\u0301', warn)).toBe('x?');
+    expect(warn).toHaveBeenCalledExactlyOnceWith(['\u0301']);
+  });
+
+  it('replaces a composed letter outside WinAnsi as one character', () => {
+    // a + U+0304 composes to ā, which WinAnsi lacks: one ? for the letter, not a? for the mark.
+    const warn = vi.fn();
+    expect(toWinAnsi('a\u0304', warn)).toBe('?');
+    expect(warn).toHaveBeenCalledExactlyOnceWith(['\u0101']);
+  });
+
   it('drops soft hyphens and zero-width spaces, which are never drawn', () => {
     const warn = vi.fn();
     expect(toWinAnsi('co­operation', warn)).toBe('cooperation');
@@ -269,6 +288,48 @@ describe('shapeText', () => {
     const { runs, shaped } = runsOf('a☃', ['Helvetica', 'font:2']);
     expect(runs).toEqual([{ text: 'a?', font: 'Helvetica' }]);
     expect(shaped.replaced).toEqual(['☃']);
+  });
+
+  it('draws decomposed accented letters composed in a standard font (#230)', () => {
+    const shaped = shapeText('Cafe\u0301 man\u0303ana u\u0308ber', ['Helvetica'], metrics);
+    expect(shaped.text).toBe('Café mañana über');
+    expect(shaped.replaced).toEqual([]);
+  });
+
+  it('draws a decomposed letter composed in a standard font of a list', () => {
+    // font:2 has neither the letter nor the mark, so Helvetica draws the composed letter.
+    const { runs, shaped } = runsOf('日e\u0301', ['font:2', 'Helvetica']);
+    expect(runs).toEqual([
+      { text: '日', font: 'font:2' },
+      { text: 'é', font: 'Helvetica' },
+    ]);
+    expect(shaped.clusterStarts).toEqual([0, 1, 2]);
+    expect(shaped.replaced).toEqual([]);
+    expect(runsOf('n\u0303u\u0308', ['Helvetica', 'font:2']).runs).toEqual([
+      { text: 'ñü', font: 'Helvetica' },
+    ]);
+  });
+
+  it('draws the composed form in a custom font that lacks the combining mark', () => {
+    const shaped = shapeText('e\u0301', ['font:1', 'Helvetica'], {
+      hasGlyph: (_font, cp) => cp !== 0x0301,
+    });
+    expect(shaped.text).toBe('é');
+    expect(shaped.fontAt).toEqual(Uint16Array.of(0));
+    expect(shaped.missing).toEqual([]);
+  });
+
+  it('keeps font order when an earlier font has only the composed form', () => {
+    // font:0 has e and U+0301, but Helvetica comes first and has é.
+    const { runs, shaped } = runsOf('e\u0301', ['Helvetica', 'font:0']);
+    expect(runs).toEqual([{ text: 'é', font: 'Helvetica' }]);
+    expect(shaped.replaced).toEqual([]);
+  });
+
+  it('replaces a decomposed cluster with no composed form with ? after a standard font', () => {
+    const { runs, shaped } = runsOf('x\u0301', ['Helvetica', 'font:2']);
+    expect(runs).toEqual([{ text: '?', font: 'Helvetica' }]);
+    expect(shaped.replaced).toEqual(['x\u0301']);
   });
 
   it('keeps a grapheme cluster together in one font', () => {
