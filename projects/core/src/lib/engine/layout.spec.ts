@@ -768,6 +768,7 @@ describe('image natural size at the page dpi', () => {
     style: Record<string, string>,
     dpi: unknown,
     available = 1000,
+    pixels = asset,
   ): [number, number] => {
     const image = el('pdf-image', style);
     const view = el('pdf-view', { width: String(available) }, [image]);
@@ -775,7 +776,7 @@ describe('image natural size at the page dpi', () => {
     const box = layoutBox(view, resolveStyles(view), available, {
       yoga,
       metrics: writer,
-      images: new Map([[image, asset]]),
+      images: new Map([[image, pixels]]),
     });
     const child = box.children[0];
     return [child?.w ?? NaN, child?.h ?? NaN];
@@ -803,6 +804,17 @@ describe('image natural size at the page dpi', () => {
     );
     expect(() => size({}, 1e-35)).toThrow(/^ngpdf: pdf-image natural size is too large/);
     expect(size({ width: '10' }, 1e-306)).toEqual([10, 5]);
+  });
+
+  it('checks the scaled width and height each on their own', () => {
+    // 72 / 7.2e-35 = 1e36pt per pixel: 1 pixel fits in float32, 1000 do not.
+    const wide = { data: new Uint8Array(1), width: 1000, height: 1 };
+    const tall = { data: new Uint8Array(1), width: 1, height: 1000 };
+    const square = { data: new Uint8Array(1), width: 1, height: 1 };
+    const tooLarge = /^ngpdf: pdf-image natural size is too large at dpi 7\.2e-35;/;
+    expect(() => size({}, 7.2e-35, 1000, wide)).toThrow(tooLarge);
+    expect(() => size({}, 7.2e-35, 1000, tall)).toThrow(tooLarge);
+    expect(() => size({}, 7.2e-35, 1000, square)).not.toThrow();
   });
 
   it('still caps the scaled size to the available width', () => {
