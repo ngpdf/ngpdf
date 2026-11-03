@@ -3,7 +3,8 @@ import { PDF_ELEMENTS } from '@ngpdf/core';
 
 /**
  * Styled runs inside one paragraph, each in a pdf-span, an inline link, a note cut to two lines,
- * superscripts and a subscript, and a rotated stamp that links to the invoice.
+ * a policy cut to the height of its box, superscripts and a subscript, and a rotated stamp that
+ * links to the invoice.
  */
 @Component({
   selector: 'app-span-sample',
@@ -30,6 +31,11 @@ import { PDF_ELEMENTS } from '@ngpdf/core';
         </pdf-text>
         <pdf-text style="width: 160; max-lines: 2; margin-bottom: 8">
           {{ note }} <pdf-span style="font-weight: bold">{{ signature }}</pdf-span>
+        </pdf-text>
+        <pdf-text
+          style="width: 160; height: 30; text-overflow: ellipsis; margin-bottom: 8; background-color: #f1f5f9"
+        >
+          {{ returns }}
         </pdf-text>
         <pdf-text style="margin-bottom: 8">
           Floor area 42 m<pdf-span style="vertical-align: super">2</pdf-span>, sealed against
@@ -65,4 +71,6 @@ export class SpanSample {
   readonly note =
     'Delivery window agreed by phone: weekdays after 2 pm, at the side gate, with a call ahead.';
   readonly signature = 'Signed by the warehouse team';
+  readonly returns =
+    'Returns are accepted within 30 days in the original packaging, with the invoice number on the label.';
 }

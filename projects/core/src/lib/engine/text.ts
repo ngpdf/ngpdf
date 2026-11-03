@@ -73,10 +73,15 @@ export interface TextRange {
   readonly emoji?: ReadonlyMap<string, ImageAsset>;
 }
 
-/** What applies to a paragraph as a whole: its line height and an optional line limit. */
+/** What applies to a paragraph as a whole: its line height and optional line and height limits. */
 export type ParagraphStyle = TextStyle & {
   /** The most lines kept; the last ends in an ellipsis when text was cut. */
   readonly maxLines?: number | null;
+  /**
+   * The height the kept lines must fit in, cut as with `maxLines`. The first line is kept even
+   * when it does not fit.
+   */
+  readonly heightLimit?: number | null;
 };
 
 export interface TextBlock {
@@ -95,6 +100,8 @@ const MEASURE_MODE_UNDEFINED = 0;
 // How far over `maxWidth` the summed character widths may be and still be tried by measuring.
 const KERNING_SLACK = 1.25;
 const ELLIPSIS = '…';
+// Line tops add up in floating point, and Yoga rounds a box height: a line this close fits.
+const HEIGHT_SLACK = 0.01;
 // For a font without U+2026.
 const ELLIPSIS_DOTS = '...';
 // U+2010 HYPHEN, or the hyphen-minus in a font without it (every standard font: it is not WinAnsi).
@@ -796,9 +803,8 @@ export function layoutRanges(
 ): TextBlock {
   assertTextSize(ranges);
   const text = ranges.length === 1 ? (ranges[0]?.text ?? '') : ranges.map((r) => r.text).join('');
-  const maxLines = paragraph.maxLines ?? Infinity;
-  const key = `${ranges.map(rangeKey).join(';')} ${String(paragraph.lineHeight)} ${String(maxWidth)} ${String(maxLines)}`;
-  const { block, replaced, missing } = cache.block(text, key, () => {
+  const rangesKey = ranges.map(rangeKey).join(';');
+  const make = (maxLines: number) => (): CachedBlock => {
     const shaped = shapeRanges(ranges, metrics);
     const widthOfs = shaped.faces.map((face) => {
       const spacing = face.letterSpacing;
@@ -843,7 +849,28 @@ export function layoutRanges(
       replaced: shaped.replaced,
       missing: [...missing],
     };
-  });
+  };
+  const blockOf = (maxLines: number): CachedBlock =>
+    cache.block(
+      text,
+      `${rangesKey} ${String(paragraph.lineHeight)} ${String(maxWidth)} ${String(maxLines)}`,
+      make(maxLines),
+    );
+  const maxLines = paragraph.maxLines ?? Infinity;
+  let result = blockOf(maxLines);
+  const limit = paragraph.heightLimit;
+  // With one line kept, the first line is kept whatever the height.
+  if (limit != null && maxLines > 1) {
+    // The lines before a cut do not depend on the line limit, so the ones kept are those that fit
+    // the height in the full layout: laid out again with their count, the last of them is cut.
+    // Counted on uncut lines, since a cut line can lose its tallest run: one line past max-lines
+    // is enough, as only a count below max-lines changes anything.
+    const { lines } = (maxLines === Infinity ? result : blockOf(maxLines + 1)).block;
+    const fitting = lines.filter((line) => line.y + line.height <= limit + HEIGHT_SLACK).length;
+    const kept = Math.max(fitting, 1);
+    if (fitting < lines.length && kept < maxLines) result = blockOf(kept);
+  }
+  const { block, replaced, missing } = result;
   if (replaced.length > 0) warn([...replaced]);
   if (missing.length > 0)
     ranges.find((range) => range.fonts?.missing)?.fonts?.missing?.([...missing]);

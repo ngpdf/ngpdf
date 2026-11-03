@@ -155,6 +155,16 @@ describe('white-space', () => {
     expect(block.lines.map((line) => line.text)).toEqual(['a', 'b…']);
   });
 
+  it('cuts at a height limit across kept line breaks, with the ellipsis', () => {
+    const block = layoutRanges(
+      [{ text: 'a\nb\nc', style: styled('pre-line') }],
+      { ...styled('pre-line'), heightLimit: 20 },
+      Infinity,
+      metrics,
+    );
+    expect(block.lines.map((line) => line.text)).toEqual(['a', 'b…']);
+  });
+
   it('hyphenates wrapping text with kept breaks, and never text that does not wrap', () => {
     expect(texts('ab­cd\nef', 'pre-wrap', 35)).toEqual(['ab-', 'cd', 'ef']);
     expect(texts('ab­cd', 'nowrap', 35)).toEqual(['abcd']);

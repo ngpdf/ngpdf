@@ -908,6 +908,18 @@ describe('resolveStyles property coverage', () => {
     }
   });
 
+  it('reads text-overflow as clip or ellipsis, not inherited', () => {
+    expect(styleOf({}, 'pdf-text').textOverflow).toBe('clip');
+    expect(styleOf({ 'text-overflow': ' Ellipsis ' }, 'pdf-text').textOverflow).toBe('ellipsis');
+    expect(styleOf({ 'text-overflow': 'clip' }, 'pdf-text').textOverflow).toBe('clip');
+    const text = el('pdf-text');
+    const view = el('pdf-view', { 'text-overflow': 'ellipsis' }, [text]);
+    expect(resolveStyles(view).get(text)?.textOverflow).toBe('clip');
+    expect(() => styleOf({ 'text-overflow': 'fade' }, 'pdf-text')).toThrow(
+      'ngpdf: invalid value "fade" for text-overflow on pdf-text',
+    );
+  });
+
   it('reads break-inside: avoid, not inherited', () => {
     expect(styleOf({}).breakInside).toBe('auto');
     expect(styleOf({ 'break-inside': 'avoid' }).breakInside).toBe('avoid');
