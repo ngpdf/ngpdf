@@ -478,6 +478,15 @@ describe('loadImages with maxImageBytes', () => {
     expect(seen.signal?.aborted).toBe(true);
   });
 
+  it('aborts the fetch on an error status without reading the body', async () => {
+    const { body, stats } = streamed(big, 10);
+    const { fetchFn, seen } = fetchWith(new Response(body, { status: 404 }));
+    const load = loadImages(root(imageNode('/missing.png')), writer, fetchFn, undefined, 100);
+    await expect(load).rejects.toThrow('ngpdf: could not load image "/missing.png": HTTP 404');
+    expect(stats.reads).toBe(0);
+    expect(seen.signal?.aborted).toBe(true);
+  });
+
   it('falls back to arrayBuffer() for a response without a body, and checks its length', async () => {
     const bodiless = (bytes: Uint8Array) =>
       ({

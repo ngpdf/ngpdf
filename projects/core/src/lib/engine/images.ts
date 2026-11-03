@@ -100,7 +100,10 @@ async function fetchCapped(
 ): Promise<Uint8Array> {
   const controller = new AbortController();
   const response = await fetchFn(url, { credentials: 'same-origin', signal: controller.signal });
-  if (!response.ok) throw new Error(`HTTP ${String(response.status)}`);
+  if (!response.ok) {
+    controller.abort();
+    throw new Error(`HTTP ${String(response.status)}`);
+  }
   // A missing or malformed header is NaN, which is never over the cap.
   if (Number(response.headers.get('content-length')) > maxBytes) {
     controller.abort();
