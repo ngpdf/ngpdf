@@ -318,6 +318,65 @@ describe('displayList', () => {
       expect(left!.dashPhase).toBeUndefined();
     });
 
+    it('starts the dots of a rounded side 1pt in at its square corner', () => {
+      const ops = box({
+        border: '2 dotted #00f',
+        'border-right': '2 solid #00f',
+        'border-radius': '0 8 0 0',
+      });
+      const [top] = only(ops, 'path');
+      // The top side runs from the square top left corner to the middle of the rounded one.
+      expect(top!.from).toEqual({ x: 36, y: 37 });
+      expect(top!.cap).toBe('round');
+      const [dash, spacing] = top!.dash!;
+      expect(dash).toBe(0);
+      expect(spacing! - top!.dashPhase!).toBeCloseTo(1, 9);
+    });
+
+    it('draws each side on its own when only the width or only the color differs', () => {
+      const widths = box({
+        border: '2 dashed #000',
+        'border-left-width': '3',
+        'border-radius': '8',
+      });
+      expect(only(widths, 'path')).toHaveLength(4);
+      const colors = box({
+        border: '2 dotted #000',
+        'border-left-color': '#f00',
+        'border-radius': '8',
+      });
+      expect(only(colors, 'path')).toHaveLength(4);
+      for (const path of only(colors, 'path')) expect(path.cap).toBe('round');
+    });
+
+    it('draws the sides of a rounded dashed box cut by a page break on their own', () => {
+      const rows = [0, 1, 2].map(() => el('pdf-view', { height: '300' }));
+      const style = { border: '2 dashed #123456', 'border-radius': '8' };
+      const pages = layout(page([el('pdf-view', style, rows)]));
+      expect(pages).toHaveLength(2);
+      for (const [index, laid] of pages.entries()) {
+        // Top, right and left on the first sheet; right, bottom and left on the second.
+        const paths = only(list(laid, index, 2), 'path');
+        expect(paths).toHaveLength(3);
+        for (const path of paths) expect(path.dash![0]).toBe(6);
+      }
+    });
+
+    it('draws the sides of a rounded dotted box below clipBottom on their own', () => {
+      const spacer = el('pdf-view', { height: '900' });
+      const style = { 'flex-direction': 'row', border: '2 dotted #000', 'border-radius': '8' };
+      const laid = layout(page([el('pdf-view', style, [spacer])]))[0]!;
+      const limit = laid.placed[0]!.clipBottom!;
+      const paths = only(list(laid, 0, 1), 'path');
+      // Top, right and left; the bottom side lies below the limit.
+      expect(paths).toHaveLength(3);
+      for (const path of paths) {
+        expect(path.cap).toBe('round');
+        const points = [path.from, ...path.segments.map((segment) => segment.to)];
+        for (const point of points) expect(point.y).toBeLessThanOrEqual(limit + 1e-6);
+      }
+    });
+
     it('draws a none side not at all and keeps solid sides solid', () => {
       const ops = box({ border: '2 solid #000', 'border-style': 'solid none' });
       const lines = only(ops, 'line');
