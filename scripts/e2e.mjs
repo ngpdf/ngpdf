@@ -268,8 +268,9 @@ function checkPoppler(versionOutput) {
 }
 
 /**
- * Kills the Chrome processes an earlier run left on this checkout's profile, read from /proc
- * (Linux, where the script runs). Matches the exact flag, so no other Chrome is touched.
+ * Kills the Chrome processes on this checkout's profile, found in /proc (Linux, where the script
+ * runs): ones an earlier run left, or a launch stuck past its timeout. Matches the exact flag, so
+ * no other Chrome is touched.
  */
 function stopLeftoverChrome() {
   if (!existsSync('/proc')) return;
@@ -291,7 +292,7 @@ function stopLeftoverChrome() {
       // It exited meanwhile, or belongs to another user.
     }
   }
-  if (stopped > 0) console.log(`e2e: stopped ${stopped} Chrome processes left by an earlier run`);
+  if (stopped > 0) console.log(`e2e: stopped ${stopped} Chrome processes on ${PROFILE}`);
 }
 
 /** Fails with a clear message when a browser step takes longer than TIMEOUT_MS. */
@@ -636,9 +637,13 @@ try {
   failed = true;
   console.error(error instanceof Error ? error.message : error);
 } finally {
-  // A launch that outlives its timeout still starts a Chrome: wait for it (puppeteer's own
-  // timeout bounds the wait) and close it too.
-  browser ??= await launching?.catch(() => undefined);
+  // A launch that outlives its timeout still starts a Chrome: give it one more timeout and close
+  // it. Puppeteer's own timeout does not cover the WebSocket handshake, so a launch still stuck
+  // after that has its processes killed by the profile flag instead.
+  if (!browser && launching) {
+    browser = await within(launching, `closing ${CHROME}`).catch(() => undefined);
+    if (!browser) stopLeftoverChrome();
+  }
   await browser?.close();
   server.close();
   // Kept out of the e2e/out artifact CI uploads on failure.
