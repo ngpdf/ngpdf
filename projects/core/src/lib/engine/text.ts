@@ -714,11 +714,13 @@ export function layoutRanges(
   const maxLines = paragraph.maxLines ?? Infinity;
   let result = blockOf(maxLines);
   const limit = paragraph.heightLimit;
-  if (limit != null) {
+  // With one line kept, the first line is kept whatever the height.
+  if (limit != null && maxLines > 1) {
     // The lines before a cut do not depend on the line limit, so the ones kept are those that fit
     // the height in the full layout: laid out again with their count, the last of them is cut.
-    // Counted before max-lines cuts, since a cut line can lose its tallest run.
-    const { lines } = (maxLines === Infinity ? result : blockOf(Infinity)).block;
+    // Counted on uncut lines, since a cut line can lose its tallest run: one line past max-lines
+    // is enough, as only a count below max-lines changes anything.
+    const { lines } = (maxLines === Infinity ? result : blockOf(maxLines + 1)).block;
     const fitting = lines.filter((line) => line.y + line.height <= limit + HEIGHT_SLACK).length;
     const kept = Math.max(fitting, 1);
     if (fitting < lines.length && kept < maxLines) result = blockOf(kept);

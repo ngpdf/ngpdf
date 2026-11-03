@@ -1026,6 +1026,18 @@ describe('layoutRanges with heightLimit', () => {
     expect(at({ heightLimit: 30, maxLines: 2 })).toEqual(at({ maxLines: 1 }));
   });
 
+  it('skips the height count for max-lines: 1, and counts past a larger max-lines', () => {
+    const long = [{ text: `${text} `.repeat(200), style }];
+    const calls = (paragraph: Partial<ParagraphStyle>) => {
+      const counting = { ...writer, widthOf: vi.fn(writer.widthOf.bind(writer)) };
+      const lines = layoutRanges(long, { ...style, ...paragraph }, 120, counting).lines;
+      return { lines, calls: counting.widthOf.mock.calls.length };
+    };
+    const one = calls({ maxLines: 1 });
+    expect(calls({ maxLines: 1, heightLimit: 5 })).toEqual(one);
+    expect(calls({ maxLines: 3, heightLimit: 30 }).lines).toEqual(calls({ maxLines: 2 }).lines);
+  });
+
   it('counts each line at its own height when runs have different sizes', () => {
     // A 30pt first line is 45pt tall, so 50pt holds it and nothing more.
     const big: TextStyle = { ...style, fontSize: 30 };
