@@ -7,7 +7,7 @@ import { gradientFill } from './gradient';
 import { fitImage, type ImageAsset } from './images';
 import { pageNumberFormat, type Box } from './layout';
 import type { OpacityGroup, PageLayout, PlacedBox } from './paginate';
-import type { Corners, Offset, ResolvedStyle, TransformFunction } from './style';
+import type { BorderStyle, Corners, Offset, ResolvedStyle, TransformFunction } from './style';
 import { wordGaps, type TextLine, type TextRun } from './text';
 import {
   NOTE_SIZE,
@@ -16,6 +16,7 @@ import {
   type Matrix,
   type OpenSegment,
   type Point,
+  type StrokePattern,
 } from './writer';
 
 export interface DisplayListOptions {
@@ -197,15 +198,27 @@ function drawBox(
 
   const { top, right, bottom, left } = box.border;
   const color = style.borderColor;
-  const line = (x1: number, y1: number, x2: number, y2: number, width: number, c: Color): void => {
+  const kind = style.borderStyle;
+  const line = (
+    x1: number,
+    y1: number,
+    x2: number,
+    y2: number,
+    width: number,
+    c: Color,
+    lineKind: BorderStyle,
+  ): void => {
     const stroke = paint(c);
     if (!stroke) return;
+    // A dot sits in the middle of the corner square, so it stays inside the box.
+    const inset = lineKind === 'dotted' ? width / 2 : 0;
+    const pattern = sidePattern(lineKind, width, Math.hypot(x2 - x1, y2 - y1), inset, inset);
     if (y1 === y2 && y1 + width / 2 > limit) {
       // A horizontal stroke across the limit keeps only its band above it.
       const top = y1 - width / 2;
       if (top >= limit) return;
       const y = (top + limit) / 2;
-      out.push({ op: 'line', x1, y1: y, x2, y2: y, width: limit - top, ...stroke });
+      out.push({ op: 'line', x1, y1: y, x2, y2: y, width: limit - top, ...stroke, ...pattern });
       return;
     }
     // A vertical line wholly below the limit is gone; one that crosses it is shortened.
@@ -218,30 +231,62 @@ function drawBox(
       y2: Math.min(y2, limit),
       width,
       ...stroke,
+      ...pattern,
     });
   };
+  const rect = { x, y, w: box.w, h: box.h };
   // A side that touches a rounded corner follows the outline; the others stay square lines.
-  const rounded = (side: BorderSide, width: number, c: Color): boolean => {
-    const path = roundedSide(side, { x, y, w: box.w, h: box.h }, radii, width / 2);
-    if (!path) return false;
+  const rounded = (side: BorderSide, width: number, c: Color, sideKind: BorderStyle): boolean => {
+    const piece = roundedSide(side, rect, radii, width / 2);
+    if (!piece) return false;
+    const { path, length } = piece;
     const stroke = paint(c);
     const points = [path.from, ...path.segments.map((segment) => segment.to)];
     if (stroke && points.some((point) => point.y < limit)) {
-      out.push({ op: 'path', ...clampPath(path, limit), width, ...stroke });
+      // A dot at a square end sits in the corner square, as on a square line.
+      const inset = (square: boolean) => (square && sideKind === 'dotted' ? width / 2 : 0);
+      const pattern = sidePattern(
+        sideKind,
+        width,
+        length,
+        inset(piece.squareStart),
+        inset(piece.squareEnd),
+      );
+      out.push({ op: 'path', ...clampPath(path, limit), width, ...stroke, ...pattern });
     }
     return true;
   };
-  if (top > 0 && !cuts.top && !rounded(TOP, top, color.top)) {
-    line(x, y + top / 2, x + box.w, y + top / 2, top, color.top);
-  }
-  if (right > 0 && !rounded(RIGHT, right, color.right)) {
-    line(x + box.w - right / 2, y, x + box.w - right / 2, y + box.h, right, color.right);
-  }
-  if (bottom > 0 && !cuts.bottom && !rounded(BOTTOM, bottom, color.bottom)) {
-    line(x, y + box.h - bottom / 2, x + box.w, y + box.h - bottom / 2, bottom, color.bottom);
-  }
-  if (left > 0 && !rounded(LEFT, left, color.left)) {
-    line(x + left / 2, y, x + left / 2, y + box.h, left, color.left);
+  // Four alike dashed or dotted sides round a rounded box: one closed path, so the pattern runs on
+  // round the corners. A box cut by a page or the limit draws its sides apart.
+  const alike = uniformBorder(style, box.border);
+  const whole =
+    alike !== null &&
+    !cuts.top &&
+    !cuts.bottom &&
+    y + box.h <= limit &&
+    Object.values(radii).some((radius) => radius > alike.width / 2);
+  if (whole) {
+    const stroke = paint(alike.color);
+    if (stroke) {
+      const { path, length } = closedOutline(rect, radii, alike.width / 2);
+      const pattern = loopPattern(alike.kind, alike.width, length);
+      out.push({ op: 'path', ...path, width: alike.width, ...stroke, ...pattern });
+    }
+  } else {
+    if (top > 0 && !cuts.top && !rounded(TOP, top, color.top, kind.top)) {
+      line(x, y + top / 2, x + box.w, y + top / 2, top, color.top, kind.top);
+    }
+    if (right > 0 && !rounded(RIGHT, right, color.right, kind.right)) {
+      const lineX = x + box.w - right / 2;
+      line(lineX, y, lineX, y + box.h, right, color.right, kind.right);
+    }
+    if (bottom > 0 && !cuts.bottom && !rounded(BOTTOM, bottom, color.bottom, kind.bottom)) {
+      const lineY = y + box.h - bottom / 2;
+      line(x, lineY, x + box.w, lineY, bottom, color.bottom, kind.bottom);
+    }
+    if (left > 0 && !rounded(LEFT, left, color.left, kind.left)) {
+      line(x + left / 2, y, x + left / 2, y + box.h, left, color.left, kind.left);
+    }
   }
 
   // The border box, cut at the limit like the background; an overflow clip doesn't cut it.
@@ -629,15 +674,16 @@ function arc(center: Point, radius: number, from: number, to: number): OpenSegme
 
 /**
  * One border side on the outline inset by `half` its width, clockwise from the middle of its
- * first corner to the middle of its second. A corner no wider than `half` stays square for this
- * side. Null when both corners are square, so the side is a plain line.
+ * first corner to the middle of its second, and its length. A corner no wider than `half` stays
+ * square for this side, and that end of the path is at the edge of the box. Null when both corners
+ * are square, so the side is a plain line.
  */
 function roundedSide(
   side: BorderSide,
   rect: Rect,
   radii: Corners<number>,
   half: number,
-): OpenPath | null {
+): { path: OpenPath; length: number; squareStart: boolean; squareEnd: boolean } | null {
   const { first, second, angle } = side;
   const r1 = radii[first.key] > half ? radii[first.key] : 0;
   const r2 = radii[second.key] > half ? radii[second.key] : 0;
@@ -650,10 +696,123 @@ function roundedSide(
   const c2 = center(second, r2);
   const segments: OpenSegment[] = [];
   const from = polar(c1, r1 - half, r1 > 0 ? angle - 45 : angle);
+  const lineStart = polar(c1, r1 - half, angle);
+  const lineEnd = polar(c2, r2 - half, angle);
   if (r1 > 0) segments.push(arc(c1, r1 - half, angle - 45, angle));
-  segments.push({ kind: 'line', to: polar(c2, r2 - half, angle) });
+  segments.push({ kind: 'line', to: lineEnd });
   if (r2 > 0) segments.push(arc(c2, r2 - half, angle, angle + 45));
-  return { from, segments };
+  const arcs = (r1 > 0 ? r1 - half : 0) + (r2 > 0 ? r2 - half : 0);
+  const length = distance(lineStart, lineEnd) + (Math.PI / 4) * arcs;
+  return { path: { from, segments }, length, squareStart: r1 === 0, squareEnd: r2 === 0 };
+}
+
+/**
+ * The whole outline inset by `half`, clockwise from the middle of the top side back to it, and
+ * its length. A corner no wider than `half` is square.
+ */
+function closedOutline(
+  rect: Rect,
+  radii: Corners<number>,
+  half: number,
+): { path: OpenPath; length: number } {
+  const start = { x: rect.x + rect.w / 2, y: rect.y + half };
+  const segments: OpenSegment[] = [];
+  let at = start;
+  let length = 0;
+  const lineTo = (to: Point): void => {
+    length += distance(at, to);
+    segments.push({ kind: 'line', to });
+    at = to;
+  };
+  for (const { second: corner, angle } of [TOP, RIGHT, BOTTOM, LEFT]) {
+    const radius = radii[corner.key];
+    const cornerX = rect.x + corner.atX * rect.w;
+    const cornerY = rect.y + corner.atY * rect.h;
+    if (radius > half) {
+      const center = { x: cornerX + corner.inX * radius, y: cornerY + corner.inY * radius };
+      lineTo(polar(center, radius - half, angle));
+      for (const from of [angle, angle + 45]) {
+        const curve = arc(center, radius - half, from, from + 45);
+        segments.push(curve);
+        at = curve.to;
+      }
+      length += (Math.PI / 2) * (radius - half);
+    } else {
+      lineTo({ x: cornerX + corner.inX * half, y: cornerY + corner.inY * half });
+    }
+  }
+  lineTo(start);
+  return { path: { from: start, segments }, length };
+}
+
+function distance(a: Point, b: Point): number {
+  return Math.hypot(b.x - a.x, b.y - a.y);
+}
+
+/** CSS draws dashes about 3 times the width long and dots the width across, 2 widths apart. */
+const DASH_WIDTHS = 3;
+const DOT_WIDTHS = 2;
+
+/**
+ * The pattern of one side `length` long. Dashes start at one end and stop at the other, the gaps
+ * fitted to the length; a side too short for two dashes is solid. Dots run from `start` to `length -
+ * end`, their spacing fitted to that span.
+ */
+function sidePattern(
+  kind: BorderStyle,
+  width: number,
+  length: number,
+  start: number,
+  end: number,
+): StrokePattern {
+  if (kind === 'dashed') {
+    const dash = DASH_WIDTHS * width;
+    const count = Math.max(2, Math.round((length + dash) / (2 * dash)));
+    const gap = (length - count * dash) / (count - 1);
+    return gap > 0 ? { dash: [dash, gap] } : {};
+  }
+  if (kind === 'dotted') {
+    const span = length - start - end;
+    const count = Math.max(1, Math.round(span / (DOT_WIDTHS * width)));
+    // Too short for two dots apart: one dot, at `start`.
+    const spacing = span / count >= width ? span / count : length + width;
+    return {
+      dash: [0, spacing],
+      cap: 'round',
+      ...(start > 0 && { dashPhase: spacing - start }),
+    };
+  }
+  return {};
+}
+
+/** The pattern of a closed outline `length` long, fitted so it ends where it starts. */
+function loopPattern(kind: BorderStyle, width: number, length: number): StrokePattern {
+  if (kind === 'dotted') {
+    const count = Math.max(1, Math.round(length / (DOT_WIDTHS * width)));
+    return { dash: [0, length / count], cap: 'round' };
+  }
+  const dash = DASH_WIDTHS * width;
+  const count = Math.max(1, Math.round(length / (2 * dash)));
+  const gap = length / count - dash;
+  return gap > 0 ? { dash: [dash, gap] } : {};
+}
+
+/** The width, color and style of four alike dashed or dotted sides; null otherwise. */
+function uniformBorder(
+  style: ResolvedStyle,
+  border: Box['border'],
+): { width: number; color: Color; kind: BorderStyle } | null {
+  const { borderStyle: kinds, borderColor: colors } = style;
+  const kind = kinds.top;
+  if (kind !== 'dashed' && kind !== 'dotted') return null;
+  const width = border.top;
+  const color = colors.top;
+  const same = (c: Color) =>
+    c.r === color.r && c.g === color.g && c.b === color.b && c.a === color.a;
+  for (const side of ['right', 'bottom', 'left'] as const) {
+    if (kinds[side] !== kind || border[side] !== width || !same(colors[side])) return null;
+  }
+  return width > 0 ? { width, color, kind } : null;
 }
 
 /** Moves every point of the path up to `limit`, so it stops there like a cut line. */

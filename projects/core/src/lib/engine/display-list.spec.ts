@@ -230,6 +230,102 @@ describe('displayList', () => {
     });
   });
 
+  describe('dashed and dotted borders', () => {
+    const box = (style: Record<string, string>) =>
+      list(layout(page([el('pdf-view', { width: '100', height: '40', ...style })]))[0]!, 0, 1);
+    const length = (op: Op<'line'>) => Math.hypot(op.x2 - op.x1, op.y2 - op.y1);
+    const expectWhole = (value: number) => {
+      expect(Math.abs(value - Math.round(value))).toBeLessThan(1e-6);
+    };
+
+    it('dashes each square side with 3w dashes, the gap fitted so it ends on a dash', () => {
+      const lines = only(box({ border: '2 dashed #f00' }), 'line');
+      expect(lines).toHaveLength(4);
+      const [top, right] = lines;
+      expect(top).toMatchObject({ x1: 36, x2: 136, y1: 37, width: 2, color: '#ff0000' });
+      expect(top!.cap).toBeUndefined();
+      expect(top!.dashPhase).toBeUndefined();
+      // 100pt: 9 dashes of 6 and 8 gaps of 5.75.
+      expect(top!.dash).toEqual([6, 5.75]);
+      // 40pt: 4 dashes and 3 gaps.
+      expect(right!.dash![0]).toBe(6);
+      expect(right!.dash![1]).toBeCloseTo(16 / 3, 9);
+      for (const line of lines) {
+        const [dash, gap] = line.dash!;
+        expectWhole((length(line) + gap!) / (dash! + gap!));
+      }
+    });
+
+    it('draws a side too short for two dashes solid', () => {
+      const lines = only(box({ width: '8', border: '2 dashed #000' }), 'line');
+      expect(lines[0]!.dash).toBeUndefined();
+      expect(lines[1]!.dash).toBeDefined();
+    });
+
+    it('dots each square side with round dots of the width, the first and last in the corners', () => {
+      const lines = only(box({ border: '2 dotted #00f' }), 'line');
+      expect(lines).toHaveLength(4);
+      for (const line of lines) {
+        expect(line.cap).toBe('round');
+        const [dash, spacing] = line.dash!;
+        expect(dash).toBe(0);
+        // About 2w apart, fitted so the dots run from 1pt inside one end to 1pt inside the other.
+        expect(spacing!).toBeGreaterThan(3.5);
+        expect(spacing!).toBeLessThan(4.5);
+        expect(spacing! - line.dashPhase!).toBeCloseTo(1, 9);
+        expectWhole((length(line) - 2) / spacing!);
+      }
+    });
+
+    it('strokes a uniform rounded border as one closed path, the pattern fitted to it', () => {
+      const perimeter = 2 * (98 - 14) + 2 * (38 - 14) + 2 * Math.PI * 7;
+      const dashed = box({ border: '2 dashed #f00', 'border-radius': '8' });
+      expect(only(dashed, 'line')).toEqual([]);
+      const [outline] = only(dashed, 'path');
+      expect(only(dashed, 'path')).toHaveLength(1);
+      expect(outline).toMatchObject({ width: 2, color: '#ff0000' });
+      const last = outline!.segments.at(-1)!.to;
+      expect(last.x).toBeCloseTo(outline!.from.x, 6);
+      expect(last.y).toBeCloseTo(outline!.from.y, 6);
+      expect(outline!.dash![0]).toBe(6);
+      const [dash, gap] = outline!.dash!;
+      expect(dash! + gap!).toBeCloseTo(perimeter / 22, 3);
+
+      const dotted = only(box({ border: '2 dotted #f00', 'border-radius': '8' }), 'path');
+      expect(dotted).toHaveLength(1);
+      expect(dotted[0]!.cap).toBe('round');
+      expect(dotted[0]!.dash![0]).toBe(0);
+      expect(dotted[0]!.dash![1]).toBeCloseTo(perimeter / 65, 3);
+    });
+
+    it('draws each side on its own when the rounded sides differ', () => {
+      const ops = box({
+        border: '2 dashed #000',
+        'border-left': '2 dotted #000',
+        'border-bottom': '2 solid #000',
+        'border-radius': '8',
+      });
+      const paths = only(ops, 'path');
+      expect(paths).toHaveLength(4);
+      const [top, right, bottom, left] = paths;
+      expect(top!.dash![0]).toBe(6);
+      expect(right!.dash![0]).toBe(6);
+      expect(bottom!.dash).toBeUndefined();
+      expect(left).toMatchObject({ cap: 'round' });
+      expect(left!.dash![0]).toBe(0);
+      // Each pattern starts at its own corner: the middle of the arc, with no phase.
+      expect(top!.dashPhase).toBeUndefined();
+      expect(left!.dashPhase).toBeUndefined();
+    });
+
+    it('draws a none side not at all and keeps solid sides solid', () => {
+      const ops = box({ border: '2 solid #000', 'border-style': 'solid none' });
+      const lines = only(ops, 'line');
+      expect(lines).toHaveLength(2);
+      for (const line of lines) expect(line.dash).toBeUndefined();
+    });
+  });
+
   it('draws one line per border side with a width', () => {
     const style = { 'border-top': '2 solid #f00', 'border-left': '1 solid #0f0', height: '30' };
     const ops = list(layout(page([el('pdf-view', style)]))[0]!, 0, 1);

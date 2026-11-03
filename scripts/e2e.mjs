@@ -137,6 +137,20 @@ const DOCUMENTS = [
     pages: 3,
     contains: ['Sheet 1 of 3', 'Continued on next page', 'Sheet 3 of 3', 'End of report'],
   },
+  {
+    name: 'borders-sample',
+    pages: 1,
+    contains: ['Spring fair ticket', 'Admit one', 'Cut here', 'Stub: keep this part.'],
+    paths: {
+      // The rounded dashed card: one closed outline, so the dashes run round its corners.
+      'm l c c l c c l c c l c c l S dashed': 1,
+      // The two dotted fields and the dashed cut line.
+      'm l S dashed': 3,
+      // The stub: three solid sides and its dotted left side, each from mid-corner to mid-corner.
+      'm c l c S': 3,
+      'm c l c S dashed': 1,
+    },
+  },
 ];
 
 const update = process.argv.includes('--update');

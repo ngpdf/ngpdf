@@ -92,6 +92,8 @@ Shorthands with 1 to 4 values follow CSS order: top, right, bottom, left.
 | `border-top-width`, `border-right-width`, `border-bottom-width`, `border-left-width` | length or `thin`, `medium`, `thick` | `0` |
 | `border-color` | 1 to 4 colors | `black` |
 | `border-top-color`, `border-right-color`, `border-bottom-color`, `border-left-color` | color | `black` |
+| `border-style` | 1 to 4 of `solid`, `dashed`, `dotted`, `none`, `hidden` (and the styles drawn solid, below) | `solid` |
+| `border-top-style`, `border-right-style`, `border-bottom-style`, `border-left-style` | one style | `solid` |
 | `border-radius` | 1 to 4 lengths, from the top-left corner clockwise | `0` |
 | `border-top-left-radius`, `border-top-right-radius`, `border-bottom-right-radius`, `border-bottom-left-radius` | length | `0` |
 | `background-color` | color | none |
@@ -104,7 +106,7 @@ Shorthands with 1 to 4 values follow CSS order: top, right, bottom, left.
 | `position` | `static`, `relative`, `absolute` | `static` |
 | `top`, `right`, `bottom`, `left` | length/%, negative allowed, or `auto`; a percentage of an absolute element is of its containing block's padding box | `auto` |
 
-In `border`, a missing width is 1 and a missing color is black. The width keywords `thin`, `medium` and `thick` mean 1, 3 and 5 points. The styles `none` and `hidden` set the width to 0; `solid` draws solid; `dashed`, `dotted`, `double`, `groove`, `ridge`, `inset` and `outset` are drawn solid with a dev-mode warning. `border-radius` rounds the background and the borders. Radii that add up to more than a side are scaled down together, as in CSS. `overflow` is not inherited and is ignored on a `pdf-page` and a `pdf-table`; see [Overflow](/docs/layout-and-styling#overflow).
+In `border`, a missing width is 1 and a missing color is black. The width keywords `thin`, `medium` and `thick` mean 1, 3 and 5 points. `border` and `border-<side>` set the style of the sides they cover, and solid when they name none. A side whose style is `none` or `hidden` has a width of 0, whichever declaration comes last. `dashed` draws dashes 3 widths long and `dotted` round dots one width across, 2 widths apart; see [Backgrounds, borders and radius](/docs/layout-and-styling#backgrounds-borders-and-radius). `double`, `groove`, `ridge`, `inset` and `outset` are drawn solid with a dev-mode warning. Unlike CSS, the default style is `solid`, so `border-width: 2` on its own draws a border. `border-radius` rounds the background and the borders. Radii that add up to more than a side are scaled down together, as in CSS. `overflow` is not inherited and is ignored on a `pdf-page` and a `pdf-table`; see [Overflow](/docs/layout-and-styling#overflow).
 
 `transform` applies its functions left to right, around `transform-origin`, and changes only how the element is drawn, not the layout. Angles take `deg`, `rad` or `turn`, and a positive angle turns clockwise. `scale()` takes one number for both axes or two. Translations take lengths or a percentage of the element's own border box. Neither property is inherited, and `transform` is ignored on a `pdf-page` and a `pdf-table`. See [Transforms](/docs/layout-and-styling#transforms).
 
@@ -127,7 +129,7 @@ Everything else is ignored, including:
 
 - `display`, `z-index`, `overflow-x`, `overflow-y`;
 - `flex-wrap`, `align-content`, `row-gap`, `column-gap`, `order`;
-- `box-shadow`, `border-style`;
+- `box-shadow`;
 - `font`, `word-spacing`, `white-space`, `vertical-align`;
 - custom properties (`--name`).
 

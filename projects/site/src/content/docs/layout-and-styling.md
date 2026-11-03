@@ -108,12 +108,14 @@ Anything else, such as `hsl()`, `currentColor` or `var(--brand)`, throws `ngpdf:
 
 - `background-color` fills the element's border box.
 - `background-image` takes one `linear-gradient()` or `radial-gradient()`, or `none`. The gradient fills the border box over the background color, follows `border-radius`, and is not inherited. `background` is a shorthand for a color, a gradient, or one of each: `background: linear-gradient(to right, #dd0031, #c3002f) #dd0031`.
-- `border: <width> <style> <color>`, in any order, with every part optional. The width defaults to 1 and the color to black. `none` and `hidden` remove the border.
-- Per side: `border-top`, `border-right`, `border-bottom`, `border-left`, and `border-<side>-width`, `border-<side>-color`. `border-width` and `border-color` take one to four values.
-- Only solid lines are drawn. `dashed`, `dotted`, `double`, `groove`, `ridge`, `inset` and `outset` are drawn solid, with a dev-mode warning. `border-style` on its own is ignored.
+- `border: <width> <style> <color>`, in any order, with every part optional. The width defaults to 1, the style to `solid` and the color to black. `none` and `hidden` remove the border.
+- Per side: `border-top`, `border-right`, `border-bottom`, `border-left`, and `border-<side>-width`, `border-<side>-style`, `border-<side>-color`. `border-width`, `border-style` and `border-color` take one to four values, like `margin`.
+- The styles drawn are `solid`, `dashed` and `dotted`. A side whose style is `none` or `hidden` is not drawn and has a width of 0 in the layout, as in CSS, whatever order the declarations come in. `double`, `groove`, `ridge`, `inset` and `outset` are drawn solid, with a dev-mode warning. Unlike CSS, a border with no style is solid, so `border-width: 2` alone draws one.
+- `dashed` draws dashes 3 times the width long with gaps of about the same length. `dotted` draws round dots as wide as the border, their centres about 2 widths apart. The gaps are fitted to each side, so a side starts and ends with a dash or a dot at its corners. On a square corner the dot sits in the corner, inside the box. A side too short for two dashes is drawn solid.
+- When all four sides of a rounded box are dashed or dotted with the same width and color, the whole outline is drawn as one line, so the dashes or dots run on round the corners. Otherwise each side starts its own pattern at its corner.
 - The width keywords `thin`, `medium` and `thick` mean 1, 3 and 5 points, in `border`, `border-width` and the per-side forms.
 - `border-radius` takes one to four lengths, from the top-left corner clockwise, as in CSS. `border-top-left-radius`, `border-top-right-radius`, `border-bottom-right-radius` and `border-bottom-left-radius` set one corner. The background and the borders both follow the rounded corners. When the radii on a side add up to more than its length, all four are scaled down together.
-- Where two border sides of different widths or colors meet at a rounded corner, each keeps its own up to the middle of the arc.
+- Where two border sides of different widths, styles or colors meet at a rounded corner, each keeps its own up to the middle of the arc.
 - A view split across pages keeps square corners where the page cuts it.
 - Children and images of a rounded view are not clipped to its corners unless it has an [`overflow`](#overflow) other than `visible`.
 
