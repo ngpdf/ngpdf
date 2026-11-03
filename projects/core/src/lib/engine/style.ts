@@ -226,7 +226,24 @@ function scanNumber(text: string): number {
       digits++;
     }
   }
-  return digits === 0 ? 0 : i;
+  if (digits === 0) return 0;
+  return scanExponent(text, i);
+}
+
+/**
+ * End index after an exponent such as `e-15` at `start`, or `start` when there is none. String(n)
+ * writes one for numbers below 1e-6 and from 1e21 up. An `e` with no digit after it stays part of
+ * the unit, so `3em` is still 3 and `em`.
+ */
+function scanExponent(text: string, start: number): number {
+  const e = text.charCodeAt(start);
+  if (e !== 69 && e !== 101) return start;
+  let i = start + 1;
+  const sign = text.charCodeAt(i);
+  if (sign === 43 || sign === 45) i++;
+  if (!isDigit(text.charCodeAt(i))) return start;
+  while (isDigit(text.charCodeAt(i))) i++;
+  return i;
 }
 
 /** A unitless number, or null when the whole token is not one. */
@@ -263,7 +280,9 @@ export function parseLength(value: string, tag?: string): Length {
   const end = scanNumber(text);
   if (end === 0) return fail(`invalid length "${show(value)}"`, tag);
   const amount = Number(text.slice(0, end));
-  if (!Number.isFinite(amount)) return fail(`invalid length "${show(value)}"`, tag);
+  if (!Number.isFinite(amount)) {
+    return fail(`invalid length "${show(value)}" (not a finite number)`, tag);
+  }
   const unit = text.slice(end).toLowerCase();
   if (unit === '%') return { percent: amount };
   const factor = UNIT_FACTORS.get(unit);

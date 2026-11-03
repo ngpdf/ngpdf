@@ -85,6 +85,8 @@ A page has no fixed height during layout: content is laid out at the page's cont
 
 Any other unit, such as `em`, `rem` or `vh`, throws `ngpdf: unknown unit in "<value>"`.
 
+Numbers can have an exponent, as in CSS: `1e-7`, `1.5E3`, `2e1mm`. A bound number is turned into text with `String(n)`, which writes values below 1e-6 and from 1e21 up this way, so `[style.left.pt]="x"` works for any finite `x`. A number too large to represent, such as `1e999`, throws; in a length the error is `ngpdf: invalid length "1e999" (not a finite number)`.
+
 Percentages work in `width`, `height`, the `min-`/`max-` sizes, `margin`, `padding` and `flex-basis`. `gap`, `font-size`, `border-radius` and border widths take a length only; a percentage there throws.
 
 `line-height` is the exception to "a bare number is points": there it multiplies the font size, as in CSS. See [Text and fonts](/docs/text-and-fonts).
