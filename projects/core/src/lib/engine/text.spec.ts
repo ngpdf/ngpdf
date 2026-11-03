@@ -763,6 +763,7 @@ describe('layoutRanges with maxLines', () => {
     writer = await createPdfkitWriter({ compress: false });
     writer.registerFont('font:0', testFont('inter-basic.otf'));
     writer.registerFont('font:jp', testFont('noto-sans-jp-subset.ttf'));
+    writer.registerFont('font:noto', testFont('noto-sans-regular.ttf'));
   });
   const text = 'Gabriela Teixeira de Albuquerque Cavalcanti mora em Recife desde 2019';
   const clamped = (maxLines: number | null, maxWidth = 120, ranges?: readonly TextRange[]) =>
@@ -887,6 +888,35 @@ describe('layoutRanges with maxLines', () => {
     const last = japaneseLine(['font:jp', 'font:0'])?.runs.at(-1);
     expect(last?.text).toBe('...');
     expect(last?.font).toBe('font:0');
+  });
+
+  it('keeps the ellipsis in the font of the last run when an earlier font of the list has it too', () => {
+    // Helvetica has "…" but no Cyrillic, so the words are drawn in Noto, which has "…" as well.
+    const cyrillic = 'Жук ест листья Жук ест листья Жук ест листья';
+    const [line] = clamped(1, 60, [
+      { text: cyrillic, style, fonts: { chain: ['Helvetica', 'font:noto'] } },
+    ]).lines;
+    const last = line?.runs.at(-1);
+    expect(last?.text.endsWith('…')).toBe(true);
+    expect(last?.font).toBe('font:noto');
+  });
+
+  it('keeps the color, decoration and link of the last run on an ellipsis in another font', () => {
+    const marked: TextStyle = {
+      ...style,
+      color: { r: 255, g: 0, b: 0, a: 1 },
+      textDecoration: 'underline',
+    };
+    const url = 'https://example.com/docs';
+    const [line] = clamped(1, 60, [
+      { text: japanese, style: marked, fonts: { chain: ['font:jp', 'Helvetica'] }, link: url },
+    ]).lines;
+    const last = line?.runs.at(-1);
+    expect(last?.text).toBe('…');
+    expect(last?.font).toBe('Helvetica');
+    expect(last?.color).toEqual(marked.color);
+    expect(last?.decoration).toBe('underline');
+    expect(last?.link).toBe(url);
   });
 
   it('takes the ellipsis font from the list of the range the cut ends in', () => {
