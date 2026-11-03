@@ -22,7 +22,7 @@ Three forms work, on any `pdf-*` element:
 <pdf-text [style]="{ color: '#c62828', 'font-weight': 'bold' }">Overdue</pdf-text>
 ```
 
-You can combine a static `style` with bindings on the same element. A binding set to `null` or `undefined` removes that property. Property names can be kebab-case or camelCase (`backgroundColor` becomes `background-color`).
+You can combine a static `style` with bindings on the same element. As in a browser, the last declaration of a property wins, and a binding wins over the static `style`. So `margin: 10; margin-top: 5` gives a top margin of 5, and so does `style="margin: 10"` with `[style.margin-top]="5"`. A binding set to `null` removes that property. One set to `undefined` falls back to the value from a `[style]` object binding or the static `style`, if either sets it, and otherwise removes it. Property names can be kebab-case or camelCase (`backgroundColor` becomes `background-color`).
 
 What has no effect:
 
