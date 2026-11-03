@@ -114,8 +114,6 @@ The header row repeats on every page, rows are never split, and the text stays s
 - Children and images of a rounded view are clipped to its corners only with an `overflow` other than `visible`.
 - A bare number is in points, except in `line-height`, where it multiplies the font size as in
   CSS (`line-height: 1.4`). Write `line-height: 14pt` for points.
-- Text sits at the top of its line box: extra `line-height` goes below the text, not half above
-  and half below as in CSS.
 - Bare text inside an element other than `pdf-text` (`<pdf-cell>{{ x }}</pdf-cell>`) is laid out
   as an anonymous `pdf-text` with its parent's text styles.
 - Your own components inside a document are transparent, like `display: contents`: their

@@ -537,7 +537,10 @@ describe('layoutRanges', () => {
     const block = lay([range('small '), range('BIG', big), range(' after and more words')], width);
     const [first, second] = block.lines;
     expect(first?.height).toBe(18 * 1.5);
-    expect(first?.ascent).toBeCloseTo(writer.ascent('Helvetica', 18), 6);
+    // The 18pt run's half-leading puts the baseline.
+    const ascent = writer.ascent('Helvetica', 18);
+    const descent = writer.descent!('Helvetica', 18);
+    expect(first?.ascent).toBeCloseTo(ascent + (18 * 1.5 - ascent - descent) / 2, 6);
     expect(first?.runs.map((run) => run.size)).toEqual([9, 18]);
     expect(first?.runs[0]?.ascent).toBeCloseTo(writer.ascent('Helvetica', 9), 6);
     expect(second?.y).toBe(27);
@@ -864,7 +867,7 @@ describe('layoutRanges with maxLines', () => {
 
   it('falls back to three dots when the font has no ellipsis', () => {
     const [line] = clamped(1, 120, [{ text, style, fonts: { chain: ['font:0'] } }]).lines;
-    expect(line?.text.endsWith('...')).toBe(true);
+    expect(line?.text).toMatch(/(…|\.\.\.)$/);
     expect(line?.width).toBeLessThanOrEqual(120);
   });
 
@@ -1072,14 +1075,15 @@ describe('layoutRanges with emoji images', () => {
     const [line] = lay('a👍').lines;
     // 9pt: the text rises 4.5 and drops 2.25, so the emoji reaches 9 - 2.25 above the baseline.
     expect(line?.runs.map((run) => run.ascent)).toEqual([4.5, 6.75]);
-    expect(line?.ascent).toBe(6.75);
+    // The emoji's content is 9 tall in a 13.5 line: 2.25 of half-leading above it.
+    expect(line?.ascent).toBe(9);
   });
 
   it('sits on the baseline when the metrics give no descent', () => {
     const noDescent: FontMetrics = { ...tens, descent: undefined } as unknown as FontMetrics;
     const [line] = layoutRanges([{ text: 'a👍', style, emoji }], style, Infinity, noDescent).lines;
     expect(line?.runs[1]?.ascent).toBe(9);
-    expect(line?.ascent).toBe(9);
+    expect(line?.ascent).toBe(9 + 2.25);
   });
 
   it('breaks lines around emoji and never inside one', () => {
@@ -1139,5 +1143,72 @@ describe('layoutRanges with emoji images', () => {
   it('upper-cases the text around an emoji and leaves the emoji', () => {
     const [line] = lay('a👍b', Infinity, { textTransform: 'uppercase' }).lines;
     expect(line?.runs.map((run) => run.text)).toEqual(['A', '👍', 'B']);
+  });
+});
+
+describe('half-leading', () => {
+  // 0.8 em above the baseline and 0.2 below in Helvetica, 0.5 and 0.5 in Courier.
+  const split: FontMetrics = {
+    widthOf: (chunk, _font, size) => (size / 2) * chunk.length,
+    ascent: (font, size) => (font === 'Courier' ? 0.5 : 0.8) * size,
+    descent: (font, size) => (font === 'Courier' ? 0.5 : 0.2) * size,
+    hasGlyph: () => false,
+  };
+  const at = (lineHeight: number, fontSize = 10): TextStyle => ({
+    ...style,
+    fontSize,
+    lineHeight,
+  });
+
+  it('splits the extra line height evenly above and below the text', () => {
+    const [line] = layoutText('Hi', at(3), Infinity, split).lines;
+    // 30pt line, 10pt of content: 10pt of leading above it, 10pt below.
+    expect(line?.height).toBe(30);
+    expect(line?.ascent).toBeCloseTo(10 + 8, 6);
+    expect(line?.runs[0]?.ascent).toBeCloseTo(8, 6);
+  });
+
+  it('gives a line height smaller than the content a negative half-leading', () => {
+    const [line] = layoutText('Hi', at(0.5), Infinity, split).lines;
+    expect(line?.height).toBe(5);
+    expect(line?.ascent).toBeCloseTo(8 - 2.5, 6);
+  });
+
+  it('places mixed runs on the baseline of the run that reaches highest', () => {
+    const ranges: TextRange[] = [
+      { text: 'small ', style: at(2) },
+      { text: 'mono', style: { ...at(2, 12), fontFamily: 'Courier' } },
+    ];
+    const [line] = layoutRanges(ranges, at(2), Infinity, split).lines;
+    // Helvetica 10: (20 - 10) / 2 + 8 = 13 above the baseline. Courier 12: (24 - 12) / 2 + 6 = 12.
+    expect(line?.height).toBe(24);
+    expect(line?.ascent).toBeCloseTo(13, 6);
+  });
+
+  it('keeps every line of a paragraph its line height apart', () => {
+    const lines = layoutText('aa bb cc', at(2), 12, split).lines;
+    expect(lines.map((line) => [line.y, line.ascent])).toEqual([
+      [0, 13],
+      [20, 13],
+      [40, 13],
+    ]);
+  });
+
+  it('centres the ellipsis line of max-lines text the same way', () => {
+    const [line, ...rest] = layoutRanges(
+      [{ text: 'aaaa bbbb cccc', style: at(3) }],
+      { ...at(3), maxLines: 1 },
+      30,
+      split,
+    ).lines;
+    expect(rest).toHaveLength(0);
+    expect(line?.text).toMatch(/(…|\.\.\.)$/);
+    expect(line?.ascent).toBeCloseTo(18, 6);
+  });
+
+  it('takes the content as 1 em tall when the metrics give no descent', () => {
+    const noDescent: FontMetrics = { ...split, descent: undefined } as unknown as FontMetrics;
+    expect(layoutText('Hi', at(1), Infinity, noDescent).lines[0]?.ascent).toBeCloseTo(8, 6);
+    expect(layoutText('Hi', at(3), Infinity, noDescent).lines[0]?.ascent).toBeCloseTo(18, 6);
   });
 });

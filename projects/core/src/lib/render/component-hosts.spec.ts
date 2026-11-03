@@ -56,6 +56,9 @@ class Lines {
   readonly lines = input.required<string[]>();
 }
 
+// Helvetica 10pt in a 12pt line: (12 - 7.18 ascent - 2.07 descent) / 2 above the text.
+const HALF_LEADING = (12 - 7.18 - 2.07) / 2;
+
 const ITEMS = Array.from({ length: 60 }, (_, i) => `Item ${String(i + 1)}`);
 
 @Component({
@@ -166,14 +169,12 @@ describe('user component hosts', () => {
     }
     // Both header cells, in their columns, open every page.
     for (const page of pages) {
-      expect(
-        texts(page)
-          .slice(0, 2)
-          .map(({ text, x, y }) => ({ text, x, y })),
-      ).toEqual([
-        { text: 'Name', x: name.x, y: 40 },
-        { text: 'Amount', x: amount.x, y: 40 },
+      const header = texts(page).slice(0, 2);
+      expect(header.map(({ text, x }) => ({ text, x }))).toEqual([
+        { text: 'Name', x: name.x },
+        { text: 'Amount', x: amount.x },
       ]);
+      for (const cell of header) expect(cell.y).toBeCloseTo(40 + HALF_LEADING, 6);
     }
   });
 
@@ -183,11 +184,8 @@ describe('user component hosts', () => {
     // 60 lines of 20pt in an A4 content box of 769.89pt: 38 lines per page.
     expect(pages.map((page) => texts(page).length)).toEqual([38, 22]);
     const [first] = texts(pages[1]!);
-    expect({ text: first?.text, x: first?.x, y: first?.y }).toEqual({
-      text: 'Item 39',
-      x: 36,
-      y: 36,
-    });
+    expect({ text: first?.text, x: first?.x }).toEqual({ text: 'Item 39', x: 36 });
+    expect(first?.y).toBeCloseTo(36 + HALF_LEADING, 6);
     expect(warn).toHaveBeenCalledExactlyOnceWith(
       'ngpdf: styles on <app-lines> are ignored; style a pdf-* element inside it',
     );
