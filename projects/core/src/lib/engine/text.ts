@@ -387,6 +387,8 @@ interface ShapedRanges {
   readonly autoAt?: Uint8Array;
   /** For an emoji face, the face of the text around it, which an ellipsis after it takes. */
   readonly textFace?: ReadonlyMap<number, number>;
+  /** For each text face, the faces of the font list of the range it came from, in list order. */
+  readonly chains: readonly (readonly number[] | undefined)[];
 }
 
 /**
@@ -478,6 +480,7 @@ function shapeRanges(ranges: readonly TextRange[], metrics: FontMetrics): Shaped
     ranges.map((range) => range.style.textTransform),
   );
   const textFace = new Map<number, number>();
+  const chains: (readonly number[] | undefined)[] = [];
   const emojiFaceOf = (emoji: string, image: ImageAsset, range: TextRange, text: number) => {
     const { fontSize: size, color, textDecoration: decoration, letterSpacing } = range.style;
     const key = `emoji ${emoji}:${String(text)}`;
@@ -506,6 +509,7 @@ function shapeRanges(ranges: readonly TextRange[], metrics: FontMetrics): Shaped
     const chain = range.fonts?.chain ?? [fontFor(range.style)];
     // Registered in chain order, so for a single range a face index is its chain index.
     const toFace = chain.map((font) => faceOf(font, range.style, range.link));
+    for (const face of toFace) chains[face] ??= toFace;
     return splitEmoji(pieces[i] ?? '', range.emoji).map((part) => {
       if (typeof part === 'string') {
         return { range, shaped: shapeText(part, chain, metrics), toFace };
@@ -534,6 +538,7 @@ function shapeRanges(ranges: readonly TextRange[], metrics: FontMetrics): Shaped
       ...only.shaped,
       faces,
       faceAt: only.shaped.fontAt,
+      chains,
       softBreaks:
         hyphens === 'none' ? [] : softBreaksIn(only.shaped.softHyphens, 0, only.shaped.text.length),
       ...(hyphens === 'auto' && { autoAt: new Uint8Array(only.shaped.text.length).fill(1) }),
@@ -570,6 +575,7 @@ function shapeRanges(ranges: readonly TextRange[], metrics: FontMetrics): Shaped
     text,
     faces,
     faceAt: Uint16Array.from(faceAt),
+    chains,
     ...(anyClusters && { clusterStarts }),
     replaced: [...replaced],
     missing: [...missing],
@@ -619,9 +625,8 @@ export function layoutRanges(
       const widthOf = cache.widthOf(metrics, face.font, face.size, false);
       return (chunk: string) => widthOf(chunk) + spacing * graphemeCount(chunk);
     });
-    const ellipses = shaped.faces.map((face) =>
-      covers(face.font, ELLIPSIS, metrics) ? ELLIPSIS : ELLIPSIS_DOTS,
-    );
+    const ellipses = shaped.faces.map((_, index) => ellipsisFor(shaped, index, metrics));
+    const missing = new Set(shaped.missing);
     const hyphens = shaped.faces.map((face) =>
       covers(face.font, HYPHEN, metrics) ? HYPHEN : HYPHEN_MINUS,
     );
@@ -630,18 +635,60 @@ export function layoutRanges(
         ? (word: string) => cache.hyphenPoints(word)
         : undefined;
     return {
-      block: breakLines(shaped, paragraph.lineHeight, maxWidth, widthOfs, maxLines, ellipses, {
-        glyphs: hyphens,
-        ...(hyphenPoints && { points: hyphenPoints }),
-      }),
+      block: breakLines(
+        shaped,
+        paragraph.lineHeight,
+        maxWidth,
+        widthOfs,
+        maxLines,
+        {
+          glyphs: ellipses,
+          onMissing: () => {
+            missing.add(ELLIPSIS);
+          },
+        },
+        { glyphs: hyphens, ...(hyphenPoints && { points: hyphenPoints }) },
+      ),
       replaced: shaped.replaced,
-      missing: shaped.missing,
+      missing: [...missing],
     };
   });
   if (replaced.length > 0) warn([...replaced]);
   if (missing.length > 0)
     ranges.find((range) => range.fonts?.missing)?.fonts?.missing?.([...missing]);
   return block;
+}
+
+/** The ellipsis a cut line ends with after a character of one face, and the face it is drawn in. */
+interface EllipsisGlyph {
+  readonly text: string;
+  readonly face: number;
+  /** No font of the list has it: it is drawn as the first font's fallback and reported. */
+  readonly missing?: boolean;
+}
+
+/** How a cut line ends: the ellipsis after each face, and what to call when a missing one is drawn. */
+interface LineEllipsis {
+  readonly glyphs: readonly EllipsisGlyph[];
+  readonly onMissing: () => void;
+}
+
+/**
+ * The ellipsis after a character of face `index`: `…` in that face if its font has it, else in the
+ * first font of its `font-family` list that has it; failing that `...` the same way. When no font
+ * of the list has either, `…` in the first font, reported as missing like any other character.
+ */
+function ellipsisFor(shaped: ShapedRanges, index: number, metrics: FontMetrics): EllipsisGlyph {
+  const chain = shaped.chains[index] ?? [index];
+  const has = (face: number, glyph: string): boolean => {
+    const font = shaped.faces[face]?.font;
+    return font !== undefined && covers(font, glyph, metrics);
+  };
+  for (const text of [ELLIPSIS, ELLIPSIS_DOTS]) {
+    const face = has(index, text) ? index : chain.find((other) => has(other, text));
+    if (face !== undefined) return { text, face };
+  }
+  return { text: ELLIPSIS, face: chain[0] ?? index, missing: true };
 }
 
 /** How a line may end inside a word. */
@@ -654,7 +701,7 @@ interface LineHyphenation {
 
 /**
  * The lines of the shaped text in `maxWidth`; see `layoutText`. Past `maxLines`, the last line is
- * shortened until its text plus the ellipsis of its last face fits.
+ * shortened until its text plus the ellipsis after its last face fits.
  */
 function breakLines(
   shaped: ShapedRanges,
@@ -662,7 +709,7 @@ function breakLines(
   maxWidth: number,
   widthOfs: readonly ((chunk: string) => number)[],
   maxLines: number,
-  ellipses: readonly string[],
+  ellipsis: LineEllipsis,
   hyphenation: LineHyphenation,
 ): TextBlock {
   const { text: collapsed, faces, faceAt: fontAt, clusterStarts, softBreaks, autoAt } = shaped;
@@ -720,19 +767,19 @@ function breakLines(
     const kept = keptEnd(start, end);
     return kept > start ? textFaceOf(fontAt[kept - 1] ?? fallback) : fallback;
   };
-  /** The runs of `[start, end)` without its trailing spaces, then the ellipsis in face `index`. */
+  /** The runs of `[start, end)` without its trailing spaces, then the ellipsis after face `index`. */
   const runsWithEllipsis = (start: number, end: number, index: number): TextRun[] => {
     const kept = keptEnd(start, end);
     const runs = runsOf(start, kept);
-    const ellipsis = ellipses[index] ?? ELLIPSIS;
-    const face = faces[index] ?? faces[0];
+    const glyph = ellipsis.glyphs[index] ?? { text: ELLIPSIS, face: index };
+    const face = faces[glyph.face] ?? faces[0];
     const last = runs.at(-1);
-    if (last && fontAt[kept - 1] === index) {
-      const text = last.text + ellipsis;
-      runs[runs.length - 1] = { ...last, text, width: widthIn(index, text) };
+    if (last && fontAt[kept - 1] === glyph.face) {
+      const text = last.text + glyph.text;
+      runs[runs.length - 1] = { ...last, text, width: widthIn(glyph.face, text) };
     } else if (face) {
       const x = last ? last.x + last.width : 0;
-      runs.push({ ...face, text: ellipsis, x, width: widthIn(index, ellipsis) });
+      runs.push({ ...face, text: glyph.text, x, width: widthIn(glyph.face, glyph.text) });
     }
     return runs;
   };
@@ -901,6 +948,7 @@ function breakLines(
       }
       // A box narrower than the ellipsis gets an empty line rather than one that overflows.
       runs = best >= 0 ? runsWithEllipsis(start, cut(best), bestFace) : [];
+      if (best >= 0 && ellipsis.glyphs[bestFace]?.missing) ellipsis.onMissing();
     }
     // An empty cut line keeps the height of the text it replaces.
     const sized = runs.length > 0 ? runs : runsOf(start, drawnEnd(end));

@@ -309,7 +309,7 @@ async save(): Promise<void> {
 
 ## Cutting text to a number of lines
 
-`max-lines` keeps at most that many lines of a `pdf-text`. When text was cut, the last kept line ends with an ellipsis: characters come off its end until the line and `…` fit the box. The ellipsis is drawn in the style of the last character kept on that line. A font without `…` gets `...` instead. The standard fonts have it. In a box too narrow for the ellipsis itself, the line is left empty. With `text-align: justify`, the cut line is not stretched, like a paragraph's last line.
+`max-lines` keeps at most that many lines of a `pdf-text`. When text was cut, the last kept line ends with an ellipsis: characters come off its end until the line and `…` fit the box. The ellipsis is drawn in the style of the last character kept on that line. When that character's font has no `…`, the ellipsis comes from the first font in the `font-family` list that has one, like any other character, keeping the size and color. If no font in the list has `…`, it is `...` in the first font that has `.`. The standard fonts have both, and a list with registered families always holds one (see [the fallback](#the-family-list-and-fallback)), so in practice the ellipsis is `…`. In a box too narrow for the ellipsis itself, the line is left empty. With `text-align: justify`, the cut line is not stretched, like a paragraph's last line.
 
 ```html
 <pdf-cell><pdf-text style="max-lines: 2">{{ product.description }}</pdf-text></pdf-cell>
