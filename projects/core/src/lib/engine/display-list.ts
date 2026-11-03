@@ -855,13 +855,12 @@ function drawPageNumber(
   const { metrics } = options;
   const size = style.fontSize;
   const ascentOf = (font: (typeof chain)[number]) => metrics.ascent(font, size);
-  const baseline = Math.max(
-    ...runs.map(({ font }) => {
-      const ascent = ascentOf(font);
-      const descent = metrics.descent?.(font, size) ?? size - ascent;
-      return ascent + (size * style.lineHeight - ascent - descent) / 2;
-    }),
-  );
+  // reduce, not a spread into Math.max: a long format can have more runs than a call has arguments.
+  const baseline = runs.reduce((highest, { font }) => {
+    const ascent = ascentOf(font);
+    const descent = metrics.descent?.(font, size) ?? size - ascent;
+    return Math.max(highest, ascent + (size * style.lineHeight - ascent - descent) / 2);
+  }, -Infinity);
   for (const run of runs) {
     out.push({
       op: 'text',

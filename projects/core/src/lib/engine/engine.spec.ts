@@ -873,6 +873,32 @@ describe('renderDocument with fonts', () => {
     expect(textOps(writer).at(-1)).toMatchObject({ text: 'Страница 1', font: 'font:0' });
   });
 
+  it('puts the runs of a page number in two fonts on one baseline, past their half-leading', async () => {
+    const baselineOf = async (family: string, format: string) => {
+      const writer = await fontWriter();
+      const number = el('pdf-page-number', { 'font-family': family, 'line-height': '3' }, [], {
+        format,
+      });
+      await renderDocument(onePage(text('a'), number), { writer, dev: false, fonts });
+      return textOps(writer)
+        .slice(1)
+        .map((op) => [op.font, op.y + real.ascent(op.font, 10)] as const);
+    };
+    const mixed = await baselineOf('Noto Sans, "Noto Sans JP"', 'Zoë 日本');
+    expect(mixed.map(([font]) => font)).toEqual(['font:0', 'font:2']);
+    const [[, latin], [, cjk]] = mixed as [readonly [string, number], readonly [string, number]];
+    expect(cjk).toBeCloseTo(latin, 6);
+    // Noto Sans JP reaches higher above its baseline in a 30pt line, so it sets the baseline the
+    // Latin run sits on: the same as a page number in Noto Sans JP alone.
+    const reach = (font: 'font:0' | 'font:2') => {
+      const ascent = real.ascent(font, 10);
+      return ascent + (30 - ascent - real.descent!(font, 10)) / 2;
+    };
+    expect(reach('font:2')).toBeGreaterThan(reach('font:0') + 0.1);
+    const [[, alone]] = (await baselineOf('"Noto Sans JP"', '日本')) as [readonly [string, number]];
+    expect(latin).toBeCloseTo(alone, 6);
+  });
+
   it('warns once, naming the characters no font in the list has', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     const writer = await fontWriter();
