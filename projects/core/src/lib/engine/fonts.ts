@@ -193,14 +193,15 @@ export function normalizeText(text: string, keepSoftHyphens = false): string {
 }
 
 /**
- * `normalizeText`, then the ideographic space and the Ogham space mark become a space and any
- * other character outside WinAnsi becomes `?`, reporting each distinct one once. The text of a
+ * `normalizeText` and NFC, then the ideographic space and the Ogham space mark become a space and
+ * any other character outside WinAnsi becomes `?`, reporting each distinct one once. The text of a
  * standard font.
  */
 export function toWinAnsi(text: string, warn: (chars: string[]) => void): string {
   const unsupported = new Set<string>();
   let out = '';
-  for (const char of normalizeText(text)) {
+  // WinAnsi has no combining marks, so `e` + U+0301 is drawn only as the composed `é`.
+  for (const char of normalizeText(text).normalize('NFC')) {
     const codePoint = char.codePointAt(0) ?? 0;
     if (isWideSpace(codePoint)) {
       out += ' ';
@@ -294,11 +295,27 @@ export function shapeText(
       softHyphens.push(out.length);
       continue;
     }
-    let index =
-      previousFont && isSpace(segment) && covers(previousFont, segment, metrics)
-        ? previous
-        : chain.findIndex((font) => covers(font, segment, metrics));
+    let index = -1;
     let drawn = segment;
+    if (previousFont && isSpace(segment) && covers(previousFont, segment, metrics)) {
+      index = previous;
+    } else {
+      // A font without the cluster as written may have its NFC form: every standard font has `é`
+      // but not `e` + U+0301. It is computed only on that miss, once per cluster.
+      let composed: string | undefined;
+      for (const [i, font] of chain.entries()) {
+        if (covers(font, segment, metrics)) {
+          index = i;
+          break;
+        }
+        composed ??= segment.normalize('NFC');
+        if (composed !== segment && covers(font, composed, metrics)) {
+          index = i;
+          drawn = composed;
+          break;
+        }
+      }
+    }
     if (index < 0) {
       index = 0;
       if (first && isStandardFont(first)) {
