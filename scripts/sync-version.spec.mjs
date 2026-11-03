@@ -11,6 +11,9 @@ describe('syncVersion', () => {
   it('writes the package version into the source', () => {
     expect(syncVersion(source, '0.8.0')).toBe(source.replace("'0.7.0'", "'0.8.0'"));
     expect(syncVersion(source, '1.0.0-next.2')).toContain("new Version('1.0.0-next.2')");
+    expect(syncVersion(source, '1.0.0-next-major.0+build-7')).toContain(
+      "new Version('1.0.0-next-major.0+build-7')",
+    );
   });
 
   it('leaves a source that already has the version unchanged', () => {

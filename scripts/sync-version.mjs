@@ -7,7 +7,9 @@ import { fileURLToPath } from 'node:url';
 
 const VERSION_FILE = 'projects/core/src/version.ts';
 const LITERAL = /new Version\('[^'\n]*'\)/;
-const SEMVER = /^\d+\.\d+\.\d+(?:-[\w.]+)?(?:\+[\w.]+)?$/;
+// SemVer 2.0: dot-separated identifiers of letters, digits and hyphens after `-` and `+`.
+const SEMVER =
+  /^\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;
 
 export function syncVersion(source, version) {
   if (!SEMVER.test(version)) throw new Error(`sync-version: "${version}" is not a version`);
