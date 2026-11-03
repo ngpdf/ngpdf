@@ -852,6 +852,14 @@ interface Plan {
   readonly top: number;
 }
 
+/**
+ * Where the header drawn with a unit ends. Above the unit in a column table, but beside it in a
+ * row table, where a header taller than the unit can reach lower.
+ */
+function headerBottom(plan: Plan): number {
+  return plan.header ? plan.leadTop + plan.header.height : -Infinity;
+}
+
 /** An absolute box asks for no break: it is never a unit. */
 function inFlow(box: Box): readonly Box[] {
   return box.children.some(isAbsolute) ? box.children.filter((c) => !isAbsolute(c)) : box.children;
@@ -1488,14 +1496,10 @@ export function paginatePage(
       frame.bottom - top - (first ? insetTop : 0);
     let next = planned;
     let starts: readonly number[] = cells.map(() => 0);
-    const here = nextStops(
-      cells,
-      starts,
-      room(next.top, true),
-      reserve,
-      slack,
-      current.units === 0,
-    );
+    const headerFits = headerBottom(next) <= frame.bottom + slack || current.units === 0;
+    const here = headerFits
+      ? nextStops(cells, starts, room(next.top, true), reserve, slack, current.units === 0)
+      : null;
     if (!here) {
       startPage();
       next = replan();
@@ -1684,7 +1688,8 @@ export function paginatePage(
     }
     const planned = index <= textLast ? textBreaks : null;
     const trail = trailOf(index, unit);
-    const overflows = next.top + unit.box.h + trail > frame.bottom + slack;
+    const overflows =
+      Math.max(next.top + unit.box.h + trail, headerBottom(next)) > frame.bottom + slack;
     if ((planned ? planned.has(index) : overflows) && current.units > 0) {
       startPage();
       previousBottom = null;

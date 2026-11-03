@@ -1991,6 +1991,39 @@ describe('paginatePage: table rows taller than a page', () => {
     }
   });
 
+  describe('a sideways table whose header is taller than the room left on the sheet', () => {
+    const header = (): PdfNode =>
+      el('pdf-row', { height: '100', width: '100' }, [cell([]), cell([])], { header: true });
+    const sideways = (rows: PdfNode[]): PdfNode =>
+      tableOf(rows, { 'flex-direction': 'row', 'row-gap': '10' });
+
+    it('moves rows that fit beside it to the next sheet with the header', () => {
+      const short = (): PdfNode =>
+        el('pdf-row', { height: '20', width: '100' }, [cell([]), cell([])]);
+      const [head, row, next, room] = [header(), short(), short(), filler(50)];
+      const pages = paginate(page([room, sideways([head, row, next])]));
+      expect(pages.map((laid) => laid.placed.map((placed) => placed.box.node))).toEqual([
+        [room],
+        [head, row, next],
+      ]);
+      for (const placed of pages[1]!.placed) expect(placed.y).toBeCloseTo(CONTENT_TOP, 6);
+    });
+
+    it('starts a split row on the next sheet with the header', () => {
+      const [head, room] = [header(), filler(50)];
+      const row = el('pdf-row', { width: '200' }, [cell([lines(100)]), cell([])]);
+      const pages = paginate(page([room, sideways([head, row])]));
+      expect(pages[0]!.placed.map((placed) => placed.box.node)).toEqual([room]);
+      for (const laid of pages.slice(1)) {
+        expect(laid.placed.map((placed) => placed.box.node)).toEqual([head, row]);
+        for (const placed of laid.placed) {
+          expect(placed.y).toBeCloseTo(CONTENT_TOP, 6);
+          expect(bottom(placed)).toBeLessThanOrEqual(BOTTOM + 1e-6);
+        }
+      }
+    });
+  });
+
   it('splits a row that fits a page only without its header, keeping the header', () => {
     const header = el('pdf-row', { height: '20' }, [cell([]), cell([])], { header: true });
     const long = lines(75);
