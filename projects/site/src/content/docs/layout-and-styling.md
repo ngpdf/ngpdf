@@ -28,7 +28,7 @@ What has no effect:
 
 - `class` and `[class.*]` bindings, and the component's `styles` or `styleUrl`. They are CSS for the DOM, and a document has no DOM.
 - Styles on the host element of your own components. ngpdf ignores them with a dev-mode warning. See [Components in documents](/docs/components-in-documents).
-- Properties ngpdf does not know, such as `z-index`, `flex-wrap` or `font`. They are ignored without a warning.
+- Properties ngpdf does not know, such as `z-index`, `order` or `font`. They are ignored without a warning.
 
 The style attribute is split on `;` outside quotes and parentheses, so a value such as `url(data:image/png;base64,...)` or `"A;B"` stays whole. Keywords are matched in any case, as in CSS: `text-align: CENTER` is `center` and `font-weight: BOLD` is `bold`. `!important` and `var()` are not supported.
 
@@ -39,9 +39,12 @@ Every element is a flex container. The defaults follow CSS flexbox, with one dif
 | Property | Values | Default |
 | --- | --- | --- |
 | `flex-direction` | `row`, `column` | `column` (`row` on `pdf-row`) |
+| `flex-wrap` | `nowrap`, `wrap`, `wrap-reverse` | `nowrap` |
+| `flex-flow` | `<direction> <wrap>`, either part optional, in any order | |
 | `justify-content` | `flex-start`, `center`, `flex-end`, `space-between`, `space-around`, `space-evenly` | `flex-start` |
 | `align-items` | `stretch`, `flex-start`, `center`, `flex-end` | `stretch` |
 | `align-self` | `auto`, `stretch`, `flex-start`, `center`, `flex-end` | `auto` |
+| `align-content` | `stretch`, `flex-start`, `center`, `flex-end`, `space-between`, `space-around`, `space-evenly` | `stretch` |
 | `gap` | `<row> [<column>]`, lengths or `%`; one value sets both | `0` |
 | `row-gap` | length, `%` | `0` |
 | `column-gap` | length, `%` | `0` |
@@ -50,9 +53,9 @@ Every element is a flex container. The defaults follow CSS flexbox, with one dif
 | `flex-shrink` | number | `1` |
 | `flex-basis` | length, `%`, `auto` | `auto` |
 
-`flex: 1` means grow 1, shrink 1, basis 0, as in CSS. `row-reverse`, `column-reverse`, `flex-wrap`, `align-content` and `baseline` are not supported.
+`flex: 1` means grow 1, shrink 1, basis 0, as in CSS. `row-reverse`, `column-reverse`, `order` and `baseline` are not supported.
 
-`row-gap` is the space between the children of a column, and `column-gap` the space between the children of a row. Without `flex-wrap`, a column uses only its row gap and a row only its column gap, as in a browser. A percentage is of the container's content box: its height for `row-gap`, its width for `column-gap`. A negative gap throws. When a column breaks across pages, the row gap before the first child on the new page is dropped: that child starts at the top of the content area.
+`row-gap` is the space between the children of a column, and `column-gap` the space between the children of a row. Without `flex-wrap`, a column uses only its row gap and a row only its column gap, as in a browser. A wrapping row also puts its row gap between its lines. A percentage is of the container's content box: its height for `row-gap`, its width for `column-gap`. A negative gap throws. When a column breaks across pages, the row gap before the first child on the new page is dropped: that child starts at the top of the content area.
 
 Sizing uses `width`, `height`, `min-width`, `min-height`, `max-width` and `max-height`, plus `margin` and `padding` with one to four values, or per side (`margin-top`, `padding-left`, and so on).
 
@@ -76,6 +79,22 @@ A margin can be `auto`, as in CSS: auto margins take the free space on their sid
 ```
 
 A page has no fixed height during layout: content is laid out at the page's content width with unbounded height, then cut into sheets. See [Pagination](/docs/pagination).
+
+### Wrapping
+
+With `flex-wrap: wrap`, a row puts the children that don't fit on further lines below, as in a browser. `wrap-reverse` stacks the lines upwards instead. `flex-flow` sets the direction and the wrap together; as in CSS, the part it leaves out goes back to its default, so write `flex-flow: row wrap` for a row, since `flex-flow: wrap` alone gives a wrapping column.
+
+```html
+<pdf-view style="flex-flow: row wrap; gap: 8">
+  @for (tag of tags(); track tag) {
+    <pdf-text style="padding: 4 8; border: 1 solid #cccccc; border-radius: 4">{{ tag }}</pdf-text>
+  }
+</pdf-view>
+```
+
+`align-content` places the lines when the container has free space on the cross axis, for example a row with a fixed `height`. The default, `stretch`, shares that space out between the lines, as CSS's `normal` does; Yoga's own default is `flex-start`. A column wraps only when its height is limited, by `height`, `max-height` or `flex` in a parent with a fixed height.
+
+Each line of a wrapping row is its own unit for [pagination](/docs/pagination#units), so a long grid breaks between lines. A `pdf-row` in a table never wraps: `flex-wrap` there is ignored with a warning.
 
 ## Units
 
