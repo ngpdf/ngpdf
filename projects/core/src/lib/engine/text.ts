@@ -40,7 +40,10 @@ export interface TextLine {
   readonly height: number;
   /** The baseline, below `y`: the largest ascent of the line's runs. */
   readonly ascent: number;
-  /** The paragraph's last line, which `text-align: justify` leaves at the start. */
+  /**
+   * The paragraph's last line, or a line that ends at a kept line break: `text-align: justify`
+   * leaves it at the start.
+   */
   readonly last: boolean;
   readonly runs: readonly TextRun[];
 }
@@ -93,6 +96,8 @@ const HYPHEN_MINUS = '-';
 // As browsers do by default: words of 5 letters or more, at least 2 letters on each side.
 const HYPHENATE_MIN_WORD = 5;
 const HYPHENATE_MIN_SIDE = 2;
+// CSS `tab-size`: tab stops every 8 spaces.
+const TAB_SIZE = 8;
 
 /**
  * The app's hyphenation function: the word cut into pieces that join back to it, such as
@@ -245,27 +250,84 @@ export class TextMeasureCache {
   }
 }
 
+type WhiteSpace = TextStyle['whiteSpace'];
+
+/** One piece under its `white-space`: CRLF and CR read as LF, then what the value collapses. */
+function collapsePiece(piece: string, whiteSpace: WhiteSpace): string {
+  switch (whiteSpace) {
+    case 'normal':
+    case 'nowrap':
+      return piece.replace(/[ \t\r\n]+/g, ' ');
+    case 'pre-line':
+      return piece
+        .replace(/\r\n?/g, '\n')
+        .replace(/[ \t]+/g, ' ')
+        .replace(/ ?\n ?/g, '\n');
+    case 'pre':
+    case 'pre-wrap':
+      return piece.replace(/\r\n?/g, '\n');
+  }
+}
+
+/** Whether spaces of text under `whiteSpace` collapse (and are trimmed at the ends). */
+const spacesCollapse = (whiteSpace: WhiteSpace): boolean =>
+  whiteSpace !== 'pre' && whiteSpace !== 'pre-wrap';
+
+/** Whether `trim()` would drop the unit at `at`; a kept line break stops the trim. */
+const trimsAt = (piece: string, at: number): boolean => {
+  const unit = piece.charAt(at);
+  return unit !== '\n' && unit.trim() === '';
+};
+
 /**
- * CSS `white-space: normal` over a paragraph split into pieces: runs of space, tab and line breaks
- * become one space, also across pieces (the space stays in the piece where the run starts), and the
- * ends of the whole paragraph are trimmed. Returns one string per piece.
+ * CSS `white-space` over a paragraph split into pieces, each under its own value (`normal` when
+ * `modes` is left out). Under `normal` and `nowrap`, runs of space, tab and line breaks become one
+ * space; under `pre-line`, line breaks stay and the spaces around them go. A collapsing space
+ * after a space or a line break is dropped across pieces too (it stays in the piece where the run
+ * starts), and collapsing spaces at the ends of the whole paragraph are trimmed. Returns one
+ * string per piece.
  */
-export function collapseWhitespace(pieces: readonly string[]): string[] {
+export function collapseWhitespace(
+  pieces: readonly string[],
+  modes?: readonly WhiteSpace[],
+): string[] {
+  const modeOf = (i: number): WhiteSpace => modes?.[i] ?? 'normal';
   let spaceBefore = false;
-  const collapsed = pieces.map((piece) => {
-    let out = piece.replace(/[ \t\r\n]+/g, ' ');
-    if (spaceBefore && out.startsWith(' ')) out = out.slice(1);
-    if (out !== '') spaceBefore = out.endsWith(' ');
+  const collapsed = pieces.map((piece, i) => {
+    let out = collapsePiece(piece, modeOf(i));
+    const collapses = spacesCollapse(modeOf(i));
+    if (collapses && spaceBefore && out.startsWith(' ')) out = out.slice(1);
+    if (out !== '') spaceBefore = out.endsWith('\n') || (collapses && out.endsWith(' '));
     return out;
   });
-  const whole = collapsed.join('');
-  const start = whole.length - whole.trimStart().length;
-  const end = whole.trimEnd().length;
-  let offset = 0;
-  return collapsed.map((piece) => {
-    const from = offset;
-    offset += piece.length;
-    return piece.slice(Math.max(0, start - from), Math.max(0, end - from));
+  // Trimmed piece by piece from each end, while the space there collapses.
+  const starts = collapsed.map(() => 0);
+  const ends = collapsed.map((piece) => piece.length);
+  for (let i = 0; i < collapsed.length; i++) {
+    const piece = collapsed[i] ?? '';
+    if (!spacesCollapse(modeOf(i))) {
+      if (piece !== '') break;
+      continue;
+    }
+    let trimmed = 0;
+    while (trimmed < piece.length && trimsAt(piece, trimmed)) trimmed++;
+    starts[i] = trimmed;
+    if (trimmed < piece.length) break;
+  }
+  for (let i = collapsed.length - 1; i >= 0; i--) {
+    const piece = collapsed[i] ?? '';
+    if (!spacesCollapse(modeOf(i))) {
+      if (piece !== '') break;
+      continue;
+    }
+    let kept = piece.length;
+    while (kept > 0 && trimsAt(piece, kept - 1)) kept--;
+    ends[i] = kept;
+    if (kept > 0) break;
+  }
+  return collapsed.map((piece, i) => {
+    const from = starts[i] ?? 0;
+    return piece.slice(from, Math.max(from, ends[i] ?? piece.length));
   });
 }
 
@@ -368,9 +430,10 @@ interface Face {
 
 /** What a range contributes to the cache key: its length and everything its faces depend on. */
 function rangeKey(range: TextRange): string {
-  const { fontSize, color, textDecoration, letterSpacing, textTransform, hyphens } = range.style;
+  const { fontSize, color, textDecoration, letterSpacing, textTransform, hyphens, whiteSpace } =
+    range.style;
   const chain = range.fonts?.chain ?? [fontFor(range.style)];
-  return `${String(range.text.length)}:${chain.join(',')}:${String(fontSize)}:${String(color.r)},${String(color.g)},${String(color.b)},${String(color.a)}:${textDecoration}:${String(letterSpacing)}:${textTransform}:${hyphens}:${range.link ?? ''}:${range.emoji?.size ? 'emoji' : ''}`;
+  return `${String(range.text.length)}:${chain.join(',')}:${String(fontSize)}:${String(color.r)},${String(color.g)},${String(color.b)},${String(color.a)}:${textDecoration}:${String(letterSpacing)}:${textTransform}:${hyphens}:${whiteSpace}:${range.link ?? ''}:${range.emoji?.size ? 'emoji' : ''}`;
 }
 
 /** The text, faces and per-unit face index of a paragraph, each range shaped in its own chain. */
@@ -387,6 +450,11 @@ interface ShapedRanges {
   readonly autoAt?: Uint8Array;
   /** For an emoji face, the face of the text around it, which an ellipsis after it takes. */
   readonly textFace?: ReadonlyMap<number, number>;
+  /**
+   * `NO_WRAP` and `KEEP_SPACES` for each unit of `text`, from its range's `white-space`;
+   * undefined when every range is `normal`.
+   */
+  readonly whiteSpaceAt?: Uint8Array;
   /** Where each range's text starts, with the faces of its font list in list order, by `start`. */
   readonly chains: readonly ChainSpan[];
 }
@@ -443,6 +511,40 @@ function dropLooseSoftHyphens(pieces: readonly string[]): string[] {
   });
 }
 
+// Flags of `ShapedRanges.whiteSpaceAt`: the text does not wrap, and its spaces do not collapse.
+const NO_WRAP = 1;
+const KEEP_SPACES = 2;
+
+function whiteSpaceFlags(whiteSpace: WhiteSpace): number {
+  return (
+    (whiteSpace === 'nowrap' || whiteSpace === 'pre' ? NO_WRAP : 0) |
+    (spacesCollapse(whiteSpace) ? 0 : KEEP_SPACES)
+  );
+}
+
+const TAB = 9;
+const LINE_FEED = 10;
+const SPACE = 32;
+
+/**
+ * `text` cut around its tabs and line feeds, which are layout, not glyphs: each is a part of its
+ * own, kept out of shaping.
+ */
+function splitControls(text: string): string[] {
+  if (!text.includes('\t') && !text.includes('\n')) return [text];
+  const parts: string[] = [];
+  let from = 0;
+  for (let i = 0; i < text.length; i++) {
+    const unit = text.charCodeAt(i);
+    if (unit !== TAB && unit !== LINE_FEED) continue;
+    if (i > from) parts.push(text.slice(from, i));
+    parts.push(text.charAt(i));
+    from = i + 1;
+  }
+  if (from < text.length) parts.push(text.slice(from));
+  return parts;
+}
+
 /** `text` cut into its text and the emoji that have an image, in order. */
 function splitEmoji(
   text: string,
@@ -494,6 +596,7 @@ function shapeRanges(ranges: readonly TextRange[], metrics: FontMetrics): Shaped
   const pieces = transformText(
     collapseWhitespace(
       dropLooseSoftHyphens(ranges.map((range) => normalizeText(range.text, true))),
+      ranges.map((range) => range.style.whiteSpace),
     ),
     ranges.map((range) => range.style.textTransform),
   );
@@ -526,9 +629,25 @@ function shapeRanges(ranges: readonly TextRange[], metrics: FontMetrics): Shaped
     const chain = range.fonts?.chain ?? [fontFor(range.style)];
     // Registered in chain order, so for a single range a face index is its chain index.
     const toFace = chain.map((font) => faceOf(font, range.style, range.link));
-    return splitEmoji(pieces[i] ?? '', range.emoji).map((part) => {
+    const parts = splitControls(pieces[i] ?? '').flatMap(
+      (part): (ReturnType<typeof splitEmoji>[number] | { readonly control: string })[] =>
+        part === '\t' || part === '\n' ? [{ control: part }] : splitEmoji(part, range.emoji),
+    );
+    return parts.map((part) => {
       if (typeof part === 'string') {
         return { range, shaped: shapeText(part, chain, metrics), toFace, chain: toFace };
+      }
+      if ('control' in part) {
+        // Drawn as nothing: a line break ends the line, a tab moves to the next stop of this face.
+        const shaped: ShapedText = {
+          text: part.control,
+          fontAt: new Uint16Array(1),
+          clusterStarts: [0, 1],
+          replaced: [],
+          missing: [],
+          softHyphens: [],
+        };
+        return { range, shaped, toFace: [toFace[0] ?? 0], chain: toFace };
       }
       const shaped: ShapedText = {
         text: part.emoji,
@@ -550,7 +669,8 @@ function shapeRanges(ranges: readonly TextRange[], metrics: FontMetrics): Shaped
   const nonEmpty = shapedPieces.filter(({ shaped }) => shaped.text !== '');
   const [only] = nonEmpty;
   if (nonEmpty.length === 1 && only?.toFace.every((face, i) => face === i)) {
-    const { hyphens } = only.range.style;
+    const { hyphens, whiteSpace } = only.range.style;
+    const flags = whiteSpaceFlags(whiteSpace);
     return {
       ...only.shaped,
       faces,
@@ -559,6 +679,9 @@ function shapeRanges(ranges: readonly TextRange[], metrics: FontMetrics): Shaped
       softBreaks:
         hyphens === 'none' ? [] : softBreaksIn(only.shaped.softHyphens, 0, only.shaped.text.length),
       ...(hyphens === 'auto' && { autoAt: new Uint8Array(only.shaped.text.length).fill(1) }),
+      ...(flags !== 0 && {
+        whiteSpaceAt: new Uint8Array(only.shaped.text.length).fill(flags),
+      }),
     };
   }
 
@@ -571,9 +694,18 @@ function shapeRanges(ranges: readonly TextRange[], metrics: FontMetrics): Shaped
   const softHyphens: number[] = [];
   const anyAuto = nonEmpty.some(({ range }) => range.style.hyphens === 'auto');
   const autoSpans: [number, number][] = [];
+  const anyWhiteSpace = nonEmpty.some(({ range }) => whiteSpaceFlags(range.style.whiteSpace));
+  const whiteSpaceSpans: [number, number, number][] = [];
   const chains: ChainSpan[] = [];
   for (const { range, shaped, toFace, chain } of nonEmpty) {
     const offset = text.length;
+    if (anyWhiteSpace) {
+      whiteSpaceSpans.push([
+        whiteSpaceFlags(range.style.whiteSpace),
+        offset,
+        offset + shaped.text.length,
+      ]);
+    }
     if (chains.at(-1)?.faces !== chain) chains.push({ start: offset, faces: chain });
     if (range.style.hyphens !== 'none') {
       for (const at of shaped.softHyphens) softHyphens.push(offset + at);
@@ -606,6 +738,12 @@ function shapeRanges(ranges: readonly TextRange[], metrics: FontMetrics): Shaped
       ),
     }),
     ...(textFace.size > 0 && { textFace }),
+    ...(anyWhiteSpace && {
+      whiteSpaceAt: whiteSpaceSpans.reduce(
+        (at, [flags, from, to]) => at.fill(flags, from, to),
+        new Uint8Array(text.length),
+      ),
+    }),
   };
 }
 
@@ -745,7 +883,15 @@ function breakLines(
   ellipsis: LineEllipsis,
   hyphenation: LineHyphenation,
 ): TextBlock {
-  const { text: collapsed, faces, faceAt: fontAt, clusterStarts, softBreaks, autoAt } = shaped;
+  const {
+    text: collapsed,
+    faces,
+    faceAt: fontAt,
+    clusterStarts,
+    softBreaks,
+    autoAt,
+    whiteSpaceAt,
+  } = shaped;
   // An ellipsis after an emoji is drawn in the text face around the emoji.
   const textFaceOf = (index: number): number => shaped.textFace?.get(index) ?? index;
   const length = collapsed.length;
@@ -765,18 +911,59 @@ function breakLines(
     const from = cut(k);
     const to = cut(k + 1);
     for (let i = from + 1; i < to; i++) prefix[i] = prefix[from] ?? 0;
-    prefix[to] = (prefix[from] ?? 0) + widthIn(fontAt[from] ?? 0, collapsed.slice(from, to));
+    // A tab's width depends on where it lands, so the guess leaves it out; measuring adds it.
+    const unit = collapsed.charCodeAt(from);
+    const width =
+      unit === TAB || unit === LINE_FEED
+        ? 0
+        : widthIn(fontAt[from] ?? 0, collapsed.slice(from, to));
+    prefix[to] = (prefix[from] ?? 0) + width;
   }
-  const breaks = length === 0 ? [] : breakPositions(collapsed);
+  const noWrapAt = (at: number): boolean => ((whiteSpaceAt?.[at] ?? 0) & NO_WRAP) !== 0;
+  const keepsSpacesAt = (at: number): boolean => ((whiteSpaceAt?.[at] ?? 0) & KEEP_SPACES) !== 0;
+  const forcedAt = (position: number): boolean => collapsed.charCodeAt(position - 1) === LINE_FEED;
+  // A break inside text that does not wrap is dropped; a kept line break always stays.
+  const breaks =
+    length === 0
+      ? []
+      : breakPositions(collapsed).filter(
+          (position) => position === length || forcedAt(position) || !noWrapAt(position - 1),
+        );
+  // Indices in `breaks` of the kept line breaks, then of the text's end.
+  const forced = breaks.flatMap((position, index) =>
+    forcedAt(position) || position === length ? [index] : [],
+  );
 
-  /** `[start, end)` split where the face changes, each piece measured in its own face. */
+  /**
+   * `[start, end)` split where the face changes, each piece measured in its own face. `start` is
+   * the start of a line: a tab moves to the next stop from there, every 8 spaces of its face, and
+   * to the one after when less than half a space is left, as in CSS.
+   */
   const runsOf = (start: number, end: number): TextRun[] => {
     const runs: TextRun[] = [];
     let x = 0;
     for (let from = start; from < end;) {
       const index = fontAt[from] ?? 0;
+      const unit = collapsed.charCodeAt(from);
+      if (unit === TAB || unit === LINE_FEED) {
+        if (unit === TAB) {
+          const space = widthIn(index, ' ');
+          const stop = space * TAB_SIZE;
+          if (stop > 0) {
+            let next = (Math.floor(x / stop) + 1) * stop;
+            if (next - x < space / 2) next += stop;
+            x = next;
+          }
+        }
+        from++;
+        continue;
+      }
       let to = from + 1;
-      while (to < end && fontAt[to] === index) to++;
+      while (to < end && fontAt[to] === index) {
+        const next = collapsed.charCodeAt(to);
+        if (next === TAB || next === LINE_FEED) break;
+        to++;
+      }
       const text = collapsed.slice(from, to);
       const width = widthIn(index, text);
       const face = faces[index] ?? faces[0];
@@ -786,13 +973,16 @@ function breakLines(
     }
     return runs;
   };
-  const widthOfRange = (start: number, end: number): number =>
-    runsOf(start, end).reduce((sum, run) => sum + run.width, 0);
+  const widthOfRange = (start: number, end: number): number => runsWidth(runsOf(start, end));
 
-  /** `end` without the spaces before it, down to `start`. */
+  /** `end` without the spaces and the line break before it, down to `start`. */
   const keptEnd = (start: number, end: number): number => {
     let kept = end;
-    while (kept > start && collapsed.charCodeAt(kept - 1) === 32) kept--;
+    while (kept > start) {
+      const unit = collapsed.charCodeAt(kept - 1);
+      if (unit !== SPACE && unit !== LINE_FEED) break;
+      kept--;
+    }
     return kept;
   };
   /** The ellipsis after `[start, end)`: after its last kept character, or the one at `fallback`. */
@@ -876,11 +1066,28 @@ function breakLines(
     return points;
   };
 
-  /** The end of the text to draw for a line `[start, end)`: a trailing space is not drawn. */
-  const drawnEnd = (end: number): number => (collapsed.charCodeAt(end - 1) === 32 ? end - 1 : end);
+  /**
+   * The end of the text to draw for a line `[start, end)`: a line break, a collapsed trailing space
+   * and the spaces that hang under `pre-wrap` are not drawn. Under `pre`, spaces are drawn.
+   */
+  const drawnEnd = (start: number, end: number): number => {
+    let drawn = end;
+    if (drawn > start && collapsed.charCodeAt(drawn - 1) === LINE_FEED) drawn--;
+    if (!whiteSpaceAt)
+      return drawn > start && collapsed.charCodeAt(drawn - 1) === SPACE ? drawn - 1 : drawn;
+    while (
+      drawn > start &&
+      collapsed.charCodeAt(drawn - 1) === SPACE &&
+      !(keepsSpacesAt(drawn - 1) && noWrapAt(drawn - 1))
+    ) {
+      drawn--;
+      if (!keepsSpacesAt(drawn)) break;
+    }
+    return drawn;
+  };
   const guess = (start: number, end: number): number =>
-    (prefix[drawnEnd(end)] ?? 0) - (prefix[start] ?? 0);
-  const measure = (start: number, end: number): number => widthOfRange(start, drawnEnd(end));
+    (prefix[drawnEnd(start, end)] ?? 0) - (prefix[start] ?? 0);
+  const measure = (start: number, end: number): number => widthOfRange(start, drawnEnd(start, end));
   const fits = (start: number, end: number): boolean => measure(start, end) <= maxWidth;
 
   /** The largest end in `[low, high]` that fits, given that `low` fits and `high` does not. */
@@ -894,19 +1101,25 @@ function breakLines(
   let top = 0;
   let start = 0;
   let nextBreak = 0;
+  let nextForced = 0;
   while (start < length) {
-    // A piece can hold an inner space (no break before some punctuation): no line starts with one.
-    if (collapsed.charCodeAt(start) === 32) {
+    // A piece can hold an inner space (no break before some punctuation): no line starts with one,
+    // unless its spaces are kept.
+    if (collapsed.charCodeAt(start) === SPACE && !keepsSpacesAt(start)) {
       start++;
       continue;
     }
     while ((breaks[nextBreak] ?? length) <= start) nextBreak++;
     const firstEnd = breaks[nextBreak] ?? length;
+    // The line ends at the next kept line break at the latest.
+    while ((breaks[forced[nextForced] ?? breaks.length] ?? length) <= start) nextForced++;
+    const lastBreak = forced[nextForced] ?? breaks.length - 1;
+    const hardEnd = breaks[lastBreak] ?? length;
 
     // Whole words: the last break whose summed width fits, checked and narrowed by measuring.
     const lastGuess = lastWhere(
       nextBreak,
-      breaks.length - 1,
+      lastBreak,
       (index) => guess(start, breaks[index] ?? length) <= guessLimit,
     );
     let end = -1;
@@ -919,13 +1132,14 @@ function breakLines(
 
     // The word that does not fit: the line ends inside it, with a hyphen, if a piece fits.
     let hyphenated = false;
-    if (end < length && (softBreaks.length > 0 || autoAt)) {
+    if (end < hardEnd && (softBreaks.length > 0 || autoAt)) {
       const from = end < 0 ? start : end;
       let next = nextBreak;
       while ((breaks[next] ?? length) <= from) next++;
       const wordStart = next > 0 ? (breaks[next - 1] ?? 0) : 0;
       const wordEnd = breaks[next] ?? length;
-      const points = hyphenPointsOf(wordStart, wordEnd);
+      const all = hyphenPointsOf(wordStart, wordEnd);
+      const points = whiteSpaceAt ? all.filter((point) => !noWrapAt(point - 1)) : all;
       const lastFitting = lastWhere(0, points.length - 1, (i) => {
         const point = points[i] ?? length;
         return (
@@ -940,7 +1154,10 @@ function breakLines(
       }
     }
 
-    if (end < 0) {
+    if (end < 0 && whiteSpaceAt && anyIn(start, firstEnd, noWrapAt)) {
+      // Text that does not wrap is never cut at the box edge: it overflows.
+      end = firstEnd;
+    } else if (end < 0) {
       // The first word is wider than the box: split it after the last cluster that fits.
       const first = cutIndex(start);
       const lastCut = lastWhere(
@@ -955,18 +1172,18 @@ function breakLines(
       else end = cut(first + 1);
     }
 
-    let runs = hyphenated ? runsWithHyphen(start, end) : runsOf(start, drawnEnd(end));
+    let runs = hyphenated ? runsWithHyphen(start, end) : runsOf(start, drawnEnd(start, end));
     // The paragraph's ends are trimmed, so anything after `end` is text that gets cut.
     const clamped = lines.length + 1 >= maxLines && end < length;
     if (clamped) {
-      const fallback = Math.max(drawnEnd(end) - 1, 0);
+      const fallback = Math.max(drawnEnd(start, end) - 1, 0);
       const widthWith = (k: number, glyph: EllipsisGlyph): number =>
         runsWithEllipsis(start, cut(k), glyph).reduce((sum, run) => sum + run.width, 0);
       // The ellipsis follows the face and font list of the last kept character, so a cut that ends
       // in a smaller face can fit where a shorter one did not. With the ellipsis fixed, width only
       // grows with the cut, so each ellipsis gets its own search over the cuts that end in it.
       const cutsByGlyph = new Map<EllipsisGlyph, number[]>();
-      for (let k = cutIndex(start); k <= cutIndex(drawnEnd(end)); k++) {
+      for (let k = cutIndex(start); k <= cutIndex(drawnEnd(start, end)); k++) {
         const glyph = ellipsisAfter(start, cut(k), fallback);
         const cuts = cutsByGlyph.get(glyph) ?? [];
         cuts.push(k);
@@ -983,10 +1200,12 @@ function breakLines(
       runs = bestGlyph ? runsWithEllipsis(start, cut(best), bestGlyph) : [];
       if (bestGlyph?.missing) ellipsis.onMissing();
     }
-    // An empty cut line keeps the height of the text it replaces.
-    const sized = runs.length > 0 ? runs : runsOf(start, drawnEnd(end));
-    let size = 0;
-    let ascent = 0;
+    // An empty cut line keeps the height of the text it replaces, and an empty line between kept
+    // line breaks the height of its line break's face.
+    const sized = runs.length > 0 ? runs : runsOf(start, drawnEnd(start, end));
+    const breakFace = faces[fontAt[start] ?? 0];
+    let size = sized.length === 0 && breakFace ? breakFace.size : 0;
+    let ascent = sized.length === 0 && breakFace ? breakFace.ascent : 0;
     for (const run of sized) {
       size = Math.max(size, run.size);
       ascent = Math.max(ascent, run.ascent);
@@ -994,12 +1213,12 @@ function breakLines(
     const height = size * lineHeight;
     lines.push({
       text: runs.map((run) => run.text).join(''),
-      width: runs.reduce((sum, run) => sum + run.width, 0),
+      width: runsWidth(runs),
       y: top,
       height,
       ascent,
       // The text is trimmed, so only the last line reaches its end.
-      last: end === length || clamped,
+      last: end === length || clamped || forcedAt(end),
       runs,
     });
     top += height;
@@ -1012,6 +1231,18 @@ function breakLines(
     width: lines.reduce((widest, line) => Math.max(widest, line.width), 0),
     height: top,
   };
+}
+
+/** Where the last run of a line ends: past the tabs between runs, which are not runs. */
+function runsWidth(runs: readonly TextRun[]): number {
+  const last = runs.at(-1);
+  return last ? last.x + last.width : 0;
+}
+
+/** Whether `holds` is true at any offset in `[from, to)`. */
+function anyIn(from: number, to: number, holds: (at: number) => boolean): boolean {
+  for (let at = from; at < to; at++) if (holds(at)) return true;
+  return false;
 }
 
 /** A Yoga measure function (`node.setMeasureFunc`) for the text. */

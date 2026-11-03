@@ -28,6 +28,7 @@ import { NotesSample } from './documents/notes-sample';
 import { SpanSample } from './documents/span-sample';
 import { Preview } from './preview';
 import { SplitRowSample } from './documents/split-row-sample';
+import { WhiteSpaceSample } from './documents/white-space-sample';
 
 const DOCUMENT_NAMES = [
   'capture-report',
@@ -47,6 +48,7 @@ const DOCUMENT_NAMES = [
   'canvas-sample',
   'emoji-sample',
   'per-sheet-sample',
+  'white-space-sample',
 ] as const;
 export type DemoDocument = (typeof DOCUMENT_NAMES)[number];
 
@@ -168,6 +170,8 @@ export class App {
         return renderToBlob(EmojiSample, { injector: this.emoji });
       case 'per-sheet-sample':
         return this.pdf.toBlob(PerSheetSample);
+      case 'white-space-sample':
+        return this.pdf.toBlob(WhiteSpaceSample);
     }
   }
 

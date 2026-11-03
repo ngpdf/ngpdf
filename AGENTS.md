@@ -224,8 +224,11 @@ NGPDF_APT=poppler-utils ./scripts/dev node scripts/server-check.mjs   # packed d
   - Wrapper backgrounds and borders are sliced per page; a gradient runs over the whole wrapper,
     so each sheet shows its part.
 - **Text wrapping:** text wraps at Unicode line-break opportunities. A word wider than its box breaks
-  at the box edge, unless it can be hyphenated. `max-lines` keeps at most N lines of a `pdf-text`;
-  when text was cut, the last line ends with `…` in the face of its last run, or else in the first
+  at the box edge, unless it can be hyphenated. `white-space` (`normal`, `nowrap`, `pre`,
+  `pre-line`, `pre-wrap`, inherited, a `pdf-span` can set it) works as in CSS: kept line breaks
+  (LF, CRLF, CR) force a break, tabs under `pre` and `pre-wrap` go to stops every 8 spaces of
+  their font from the line start, and text that does not wrap overflows its box. `max-lines`
+  keeps at most N lines of a `pdf-text`; when text was cut, the last line ends with `…` in the face of its last run, or else in the first
   font of its `font-family` list that has `…`; failing that, `...` the same way. When no font has
   either, `…` takes the first font's fallback and the missing-character warning.
 - **Hyphenation:** `hyphens` is `manual` (default), `none` or `auto`, inherited, and a `pdf-span`
@@ -243,8 +246,8 @@ NGPDF_APT=poppler-utils ./scripts/dev node scripts/server-check.mjs   # packed d
     font).
 - **Styled runs:** a `pdf-span` inside a `pdf-text` changes only `color`, `font-family`,
   `font-size`, `font-weight`, `font-style`, `text-decoration`, `letter-spacing`,
-  `text-transform` and `hyphens`. The paragraph breaks as one text, and runs of different sizes
-  share a baseline. A `pdf-span` outside a `pdf-text` throws.
+  `text-transform`, `hyphens` and `white-space`. The paragraph breaks as one text, and runs of
+  different sizes share a baseline. A `pdf-span` outside a `pdf-text` throws.
 - **Links:** `<pdf-link [href]>` is a column `pdf-view` where a view can go and an inline run like
   a `pdf-span` inside a `pdf-text`. It changes nothing visually.
   - Only absolute `http:`, `https:` and `mailto:` URLs are written, normalized by `URL`. Any other

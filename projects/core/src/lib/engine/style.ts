@@ -52,6 +52,8 @@ export interface TextStyle {
   /** Where words may break with a hyphen: at soft hyphens (`manual`), also by the app's
    * hyphenation function (`auto`), or nowhere (`none`). */
   readonly hyphens: 'none' | 'manual' | 'auto';
+  /** CSS `white-space`: which spaces and line breaks of the text are kept, and whether it wraps. */
+  readonly whiteSpace: 'normal' | 'nowrap' | 'pre' | 'pre-line' | 'pre-wrap';
   /** The fewest lines of a split text left at the bottom of a page. */
   readonly orphans: number;
   /** The fewest lines of a split text carried to the top of the next page. */
@@ -174,6 +176,7 @@ export const ROOT_TEXT_STYLE: TextStyle = Object.freeze({
   letterSpacing: 0,
   textTransform: 'none',
   hyphens: 'manual',
+  whiteSpace: 'normal',
   orphans: 2,
   widows: 2,
 });
@@ -1004,6 +1007,14 @@ function apply(
     case 'hyphens':
       style.hyphens = oneOf(value, ['none', 'manual', 'auto'], property, tag);
       break;
+    case 'white-space':
+      style.whiteSpace = oneOf(
+        value,
+        ['normal', 'nowrap', 'pre', 'pre-line', 'pre-wrap'],
+        property,
+        tag,
+      );
+      break;
     case 'flex-direction':
       style.flexDirection = oneOf(value, ['row', 'column'], property, tag);
       break;
@@ -1266,6 +1277,7 @@ function textPartOf(style: ResolvedStyle): TextStyle {
     letterSpacing: style.letterSpacing,
     textTransform: style.textTransform,
     hyphens: style.hyphens,
+    whiteSpace: style.whiteSpace,
     orphans: style.orphans,
     widows: style.widows,
   };
@@ -1312,6 +1324,7 @@ const SPAN_PROPERTIES = new Set([
   'letter-spacing',
   'text-transform',
   'hyphens',
+  'white-space',
 ]);
 
 /** Whether the node is part of a line: inside a pdf-text, or a span or link that is. */

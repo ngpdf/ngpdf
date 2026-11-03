@@ -137,6 +137,12 @@ const DOCUMENTS = [
     pages: 3,
     contains: ['Sheet 1 of 3', 'Continued on next page', 'Sheet 3 of 3', 'End of report'],
   },
+  // Line breaks and tabs from data, kept by white-space.
+  {
+    name: 'white-space-sample',
+    pages: 1,
+    contains: ['Marta Quintela', 'Lagoa Serena, 01234-000', 'REF 2026 0417 B'],
+  },
 ];
 
 const update = process.argv.includes('--update');

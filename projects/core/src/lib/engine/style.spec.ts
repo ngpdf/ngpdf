@@ -138,6 +138,7 @@ describe('resolveStyles', () => {
       letterSpacing: 0,
       textTransform: 'none',
       hyphens: 'manual',
+      whiteSpace: 'normal',
       orphans: 2,
       widows: 2,
     });
@@ -766,6 +767,25 @@ describe('resolveStyles property coverage', () => {
     expect(warn).not.toHaveBeenCalled();
   });
 
+  it('reads white-space keywords, normal by default', () => {
+    expect(styleOf({}).whiteSpace).toBe('normal');
+    for (const keyword of ['normal', 'nowrap', 'pre', 'pre-line', 'pre-wrap'] as const) {
+      expect(styleOf({ 'white-space': keyword }).whiteSpace).toBe(keyword);
+    }
+    expect(styleOf({ 'white-space': ' Pre-Line ' }).whiteSpace).toBe('pre-line');
+  });
+
+  it('inherits white-space and lets a pdf-span set it', () => {
+    const warn = vi.fn();
+    const span = el('pdf-span', { 'white-space': 'nowrap' });
+    const text = el('pdf-text', {}, [span]);
+    const view = el('pdf-view', { 'white-space': 'pre-line' }, [text]);
+    const styles = resolveStyles(el('pdf-document', {}, [view]), warn);
+    expect(styles.get(text)?.whiteSpace).toBe('pre-line');
+    expect(styles.get(span)?.whiteSpace).toBe('nowrap');
+    expect(warn).not.toHaveBeenCalled();
+  });
+
   it('inherits letter-spacing and text-transform, and lets a pdf-span set them', () => {
     const warn = vi.fn();
     const span = el('pdf-span', { 'letter-spacing': '1', 'text-transform': 'lowercase' });
@@ -931,6 +951,7 @@ describe('resolveStyles property coverage', () => {
     ['object-fit', 'fill'],
     ['text-transform', 'full-width'],
     ['hyphens', 'all'],
+    ['white-space', 'break-spaces'],
     ['overflow', 'none'],
     ['position', 'float'],
   ])('rejects an invalid %s value "%s"', (property, value) => {

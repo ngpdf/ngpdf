@@ -218,12 +218,38 @@ The same applies to the text of `pdf-page-number`.
 
 ## Wrapping
 
-- Whitespace collapses as in CSS `white-space: normal`: runs of spaces, tabs and line breaks become one space, and the ends are trimmed. A line break in your data does not start a new line. Use one `pdf-text` per paragraph or line.
+- By default, whitespace collapses as in CSS `white-space: normal`: runs of spaces, tabs and line breaks become one space, and the ends are trimmed. A line break in your data does not start a new line unless you set [`white-space`](#white-space).
 - Lines wrap at Unicode line-break opportunities (UAX #14), so they break after spaces and hyphens, and not inside words.
 - A word wider than its box is broken at the box edge, between characters as you see them (grapheme clusters), so an accent stays with its letter.
 - Widths include the font's kerning, and the ligatures of a custom font.
 - Words break with a hyphen at soft hyphens, and with `hyphens: auto` where your hyphenation function allows. See [Hyphenation](#hyphenation).
 - There is no right-to-left text.
+
+## White space
+
+`white-space` sets which spaces and line breaks of the text are kept, and whether lines wrap at the box edge. It is inherited, and a `pdf-span` can set it. The values mean what they mean in CSS:
+
+| Value | Spaces and tabs | Line breaks | Wraps |
+| --- | --- | --- | --- |
+| `normal` (default) | collapse | collapse | yes |
+| `nowrap` | collapse | collapse | no |
+| `pre` | kept | kept | no |
+| `pre-line` | collapse | kept | yes |
+| `pre-wrap` | kept | kept | yes |
+
+An address or a note typed with line breaks keeps them with `pre-line`:
+
+```html
+<pdf-text style="white-space: pre-line">{{ customer.address }}</pdf-text>
+```
+
+- A line break is LF, CRLF or CR. Where line breaks are kept, each one starts a new line, and two in a row leave an empty line. A line break at the very end of the text adds no line.
+- Under `pre-line`, the spaces around a line break are dropped, and the ends of the text are trimmed. Under `pre` and `pre-wrap`, nothing is trimmed, so put the binding right against the tags: `<pdf-text>{{ text }}</pdf-text>`.
+- Under `pre` and `pre-wrap`, a tab moves to the next tab stop. Stops are every 8 space widths of the tab's font, counted from the start of the line, as with CSS's default `tab-size`. A tab is not underlined. There is no `tab-size` property.
+- Under `pre-wrap`, spaces at the end of a wrapped line hang past it and are not drawn.
+- Text that does not wrap (`nowrap`, `pre`) and is wider than its box is drawn past the edge, or clipped with `overflow: hidden`. A word in it is never cut at the box edge or hyphenated.
+- A `nowrap` or `pre` `pdf-span` inside a wrapping paragraph does not break inside.
+- A kept line break ends the line before it, so `text-align: justify` leaves that line at the start, as it does the last line. `max-lines` counts lines across kept line breaks.
 
 A long `pdf-text` breaks between lines at a page break, keeping `orphans` lines (default 2) before the break and `widows` lines (default 2) after it. `break-inside: avoid` keeps it whole. See [Text across pages](/docs/pagination#text-across-pages).
 
