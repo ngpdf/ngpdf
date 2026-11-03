@@ -140,8 +140,10 @@ NGPDF_APT=poppler-utils ./scripts/dev node scripts/server-check.mjs   # packed d
   throws on any other keyword through `oneOf` in `engine/keyword.ts`:
   `ngpdf: invalid value "<v>" for <property> on <tag>; use a, b or c`. A property that mixes
   keywords with other values (`vertical-align`) or takes several (`flex-flow`) throws through
-  `invalidKeyword`, saying what it takes after `; use`. No property falls back or ignores an
-  unknown keyword. Unknown properties are ignored.
+  `invalidKeyword`, saying what it takes after `; use`. Two keep their own message on purpose:
+  `font-weight` (`fontWeightOf`, which lists its numbers and names after `; expected`) and
+  `position: fixed`/`sticky` (which say they are not supported). No property falls back or ignores
+  an unknown keyword. Unknown properties are ignored.
 - **Page sizes, in points:** A3 841.89×1190.55, A4 595.28×841.89, A5 419.53×595.28, Letter
   612×792, Legal 612×1008, or `[width, height]`. Landscape swaps them.
 - **Fonts:**
