@@ -141,6 +141,7 @@ In `border`, a missing width is 1 and a missing color is black. The width keywor
 | `break-before` | `page` starts a new sheet; `auto` does nothing | `auto` |
 | `break-after` | `page` starts a new sheet after the element; `avoid` or `avoid-page` keeps it on a sheet with what follows; `auto` does nothing | `auto` |
 | `break-inside` | `avoid` or `avoid-page` keeps a `pdf-text`, a column `pdf-view` or a `pdf-table` on one sheet when it fits on one; `auto` does nothing | `auto` |
+| `min-presence-ahead` | `0` or a length: when less than this is left on the sheet below the element, it moves to the next sheet; see [Leaving room after an element](/docs/pagination#leaving-room-after-an-element) | `0` |
 | `orphans` | integer ≥ 1: the fewest lines of a `pdf-text` before a page break (inherited) | `2` |
 | `widows` | integer ≥ 1: the fewest lines of a `pdf-text` after a page break (inherited) | `2` |
 
@@ -172,7 +173,8 @@ Some styles are ignored in specific places:
 - a percentage or `auto` in `font-size`, `border-radius`, a `border-*-radius` corner, `border-width` or a border's width;
 - an elliptical radius such as `border-radius: 4 / 8`;
 - `auto` in `padding` or a `padding-*` side;
-- a negative `font-size`, padding, gap, border width or radius (margins can be negative, as in CSS);
+- a negative `font-size`, padding, gap, border width, radius or `min-presence-ahead` (margins can be negative, as in CSS);
+- a percentage or a keyword such as `auto` in `min-presence-ahead`: `ngpdf: invalid value "auto" for min-presence-ahead on pdf-text; use 0 or a length`;
 - a color that is not one of the forms above, including `hsl()`, `currentColor` and `var()`;
 - a keyword outside the lists above for any keyword property: `font-weight`, `font-style`, `text-align`, `text-decoration`, `text-transform`, `text-overflow`, `hyphens`, `white-space`, `display`, `flex-direction`, `flex-wrap`, `flex-flow`, `justify-content`, `align-items`, `align-self`, `align-content`, `border-style` and its sides, `object-fit`, `overflow`, `position`, `break-before`, `break-after` and `break-inside`, in any case, and for `vertical-align` on a `pdf-span` (`middle`, `top` and the like);
 - `position: fixed` and `position: sticky`;

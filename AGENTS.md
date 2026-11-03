@@ -207,6 +207,12 @@ NGPDF_APT=poppler-utils ./scripts/dev node scripts/server-check.mjs   # packed d
   - `break-after: avoid` (or `avoid-page`) moves an element to the next page with the unit after
     it when that unit does not fit. An element at the top of a page, a chain that would not fit on
     an empty page and the tail of a text carried from an earlier page are left alone.
+  - `min-presence-ahead: <length>` (`0` by default, off; not inherited; a percentage, keyword or
+    negative length throws) moves an element that fits whole on its sheet to the next one when less
+    than that is left below it, above fixed bottom views and the page number. The first unit on a
+    sheet and the last unit of a page stay. A wrapper (column view, split text, table) moves whole,
+    a cell's value counts for its row, and a header row's value is ignored. The `break-after:
+    avoid` chain ending at a moved element moves with it.
   - `break-inside: avoid` on a column `pdf-view` or a `pdf-table` moves it whole to the next page
     when it fits on one; one taller than a page splits as usual.
   - `pdf-page-number` as a direct child of `pdf-page` reserves its height at the bottom of the
