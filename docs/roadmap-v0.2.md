@@ -29,7 +29,7 @@ it does not affect a correct document. Items that change behaviour need a design
 ## Robustness
 
 - **Unknown keywords.** Keywords are matched case-insensitively, but an unknown one throws for
-  `text-align` and the other `oneOf` properties, falls back to `normal` for `font-weight` and
+  `text-align`, the other `oneOf` properties and `font-weight`, falls back to `normal` for
   `font-style`, and is ignored by `break-before` and `break-inside`; pick one policy (fallback or
   throw).
 

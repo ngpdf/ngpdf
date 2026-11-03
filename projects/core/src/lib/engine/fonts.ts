@@ -1,4 +1,4 @@
-import type { TextStyle } from './style';
+import { WEIGHT_NAMES, type TextStyle } from './style';
 import type { CustomFont, FontMetrics, FontName, StandardFont } from './writer';
 
 type StandardFamily = 'Helvetica' | 'Times' | 'Courier';
@@ -40,7 +40,8 @@ const STANDARD_NAMES: ReadonlyMap<string, StandardFamily> = new Map([
 ]);
 
 function standardFont(family: StandardFamily, style: FaceStyle): StandardFont {
-  const index = (style.fontWeight === 'bold' ? 1 : 0) + (style.fontStyle === 'italic' ? 2 : 0);
+  // Only 400 and 700 exist: `matchWeight` picks 700 for any weight above 500, and 400 otherwise.
+  const index = (style.fontWeight > 500 ? 1 : 0) + (style.fontStyle === 'italic' ? 2 : 0);
   return FONT_NAMES[family][index] as StandardFont;
 }
 
@@ -53,7 +54,8 @@ export const isStandardFont = (font: FontName): font is StandardFont => !font.st
 
 /** A registered face of one family. */
 export interface RegisteredFace {
-  readonly weight: 'normal' | 'bold';
+  /** From 1 to 1000. */
+  readonly weight: number;
   readonly style: 'normal' | 'italic';
   readonly font: CustomFont;
 }
@@ -83,30 +85,53 @@ export function parseFontFamily(value: string): string[] {
   return names.filter((name) => name !== '');
 }
 
+/**
+ * The weight in `weights` that CSS font matching picks for `target`. From 400 to 500 it looks up
+ * to 500 first, then lighter going down, then heavier going up; below 400 lighter first; above
+ * 500 heavier first. Undefined only for an empty list.
+ */
+export function matchWeight(weights: readonly number[], target: number): number | undefined {
+  if (weights.includes(target)) return target;
+  const lighter = weights.filter((w) => w < target).sort((a, b) => b - a);
+  const heavier = weights.filter((w) => w > target).sort((a, b) => a - b);
+  if (target > 500) return heavier[0] ?? lighter[0];
+  if (target < 400) return lighter[0] ?? heavier[0];
+  const upTo500 = heavier.find((w) => w <= 500);
+  return upTo500 ?? lighter[0] ?? heavier[0];
+}
+
 function faceOf(
   faces: readonly RegisteredFace[],
   family: string,
   style: FaceStyle,
   warn: (message: string) => void,
 ): FontName {
-  const exact = faces.find((f) => f.weight === style.fontWeight && f.style === style.fontStyle);
-  if (exact) return exact.font;
   // No synthetic bold or italic: the closest real face, keeping the weight before the slant.
+  const weight = matchWeight(
+    faces.map((f) => f.weight),
+    style.fontWeight,
+  );
+  const sameWeight = faces.filter((f) => f.weight === weight);
   const face =
-    faces.find((f) => f.weight === style.fontWeight && f.style === 'normal') ??
-    faces.find((f) => f.weight === 'normal' && f.style === 'normal') ??
-    faces[0];
+    sameWeight.find((f) => f.style === style.fontStyle) ??
+    sameWeight.find((f) => f.style === 'normal') ??
+    sameWeight[0];
   // A family is registered with at least one face; the standard font only keeps the types honest.
   if (!face) return fontFor(style);
-  warn(
-    `ngpdf: font "${family}" has no ${faceName(style.fontWeight, style.fontStyle)} face; using its ${faceName(face.weight, face.style)} face`,
-  );
+  if (face.weight !== style.fontWeight || face.style !== style.fontStyle) {
+    warn(
+      `ngpdf: font "${family}" has no ${faceName(style.fontWeight, style.fontStyle)} face; using its ${faceName(face.weight, face.style)} face`,
+    );
+  }
   return face.font;
 }
 
-/** "bold italic", "bold", "italic" or "regular". */
-const faceName = (weight: string, style: string): string =>
-  [weight, style].filter((part) => part !== 'normal').join(' ') || 'regular';
+/** "bold italic", "light", "650 italic", "italic" or "regular": a weight by name when it has one. */
+function faceName(weight: number, style: string): string {
+  const named = weight % 100 === 0 ? WEIGHT_NAMES[weight / 100 - 1] : undefined;
+  const parts = [named ?? String(weight), style].filter((part) => part !== 'normal');
+  return parts.join(' ') || 'regular';
+}
 
 /**
  * The fonts to draw a text style in, in order of preference. A list that names no registered
