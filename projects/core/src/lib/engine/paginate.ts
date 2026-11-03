@@ -106,7 +106,10 @@ interface Header {
   readonly rows: readonly Flowed[];
   readonly top: number;
   readonly height: number;
-  /** The table's gap, kept between a repeated header and the row under it. */
+  /**
+   * From the header's bottom to the row it is drawn with: the table's row gap in a column table,
+   * and minus the header's height in a row table, where the rows sit beside it.
+   */
   readonly gap: number;
   /** The faded table and its faded ancestors, around the header rows. */
   readonly groups: readonly OpacityGroup[];
@@ -529,10 +532,11 @@ function collectUnits(
           first && first === body[lastInFlow(body)]
             ? Math.max(0, end - (top + first.y + first.h))
             : 0;
+        const gap = box.style.flexDirection === 'column' ? rowGapOf(box) : -height;
         let repeats = height <= maxHeader + fitSlack(maxHeader);
         if (!repeats) {
           warn('ngpdf: pdf-table header rows are taller than a page and are not repeated');
-        } else if (!sharesPage(height, rowGapOf(box), first, maxHeader, trail)) {
+        } else if (!sharesPage(height, gap, first, maxHeader, trail)) {
           // Repeated, it would be left off the first row's page, and off every page when no row
           // fits under it.
           warn(
@@ -545,7 +549,7 @@ function collectUnits(
             rows,
             top: headerTop,
             height,
-            gap: rowGapOf(box),
+            gap,
             groups: inside,
             breakBefore: rows.some((r) => asksForBreak(r.box)),
           };

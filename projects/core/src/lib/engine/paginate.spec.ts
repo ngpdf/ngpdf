@@ -1974,6 +1974,23 @@ describe('paginatePage: table rows taller than a page', () => {
     expect(linesOf(pages[1]!, long)).toEqual(words('a', 74, 100));
   });
 
+  it('keeps every piece beside the header in a sideways table with a row gap', () => {
+    const header = el('pdf-row', { height: '20', width: '100' }, [cell([]), cell([])], {
+      header: true,
+    });
+    const row = el('pdf-row', { width: '200' }, [cell([lines(100)]), cell([])]);
+    const table = tableOf([header, row], { 'flex-direction': 'row', 'row-gap': '10' });
+    const pages = paginate(page([table]));
+    expect(pages).toHaveLength(2);
+    for (const laid of pages) {
+      expect(laid.placed.map((placed) => placed.box.node)).toEqual([header, row]);
+      const [repeated, piece] = laid.placed;
+      expect(repeated!.y).toBeCloseTo(CONTENT_TOP, 6);
+      expect(piece!.y).toBeCloseTo(CONTENT_TOP, 6);
+      expect(piece!.x).toBeCloseTo(repeated!.x + 100, 6);
+    }
+  });
+
   it('splits a row that fits a page only without its header, keeping the header', () => {
     const header = el('pdf-row', { height: '20' }, [cell([]), cell([])], { header: true });
     const long = lines(75);
