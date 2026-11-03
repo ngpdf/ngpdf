@@ -57,6 +57,9 @@ These invariants are checked for any input:
   text diff, and a person checks the PDFs by eye before merging.
 - Image comparison of rendered pages (`pdftoppm` + pixel diff) is planned for v0.2, once custom
   fonts make rendering font-stable.
+- Chrome runs on the profile `e2e/out/chrome-profile`. puppeteer starts it in its own process
+  group, so a run killed with SIGKILL leaves it running; the next run kills the processes that
+  carry that profile's `--user-data-dir` flag and deletes the profile before it starts Chrome.
 
 ### Performance
 
