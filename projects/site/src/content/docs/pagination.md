@@ -38,7 +38,7 @@ If the page's own `flex-direction` is `row`, its whole content is one unit, unle
 A row with `flex-wrap: wrap` or `wrap-reverse` breaks between its lines and never through one. Each line is a unit with every child on it, so a card on a line is never cut from the rest of the line.
 
 - A line goes to the next sheet whole when it does not fit. The row gap (or `align-content` space) before it is dropped there, and the line starts at the top of the content area, as a child of a column does.
-- A line taller than the content area goes on a sheet of its own and is clipped, as any [unit taller than a page](#units-taller-than-a-page).
+- A line taller than the content area goes on a sheet of its own and is clipped, as any [unit taller than a page](#units-taller-than-a-page). On a wrapping `pdf-page` the warning names the line: `ngpdf: a wrapped line of pdf-page is taller than a page and is cut at the bottom`.
 - The row's background and border are sliced per sheet like a [wrapper's](#wrapper-backgrounds-and-borders), and `break-inside: avoid`, `break-before`, `break-after` work on it as on a column `pdf-view`.
 - With `wrap-reverse`, the lines go on the sheets top to bottom as drawn, so the first children end up last.
 - `align-content` is not worked out again per sheet: lines keep the places Yoga gave them in the single layout of the page, apart from the space dropped before a line that moves to a new sheet. It only matters when the row has free space on the cross axis, such as a fixed `height` taller than its lines.
@@ -266,7 +266,7 @@ A `pdf-page-number` shows the sheet's number. Put it directly inside a `pdf-page
 
 - `format` replaces `{page}` with the sheet's number and `{total}` with the number of sheets in the whole document, across all `pdf-page` elements. Each token can appear any number of times. The default format is `{page} / {total}`.
 - It sits at the bottom of the content area, inside the page padding, across the content width, on every sheet that `pdf-page` produces. It is taken out of the flow wherever you write it among the page's children, so `break-before` and `break-after` on it do nothing.
-- It reserves its height on every sheet: one line of its font (`font-size × line-height`) plus its own vertical padding and borders, or its `height` if you set one. Content and bottom fixed views stop above it.
+- It reserves its height on every sheet: one line of its font (`font-size × line-height`) plus its own vertical padding and borders, or its `height` if you set one. Content and bottom fixed views stop above it. Its text sits in the middle of that line, as in a `pdf-text`.
 - It is right-aligned unless it, or an element above it, sets `text-align`.
 - Text styles apply: `font-size`, `color`, `font-weight` and the rest. Other position styles are ignored.
 - The text is drawn on one line and does not wrap. Content you put inside the element is ignored.

@@ -121,6 +121,8 @@ interface Unit extends Flowed {
   readonly header: Header | null;
   /** A body row of a table that may split across sheets when it is taller than a page. */
   readonly splits?: true;
+  /** A line of a wrapping pdf-page, named so in the warning when it is taller than a page. */
+  readonly pageLine?: true;
 }
 
 /** A column pdf-view or a table the units were taken from; it covers units first..last. */
@@ -599,7 +601,10 @@ function collectUnits(
       for (const child of line) lineOf.set(child, i);
     });
     const base = units.length;
-    let next = lines.length - 1;
+    // A note after the last flow child goes with that child's line: the lowest one, or the top
+    // one with wrap-reverse. With no line at all, -1 as on a page with no units.
+    const lastChild = flowOf(box).at(-1);
+    let next = (lastChild && lineOf.get(lastChild)) ?? lines.length - 1;
     const after: number[] = [];
     for (let i = box.children.length - 1; i >= 0; i--) {
       after[i] = next;
@@ -613,6 +618,9 @@ function collectUnits(
     for (const line of lines) {
       const unit = lineBox(box, line);
       visit(unit, x + unit.x, top + unit.y, header, groups, dx, dy);
+      // A line is one unit; a page's line is named as such when it is too tall.
+      const index = units.length - 1;
+      if (box.node.tag === 'pdf-page') units[index] = { ...at(units, index), pageLine: true };
     }
   };
 
@@ -1415,7 +1423,12 @@ export function paginatePage(
     const { box } = at;
     const drawn = { box, x: x + at.dx, y: y + at.dy, ...grouped(groups) };
     if (y + box.h > frame.bottom + slack) {
-      const what = isHeaderRow(box.node) ? `${box.node.tag} header` : box.node.tag;
+      const what =
+        'pageLine' in at && at.pageLine
+          ? `a wrapped line of ${box.node.tag}`
+          : isHeaderRow(box.node)
+            ? `${box.node.tag} header`
+            : box.node.tag;
       warn(`ngpdf: ${what} is taller than a page and is cut at the bottom`);
       on.placed.push({ ...drawn, clipBottom: frame.bottom });
     } else {
