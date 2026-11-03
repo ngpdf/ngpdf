@@ -1,11 +1,11 @@
 ---
 title: Rendering API
-description: Reference for PdfRenderer, renderToBlob, downloadPdf, pdfResource, PdfDownload and the PdfViewer preview in @ngpdf/core - signatures, option types, render lifecycle, errors and dev-mode warnings.
+description: Reference for PdfRenderer, renderToBlob, downloadPdf, pdfResource, PdfDownload, the PdfViewer preview and VERSION in @ngpdf/core - signatures, option types, render lifecycle, errors and dev-mode warnings.
 section: Reference
 order: 10
 ---
 
-`@ngpdf/core` exports one service, three functions and a directive that render a document component to a PDF. `@ngpdf/core/viewer` adds a component that shows one in the page. `renderToBuffer` from `@ngpdf/core/server` renders one in Node: see [Server rendering](/docs/server-rendering).
+`@ngpdf/core` exports one service, three functions and a directive that render a document component to a PDF, and [`VERSION`](#version). `@ngpdf/core/viewer` adds a component that shows one in the page. `renderToBuffer` from `@ngpdf/core/server` renders one in Node: see [Server rendering](/docs/server-rendering).
 
 | Export | Needs an injection context | Returns |
 | --- | --- | --- |
@@ -182,6 +182,18 @@ export class InvoicePreview {
 ```
 
 A canvas viewer built on pdf.js would work in every browser, but it is a large dependency, so ngpdf does not ship one. If you need it, render with `pdfResource` or `renderToBlob` and pass the `Blob` to pdf.js yourself.
+
+## VERSION
+
+`VERSION` is the version of `@ngpdf/core` that the app runs, as an Angular `Version` with `full`, `major`, `minor` and `patch` strings, like `VERSION` from `@angular/core`. Use it in bug reports, support tools or your own `/Producer`:
+
+```ts
+import { VERSION } from '@ngpdf/core';
+
+console.log(VERSION.full); // for example '0.7.0'
+```
+
+It comes from `@ngpdf/core` only. `@ngpdf/core/viewer` and `@ngpdf/core/server` are part of the same package, so they always have the same version.
 
 ## Option types
 

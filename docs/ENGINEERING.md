@@ -231,6 +231,9 @@ package:**
 - **Versions:** Semantic Versioning, starting at `0.1.0`. Under `0.x`, a minor bump may break.
 - **Changes:** each PR that changes the package adds a changeset (`@changesets/cli`). The release PR
   turns the changesets into `CHANGELOG.md` and the version.
+- **`VERSION`:** the exported `VERSION` is a literal in `projects/core/src/version.ts`.
+  `npm run changeset:version` rewrites it from `projects/core/package.json` with
+  `scripts/sync-version.mjs`, and `version.spec.ts` fails when the two differ.
 - **Publishing:**
   - Publishing runs from GitHub Actions only, with npm trusted publishing (OIDC): there is no
     long-lived npm token.
