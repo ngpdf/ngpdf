@@ -23,7 +23,7 @@ Documents often contain data that came from users or a server. ngpdf is built so
 | More than 64 nested elements | `ngpdf: nesting deeper than 64` |
 | A text node longer than 1 MB (1,048,576 characters) | `ngpdf: text longer than 1 MB` |
 
-Component host elements do not count towards the nesting limit. Both errors reject the render; no PDF is produced.
+Component host elements do not count towards the nesting limit, and neither does text: bare text inside an element is not one more level. Both errors reject the render; no PDF is produced.
 
 An image fetched from a URL is downloaded in full unless you set `maxImageBytes`. If image URLs in your documents come from users, set it, and check or restrict the URLs before rendering. See [A size cap](/docs/images#a-size-cap).
 

@@ -52,6 +52,72 @@ describe('parseLength', () => {
   });
 });
 
+describe('numbers in exponent form', () => {
+  // String(n) writes numbers below 1e-6 and from 1e21 up this way, so bound values come out like it.
+  it('reads exponents in lengths, with and without a unit', () => {
+    expect(parseLength(`${String(Math.sin(Math.PI) * 10)}pt`)).toBeCloseTo(0, 12);
+    expect(parseLength('1.2246467991473533e-15pt')).toBe(1.2246467991473533e-15);
+    expect(parseLength('1e-7')).toBe(1e-7);
+    expect(parseLength('1.5E3')).toBe(1500);
+    expect(parseLength('-2e+2px')).toBe(-200);
+    expect(parseLength('.5e1in')).toBe(360);
+    expect(parseLength('1e2%')).toEqual({ percent: 100 });
+    expect(parseLength('1e21')).toBe(1e21);
+  });
+
+  it('reads exponents in unitless numbers', () => {
+    expect(styleOf({ opacity: '1e-7' }).opacity).toBe(1e-7);
+    expect(styleOf({ 'flex-grow': '2e0' }).flexGrow).toBe(2);
+    expect(styleOf({ 'line-height': '1.5e0' }).lineHeight).toBe(1.5);
+    expect(styleOf({ 'font-weight': '7e2' }).fontWeight).toBe('bold');
+    expect(styleOf({ transform: 'scale(1e-7)' }).transform).toEqual([
+      { kind: 'scale', x: 1e-7, y: 1e-7 },
+    ]);
+  });
+
+  it('reads exponents in angles', () => {
+    const [rotation] = styleOf({ transform: 'rotate(9e1deg)' }).transform;
+    expect(rotation?.kind === 'rotate' ? rotation.angle : null).toBeCloseTo(Math.PI / 2, 12);
+    const gradient = styleOf({
+      'background-image': 'linear-gradient(4.5e1deg, red, blue)',
+    }).backgroundImage;
+    expect(gradient?.kind === 'linear' ? gradient.direction : null).toEqual({ angle: 45 });
+  });
+
+  it('keeps an e that no digit follows as part of the unit', () => {
+    expect(() => parseLength('3em')).toThrow(/^ngpdf: unknown unit in "3em"/);
+    expect(() => parseLength('1e')).toThrow(/^ngpdf: unknown unit in "1e"/);
+    expect(() => parseLength('1e+')).toThrow(/^ngpdf: unknown unit in "1e\+"/);
+    expect(() => parseLength('1e-pt')).toThrow(/^ngpdf: unknown unit in "1e-pt"/);
+    expect(() => parseLength('e5')).toThrow(/^ngpdf: invalid length "e5"/);
+    expect(() => styleOf({ opacity: '1e' })).toThrow(/^ngpdf: invalid value "1e" for opacity/);
+  });
+
+  it('throws on an exponent that overflows to a non-finite number', () => {
+    expect(() => parseLength('1e999')).toThrow(
+      'ngpdf: invalid length "1e999" (not a finite number)',
+    );
+    expect(() => parseLength('-1e999pt', 'pdf-view')).toThrow(
+      'ngpdf: invalid length "-1e999pt" (not a finite number) on pdf-view',
+    );
+    expect(() => styleOf({ opacity: '1e999' })).toThrow(/^ngpdf: invalid value "1e999"/);
+    expect(parseLength('1e-400')).toBe(0);
+  });
+
+  it('throws when a unit turns a finite number into a non-finite one', () => {
+    expect(() => parseLength('1e308in')).toThrow(
+      'ngpdf: invalid length "1e308in" (not a finite number)',
+    );
+    expect(() => parseLength(`1${'0'.repeat(308)}cm`)).toThrow(/\(not a finite number\)/);
+    expect(() => styleOf({ transform: 'rotate(1e308turn)' })).toThrow(
+      /^ngpdf: invalid angle "1e308turn"/,
+    );
+    expect(() => styleOf({ 'background-image': 'linear-gradient(1e308turn, red, blue)' })).toThrow(
+      /^ngpdf: invalid gradient angle "1e308turn"/,
+    );
+  });
+});
+
 describe('resolveStyles', () => {
   afterEach(() => {
     vi.restoreAllMocks();
@@ -1042,7 +1108,9 @@ describe('resolveStyles property coverage', () => {
   });
 
   it('rejects non-finite numbers and truncates long values in errors', () => {
-    expect(() => parseLength('1e999')).toThrow(/^ngpdf: unknown unit/);
+    expect(() => parseLength('1e999')).toThrow(
+      /^ngpdf: invalid length "1e999" \(not a finite number\)/,
+    );
     expect(() => parseLength('9'.repeat(400))).toThrow(/^ngpdf: invalid length "9{60}\.\.\."/);
     expect(() => styleOf({ opacity: '9'.repeat(400) })).toThrow(/^ngpdf: invalid value/);
   });

@@ -203,7 +203,7 @@ export function readSource(
 
 async function loadOne(
   src: unknown,
-  writer: Pick<PdfWriter, 'imageSize'>,
+  writer: Pick<PdfWriter, 'imageSize' | 'checkImage'>,
   fetchFn: typeof fetch | undefined,
   server: ServerSources | undefined,
   maxBytes: number | undefined,
@@ -213,7 +213,11 @@ async function loadOne(
   try {
     if (!source) throw new Error('src must be a string, Blob, ArrayBuffer or Uint8Array');
     const data = await source.read();
-    return { data, ...writer.imageSize(data) };
+    const size = writer.imageSize(data);
+    if (writer.checkImage && !(await writer.checkImage(data))) {
+      throw new Error('the image data is corrupt or cut off');
+    }
+    return { data, ...size };
   } catch (error) {
     throw new Error(`ngpdf: could not load image "${label}": ${describeError(error, src, label)}`, {
       cause: error,
@@ -227,7 +231,7 @@ async function loadOne(
  */
 export async function loadImages(
   root: PdfNode,
-  writer: Pick<PdfWriter, 'imageSize'>,
+  writer: Pick<PdfWriter, 'imageSize' | 'checkImage'>,
   fetchFn?: typeof fetch,
   server?: ServerSources,
   maxBytes?: number,
