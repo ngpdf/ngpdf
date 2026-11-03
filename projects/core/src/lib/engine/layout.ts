@@ -215,7 +215,12 @@ const ALIGN = {
   'flex-start': 'ALIGN_FLEX_START',
   center: 'ALIGN_CENTER',
   'flex-end': 'ALIGN_FLEX_END',
+  'space-between': 'ALIGN_SPACE_BETWEEN',
+  'space-around': 'ALIGN_SPACE_AROUND',
+  'space-evenly': 'ALIGN_SPACE_EVENLY',
 } as const;
+
+const WRAP = { wrap: 'WRAP_WRAP', 'wrap-reverse': 'WRAP_WRAP_REVERSE' } as const;
 
 /**
  * Sets the style on a fresh Yoga node. Each setter is a call into WebAssembly, so values equal
@@ -224,6 +229,13 @@ const ALIGN = {
  */
 function applyStyle(yoga: Yoga, node: YogaNode, style: ResolvedStyle): void {
   if (style.flexDirection === 'row') node.setFlexDirection(yoga.FLEX_DIRECTION_ROW);
+  if (style.flexWrap !== 'nowrap') {
+    node.setFlexWrap(yoga[WRAP[style.flexWrap]]);
+    // Yoga's default is flex-start; CSS's `normal` stretches the lines of a flex container.
+    if (style.alignContent !== 'flex-start') {
+      node.setAlignContent(yoga[ALIGN[style.alignContent]]);
+    }
+  }
   if (style.flexGrow !== 0) node.setFlexGrow(style.flexGrow);
   // Yoga's default is 0; CSS (and ResolvedStyle) default to 1.
   if (style.flexShrink !== 0) node.setFlexShrink(style.flexShrink);
@@ -407,7 +419,7 @@ function isZero(length: Length): boolean {
 /**
  * Inside a table, rows and cells give up the styles that would move cells off their columns:
  * a row keeps vertical padding and borders and its background, but its horizontal padding,
- * left/right border, margin, justify-content, direction and column gap are fixed; a cell loses its margin
+ * left/right border, margin, justify-content, direction, wrap and column gap are fixed; a cell loses its margin
  * and min/max width. `ignored` collects the properties the author had set.
  */
 function tableStyle(style: ResolvedStyle, node: PdfNode, ignored: Set<string>): ResolvedStyle {
@@ -423,11 +435,14 @@ function tableStyle(style: ResolvedStyle, node: PdfNode, ignored: Set<string>): 
     }
     if (style.justifyContent !== 'flex-start') ignored.add('pdf-row justify-content');
     if (style.flexDirection !== 'row') ignored.add('pdf-row flex-direction');
+    // Cells stay on their columns, so a row never wraps.
+    if (style.flexWrap !== 'nowrap') ignored.add('pdf-row flex-wrap');
     // A row gap has nothing to space in a row that does not wrap, so only the column gap counts.
     if (style.columnGap !== 0) ignored.add('pdf-row column-gap');
     return {
       ...style,
       flexDirection: 'row',
+      flexWrap: 'nowrap',
       justifyContent: 'flex-start',
       columnGap: 0,
       margin: { top: zeroEdge, right: zeroEdge, bottom: zeroEdge, left: zeroEdge },
