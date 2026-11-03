@@ -28,7 +28,7 @@ What has no effect:
 
 - `class` and `[class.*]` bindings, and the component's `styles` or `styleUrl`. They are CSS for the DOM, and a document has no DOM.
 - Styles on the host element of your own components. ngpdf ignores them with a dev-mode warning. See [Components in documents](/docs/components-in-documents).
-- Properties ngpdf does not know, such as `display`, `z-index`, `flex-wrap` or `font`. They are ignored without a warning.
+- Properties ngpdf does not know, such as `z-index`, `flex-wrap` or `font`. They are ignored without a warning.
 
 The style attribute is split on `;` outside quotes and parentheses, so a value such as `url(data:image/png;base64,...)` or `"A;B"` stays whole. Keywords are matched in any case, as in CSS: `text-align: CENTER` is `center` and `font-weight: BOLD` is `bold`. `!important` and `var()` are not supported.
 
@@ -225,6 +225,23 @@ Each faded element adds a small object to the file (a PDF transparency group). F
 - Positioned elements are drawn after the in-flow ones, so they sit on top of them. Positioned elements of the same containing block, at any depth, are drawn in template order. The exception is a `relative` element inside a static element with an [`overflow`](#overflow) clip: it is drawn with that element, inside its clip, before any absolute element that escapes the clip. An absolute element is drawn with its containing block: inside its [`overflow`](#overflow) clip and its [transform](#transforms). A static clipping element between them does not clip it, as in CSS.
 - An absolute element is never split across sheets; [Pagination](/docs/pagination#positioned-elements) says where it goes.
 - `z-index` is not supported. None of these properties is inherited. They are ignored on `pdf-page`, `pdf-row` and `pdf-cell`, whose values are still checked, and have no effect on a `pdf-span`.
+
+## Hiding elements
+
+`display: none` leaves an element out of the document, with everything inside it, the same as wrapping it in `@if`:
+
+```html
+<pdf-view [style.display]="order().notes ? null : 'none'">
+  <pdf-text style="font-weight: bold">Notes</pdf-text>
+  <pdf-text>{{ order().notes }}</pdf-text>
+</pdf-view>
+```
+
+- A hidden element takes no space, starts no new sheet, draws nothing and loads none of its images or fonts. That includes the [absolute elements](#positioning), [fixed views](/docs/pagination#fixed-headers-and-footers), notes, images, canvases and `pdfPerSheet` templates inside it.
+- An `anchor` or a `bookmark` inside a hidden element does not exist: the bookmark is left out of the outline, and a `pdf-link` to the anchor gets the same dev-mode warning as a link to a name no element declares, `ngpdf: pdf-link href "#notes" names no anchor; no link written`. Its content is drawn without a link.
+- A hidden `pdf-span` or inline `pdf-link` drops out of its line. A hidden `pdf-cell` takes no column, so the cells after it move one column to the left. A hidden `pdf-page` adds no sheets, and when every page is hidden the render throws `ngpdf: pdf-document has no pdf-page`.
+- `display: flex` is the default. Any other value, such as `block`, `grid` or `contents`, throws: `ngpdf: invalid value "block" for display on pdf-view; use flex or none`. The values inside a hidden element are not checked.
+- `display` is not inherited, and on a component's host element it is ignored with the other host styles.
 
 ## Debugging layouts
 

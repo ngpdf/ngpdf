@@ -132,6 +132,10 @@ NGPDF_APT=poppler-utils ./scripts/dev node scripts/server-check.mjs   # packed d
   - `px` = 1pt;
   - `%` is of the parent's content box;
   - any other unit throws.
+- **Display:** `display: none` leaves an element and all it holds out of the document before
+  any stage reads it (`dissolveHosts`): no space, no sheet, no drawing, no anchors or bookmarks;
+  a link to an anchor in it warns like one to a missing name. `flex` is the default; any other
+  value throws `ngpdf: invalid value "<v>" for display on <tag>; use flex or none`. Not inherited.
 - **Page sizes, in points:** A3 841.89×1190.55, A4 595.28×841.89, A5 419.53×595.28, Letter
   612×792, Legal 612×1008, or `[width, height]`. Landscape swaps them.
 - **Fonts:**
@@ -266,7 +270,7 @@ NGPDF_APT=poppler-utils ./scripts/dev node scripts/server-check.mjs   # packed d
     outline panel opens only with `pageMode="UseOutlines"`.
 - **Notes:** `<pdf-note>` is a Text annotation where a view can go, with `author`, `icon` and
   `open`. Text only, any character, no space in the layout, no action, never printed; under a
-  `pdf-text` at any depth it throws, and properties other than `color`, `position` and the offsets
+  `pdf-text` at any depth it throws, and properties other than `display`, `color`, `position` and the offsets
   are dropped with a warning. It is never
   a unit: it goes on the sheet of the content after it, or before it when it is the last child;
   an absolute note follows the absolute rules. Its color is its own, `#ffd400` by default.

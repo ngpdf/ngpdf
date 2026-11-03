@@ -130,4 +130,73 @@ describe('dissolveHosts', () => {
 
     expect(tags(out.children[0]!)).toEqual(['pdf-view']);
   });
+
+  describe('display', () => {
+    it('drops an element with display: none and everything inside it, at any depth', () => {
+      const hidden = el('pdf-view', [el('pdf-text', [createNode('text', '', 'gone')])], {
+        display: 'none',
+      });
+      const kept = el('pdf-view', [], { display: 'flex' });
+      const span = el('pdf-span', [createNode('text', '', 'x')], { display: ' None ' });
+      const line = el('pdf-text', [createNode('text', '', 'a'), span, createNode('text', '', 'b')]);
+      const page = el('pdf-page', [el('app-card', [hidden, kept]), line]);
+
+      const outPage = dissolveHosts(el('pdf-document', [page]), vi.fn()).children[0]!;
+
+      expect(tags(outPage)).toEqual(['pdf-view', 'pdf-text']);
+      expect(outPage.children[0]!.rawStyle).toEqual({ display: 'flex' });
+      expect(tags(outPage.children[1]!)).toEqual(['#text', '#text']);
+    });
+
+    it('drops hidden pages, and throws when every page is hidden', () => {
+      const hidden = el('pdf-page', [], { display: 'none' });
+      expect(tags(dissolveHosts(el('pdf-document', [hidden, el('pdf-page')]), vi.fn()))).toEqual([
+        'pdf-page',
+      ]);
+      expect(() =>
+        dissolveHosts(el('pdf-document', [el('pdf-page', [], { display: 'none' })]), vi.fn()),
+      ).toThrow('ngpdf: pdf-document has no pdf-page');
+      expect(() =>
+        dissolveHosts(el('pdf-document', [el('pdf-page')], { display: 'none' }), vi.fn()),
+      ).toThrow('ngpdf: pdf-document has no pdf-page');
+    });
+
+    it('throws on any other value, naming the allowed ones', () => {
+      for (const value of ['block', 'grid', 'contents', '']) {
+        const page = el('pdf-page', [el('pdf-view', [], { display: value })]);
+        expect(() => dissolveHosts(el('pdf-document', [page]), vi.fn())).toThrow(
+          `ngpdf: invalid value "${value}" for display on pdf-view; use flex or none`,
+        );
+      }
+      expect(() =>
+        dissolveHosts(el('pdf-document', [el('pdf-page')], { display: 'inline' }), vi.fn()),
+      ).toThrow('ngpdf: invalid value "inline" for display on pdf-document; use flex or none');
+    });
+
+    it('does not read display on a component host, whose styles are ignored', () => {
+      const warn = vi.fn();
+      const page = el('pdf-page', [el('app-card', [el('pdf-view')], { display: 'none' })]);
+      const outPage = dissolveHosts(el('pdf-document', [page]), warn).children[0]!;
+      expect(tags(outPage)).toEqual(['pdf-view']);
+      expect(warn).toHaveBeenCalledWith(
+        'ngpdf: styles on <app-card> are ignored; style a pdf-* element inside it',
+      );
+    });
+
+    it('does not count or check what a hidden element holds', () => {
+      let deep = el('pdf-view', [], { display: 'grid' });
+      for (let i = 0; i < 70; i++) deep = el('pdf-view', [deep]);
+      const hidden = el('pdf-view', [deep], { display: 'none' });
+      expect(() =>
+        dissolveHosts(el('pdf-document', [el('pdf-page', [hidden])]), vi.fn()),
+      ).not.toThrow();
+    });
+
+    it('leaves the input tree unchanged', () => {
+      const hidden = el('pdf-view', [], { display: 'none' });
+      const page = el('pdf-page', [hidden]);
+      dissolveHosts(el('pdf-document', [page]), vi.fn());
+      expect(page.children).toEqual([hidden]);
+    });
+  });
 });

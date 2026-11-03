@@ -1,4 +1,5 @@
 import { createNode, propsOf, type PdfNode } from '../tree/node';
+import { MAX_NESTING, show } from './limits';
 import { parseColor, type Color } from './color';
 
 export type { Color };
@@ -154,8 +155,6 @@ export interface BorderParts {
   readonly unsupportedStyle: string | null;
 }
 
-export const MAX_NESTING = 64;
-
 const BLACK: Color = Object.freeze({ r: 0, g: 0, b: 0, a: 1 });
 const BORDER_WIDTHS: ReadonlyMap<string, number> = new Map([
   ['thin', 1],
@@ -204,11 +203,6 @@ const BORDER_STYLES = new Set([
 
 function fail(message: string, tag?: string): never {
   throw new Error(`ngpdf: ${message}${tag ? ` on ${tag}` : ''}`);
-}
-
-/** Cuts long values so an error message stays readable. */
-export function show(value: string): string {
-  return value.length > 60 ? `${value.slice(0, 60)}...` : value;
 }
 
 function isDigit(code: number): boolean {
@@ -1258,6 +1252,7 @@ function lineHeightOf(value: string, fontSize: number, tag: string): number {
 
 // A note takes no space: only its icon color and where it sits apply to it.
 const NOTE_PROPERTIES: readonly string[] = Object.freeze([
+  'display',
   'color',
   'position',
   'top',
@@ -1337,6 +1332,7 @@ function checkLeafChildren(node: PdfNode): void {
 const INLINE = new Set(['pdf-text', 'pdf-span']);
 // A pdf-span is part of a line: only what changes how its characters are drawn applies to it.
 const SPAN_PROPERTIES = new Set([
+  'display',
   'color',
   'font-family',
   'font-size',
