@@ -228,6 +228,20 @@ describe('layoutText', () => {
     expect(block.lines.map((line) => line.text)).toEqual(['a  b']);
   });
 
+  it('keeps a leading and trailing no-break space at paragraph edges', () => {
+    const nbsp = '\u00a0';
+    const leading = layoutText(`${nbsp}${nbsp}Indented`, style, 500, writer);
+    expect(leading.lines.map((line) => line.text)).toEqual([`${nbsp}${nbsp}Indented`]);
+    const trailing = layoutText(`Keep${nbsp}`, style, 500, writer);
+    expect(trailing.lines.map((line) => line.text)).toEqual([`Keep${nbsp}`]);
+  });
+
+  it('keeps a leading figure space after it is rewritten to U+00A0', () => {
+    // fonts.normalizeText turns U+2007 into U+00A0 before collapseWhitespace runs.
+    const block = layoutText('\u20077', style, 500, writer);
+    expect(block.lines.map((line) => line.text)).toEqual(['\u00a07']);
+  });
+
   it('accepts text of exactly 1 MB and rejects one code unit more', () => {
     const limit = 1_048_576;
     expect(() => layoutText('a'.repeat(limit), style, Infinity, writer)).not.toThrow();

@@ -236,10 +236,16 @@ export class TextMeasureCache {
   }
 }
 
+/** CSS `white-space: normal` edge characters: space, tab, LF, CR, FF — not U+00A0. */
+const CSS_EDGE_WHITESPACE = /[ \t\r\n\f]/;
+
 /**
  * CSS `white-space: normal` over a paragraph split into pieces: runs of space, tab and line breaks
  * become one space, also across pieces (the space stays in the piece where the run starts), and the
  * ends of the whole paragraph are trimmed. Returns one string per piece.
+ *
+ * End trimming follows CSS: only space/tab/LF/CR/FF are removed. U+00A0 (including figure space
+ * rewritten to it) is kept (#231).
  */
 export function collapseWhitespace(pieces: readonly string[]): string[] {
   let spaceBefore = false;
@@ -250,8 +256,10 @@ export function collapseWhitespace(pieces: readonly string[]): string[] {
     return out;
   });
   const whole = collapsed.join('');
-  const start = whole.length - whole.trimStart().length;
-  const end = whole.trimEnd().length;
+  let start = 0;
+  while (start < whole.length && CSS_EDGE_WHITESPACE.test(whole[start]!)) start++;
+  let end = whole.length;
+  while (end > start && CSS_EDGE_WHITESPACE.test(whole[end - 1]!)) end--;
   let offset = 0;
   return collapsed.map((piece) => {
     const from = offset;
