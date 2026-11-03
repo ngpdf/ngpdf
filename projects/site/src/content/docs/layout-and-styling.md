@@ -79,7 +79,7 @@ A page has no fixed height during layout: content is laid out at the page's cont
 | --- | --- |
 | none | points. `12` is 12pt. |
 | `pt` | points, 1/72 inch |
-| `px` | 1px = 1pt |
+| `px` | 1px = 1pt, also on a page with a `dpi` |
 | `in` | 72pt |
 | `cm` | 72/2.54pt |
 | `mm` | 72/25.4pt |

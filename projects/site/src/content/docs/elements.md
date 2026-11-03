@@ -72,6 +72,7 @@ A page template. Its content continues on as many sheets as it needs, all of the
 | --- | --- | --- | --- |
 | `size` | `PageSize` | `'A4'` | `'A3'`, `'A4'`, `'A5'`, `'Letter'`, `'Legal'`, or `readonly [width, height]` in points. |
 | `orientation` | `PageOrientation` | `'portrait'` | `'portrait'` or `'landscape'`. Landscape swaps width and height. |
+| `dpi` | `number` | `72` | The resolution images on the page are printed at: one without a `width` or `height` takes 72 / `dpi` points per pixel. A finite number above 0; `dpi="300"` works as an attribute. `px` stays 1pt. |
 
 `PageSize` and `PageOrientation` are exported types. Padding on the page is the margin of every sheet; background and border are drawn on every sheet. `width`, `height` and `margin` are ignored.
 

@@ -1,5 +1,5 @@
 import { propsOf, type PdfNode } from '../tree/node';
-import { layoutBox, type Box, type LayoutContext } from './layout';
+import { layoutBox, pageDpi, type Box, type LayoutContext } from './layout';
 import type { TextBlock } from './text';
 import type { Edges, Length, ResolvedStyle } from './style';
 
@@ -1044,6 +1044,8 @@ export function paginatePage(
   const pageStyle = styles.get(page);
   if (!pageStyle) throw new Error('ngpdf: no resolved style for <pdf-page>');
   const base = frameOf(page, pageStyle);
+  // Checked here too, so a bad dpi throws on a page without images.
+  pageDpi(page);
   // A faded page is one group per sheet, with everything on it.
   const pageGroups = within([], page, pageStyle.opacity);
 
