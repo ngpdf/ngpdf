@@ -37,7 +37,7 @@ All text properties are inherited by child elements.
 | Property | Values | Default |
 | --- | --- | --- |
 | `max-lines` | integer ≥ 1: the most lines a `pdf-text` keeps, the last ending in `…` when text was cut; `none` | `none` |
-| `text-overflow` | `clip`, `ellipsis`: with a fixed `height` or `max-height` on the same `pdf-text`, keep the lines that fit and end the last in `…` (see [Cutting text to its height](/docs/text-and-fonts#cutting-text-to-its-height)) | `clip` |
+| `text-overflow` | `clip`, `ellipsis`: with a fixed `height` or `max-height` on the same `pdf-text`, keep the lines that fit, the last ending in `…` when text was cut (see [Cutting text to its height](/docs/text-and-fonts#cutting-text-to-its-height)) | `clip` |
 | `vertical-align` | on a `pdf-span` only: `baseline`, `super`, `sub`, a length (raises; negative lowers) or `N%` of the span's line height. See [Superscript and subscript](/docs/text-and-fonts#superscript-and-subscript) | `baseline` |
 
 A `pdf-span` takes `display`, `color`, `font-family`, `font-size`, `font-weight`, `font-style`, `text-decoration`, `letter-spacing`, `text-transform`, `hyphens` and `vertical-align`; `line-height`, `text-align`, `max-lines` and `text-overflow` come from its `pdf-text`. See [Styled runs](/docs/text-and-fonts#styled-runs-pdf-span).

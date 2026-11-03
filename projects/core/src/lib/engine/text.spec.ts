@@ -1005,6 +1005,27 @@ describe('layoutRanges with heightLimit', () => {
     expect(block.lines[0]?.text).toBe('Recife');
   });
 
+  it('counts the lines that fit before max-lines cuts the last one', () => {
+    // Each character is as wide as its font size. The second line is "cc dd X" with a 30pt "X",
+    // 45pt tall, so only the first line fits in 30pt. Cut by max-lines, the second line loses
+    // the "X" and is 13.5pt tall, but it still does not fit the text as laid out.
+    const sized: FontMetrics = {
+      widthOf: (chunk, _font, size) => size * chunk.length,
+      ascent: () => 0,
+      hasGlyph: () => false,
+    };
+    const ranges = [
+      { text: 'aaaa bbbb cc dd ', style },
+      { text: 'X', style: { ...style, fontSize: 30 } },
+      { text: ' ff gg', style },
+    ];
+    const at = (paragraph: Partial<ParagraphStyle>) =>
+      layoutRanges(ranges, { ...style, ...paragraph }, 100, sized).lines;
+    expect(at({}).map((line) => line.height)).toEqual([13.5, 45, 13.5]);
+    expect(at({ maxLines: 2 })[1]?.height).toBe(13.5);
+    expect(at({ heightLimit: 30, maxLines: 2 })).toEqual(at({ maxLines: 1 }));
+  });
+
   it('counts each line at its own height when runs have different sizes', () => {
     // A 30pt first line is 45pt tall, so 50pt holds it and nothing more.
     const big: TextStyle = { ...style, fontSize: 30 };
