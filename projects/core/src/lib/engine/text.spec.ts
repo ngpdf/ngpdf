@@ -1083,3 +1083,97 @@ describe('layoutRanges with emoji images', () => {
     expect(line?.runs.map((run) => run.text)).toEqual(['A', '👍', 'B']);
   });
 });
+
+describe('layoutRanges with vertical-align', () => {
+  let writer: PdfWriter;
+  beforeAll(async () => {
+    writer = await createPdfkitWriter({ compress: false });
+  });
+
+  const lay = (ranges: readonly TextRange[], maxWidth = Infinity) =>
+    layoutRanges(ranges, style, maxWidth, writer);
+  const shifted = (fontSize: number, baselineShift: number): TextStyle => ({
+    ...style,
+    fontSize,
+    baselineShift,
+  });
+
+  it('keeps the shift on the runs of a shifted range only', () => {
+    const [line] = lay([
+      { text: 'm', style },
+      { text: '2', style: shifted(6.3, 2.97) },
+    ]).lines;
+    expect(line?.runs.map((run) => [run.text, run.shift])).toEqual([
+      ['m', undefined],
+      ['2', 2.97],
+    ]);
+    expect(line?.runs[0]).not.toHaveProperty('shift');
+  });
+
+  it('grows the line at the top by what a raised run sticks out above it', () => {
+    const block = lay([
+      { text: 'm', style },
+      { text: '2', style: shifted(6.3, 2.97) },
+    ]);
+    const top = writer.ascent('Helvetica', 6.3) + 2.97;
+    const ascent = writer.ascent('Helvetica', 9);
+    expect(top).toBeGreaterThan(ascent);
+    const [line] = block.lines;
+    expect(line?.ascent).toBeCloseTo(top, 9);
+    expect(line?.height).toBeCloseTo(13.5 + top - ascent, 9);
+    expect(block.height).toBeCloseTo(line?.height ?? 0, 9);
+  });
+
+  it('grows the line at the bottom by what a lowered run sticks out below it', () => {
+    const [line] = lay([
+      { text: 'm', style },
+      { text: '2', style: shifted(9, -10) },
+    ]).lines;
+    const ascent = writer.ascent('Helvetica', 9);
+    expect(line?.ascent).toBeCloseTo(ascent, 9);
+    expect(line?.height).toBeCloseTo(9 - ascent + 10 + ascent, 9);
+  });
+
+  it('leaves the line as it is when the shifted run fits in it', () => {
+    const plain = lay([{ text: 'H2O', style }]).lines[0];
+    const [line] = lay([
+      { text: 'H', style },
+      { text: '2', style: shifted(6.3, -1.8) },
+      { text: 'O', style },
+    ]).lines;
+    expect(line?.runs[1]?.shift).toBe(-1.8);
+    expect(line?.ascent).toBe(plain?.ascent);
+    expect(line?.height).toBe(plain?.height);
+  });
+
+  it('moves the next line down by the grown height', () => {
+    const width = writer.widthOf('one two', 'Helvetica', 9) + 1;
+    const block = lay(
+      [
+        { text: 'one', style },
+        { text: '1', style: shifted(6.3, 2.97) },
+        { text: ' two three four', style },
+      ],
+      width,
+    );
+    expect(block.lines.length).toBeGreaterThan(1);
+    expect(block.lines[0]?.height).toBeGreaterThan(13.5);
+    expect(block.lines[1]?.y).toBeCloseTo(block.lines[0]?.height ?? 0, 9);
+    expect(block.lines[1]?.height).toBe(13.5);
+  });
+
+  it('does not reuse a cached block for the same text with another shift', () => {
+    const cache = new TextMeasureCache();
+    const plain = layoutRanges([{ text: 'x', style }], style, Infinity, writer, undefined, cache);
+    const raised = layoutRanges(
+      [{ text: 'x', style: shifted(9, 3) }],
+      style,
+      Infinity,
+      writer,
+      undefined,
+      cache,
+    );
+    expect(plain.lines[0]?.runs[0]?.shift).toBeUndefined();
+    expect(raised.lines[0]?.runs[0]?.shift).toBe(3);
+  });
+});

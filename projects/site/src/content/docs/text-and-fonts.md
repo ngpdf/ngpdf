@@ -354,14 +354,32 @@ Wrap part of a text in a `pdf-span` to draw it in other text styles:
 </pdf-text>
 ```
 
-- A span inherits the text styles around it and can change `color`, `font-family`, `font-size`, `font-weight`, `font-style`, `text-decoration`, `letter-spacing`, `text-transform` and `hyphens`. Spans nest.
+- A span inherits the text styles around it and can change `color`, `font-family`, `font-size`, `font-weight`, `font-style`, `text-decoration`, `letter-spacing`, `text-transform` and `hyphens`, and move its text up or down with `vertical-align` (below). Spans nest.
 - The paragraph wraps as one text: a span boundary is not a place to break, and a span wraps over lines like the rest of the text. Kerning is not applied across two spans.
-- Runs of different sizes share a baseline, and a line is as tall as its largest font size times the paragraph's `line-height`.
+- Runs of different sizes share a baseline, and a line is as tall as its largest font size times the paragraph's `line-height`, or taller when a raised or lowered run sticks out of it.
 - `line-height` and `text-align` belong to the `pdf-text`. Other properties on a span, such as padding or a background, have no effect and get a warning in development mode.
 - A span is drawn in the fonts its own `font-family` names, with the same fallback as any text.
 - `@if`, `@for` and components work inside a `pdf-text` as anywhere else.
 
 A `pdf-text` inside a `pdf-text` is drawn in the outer text's style, with a warning in development mode: use `pdf-span` instead. Elements other than `pdf-span`, `pdf-link` and text inside a `pdf-text` are not laid out.
+
+### Superscript and subscript
+
+`vertical-align` on a `pdf-span` raises or lowers its text, for units, formulas and footnote markers:
+
+```html
+<pdf-text>
+  42 m<pdf-span style="vertical-align: super">2</pdf-span> of floor, sealed against
+  H<pdf-span style="vertical-align: sub">2</pdf-span>O<pdf-span style="vertical-align: super">1</pdf-span>
+</pdf-text>
+```
+
+- `super` raises the span's baseline by 0.33 times the font size around it, and `sub` lowers it by 0.2 times. Both draw the span at 70% of the font size around it, unless the span sets its own `font-size`.
+- A length raises the text by that much, and a negative one lowers it: `vertical-align: 3pt`. A percentage is of the span's line height, its font size times the paragraph's `line-height`. Neither changes the size.
+- `baseline` is the default. Like CSS, `vertical-align` is not inherited, but a span inside a raised span sits on that span's baseline, so its own `vertical-align` adds to the move.
+- A line grows when a moved run sticks out above its baseline or below its bottom, as in CSS, so a line with a superscript can be a little taller than its neighbours. A lower `line-height` doesn't stop that.
+- The underline or strike of a moved span, and the clickable area of a link around it, move with its text.
+- `vertical-align` works only on a `pdf-span`. On any other element it has no effect, with a warning in development mode (`ngpdf: vertical-align has no effect on <tag>`). `middle`, `top`, `text-top` and the other CSS keywords throw.
 
 ## Links: pdf-link
 

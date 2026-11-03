@@ -243,8 +243,13 @@ NGPDF_APT=poppler-utils ./scripts/dev node scripts/server-check.mjs   # packed d
     font).
 - **Styled runs:** a `pdf-span` inside a `pdf-text` changes only `color`, `font-family`,
   `font-size`, `font-weight`, `font-style`, `text-decoration`, `letter-spacing`,
-  `text-transform` and `hyphens`. The paragraph breaks as one text, and runs of different sizes
-  share a baseline. A `pdf-span` outside a `pdf-text` throws.
+  `text-transform`, `hyphens` and `vertical-align`. The paragraph breaks as one text, and runs of
+  different sizes share a baseline. A `pdf-span` outside a `pdf-text` throws.
+- **Superscript and subscript:** `vertical-align` (not inherited) applies to a `pdf-span` only and
+  warns elsewhere. `super` raises the baseline 0.33em and `sub` lowers it 0.2em of the parent's
+  font size, both at 70% of that size unless the span sets `font-size`; a length raises by it, a
+  percentage is of the span's line height. A nested span adds its move to its parent's. A line
+  grows where a moved run sticks out of it; decorations and link areas move with the run.
 - **Links:** `<pdf-link [href]>` is a column `pdf-view` where a view can go and an inline run like
   a `pdf-span` inside a `pdf-text`. It changes nothing visually.
   - Only absolute `http:`, `https:` and `mailto:` URLs are written, normalized by `URL`. Any other

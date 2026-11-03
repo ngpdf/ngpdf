@@ -22,6 +22,8 @@ export interface TextRun {
   readonly width: number;
   /** Height of the font above its baseline. */
   readonly ascent: number;
+  /** Points the run's baseline is above the line's (negative is below); absent for 0. */
+  readonly shift?: number;
   /** The URL of the pdf-link the run belongs to, or `#name` for one to an anchor. */
   readonly link?: string;
   /**
@@ -362,15 +364,17 @@ interface Face {
   readonly decoration: TextStyle['textDecoration'];
   readonly letterSpacing: number;
   readonly ascent: number;
+  readonly shift?: number;
   readonly link?: string;
   readonly emoji?: ImageAsset;
 }
 
 /** What a range contributes to the cache key: its length and everything its faces depend on. */
 function rangeKey(range: TextRange): string {
-  const { fontSize, color, textDecoration, letterSpacing, textTransform, hyphens } = range.style;
+  const { fontSize, color, textDecoration, letterSpacing, textTransform, hyphens, baselineShift } =
+    range.style;
   const chain = range.fonts?.chain ?? [fontFor(range.style)];
-  return `${String(range.text.length)}:${chain.join(',')}:${String(fontSize)}:${String(color.r)},${String(color.g)},${String(color.b)},${String(color.a)}:${textDecoration}:${String(letterSpacing)}:${textTransform}:${hyphens}:${range.link ?? ''}:${range.emoji?.size ? 'emoji' : ''}`;
+  return `${String(range.text.length)}:${chain.join(',')}:${String(fontSize)}^${String(baselineShift)}:${String(color.r)},${String(color.g)},${String(color.b)},${String(color.a)}:${textDecoration}:${String(letterSpacing)}:${textTransform}:${hyphens}:${range.link ?? ''}:${range.emoji?.size ? 'emoji' : ''}`;
 }
 
 /** The text, faces and per-unit face index of a paragraph, each range shaped in its own chain. */
@@ -471,7 +475,8 @@ function shapeRanges(ranges: readonly TextRange[], metrics: FontMetrics): Shaped
   const faceIndex = new Map<string, number>();
   const faceOf = (font: FontName, style: TextStyle, link: string | undefined): number => {
     const { fontSize: size, color, textDecoration: decoration, letterSpacing } = style;
-    const key = `${font}:${String(size)}:${String(color.r)},${String(color.g)},${String(color.b)},${String(color.a)}:${decoration}:${String(letterSpacing)}:${link ?? ''}`;
+    const shift = style.baselineShift;
+    const key = `${font}:${String(size)}^${String(shift)}:${String(color.r)},${String(color.g)},${String(color.b)},${String(color.a)}:${decoration}:${String(letterSpacing)}:${link ?? ''}`;
     let index = faceIndex.get(key);
     if (index === undefined) {
       index = faces.length;
@@ -483,6 +488,7 @@ function shapeRanges(ranges: readonly TextRange[], metrics: FontMetrics): Shaped
         decoration,
         letterSpacing,
         ascent,
+        ...(shift !== 0 && { shift }),
         ...(link !== undefined && { link }),
       });
       faceIndex.set(key, index);
@@ -514,6 +520,7 @@ function shapeRanges(ranges: readonly TextRange[], metrics: FontMetrics): Shaped
         decoration,
         letterSpacing,
         ascent,
+        ...(range.style.baselineShift !== 0 && { shift: range.style.baselineShift }),
         ...(range.link !== undefined && { link: range.link }),
         emoji: image,
       });
@@ -991,18 +998,18 @@ function breakLines(
       size = Math.max(size, run.size);
       ascent = Math.max(ascent, run.ascent);
     }
-    const height = size * lineHeight;
+    const box = growForShifts(sized, size * lineHeight, ascent);
     lines.push({
       text: runs.map((run) => run.text).join(''),
       width: runs.reduce((sum, run) => sum + run.width, 0),
       y: top,
-      height,
-      ascent,
+      height: box.height,
+      ascent: box.ascent,
       // The text is trimmed, so only the last line reaches its end.
       last: end === length || clamped,
       runs,
     });
-    top += height;
+    top += box.height;
     if (clamped) break;
     start = end;
   }
@@ -1012,6 +1019,29 @@ function breakLines(
     width: lines.reduce((widest, line) => Math.max(widest, line.width), 0),
     height: top,
   };
+}
+
+/**
+ * The line's height and baseline, grown as CSS grows a line box when a run moved by
+ * `vertical-align` sticks out above its baseline or below its bottom. A run's extent is its em box:
+ * `ascent` above its baseline and the rest of its size below it.
+ */
+function growForShifts(
+  runs: readonly TextRun[],
+  height: number,
+  ascent: number,
+): { height: number; ascent: number } {
+  let above = ascent;
+  // Room below the baseline: the line box, or the unshifted runs where they reach further.
+  let room = height - ascent;
+  for (const run of runs) if (!run.shift) room = Math.max(room, run.size - run.ascent);
+  let below = room;
+  for (const run of runs) {
+    if (!run.shift) continue;
+    above = Math.max(above, run.ascent + run.shift);
+    below = Math.max(below, run.size - run.ascent - run.shift);
+  }
+  return { height: height + (above - ascent) + (below - room), ascent: above };
 }
 
 /** A Yoga measure function (`node.setMeasureFunc`) for the text. */

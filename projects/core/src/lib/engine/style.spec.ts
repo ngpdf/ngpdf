@@ -138,6 +138,7 @@ describe('resolveStyles', () => {
       letterSpacing: 0,
       textTransform: 'none',
       hyphens: 'manual',
+      baselineShift: 0,
       orphans: 2,
       widows: 2,
     });
@@ -775,6 +776,96 @@ describe('resolveStyles property coverage', () => {
     expect(styles.get(text)).toMatchObject({ letterSpacing: 4, textTransform: 'uppercase' });
     expect(styles.get(span)).toMatchObject({ letterSpacing: 1, textTransform: 'lowercase' });
     expect(warn).not.toHaveBeenCalled();
+  });
+
+  describe('vertical-align', () => {
+    function spanStyles(
+      spanStyle: Record<string, string>,
+      textStyle: Record<string, string> = { 'font-size': '10' },
+      warn?: (message: string) => void,
+    ) {
+      const span = el('pdf-span', spanStyle, [createNode('text', '', 'x')]);
+      const text = el('pdf-text', textStyle, [span]);
+      const styles = resolveStyles(el('pdf-document', {}, [text]), warn);
+      return { span: styles.get(span), text: styles.get(text) };
+    }
+
+    it('raises super by 0.33em and lowers sub by 0.2em of the parent, at 70% of its size', () => {
+      expect(spanStyles({ 'vertical-align': 'super' }).span).toMatchObject({ fontSize: 7 });
+      expect(spanStyles({ 'vertical-align': 'super' }).span?.baselineShift).toBeCloseTo(3.3, 9);
+      expect(spanStyles({ 'vertical-align': 'SUB' }).span).toMatchObject({ fontSize: 7 });
+      expect(spanStyles({ 'vertical-align': 'sub' }).span?.baselineShift).toBeCloseTo(-2, 9);
+    });
+
+    it('keeps a font-size the span sets itself, and moves by the parent size', () => {
+      const { span } = spanStyles({ 'vertical-align': 'super', 'font-size': '12' });
+      expect(span?.fontSize).toBe(12);
+      expect(span?.baselineShift).toBeCloseTo(3.3, 9);
+    });
+
+    it('moves by a length or a percentage of the line height, without shrinking', () => {
+      expect(spanStyles({ 'vertical-align': '3pt' }).span).toMatchObject({
+        fontSize: 10,
+        baselineShift: 3,
+      });
+      expect(spanStyles({ 'vertical-align': '-2' }).span?.baselineShift).toBe(-2);
+      expect(spanStyles({ 'vertical-align': '1in' }).span?.baselineShift).toBe(72);
+      const percent = spanStyles(
+        { 'vertical-align': '50%', 'font-size': '20' },
+        { 'line-height': '1.5' },
+      ).span;
+      expect(percent).toMatchObject({ fontSize: 20, baselineShift: 15 });
+    });
+
+    it('leaves baseline, and a pdf-text, where they are', () => {
+      expect(spanStyles({ 'vertical-align': 'baseline' }).span).toMatchObject({
+        fontSize: 10,
+        baselineShift: 0,
+      });
+      expect(spanStyles({}).text?.baselineShift).toBe(0);
+      expect(ROOT_TEXT_STYLE.baselineShift).toBe(0);
+    });
+
+    it('carries a span on the shifted baseline of the span around it', () => {
+      const inner = el('pdf-span', { 'vertical-align': 'super' }, [createNode('text', '', 'x')]);
+      const plain = el('pdf-span', {}, [createNode('text', '', 'y')]);
+      const outer = el('pdf-span', { 'vertical-align': 'super' }, [inner, plain]);
+      const after = el('pdf-span', {}, [createNode('text', '', 'z')]);
+      const text = el('pdf-text', { 'font-size': '10' }, [outer, after]);
+      const styles = resolveStyles(el('pdf-document', {}, [text]));
+      expect(styles.get(plain)?.fontSize).toBeCloseTo(7, 9);
+      expect(styles.get(plain)?.baselineShift).toBeCloseTo(3.3, 9);
+      expect(styles.get(inner)?.fontSize).toBeCloseTo(4.9, 9);
+      expect(styles.get(inner)?.baselineShift).toBeCloseTo(3.3 + 0.33 * 7, 9);
+      expect(styles.get(after)).toMatchObject({ fontSize: 10, baselineShift: 0 });
+    });
+
+    it('does not warn on a pdf-span, and warns and is ignored anywhere else', () => {
+      const warn = vi.fn();
+      spanStyles({ 'vertical-align': 'super' }, {}, warn);
+      expect(warn).not.toHaveBeenCalled();
+      const linked = el('pdf-link', { 'vertical-align': 'super' }, [createNode('text', '', 'x')]);
+      const text = el('pdf-text', { 'vertical-align': 'sub' }, [linked]);
+      const view = el('pdf-view', { 'vertical-align': '3pt' }, [text]);
+      const styles = resolveStyles(el('pdf-document', {}, [view]), warn);
+      expect(warn.mock.calls).toEqual([
+        ['ngpdf: vertical-align has no effect on pdf-view'],
+        ['ngpdf: vertical-align has no effect on pdf-text'],
+        ['ngpdf: vertical-align has no effect on pdf-link'],
+      ]);
+      for (const node of [view, text, linked]) {
+        expect(styles.get(node)).toMatchObject({ fontSize: 10, baselineShift: 0 });
+      }
+    });
+
+    it('throws for a value it does not take', () => {
+      for (const value of ['middle', 'auto', 'top', '2em']) {
+        expect(() => spanStyles({ 'vertical-align': value })).toThrow(/^ngpdf: .* on pdf-span$/);
+      }
+      expect(() => spanStyles({ 'vertical-align': 'middle' })).toThrow(
+        'ngpdf: invalid value "middle" for vertical-align on pdf-span',
+      );
+    });
   });
 
   describe('transform', () => {

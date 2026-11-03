@@ -317,15 +317,17 @@ function drawBox(
       const lineLeft = alignedX(contentLeft, contentWidth, textLine.width, style.textAlign);
       const spacing = style.textAlign === 'justify' ? wordSpacing(textLine, contentWidth) : 0;
       let gapsBefore = 0;
-      // The link being followed along the line: one area per line fragment of a pdf-link.
-      let linked: { url: string; left: number; right: number } | undefined;
+      // The link being followed along the line: one area per line fragment of a pdf-link, the
+      // line box moved up and down to cover its shifted runs.
+      let linked:
+        { url: string; left: number; right: number; up: number; down: number } | undefined;
       const closeLink = (): void => {
         if (!linked) return;
         const area = {
           x: linked.left,
-          y: lineTop,
+          y: lineTop - linked.up,
           w: linked.right - linked.left,
-          h: textLine.height,
+          h: textLine.height + linked.up + linked.down,
         };
         pushLink(out, matrix, area, linked.url);
         linked = undefined;
@@ -335,14 +337,20 @@ function drawBox(
         const gaps = spacing > 0 ? wordGaps(run.text) : 0;
         gapsBefore += gaps;
         const right = x + run.width + gaps * spacing;
+        const shift = run.shift ?? 0;
         if (run.link !== undefined && linked?.url === run.link) {
           linked.right = right;
+          linked.up = Math.max(linked.up, shift);
+          linked.down = Math.max(linked.down, -shift);
         } else {
           closeLink();
-          if (run.link !== undefined) linked = { url: run.link, left: x, right };
+          if (run.link !== undefined) {
+            linked = { url: run.link, left: x, right, up: shift, down: -shift };
+          }
         }
+        const baseline = lineTop + textLine.ascent - shift;
         if (run.emoji) {
-          drawEmoji(run, run.emoji, x, lineTop + textLine.ascent, numbering.options.metrics, out);
+          drawEmoji(run, run.emoji, x, baseline, numbering.options.metrics, out);
           continue;
         }
         const ink = paint(run.color);
@@ -350,8 +358,8 @@ function drawBox(
         out.push({
           op: 'text',
           x,
-          // Runs of different sizes share the line's baseline.
-          y: lineTop + textLine.ascent - run.ascent,
+          // Runs of different sizes share the line's baseline, less any vertical-align shift.
+          y: baseline - run.ascent,
           text: run.text,
           font: run.font,
           size: run.size,
