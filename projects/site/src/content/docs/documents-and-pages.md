@@ -177,6 +177,23 @@ export class PagesDocument {
 
 To convert: 1in = 72pt, 1cm = 72/2.54pt (about 28.35pt), 1mm = 72/25.4pt (about 2.83pt).
 
+## Image resolution (dpi)
+
+`dpi` sets the resolution that images on the page are printed at. The default is 72, where one image pixel is 1pt. An image with no `width` and no `height` that is N pixels wide takes N × 72 / dpi points, so on a 300 dpi page a 600-pixel image is 144pt (2in) wide:
+
+```html
+<pdf-page size="Letter" dpi="300">
+  <pdf-image [src]="scan" />
+</pdf-page>
+```
+
+Images with a `width` or a `height` keep the size you gave them, and the cap to the width available still applies. `dpi` changes nothing else on the page:
+
+- `px` in styles stays 1pt, as in CSS for print.
+- No `/UserUnit` is written, so the page keeps its size in points and viewers show it at its real size.
+
+The resolution stored in the image file itself (JPEG density, PNG `pHYs`) is not read. A value that is not a finite number above 0 fails with `ngpdf: invalid dpi "<value>" on pdf-page`. A dpi so small that an image without a size would be too large to lay out fails with `ngpdf: pdf-image natural size is too large at dpi <dpi>; set a width or a larger dpi`.
+
 ## Page padding, background and border
 
 Style the page with `style`, as any other element.

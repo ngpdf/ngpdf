@@ -1,5 +1,5 @@
 import { propsOf, type PdfNode } from '../tree/node';
-import { show } from './style';
+import { show } from './limits';
 import type { OutlineItem } from './writer';
 
 /** What a box with an `anchor` or a `bookmark` carries to the display list. */

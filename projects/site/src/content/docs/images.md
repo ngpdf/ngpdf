@@ -99,7 +99,7 @@ The image keeps its aspect ratio unless you give it both dimensions.
 
 | You set | Result |
 | --- | --- |
-| nothing | natural size, 1 image pixel = 1pt, capped to the width available |
+| nothing | natural size, 1 image pixel = 1pt (72 / `dpi` points with a [`dpi`](/docs/documents-and-pages#image-resolution-dpi) on the page), capped to the width available |
 | `width` only | the height follows the aspect ratio |
 | `height` only | the width follows the aspect ratio |
 | `width` and `height` | the box you set; `object-fit` places the image in it |

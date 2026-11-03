@@ -9,10 +9,10 @@ These are all the style properties ngpdf reads. Any other property is ignored wi
 
 In the tables:
 
-- **length** is a number with an optional unit: none or `pt` (points), `px` (= 1pt), `in`, `cm` or `mm`. Any other unit throws.
+- **length** is a number with an optional unit: none or `pt` (points), `px` (= 1pt, whatever the page's `dpi`), `in`, `cm` or `mm`. Any other unit throws.
 - **length/%** also accepts a percentage of the parent's content box.
 - **color** is hex (3, 4, 6 or 8 digits), `rgb()`/`rgba()`, a CSS named color or `transparent`.
-- Keywords are matched in any case, as in CSS: `CENTER` is `center`. That covers the keywords of `text-align`, `text-decoration`, `text-transform`, `hyphens`, `normal` in `letter-spacing` and `line-height`, `flex-direction`, `justify-content`, `align-items`, `align-self`, `object-fit`, `overflow`, `position`, `font-weight`, `font-style`, `break-before`, `break-after` and `break-inside`, `none` in `max-lines`, `none` and the function names in `transform`, the keywords of `transform-origin`, `auto` in lengths, `auto` and `none` in `flex`, and the border styles, and the gradient function names and keywords in `background` and `background-image`.
+- Keywords are matched in any case, as in CSS: `CENTER` is `center`. That covers the keywords of `text-align`, `text-decoration`, `text-transform`, `hyphens`, `normal` in `letter-spacing` and `line-height`, `display`, `flex-direction`, `justify-content`, `align-items`, `align-self`, `object-fit`, `overflow`, `position`, `font-weight`, `font-style`, `break-before`, `break-after` and `break-inside`, `none` in `max-lines`, `none` and the function names in `transform`, the keywords of `transform-origin`, `auto` in lengths, `auto` and `none` in `flex`, and the border styles, and the gradient function names and keywords in `background` and `background-image`.
 
 ## Text
 
@@ -38,7 +38,7 @@ All text properties are inherited by child elements.
 | --- | --- | --- |
 | `max-lines` | integer ≥ 1: the most lines a `pdf-text` keeps, the last ending in `…` when text was cut; `none` | `none` |
 
-A `pdf-span` takes `color`, `font-family`, `font-size`, `font-weight`, `font-style`, `text-decoration`, `letter-spacing`, `text-transform` and `hyphens`; `line-height`, `text-align` and `max-lines` come from its `pdf-text`. See [Styled runs](/docs/text-and-fonts#styled-runs-pdf-span).
+A `pdf-span` takes `display`, `color`, `font-family`, `font-size`, `font-weight`, `font-style`, `text-decoration`, `letter-spacing`, `text-transform` and `hyphens`; `line-height`, `text-align` and `max-lines` come from its `pdf-text`. See [Styled runs](/docs/text-and-fonts#styled-runs-pdf-span).
 
 Without a registered family in the list: `font-family` contains `courier` or `mono`: Courier. Contains `times`, or `serif` without `sans`: Times. Otherwise Helvetica. With one, each character takes the first font in the list that has it. See [Text and fonts](/docs/text-and-fonts).
 
@@ -46,6 +46,7 @@ Without a registered family in the list: `font-family` contains `courier` or `mo
 
 | Property | Values | Default |
 | --- | --- | --- |
+| `display` | `flex`; `none` leaves the element and everything in it out of the document; any other value throws | `flex` |
 | `flex-direction` | `row`, `column` | `column`; `row` on `pdf-row` |
 | `justify-content` | `flex-start`, `center`, `flex-end`, `space-between`, `space-around`, `space-evenly` | `flex-start` |
 | `align-items` | `stretch`, `flex-start`, `center`, `flex-end` | `stretch` |
@@ -57,6 +58,8 @@ Without a registered family in the list: `font-family` contains `courier` or `mo
 | `flex-grow` | number | `0` |
 | `flex-shrink` | number | `1` |
 | `flex-basis` | length/%, `auto` | `auto` |
+
+`display` is not inherited. It applies to every `pdf-*` element, `pdf-span` and `pdf-note` included, and is ignored on a component host element like its other styles. See [Hiding elements](/docs/layout-and-styling#hiding-elements).
 
 `flex` takes:
 
@@ -129,7 +132,7 @@ In `border`, a missing width is 1 and a missing color is black. The width keywor
 
 Everything else is ignored, including:
 
-- `display`, `z-index`, `overflow-x`, `overflow-y`;
+- `z-index`, `overflow-x`, `overflow-y`;
 - `flex-wrap`, `align-content`, `order`;
 - `box-shadow`;
 - `font`, `word-spacing`, `white-space`, `vertical-align`;
@@ -143,7 +146,7 @@ Some styles are ignored in specific places:
 - margins, `min-width` and `max-width` on a `pdf-cell` inside a table;
 - position and size styles other than `height` on `pdf-page-number`;
 - `position`, `top`, `right`, `bottom` and `left` on a `pdf-page`, a `pdf-row` and a `pdf-cell`;
-- everything except the nine text properties above on a `pdf-span` (with a warning).
+- everything except `display` and the nine text properties above on a `pdf-span` (with a warning).
 
 ## Throws
 
