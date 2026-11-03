@@ -41,7 +41,11 @@ const DOCUMENTS = [
     pages: 1,
     contains: ['Łódź', 'καλημέρα', 'доброе утро', '日本語の文字テスト', 'Страница 1 / 1'],
   },
-  { name: 'span-sample', pages: 1, contains: ['#1024', '12 days overdue', 'Łódź', 'after 2 pm,…'] },
+  {
+    name: 'span-sample',
+    pages: 1,
+    contains: ['#1024', '12 days overdue', 'Łódź', 'after 2 pm,…', 'packaging,…'],
+  },
   { name: 'article-sample', pages: 3, contains: ['Field notes', 'Page 3 of 3'] },
   {
     name: 'fixed-sample',

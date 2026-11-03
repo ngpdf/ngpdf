@@ -851,6 +851,68 @@ function place(
   return [child?.x ?? NaN, child?.w ?? NaN, child?.h ?? NaN];
 }
 
+describe('text-overflow: ellipsis', () => {
+  // 9pt at line-height 1.5: each line is 13.5pt tall.
+  const words =
+    'Gabriela Teixeira de Albuquerque Cavalcanti mora em Recife desde 2019 com a família';
+  const text = (style: Record<string, string>) =>
+    lay(
+      el('pdf-view', {}, [
+        el('pdf-text', { 'font-size': '9', 'line-height': '1.5', width: '120', ...style }, [
+          textNode(words),
+        ]),
+      ]),
+      400,
+    ).children[0];
+
+  it('keeps the lines that fit a fixed height, the last ending with an ellipsis', () => {
+    const leaf = text({ height: '40', 'text-overflow': 'ellipsis' });
+    expect(leaf?.h).toBe(40);
+    expect(leaf?.text?.lines).toHaveLength(2);
+    expect(leaf?.text?.lines[1]?.text.endsWith('…')).toBe(true);
+  });
+
+  it('measures the height inside the padding and border', () => {
+    const leaf = text({
+      height: '50',
+      padding: '5',
+      'border-width': '1',
+      'text-overflow': 'ellipsis',
+    });
+    // 50 - 10 - 2 = 38pt: two lines.
+    expect(leaf?.text?.lines).toHaveLength(2);
+  });
+
+  it('keeps the lines that fit a max-height', () => {
+    const leaf = text({ 'max-height': '30', 'text-overflow': 'ellipsis' });
+    expect(leaf?.h).toBe(30);
+    expect(leaf?.text?.lines).toHaveLength(2);
+    expect(leaf?.text?.lines[1]?.text.endsWith('…')).toBe(true);
+  });
+
+  it('keeps every line with clip, or without a fixed height or max-height', () => {
+    const all = text({})?.text?.lines.length ?? 0;
+    expect(all).toBeGreaterThan(3);
+    expect(text({ height: '40' })?.text?.lines).toHaveLength(all);
+    expect(text({ height: '40', 'text-overflow': 'clip' })?.text?.lines).toHaveLength(all);
+    expect(text({ 'text-overflow': 'ellipsis' })?.text?.lines).toHaveLength(all);
+    expect(text({ 'min-height': '10', 'text-overflow': 'ellipsis' })?.text?.lines).toHaveLength(
+      all,
+    );
+  });
+
+  it('ignores the height of an overflow: hidden parent', () => {
+    const root = el('pdf-view', { height: '20', overflow: 'hidden' }, [
+      el('pdf-text', { 'font-size': '9', width: '120', 'text-overflow': 'ellipsis' }, [
+        textNode(words),
+      ]),
+    ]);
+    const lines = lay(root, 400).children[0]?.text?.lines ?? [];
+    expect(lines.length).toBeGreaterThan(3);
+    expect(lines.some((line) => line.text.endsWith('…'))).toBe(false);
+  });
+});
+
 describe('anonymous text', () => {
   const linesOf = (box: Box | undefined): string[] =>
     box?.text?.lines.map((line) => line.text) ?? [];

@@ -12,7 +12,7 @@ In the tables:
 - **length** is a number with an optional unit: none or `pt` (points), `px` (= 1pt, whatever the page's `dpi`), `in`, `cm` or `mm`. Any other unit throws.
 - **length/%** also accepts a percentage of the parent's content box.
 - **color** is hex (3, 4, 6 or 8 digits), `rgb()`/`rgba()`, a CSS named color or `transparent`.
-- Keywords are matched in any case, as in CSS: `CENTER` is `center`. That covers the keywords of `text-align`, `text-decoration`, `text-transform`, `hyphens`, `normal` in `letter-spacing` and `line-height`, `display`, `flex-direction`, `justify-content`, `align-items`, `align-self`, `object-fit`, `overflow`, `position`, `font-weight`, `font-style`, `break-before`, `break-after` and `break-inside`, `none` in `max-lines`, `none` and the function names in `transform`, the keywords of `transform-origin`, `auto` in lengths, `auto` and `none` in `flex`, and the border styles, and the gradient function names and keywords in `background` and `background-image`.
+- Keywords are matched in any case, as in CSS: `CENTER` is `center`. That covers the keywords of `text-align`, `text-decoration`, `text-transform`, `text-overflow`, `hyphens`, `normal` in `letter-spacing` and `line-height`, `display`, `flex-direction`, `justify-content`, `align-items`, `align-self`, `object-fit`, `overflow`, `position`, `font-weight`, `font-style`, `break-before`, `break-after` and `break-inside`, `none` in `max-lines`, `none` and the function names in `transform`, the keywords of `transform-origin`, `auto` in lengths, `auto` and `none` in `flex`, and the border styles, and the gradient function names and keywords in `background` and `background-image`.
 
 ## Text
 
@@ -32,13 +32,14 @@ All text properties are inherited by child elements.
 | `text-transform` | `none`, `uppercase`, `lowercase`, `capitalize` | `none` |
 | `hyphens` | `manual` (break at soft hyphens), `none`, `auto` (also where the [hyphenation function](/docs/text-and-fonts#automatic-hyphenation) allows) | `manual` |
 
-`max-lines` is not inherited:
+`max-lines` and `text-overflow` are not inherited:
 
 | Property | Values | Default |
 | --- | --- | --- |
 | `max-lines` | integer ≥ 1: the most lines a `pdf-text` keeps, the last ending in `…` when text was cut; `none` | `none` |
+| `text-overflow` | `clip`, `ellipsis`: with a fixed `height` or `max-height` on the same `pdf-text`, keep the lines that fit and end the last in `…` (see [Cutting text to its height](/docs/text-and-fonts#cutting-text-to-its-height)) | `clip` |
 
-A `pdf-span` takes `display`, `color`, `font-family`, `font-size`, `font-weight`, `font-style`, `text-decoration`, `letter-spacing`, `text-transform` and `hyphens`; `line-height`, `text-align` and `max-lines` come from its `pdf-text`. See [Styled runs](/docs/text-and-fonts#styled-runs-pdf-span).
+A `pdf-span` takes `display`, `color`, `font-family`, `font-size`, `font-weight`, `font-style`, `text-decoration`, `letter-spacing`, `text-transform` and `hyphens`; `line-height`, `text-align`, `max-lines` and `text-overflow` come from its `pdf-text`. See [Styled runs](/docs/text-and-fonts#styled-runs-pdf-span).
 
 Without a registered family in the list: `font-family` contains `courier` or `mono`: Courier. Contains `times`, or `serif` without `sans`: Times. Otherwise Helvetica. With one, each character takes the first font in the list that has it. See [Text and fonts](/docs/text-and-fonts).
 
@@ -157,7 +158,7 @@ Some styles are ignored in specific places:
 - `auto` in `padding` or a `padding-*` side;
 - a negative `font-size`, padding, gap, border width or radius (margins can be negative, as in CSS);
 - a color that is not one of the forms above, including `hsl()`, `currentColor` and `var()`;
-- a keyword outside the lists above for `text-align`, `text-decoration`, `text-transform`, `flex-direction`, `justify-content`, `align-items`, `align-self`, `object-fit`, `overflow` and `position`, in any case;
+- a keyword outside the lists above for `text-align`, `text-decoration`, `text-transform`, `text-overflow`, `flex-direction`, `justify-content`, `align-items`, `align-self`, `object-fit`, `overflow` and `position`, in any case;
 - `position: fixed` and `position: sticky`;
 - a `transform` function other than the seven above, such as `skew()`, `matrix()` or `rotate3d()`, an angle without a unit (other than `0`) and a `transform-origin` with three values;
 - a value that is not a number for `flex-grow`, `flex-shrink` and `opacity`;

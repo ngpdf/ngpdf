@@ -951,6 +951,64 @@ describe('layoutRanges with maxLines', () => {
   });
 });
 
+describe('layoutRanges with heightLimit', () => {
+  let writer: PdfWriter;
+  beforeAll(async () => {
+    writer = await createPdfkitWriter({ compress: false });
+  });
+  // 9pt Helvetica at line-height 1.5: each line is 13.5pt tall.
+  const text =
+    'Gabriela Teixeira de Albuquerque Cavalcanti mora em Recife desde 2019 com a família';
+  const lay = (paragraph: Partial<ParagraphStyle>, ranges?: readonly TextRange[]) =>
+    layoutRanges(ranges ?? [{ text, style }], { ...style, ...paragraph }, 120, writer);
+
+  it('keeps the lines that fit fully in the height and ends the last with an ellipsis', () => {
+    const all = lay({});
+    expect(all.lines.length).toBeGreaterThan(3);
+    const block = lay({ heightLimit: 40 });
+    expect(block).toEqual(lay({ maxLines: 2 }));
+    expect(block.lines).toHaveLength(2);
+    expect(block.lines[1]?.text.endsWith('…')).toBe(true);
+    expect(block.height).toBe(27);
+  });
+
+  it('keeps a line whose bottom is exactly at the limit', () => {
+    const block = lay({ heightLimit: 40.5 });
+    expect(block.lines).toHaveLength(3);
+    expect(block.lines[2]?.text.endsWith('…')).toBe(true);
+  });
+
+  it('changes nothing when every line fits, or without a limit', () => {
+    const all = lay({});
+    expect(lay({ heightLimit: all.height })).toEqual(all);
+    expect(lay({ heightLimit: null })).toEqual(all);
+  });
+
+  it('takes the smaller line count of maxLines and the height', () => {
+    expect(lay({ heightLimit: 40, maxLines: 1 }).lines).toHaveLength(1);
+    expect(lay({ heightLimit: 40, maxLines: 3 }).lines).toHaveLength(2);
+  });
+
+  it('keeps the first line, with an ellipsis, when not even one fits', () => {
+    const block = lay({ heightLimit: 5 });
+    expect(block).toEqual(lay({ maxLines: 1 }));
+    expect(block.lines[0]?.text.endsWith('…')).toBe(true);
+  });
+
+  it('counts each line at its own height when runs have different sizes', () => {
+    // A 30pt first line is 45pt tall, so 50pt holds it and nothing more.
+    const big: TextStyle = { ...style, fontSize: 30 };
+    const ranges = [
+      { text: 'Grande ', style: big },
+      { text: text, style },
+    ];
+    const block = lay({ heightLimit: 50 }, ranges);
+    expect(block.lines).toHaveLength(1);
+    expect(block.lines[0]?.text.endsWith('…')).toBe(true);
+    expect(lay({ heightLimit: 59 }, ranges).lines).toHaveLength(2);
+  });
+});
+
 describe('layoutRanges with emoji images', () => {
   const asset = (n: number): ImageAsset => ({ data: new Uint8Array([n]), width: 1, height: 1 });
   const thumbs = asset(1);
