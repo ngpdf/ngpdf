@@ -12,7 +12,7 @@ In the tables:
 - **length** is a number with an optional unit: none or `pt` (points), `px` (= 1pt, whatever the page's `dpi`), `in`, `cm` or `mm`. Any other unit throws.
 - **length/%** also accepts a percentage of the parent's content box.
 - **color** is hex (3, 4, 6 or 8 digits), `rgb()`/`rgba()`, a CSS named color or `transparent`.
-- Keywords are matched in any case, as in CSS: `CENTER` is `center`. That covers the keywords of `text-align`, `text-decoration`, `text-transform`, `text-overflow`, `hyphens`, `vertical-align`, `normal` in `letter-spacing` and `line-height`, `display`, `flex-direction`, `justify-content`, `align-items`, `align-self`, `object-fit`, `overflow`, `position`, `font-weight`, `font-style`, `break-before`, `break-after` and `break-inside`, `none` in `max-lines`, `none` and the function names in `transform`, the keywords of `transform-origin`, `auto` in lengths, `auto` and `none` in `flex`, and the border styles, and the gradient function names and keywords in `background` and `background-image`.
+- Keywords are matched in any case, as in CSS: `CENTER` is `center`. That covers the keywords of `text-align`, `text-decoration`, `text-transform`, `text-overflow`, `hyphens`, `vertical-align`, `normal` in `letter-spacing` and `line-height`, `display`, `flex-direction`, `flex-wrap`, `flex-flow`, `justify-content`, `align-items`, `align-self`, `align-content`, `object-fit`, `overflow`, `position`, `font-weight`, `font-style`, `break-before`, `break-after` and `break-inside`, `none` in `max-lines`, `none` and the function names in `transform`, the keywords of `transform-origin`, `auto` in lengths, `auto` and `none` in `flex`, and the border styles, and the gradient function names and keywords in `background` and `background-image`.
 
 ## Text
 
@@ -50,12 +50,15 @@ Without a registered family in the list: `font-family` contains `courier` or `mo
 | --- | --- | --- |
 | `display` | `flex`; `none` leaves the element and everything in it out of the document; any other value throws | `flex` |
 | `flex-direction` | `row`, `column` | `column`; `row` on `pdf-row` |
+| `flex-wrap` | `nowrap`, `wrap`, `wrap-reverse` | `nowrap` |
+| `flex-flow` | `<direction> \|\| <wrap>`: one or two keywords in any order; the part left out goes back to its default | |
 | `justify-content` | `flex-start`, `center`, `flex-end`, `space-between`, `space-around`, `space-evenly` | `flex-start` |
 | `align-items` | `stretch`, `flex-start`, `center`, `flex-end` | `stretch` |
 | `align-self` | `auto`, `stretch`, `flex-start`, `center`, `flex-end` | `auto` |
+| `align-content` | `stretch`, `flex-start`, `center`, `flex-end`, `space-between`, `space-around`, `space-evenly`: where the lines of a wrapping container go in its free cross space | `stretch` |
 | `gap` | `<row> [<column>]`: one or two lengths/% ≥ 0; one value sets both | `0` |
-| `row-gap` | length/% ≥ 0: space between the children of a column; a % is of the container's content height | `0` |
-| `column-gap` | length/% ≥ 0: space between the children of a row; a % is of the container's content width | `0` |
+| `row-gap` | length/% ≥ 0: space between the children of a column, or between the lines of a wrapping row; a % is of the container's content height | `0` |
+| `column-gap` | length/% ≥ 0: space between the children of a row, or between the columns of a wrapping column; a % is of the container's content width | `0` |
 | `flex` | see below | |
 | `flex-grow` | number | `0` |
 | `flex-shrink` | number | `1` |
@@ -135,7 +138,7 @@ In `border`, a missing width is 1 and a missing color is black. The width keywor
 Everything else is ignored, including:
 
 - `z-index`, `overflow-x`, `overflow-y`;
-- `flex-wrap`, `align-content`, `order`;
+- `order`;
 - `box-shadow`;
 - `font`, `word-spacing`, `white-space`;
 - custom properties (`--name`).
@@ -144,7 +147,7 @@ Some styles are ignored in specific places:
 
 - on a component host element (with a warning);
 - `width`, `height`, the `min-`/`max-` sizes and `margin` on a `pdf-page`;
-- horizontal padding, left and right borders, margins, `justify-content`, `flex-direction` and the column gap (`column-gap`, or the column part of `gap`) on a `pdf-row` inside a table;
+- horizontal padding, left and right borders, margins, `justify-content`, `flex-direction`, `flex-wrap` and the column gap (`column-gap`, or the column part of `gap`) on a `pdf-row` inside a table;
 - margins, `min-width` and `max-width` on a `pdf-cell` inside a table;
 - position and size styles other than `height` on `pdf-page-number`;
 - `position`, `top`, `right`, `bottom` and `left` on a `pdf-page`, a `pdf-row` and a `pdf-cell`;
@@ -160,7 +163,7 @@ Some styles are ignored in specific places:
 - `auto` in `padding` or a `padding-*` side;
 - a negative `font-size`, padding, gap, border width or radius (margins can be negative, as in CSS);
 - a color that is not one of the forms above, including `hsl()`, `currentColor` and `var()`;
-- a keyword outside the lists above for `text-align`, `text-decoration`, `text-transform`, `text-overflow`, `flex-direction`, `justify-content`, `align-items`, `align-self`, `object-fit`, `overflow` and `position`, in any case, and for `vertical-align` on a `pdf-span` (`middle`, `top` and the like);
+- a keyword outside the lists above for `text-align`, `text-decoration`, `text-transform`, `text-overflow`, `flex-direction`, `flex-wrap`, `flex-flow`, `justify-content`, `align-items`, `align-self`, `align-content`, `object-fit`, `overflow` and `position`, in any case, and for `vertical-align` on a `pdf-span` (`middle`, `top` and the like);
 - `position: fixed` and `position: sticky`;
 - a `transform` function other than the seven above, such as `skew()`, `matrix()` or `rotate3d()`, an angle without a unit (other than `0`) and a `transform-origin` with three values;
 - a value that is not a number for `flex-grow`, `flex-shrink` and `opacity`;

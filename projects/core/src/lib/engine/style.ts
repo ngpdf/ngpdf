@@ -100,6 +100,7 @@ type AlignItems = 'stretch' | 'flex-start' | 'center' | 'flex-end';
 
 export interface ResolvedStyle extends TextStyle {
   readonly flexDirection: 'row' | 'column';
+  readonly flexWrap: 'nowrap' | 'wrap' | 'wrap-reverse';
   readonly flexGrow: number;
   readonly flexShrink: number;
   readonly flexBasis: Length;
@@ -107,6 +108,15 @@ export interface ResolvedStyle extends TextStyle {
     'flex-start' | 'center' | 'flex-end' | 'space-between' | 'space-around' | 'space-evenly';
   readonly alignItems: AlignItems;
   readonly alignSelf: 'auto' | AlignItems;
+  /** Where the lines of a wrapping container go in its free cross space. */
+  readonly alignContent:
+    | 'stretch'
+    | 'flex-start'
+    | 'center'
+    | 'flex-end'
+    | 'space-between'
+    | 'space-around'
+    | 'space-evenly';
   /** Space between lines of a column's children (CSS `row-gap`). */
   readonly rowGap: Gap;
   /** Space between a row's children (CSS `column-gap`). */
@@ -951,18 +961,53 @@ function fontWeightOf(value: string, inherited: number, tag: string): number {
   );
 }
 
+const WRAPS = ['nowrap', 'wrap', 'wrap-reverse'] as const;
+
+/** The direction an element has without `flex-direction`: `row` on a pdf-row, else `column`. */
+function defaultDirection(tag: string | undefined): 'row' | 'column' {
+  return tag === 'pdf-row' ? 'row' : 'column';
+}
+
+/**
+ * `flex-flow: <direction> || <wrap>`: one or two keywords in any order, each kind at most once.
+ * A part left out is undefined, and the caller resets it to its default, as CSS does.
+ */
+function parseFlexFlow(
+  value: string,
+  tag: string,
+): { direction?: 'row' | 'column'; wrap?: (typeof WRAPS)[number] } {
+  const tokens = tokenize(value);
+  const bad = (): never => fail(`invalid value "${show(value)}" for flex-flow`, tag);
+  if (tokens.length < 1 || tokens.length > 2) return bad();
+  let direction: 'row' | 'column' | undefined;
+  let wrap: (typeof WRAPS)[number] | undefined;
+  for (const token of tokens) {
+    const keyword = keywordOf(token);
+    if ((keyword === 'row' || keyword === 'column') && direction === undefined) {
+      direction = keyword;
+    } else {
+      const found = WRAPS.find((candidate) => candidate === keyword);
+      if (found === undefined || wrap !== undefined) return bad();
+      wrap = found;
+    }
+  }
+  return { ...(direction && { direction }), ...(wrap && { wrap }) };
+}
+
 const SIDES: readonly Side[] = ['top', 'right', 'bottom', 'left'];
 
 function defaultStyle(node: PdfNode, inherited: TextStyle): Mutable<ResolvedStyle> {
   return {
     ...inherited,
-    flexDirection: node.tag === 'pdf-row' ? 'row' : 'column',
+    flexDirection: defaultDirection(node.tag),
+    flexWrap: 'nowrap',
     flexGrow: 0,
     flexShrink: 1,
     flexBasis: 'auto',
     justifyContent: 'flex-start',
     alignItems: 'stretch',
     alignSelf: 'auto',
+    alignContent: 'stretch',
     rowGap: 0,
     columnGap: 0,
     width: 'auto',
@@ -1079,6 +1124,31 @@ function apply(
       break;
     case 'flex-direction':
       style.flexDirection = oneOf(value, ['row', 'column'], property, tag);
+      break;
+    case 'flex-wrap':
+      style.flexWrap = oneOf(value, WRAPS, property, tag);
+      break;
+    case 'flex-flow': {
+      const flow = parseFlexFlow(value, tag);
+      style.flexDirection = flow.direction ?? defaultDirection(tag);
+      style.flexWrap = flow.wrap ?? 'nowrap';
+      break;
+    }
+    case 'align-content':
+      style.alignContent = oneOf(
+        value,
+        [
+          'stretch',
+          'flex-start',
+          'center',
+          'flex-end',
+          'space-between',
+          'space-around',
+          'space-evenly',
+        ],
+        property,
+        tag,
+      );
       break;
     case 'flex': {
       const flex = parseFlex(value, tag);
