@@ -12,7 +12,7 @@ export { loadFont } from './font-loading';
 import { loadEmoji, type EmojiSource } from './emoji';
 import { parseFontFamily, type RegisteredFace } from './fonts';
 import { dissolveHosts } from './hosts';
-import { loadImages, type ImageAsset, type ServerSources } from './images';
+import { loadImages, type ServerSources } from './images';
 import type { Box, LayoutContext } from './layout';
 import {
   fixedViewWidth,
@@ -253,18 +253,17 @@ export async function renderDocument(
       : { tree: dissolved, views: new Map<PdfNode, PerSheetView>(), origins: new Map() };
     const anchors = marksOf(origins, collected);
     const styles = resolveStyles(tree, warn);
-    const sharedImages = new Map<unknown, Promise<ImageAsset>>();
     const fonts = new Map<string, RegisteredFace[]>();
-    // Emoji tried so far; a pdfPerSheet sheet's content loads only the ones not in it.
-    const seenEmoji = new Set<string>();
-    const emoji = new Map<string, ImageAsset>();
     // Emoji images load with the others, before layout, so measuring stays synchronous.
-    const [images, , found] = await Promise.all([
-      loadImages(tree, writer, undefined, options.server, sharedImages),
+    const [{ images, loads }, , found] = await Promise.all([
+      loadImages(tree, writer, undefined, options.server),
       registerUsedFonts(options.fonts ?? [], styles, writer, fonts),
-      loadEmoji(tree, options.emoji, writer, warn, undefined, options.server, seenEmoji),
+      loadEmoji(tree, options.emoji, writer, warn, undefined, options.server),
     ]);
-    for (const [sequence, asset] of found) emoji.set(sequence, asset);
+    // Image loads and emoji tried so far; a pdfPerSheet sheet's content loads only new ones.
+    const imageLoads = new Map(loads);
+    const seenEmoji = new Set(found.tried);
+    const emoji = new Map(found.images);
     // One text cache per render, passed down like the metrics and images, so renders share nothing.
     const language = languageOf(propsOf(document)['language']);
     const textCache = new TextMeasureCache({
@@ -304,15 +303,17 @@ export async function renderDocument(
       if (!pageStyle) throw new Error('ngpdf: no resolved style for <pdf-page>');
       const viewStyles = resolveStyles(filled.view, warn, { style: pageStyle, depth: 3 });
       const [viewImages, , viewEmoji] = await Promise.all([
-        loadImages(filled.view, writer, undefined, options.server, sharedImages),
+        loadImages(filled.view, writer, undefined, options.server, imageLoads),
         registerUsedFonts(options.fonts ?? [], viewStyles, writer, fonts),
         loadEmoji(filled.view, options.emoji, writer, warn, undefined, options.server, seenEmoji),
       ]);
-      for (const [sequence, asset] of viewEmoji) emoji.set(sequence, asset);
+      for (const [src, load] of viewImages.loads) imageLoads.set(src, load);
+      for (const sequence of viewEmoji.tried) seenEmoji.add(sequence);
+      for (const [sequence, asset] of viewEmoji.images) emoji.set(sequence, asset);
       const width = fixedViewWidth(view.page, pageStyle, viewStyles.get(filled.view));
       const viewCtx: LayoutContext = {
         ...ctx,
-        images: viewImages,
+        images: viewImages.images,
         anchors: marksOf(filled.origins, collected),
       };
       return placeSheetView(placed, filled.view, viewStyles, width, viewCtx, () => {

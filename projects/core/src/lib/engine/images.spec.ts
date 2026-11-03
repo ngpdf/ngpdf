@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { createNode, type PdfNode } from '../tree/node';
-import { fitImage, loadImages, type ImageAsset } from './images';
+import { fitImage, loadImages } from './images';
 import { createPdfkitWriter, type PdfWriter } from './writer';
 
 /** PNG signature plus an IHDR chunk: all `imageSize` reads. */
@@ -59,11 +59,12 @@ beforeAll(async () => {
 });
 
 const png = pngHeader(200, 100);
+const dataUrl = `data:image/png;base64,${base64(png)}`;
 
 describe('loadImages', () => {
   it('loads a base64 PNG data URL with its natural size', async () => {
     const node = imageNode(`data:image/png;base64,${base64(png)}`);
-    const assets = await loadImages(root(node), writer);
+    const { images: assets } = await loadImages(root(node), writer);
     expect(assets.get(node)).toEqual({ data: png, width: 200, height: 100 });
   });
 
@@ -72,7 +73,7 @@ describe('loadImages', () => {
     async (prefix) => {
       const fetchFn = vi.fn(() => Promise.reject(new TypeError('Failed to fetch')));
       const node = imageNode(`${prefix}${base64(png)}`);
-      const assets = await loadImages(root(node), writer, fetchFn);
+      const { images: assets } = await loadImages(root(node), writer, fetchFn);
       expect(fetchFn).not.toHaveBeenCalled();
       expect(assets.get(node)).toEqual({ data: png, width: 200, height: 100 });
     },
@@ -81,7 +82,7 @@ describe('loadImages', () => {
   it('decodes a percent-encoded data URL', async () => {
     const encoded = Array.from(png, (b) => `%${b.toString(16).padStart(2, '0')}`).join('');
     const node = imageNode(`data:image/png,${encoded}`);
-    const assets = await loadImages(root(node), writer);
+    const { images: assets } = await loadImages(root(node), writer);
     expect(assets.get(node)?.width).toBe(200);
   });
 
@@ -89,12 +90,12 @@ describe('loadImages', () => {
     const escaped = imageNode(
       `data:image/png,${Array.from(png, (b) => `%${b.toString(16).padStart(2, '0')}`).join('')}`,
     );
-    expect((await loadImages(root(escaped), writer)).get(escaped)?.data).toEqual(png);
+    expect((await loadImages(root(escaped), writer)).images.get(escaped)?.data).toEqual(png);
 
     // Bytes written as Latin-1 characters, only `%` escaped.
     const text = Array.from(png, (b) => (b === 0x25 ? '%25' : String.fromCharCode(b))).join('');
     const plain = imageNode(`data:image/png,${text}`);
-    expect((await loadImages(root(plain), writer)).get(plain)?.data).toEqual(png);
+    expect((await loadImages(root(plain), writer)).images.get(plain)?.data).toEqual(png);
   });
 
   it('rejects a data URL without a comma', async () => {
@@ -109,7 +110,7 @@ describe('loadImages', () => {
       b === 0x25 ? '%' : `%${b.toString(16).padStart(2, '0')}`,
     ).join('');
     const node = imageNode(`data:image/png,${encoded}`);
-    const assets = await loadImages(root(node), writer);
+    const { images: assets } = await loadImages(root(node), writer);
     expect(assets.get(node)).toEqual({ data: bytes, width: 37, height: 100 });
   });
 
@@ -126,7 +127,7 @@ describe('loadImages', () => {
     ).join('');
     const node = imageNode(`data:image/png,${encoded}`);
     const started = performance.now();
-    const assets = await loadImages(root(node), writer);
+    const { images: assets } = await loadImages(root(node), writer);
     // About 90 ms on a developer machine. As with the text budget, the margin only has to separate
     // a linear decode on a busy CI runner with coverage on from a quadratic one.
     expect(performance.now() - started).toBeLessThan(2000);
@@ -140,7 +141,7 @@ describe('loadImages', () => {
   it('loads a Blob and an ArrayBuffer the same way', async () => {
     const blobNode = imageNode(new Blob([png as BlobPart], { type: 'image/png' }));
     const bufferNode = imageNode(png.buffer.slice(0));
-    const assets = await loadImages(root(blobNode, bufferNode), writer);
+    const { images: assets } = await loadImages(root(blobNode, bufferNode), writer);
     expect(assets.get(blobNode)).toEqual({ data: png, width: 200, height: 100 });
     expect(assets.get(bufferNode)).toEqual({ data: png, width: 200, height: 100 });
   });
@@ -148,7 +149,7 @@ describe('loadImages', () => {
   it('fetches a URL with same-origin credentials', async () => {
     const fetchFn = vi.fn(() => Promise.resolve(new Response(png as BodyInit)));
     const node = imageNode('/logo.png');
-    const assets = await loadImages(root(node), writer, fetchFn);
+    const { images: assets } = await loadImages(root(node), writer, fetchFn);
     expect(fetchFn).toHaveBeenCalledWith('/logo.png', { credentials: 'same-origin' });
     expect(assets.get(node)?.height).toBe(100);
   });
@@ -182,24 +183,28 @@ describe('loadImages', () => {
     const fetchFn = vi.fn(() => Promise.resolve(new Response(png as BodyInit)));
     const first = imageNode('/same.png');
     const second = imageNode('/same.png');
-    const assets = await loadImages(root(first, second), writer, fetchFn);
+    const { images: assets } = await loadImages(root(first, second), writer, fetchFn);
     expect(fetchFn).toHaveBeenCalledTimes(1);
     expect(assets.get(second)).toBe(assets.get(first));
   });
 
-  it('reads a Blob or an ArrayBuffer once across calls that share a map', async () => {
+  it('reads a Blob or an ArrayBuffer once across calls given the earlier loads', async () => {
     const blob = new Blob([png as BlobPart], { type: 'image/png' });
     const read = vi.spyOn(blob, 'arrayBuffer');
     const buffer = png.buffer.slice(0);
-    const shared = new Map<unknown, Promise<ImageAsset>>();
     const first = [imageNode(blob), imageNode(buffer)];
-    const second = [imageNode(blob), imageNode(buffer)];
-    const before = await loadImages(root(...first), writer, undefined, undefined, shared);
-    const after = await loadImages(root(...second), writer, undefined, undefined, shared);
+    const second = [imageNode(blob), imageNode(buffer), imageNode(dataUrl)];
+    const before = await loadImages(root(...first), writer);
+    expect([...before.loads.keys()]).toEqual([blob, buffer]);
+    const known = new Map(before.loads);
+    const after = await loadImages(root(...second), writer, undefined, undefined, known);
     expect(read).toHaveBeenCalledTimes(1);
     // The same bytes, so the writer encodes each image once.
-    expect(after.get(second[0]!)?.data).toBe(before.get(first[0]!)?.data);
-    expect(after.get(second[1]!)?.data).toBe(before.get(first[1]!)?.data);
+    expect(after.images.get(second[0]!)?.data).toBe(before.images.get(first[0]!)?.data);
+    expect(after.images.get(second[1]!)?.data).toBe(before.images.get(first[1]!)?.data);
+    // Only the new source is returned, and the map passed in is left as it was.
+    expect([...after.loads.keys()]).toEqual([dataUrl]);
+    expect([...known.keys()]).toEqual([blob, buffer]);
   });
 
   it('rejects a 404 with the URL and the status', async () => {
@@ -265,7 +270,7 @@ describe('loadImages', () => {
     pooled.set(png, 8);
     const view = pooled.subarray(8, 8 + png.length);
     const node = imageNode(view);
-    const assets = await loadImages(root(node), writer);
+    const { images: assets } = await loadImages(root(node), writer);
     expect(assets.get(node)).toEqual({ data: png, width: 200, height: 100 });
   });
 
@@ -282,7 +287,7 @@ describe('loadImages', () => {
   it('ignores other elements and loads nested images', async () => {
     const nested = imageNode(png.buffer.slice(0));
     const inner = root(nested);
-    const assets = await loadImages(root(inner, createNode('text', '', 'x')), writer);
+    const { images: assets } = await loadImages(root(inner, createNode('text', '', 'x')), writer);
     expect([...assets.keys()]).toEqual([nested]);
   });
 });
@@ -300,8 +305,6 @@ describe('fitImage', () => {
 });
 
 describe('loadImages on the server', () => {
-  const dataUrl = `data:image/png;base64,${base64(png)}`;
-
   it('refuses a remote URL without fetchImage, and never calls fetch', async () => {
     const fetchFn = vi.fn(() => Promise.resolve(new Response(png as BodyInit)));
     const load = loadImages(root(imageNode('https://cdn.example.com/a.png')), writer, fetchFn, {});
@@ -327,7 +330,7 @@ describe('loadImages on the server', () => {
     const fetchImage = vi.fn(() => Promise.resolve(png));
     const fetchFn = vi.fn(() => Promise.resolve(new Response(png as BodyInit)));
     const node = imageNode('https://cdn.example.com/a.png?size=2');
-    const assets = await loadImages(root(node), writer, fetchFn, { fetchImage });
+    const { images: assets } = await loadImages(root(node), writer, fetchFn, { fetchImage });
     expect(fetchImage).toHaveBeenCalledWith('https://cdn.example.com/a.png?size=2');
     expect(fetchFn).not.toHaveBeenCalled();
     expect(assets.get(node)).toEqual({ data: png, width: 200, height: 100 });
@@ -392,7 +395,7 @@ describe('loadImages on the server', () => {
       imageNode(new Blob([png as BlobPart])),
       imageNode(png.buffer.slice(0)),
     ];
-    const assets = await loadImages(root(...nodes), writer, undefined, {});
+    const { images: assets } = await loadImages(root(...nodes), writer, undefined, {});
     for (const node of nodes) expect(assets.get(node)?.width).toBe(200);
   });
 });
