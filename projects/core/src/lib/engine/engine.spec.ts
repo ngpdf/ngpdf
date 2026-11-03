@@ -1,7 +1,7 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createNode, type PdfNode } from '../tree/node';
 import { testFont } from '../../testing/test-fonts';
-import { testPng } from '../../testing/test-png';
+import { testPng, testRows } from '../../testing/test-png';
 import { renderDocument, type FontSource } from './index';
 import { createPdfkitWriter, type DocumentInfo, type PageOps, type PdfWriter } from './writer';
 
@@ -943,6 +943,27 @@ describe('renderDocument with emoji', () => {
     await expect(
       renderDocument(doc, { writer: await createPdfkitWriter({ compress: false }), dev: false }),
     ).rejects.toThrow();
+  });
+
+  // pdfkit decodes these pixels while it writes, in a zlib callback whose throw no promise sees.
+  describe.each([
+    ['RGBA', 6, 4],
+    ['gray with alpha', 4, 2],
+    ['a palette with tRNS', 3, 1],
+  ] as const)('a pdf-image in %s', (_, colorType, channels) => {
+    const cut = testRows(2, 2, channels);
+    it.each([
+      ['a bad filter byte', testPng({ colorType, idat: testRows(2, 2, channels, 2, 9) })],
+      ['a truncated IDAT', testPng({ colorType, idat: cut.slice(0, cut.length - 4) })],
+    ])('with %s rejects the render', async (__, png) => {
+      const image = el('pdf-image', { width: '10', height: '10' }, [], { src: png });
+      const doc = host({}, [el('pdf-page', {}, [image], { size: 'A4' })]);
+      await expect(
+        renderDocument(doc, { writer: await createPdfkitWriter({ compress: false }), dev: false }),
+      ).rejects.toThrow(
+        'ngpdf: could not load image "Uint8Array": the image data is corrupt or cut off',
+      );
+    });
   });
 
   it('embeds an emoji image once in the PDF', async () => {

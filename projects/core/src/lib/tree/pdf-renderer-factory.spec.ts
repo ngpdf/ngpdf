@@ -137,6 +137,27 @@ describe('PdfRendererFactory styles', () => {
     expect(el.rawStyle).toEqual({ color: 'blue' });
   });
 
+  it('moves a repeated property to its last declaration, so it wins over a shorthand', () => {
+    const r = setup();
+    const el = r.createElement('x') as PdfNode;
+    r.setAttribute(el, 'style', 'margin-top: 20; margin: 0; margin-top: 5');
+    expect(Object.entries(el.rawStyle)).toEqual([
+      ['margin', '0'],
+      ['margin-top', '5'],
+    ]);
+  });
+
+  it('setStyle moves a property the attribute already set to the end', () => {
+    const r = setup();
+    const el = r.createElement('x') as PdfNode;
+    r.setAttribute(el, 'style', 'margin-top: 5; margin: 10');
+    r.setStyle(el, 'marginTop', '20pt');
+    expect(Object.entries(el.rawStyle)).toEqual([
+      ['margin', '10'],
+      ['margin-top', '20pt'],
+    ]);
+  });
+
   it('keeps colons inside values', () => {
     const r = setup();
     const el = r.createElement('x') as PdfNode;

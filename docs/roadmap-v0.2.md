@@ -43,9 +43,6 @@ it does not affect a correct document. Items that change behaviour need a design
 
 ## Tooling
 
-- **The bundle budget measures the demo build of the source**, splitting chunks by folder. Measure
-  the built package in `dist/core` instead, and grep its `fesm2022` files for a static import of
-  the engine, pdfkit or Yoga.
 - **The e2e Chrome can leak** when `puppeteer.launch` finishes after the script's timeout.
 - Spec hygiene: some component specs destroy in the test body instead of `finally`/`afterEach`,
   a global `URL` stub and the zone.js import leak into later tests, and a few assertions use loose

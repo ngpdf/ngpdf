@@ -39,7 +39,7 @@ All toolchains run in Docker. Nothing is installed on the host except nvm.
 ./scripts/dev npm test -- <pattern>    # one area, e.g. paginate
 ./scripts/dev npm run build:core       # ng-packagr build of @ngpdf/core
 ./scripts/dev npx ng build demo
-./scripts/dev node scripts/bundle-budget.mjs   # eager size of @ngpdf/core in the demo
+./scripts/dev node scripts/bundle-budget.mjs   # eager size of the built @ngpdf/core in the demo
 node scripts/e2e.mjs [--update]        # demo PDFs in headless Chrome vs e2e/expected/*.txt
 ./scripts/dev npm run build:site       # ngpdf.dev, prerendered to dist/site/browser
 ```
@@ -206,8 +206,9 @@ NGPDF_APT=poppler-utils ./scripts/dev node scripts/server-check.mjs   # packed d
     so each sheet shows its part.
 - **Text wrapping:** text wraps at Unicode line-break opportunities. A word wider than its box breaks
   at the box edge, unless it can be hyphenated. `max-lines` keeps at most N lines of a `pdf-text`;
-  when text was cut, the last line ends with `…` in the face of its last run, or `...` in a font
-  without `…`.
+  when text was cut, the last line ends with `…` in the face of its last run, or else in the first
+  font of its `font-family` list that has `…`; failing that, `...` the same way. When no font has
+  either, `…` takes the first font's fallback and the missing-character warning.
 - **Hyphenation:** `hyphens` is `manual` (default), `none` or `auto`, inherited, and a `pdf-span`
   can set it.
   - A soft hyphen (U+00AD) is never drawn. Under `manual` and `auto` it is a break point.
