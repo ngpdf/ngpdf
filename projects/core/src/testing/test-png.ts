@@ -22,8 +22,8 @@ function concat(parts: readonly Uint8Array[]): Uint8Array {
 export interface TestPng {
   readonly width?: number;
   readonly height?: number;
-  /** 2 for RGB, 6 for RGBA. */
-  readonly colorType?: 2 | 6;
+  /** 2 for RGB, 3 for a palette (with a `tRNS`), 4 for gray with alpha, 6 for RGBA. */
+  readonly colorType?: 2 | 3 | 4 | 6;
   /** The IDAT payload; by default the zlib stream of every row, each with filter byte 0. */
   readonly idat?: Uint8Array;
   /** Leave out the IEND chunk, as a cut-off file does. */
@@ -32,10 +32,12 @@ export interface TestPng {
   readonly interlaced?: boolean;
 }
 
+const CHANNELS = { 2: 3, 3: 1, 4: 2, 6: 4 } as const;
+
 /** A small 8-bit PNG built for tests, with every part replaceable to make it broken. */
 export function testPng(options: TestPng = {}): Uint8Array {
   const { width = 2, height = 2, colorType = 6 } = options;
-  const channels = colorType === 6 ? 4 : 3;
+  const channels = CHANNELS[colorType];
   const header = new Uint8Array(13);
   const view = new DataView(header.buffer);
   view.setUint32(0, width);
@@ -47,15 +49,29 @@ export function testPng(options: TestPng = {}): Uint8Array {
   return concat([
     Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
     chunk('IHDR', header),
+    // Every pixel is index 200: a palette of 256 black entries, the first one transparent, so
+    // pdfkit has to decode the pixels to build the alpha mask.
+    ...(colorType === 3
+      ? [chunk('PLTE', new Uint8Array(256 * 3)), chunk('tRNS', Uint8Array.of(0))]
+      : []),
     chunk('IDAT', idat),
     ...(options.noEnd ? [] : [chunk('IEND', new Uint8Array())]),
   ]);
 }
 
-/** The pixel data of `testPng(options)` compressed, for building a variant of it. */
-export function testRows(width = 2, height = 2, channels = 4, count = height): Uint8Array {
+/**
+ * The pixel data of `testPng(options)` compressed, for building a variant of it. `filter` is every
+ * row's filter byte; png-js throws on one above 4.
+ */
+export function testRows(
+  width = 2,
+  height = 2,
+  channels = 4,
+  count = height,
+  filter = 0,
+): Uint8Array {
   const rows = new Uint8Array(count * (1 + width * channels)).fill(200);
-  for (let row = 0; row < count; row++) rows[row * (1 + width * channels)] = 0;
+  for (let row = 0; row < count; row++) rows[row * (1 + width * channels)] = filter;
   return new Uint8Array(deflateSync(rows));
 }
 
