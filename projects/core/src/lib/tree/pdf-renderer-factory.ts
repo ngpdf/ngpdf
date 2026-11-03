@@ -35,13 +35,23 @@ function splitDeclarations(source: string): string[] {
   return declarations;
 }
 
+/**
+ * Sets a declaration at the end of `style`. The engine applies declarations in key order, so a
+ * property set again has to move past any shorthand set since, as a later declaration does in CSS.
+ */
+function declare(style: Record<string, string>, name: string, value: string): void {
+  // eslint-disable-next-line @typescript-eslint/no-dynamic-delete
+  delete style[name];
+  style[name] = value;
+}
+
 function parseStyle(source: string): Record<string, string> {
   const style: Record<string, string> = {};
   for (const declaration of splitDeclarations(source)) {
     const colon = declaration.indexOf(':');
     if (colon < 0) continue;
     const name = declaration.slice(0, colon).trim();
-    if (name) style[toKebab(name)] = declaration.slice(colon + 1).trim();
+    if (name) declare(style, toKebab(name), declaration.slice(colon + 1).trim());
   }
   return style;
 }
@@ -126,7 +136,7 @@ class PdfRenderer implements Renderer2 {
   }
 
   setStyle(el: PdfNode, style: string, value: unknown): void {
-    el.rawStyle[toKebab(style)] = String(value);
+    declare(el.rawStyle, toKebab(style), String(value));
   }
 
   removeStyle(el: PdfNode, style: string): void {
@@ -150,7 +160,7 @@ class PdfRenderer implements Renderer2 {
 export class PdfRendererFactory implements RendererFactory2 {
   private readonly renderer = new PdfRenderer();
 
-  createRenderer(): Renderer2 {
-    return this.renderer;
-  }
+  // Angular's full signature, so callers can pass the host and type; one renderer serves every
+  // component, since neither changes how nodes are built.
+  readonly createRenderer: RendererFactory2['createRenderer'] = () => this.renderer;
 }

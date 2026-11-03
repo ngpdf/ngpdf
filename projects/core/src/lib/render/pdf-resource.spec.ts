@@ -2,25 +2,30 @@
 import {
   ApplicationRef,
   Component,
+  DestroyRef,
   EnvironmentInjector,
   PLATFORM_ID,
+  type Provider,
   createEnvironmentInjector,
   runInInjectionContext,
   signal,
 } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { pdfResource } from './pdf-resource';
 
 const renders = vi.hoisted(() => ({
-  calls: [] as { inputs: Record<string, unknown> | undefined }[],
+  calls: [] as { inputs: Record<string, unknown> | undefined; maxImageBytes: number | undefined }[],
   fail: false,
 }));
 
 // The resource is only plumbing around renderToBlob, which has its own specs.
 vi.mock('./pdf-renderer', () => ({
-  renderToBlob: (_component: unknown, options: { inputs?: Record<string, unknown> }) => {
-    renders.calls.push({ inputs: options.inputs });
+  renderToBlob: (
+    _component: unknown,
+    options: { inputs?: Record<string, unknown>; maxImageBytes?: number },
+  ) => {
+    renders.calls.push({ inputs: options.inputs, maxImageBytes: options.maxImageBytes });
     if (renders.fail) return Promise.reject(new Error('ngpdf: render failed'));
     return Promise.resolve(new Blob([JSON.stringify(options.inputs ?? {})]));
   },
@@ -37,15 +42,33 @@ beforeEach(() => {
   renders.fail = false;
   urls = 0;
   revoked.length = 0;
-  // jsdom has no object URLs.
-  URL.createObjectURL = () => `blob:test/${String(++urls)}`;
-  URL.revokeObjectURL = (url: string) => revoked.push(url);
+  // jsdom has no object URLs. A stubbed subclass, so the real URL is never changed.
+  vi.stubGlobal(
+    'URL',
+    Object.assign(class extends URL {}, {
+      createObjectURL: () => `blob:test/${String(++urls)}`,
+      revokeObjectURL: (url: string) => revoked.push(url),
+    }),
+  );
+});
+
+// Each test's injectors, destroyed after it even when it fails, so no resource renders on.
+let scopes: EnvironmentInjector[] = [];
+
+afterEach(() => {
+  for (const injector of [...scopes]) injector.destroy();
 });
 
 const settle = () => TestBed.inject(ApplicationRef).whenStable();
 
-function scope(): EnvironmentInjector {
-  return createEnvironmentInjector([], TestBed.inject(EnvironmentInjector));
+function scope(providers: Provider[] = []): EnvironmentInjector {
+  const injector = createEnvironmentInjector(providers, TestBed.inject(EnvironmentInjector));
+  scopes.push(injector);
+  // A test that destroys it itself takes it off the list.
+  injector.get(DestroyRef).onDestroy(() => {
+    scopes = scopes.filter((other) => other !== injector);
+  });
+  return injector;
 }
 
 describe('pdfResource', () => {
@@ -62,6 +85,21 @@ describe('pdfResource', () => {
     expect(renders.calls).toEqual([{ inputs: { customer: 'ACME' } }]);
     expect(await pdf.value()?.text()).toBe('{"customer":"ACME"}');
     expect(pdf.url()).toBe('blob:test/1');
+  });
+
+  it('passes maxImageBytes to every render, and no cap by default', async () => {
+    const capped = pdfResource(TestDocument, { maxImageBytes: 5_000_000, injector: scope() });
+    await settle();
+    capped.reload();
+    await settle();
+    pdfResource(TestDocument, { injector: scope() });
+    await settle();
+
+    expect(renders.calls.map((call) => call.maxImageBytes)).toEqual([
+      5_000_000,
+      5_000_000,
+      undefined,
+    ]);
   });
 
   it('renders with no inputs when none are given', async () => {
@@ -125,7 +163,6 @@ describe('pdfResource', () => {
     expect(pdf.isLoading()).toBe(true);
     expect(pdf.url()).toBe('blob:test/1');
     expect(revoked).toEqual([]);
-    pdf.destroy();
   });
 
   it('renders once for a burst of changes inside the debounce window', async () => {
@@ -202,10 +239,7 @@ describe('pdfResource', () => {
   });
 
   it('stays idle on a server platform when made in an injection context', async () => {
-    const injector = createEnvironmentInjector(
-      [{ provide: PLATFORM_ID, useValue: 'server' }],
-      TestBed.inject(EnvironmentInjector),
-    );
+    const injector = scope([{ provide: PLATFORM_ID, useValue: 'server' }]);
     const pdf = runInInjectionContext(injector, () =>
       pdfResource(TestDocument, { inputs: () => ({ customer: 'ACME' }) }),
     );
@@ -217,10 +251,7 @@ describe('pdfResource', () => {
   });
 
   it('throws on a server platform when given an injector, before any render', () => {
-    const injector = createEnvironmentInjector(
-      [{ provide: PLATFORM_ID, useValue: 'server' }],
-      TestBed.inject(EnvironmentInjector),
-    );
+    const injector = scope([{ provide: PLATFORM_ID, useValue: 'server' }]);
     expect(() => pdfResource(TestDocument, { injector })).toThrow(
       'ngpdf: pdfResource needs a browser; on the server, use renderToBuffer from @ngpdf/core/server',
     );

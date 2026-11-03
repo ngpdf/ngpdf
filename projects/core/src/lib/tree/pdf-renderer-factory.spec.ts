@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import type { Renderer2, RendererFactory2 } from '@angular/core';
+import {
+  ViewEncapsulation,
+  type Renderer2,
+  type RendererFactory2,
+  type RendererType2,
+} from '@angular/core';
 import { elementChildren, propsOf, textContent, type PdfNode } from './node';
 import { PdfRendererFactory } from './pdf-renderer-factory';
 
@@ -12,6 +17,17 @@ describe('PdfRendererFactory tree operations', () => {
   it('shares one renderer per factory', () => {
     const factory: RendererFactory2 = new PdfRendererFactory();
     expect(factory.createRenderer(null, null)).toBe(factory.createRenderer({}, null));
+  });
+
+  it("takes RendererFactory2's arguments when called as a PdfRendererFactory", () => {
+    const factory = new PdfRendererFactory();
+    const type: RendererType2 = {
+      id: 'c0',
+      encapsulation: ViewEncapsulation.None,
+      styles: [],
+      data: {},
+    };
+    expect(factory.createRenderer({}, type)).toBe(factory.createRenderer(null, null));
   });
 
   it('creates element, text and comment nodes', () => {
@@ -119,6 +135,27 @@ describe('PdfRendererFactory styles', () => {
     expect(el.rawStyle).toEqual({ 'font-size': '9', color: '#666' });
     r.setAttribute(el, 'style', 'color: red; color: blue;;');
     expect(el.rawStyle).toEqual({ color: 'blue' });
+  });
+
+  it('moves a repeated property to its last declaration, so it wins over a shorthand', () => {
+    const r = setup();
+    const el = r.createElement('x') as PdfNode;
+    r.setAttribute(el, 'style', 'margin-top: 20; margin: 0; margin-top: 5');
+    expect(Object.entries(el.rawStyle)).toEqual([
+      ['margin', '0'],
+      ['margin-top', '5'],
+    ]);
+  });
+
+  it('setStyle moves a property the attribute already set to the end', () => {
+    const r = setup();
+    const el = r.createElement('x') as PdfNode;
+    r.setAttribute(el, 'style', 'margin-top: 5; margin: 10');
+    r.setStyle(el, 'marginTop', '20pt');
+    expect(Object.entries(el.rawStyle)).toEqual([
+      ['margin', '10'],
+      ['margin-top', '20pt'],
+    ]);
   });
 
   it('keeps colons inside values', () => {

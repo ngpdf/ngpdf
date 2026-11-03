@@ -10,7 +10,7 @@ export { loadFont } from './font-loading';
 import { loadEmoji, type EmojiSource } from './emoji';
 import { parseFontFamily, type FontRegistry, type RegisteredFace } from './fonts';
 import { dissolveHosts } from './hosts';
-import { loadImages, type ServerSources } from './images';
+import { loadImages, maxImageBytesOf, type ServerSources } from './images';
 import type { LayoutContext } from './layout';
 import { paginatePage } from './paginate';
 import { securityOf } from './security';
@@ -57,6 +57,8 @@ export interface RenderDocumentOptions {
   readonly server?: ServerSources;
   /** Where emoji images come from; without it, emoji are text like any other character. */
   readonly emoji?: EmojiSource;
+  /** The most bytes a fetched `pdf-image` URL may have; no cap when undefined. */
+  readonly maxImageBytes?: number;
 }
 
 /** One face of a font family, with a way to get its bytes. */
@@ -197,6 +199,7 @@ export async function renderDocument(
   const dev = options.dev ?? (typeof ngDevMode === 'undefined' || !!ngDevMode);
   const document = findDocument(root);
   if (!document) throw new Error('ngpdf: no pdf-document in the rendered component');
+  const maxImageBytes = maxImageBytesOf(options.maxImageBytes);
 
   const warnings = new Set<string>();
   const warn = (message: string): void => {
@@ -227,7 +230,7 @@ export async function renderDocument(
     const anchors = collectAnchors(tree, warn);
     // Emoji images load with the others, before layout, so measuring stays synchronous.
     const [images, fonts, emoji] = await Promise.all([
-      loadImages(tree, writer, undefined, options.server),
+      loadImages(tree, writer, undefined, options.server, maxImageBytes),
       registerUsedFonts(options.fonts ?? [], styles, writer),
       loadEmoji(tree, options.emoji, writer, warn, undefined, options.server),
     ]);

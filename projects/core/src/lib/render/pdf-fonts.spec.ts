@@ -2,6 +2,7 @@
 import { Component, EnvironmentInjector, createEnvironmentInjector, input } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { stubFetch } from '../../testing/stub-fetch';
 import { testFont } from '../../testing/test-fonts';
 import { PDF_ELEMENTS } from '../elements';
 import { providePdfFonts } from './pdf-fonts';
@@ -39,7 +40,7 @@ function serveFonts(files: Record<string, Uint8Array>) {
       bytes ? new Response(bytes.slice().buffer) : new Response(null, { status: 404 }),
     );
   });
-  vi.stubGlobal('fetch', fetchFn);
+  stubFetch(fetchFn);
   return fetchFn;
 }
 
@@ -123,9 +124,12 @@ describe('providePdfFonts', () => {
       [providePdfFonts([{ family: 'Noto Sans JP', src: JP }])],
       parent,
     );
-    expect(await embedded(await renderToBlob(FontDocument, { injector: route }))).toBe(2);
-    expect(await embedded(await renderToBlob(FontDocument, { injector: parent }))).toBe(1);
-    route.destroy();
+    try {
+      expect(await embedded(await renderToBlob(FontDocument, { injector: route }))).toBe(2);
+      expect(await embedded(await renderToBlob(FontDocument, { injector: parent }))).toBe(1);
+    } finally {
+      route.destroy();
+    }
   });
 
   it('merges two providePdfFonts calls in the same injector', async () => {

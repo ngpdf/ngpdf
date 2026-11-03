@@ -14,7 +14,7 @@ import {
   input,
 } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import { afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { PDF_ELEMENTS } from '../elements';
 import { elementChildren, propsOf, textContent, type PdfNode } from '../tree/node';
 import { renderTree } from './render-tree';
@@ -78,6 +78,26 @@ const FIXED_DATE = new Date(2020, 0, 2);
 })
 class DatedDocument {
   readonly date = FIXED_DATE;
+}
+
+@Component({
+  selector: 'pdf-test-cascade',
+  imports: [PDF_ELEMENTS],
+  template: `
+    <pdf-document>
+      <pdf-page>
+        <pdf-view style="margin-top: 20; margin: 0; margin-top: 5" />
+        <pdf-view style="margin-top: 5; margin: 10" [style.margin-top.pt]="top" />
+        <pdf-view style="margin-top: 7" [style.margin-top.pt]="unset" />
+        <pdf-view style="margin-top: 7" [style.margin-top.pt]="removed" />
+      </pdf-page>
+    </pdf-document>
+  `,
+})
+class CascadeDocument {
+  readonly top = 20;
+  readonly unset = undefined;
+  readonly removed = null;
 }
 
 const seen: { injector?: EnvironmentInjector } = {};
@@ -171,11 +191,13 @@ describe('renderTree', () => {
   };
 
   afterEach(() => {
-    for (const result of rendered) result.destroy();
+    // Last made first: a tree goes before the injector it was rendered in.
+    for (const result of rendered.reverse()) result.destroy();
     rendered = [];
   });
 
-  beforeAll(async () => {
+  // TestBed's injector is torn down after each test, so each test takes the current one.
+  beforeEach(async () => {
     parent = TestBed.inject(EnvironmentInjector);
     await TestBed.inject(ApplicationRef).whenStable();
   });
@@ -212,6 +234,21 @@ describe('renderTree', () => {
     expect(at(rows, 1).rawStyle['padding']).toBe('6');
   });
 
+  it('lets a later longhand, static or bound, win over an earlier shorthand', async () => {
+    const { resolveStyles } = await import('../engine/style');
+    const result = render(CascadeDocument);
+    const views = find(result.root, 'pdf-view');
+    const styles = resolveStyles(result.root);
+    expect(styles.get(at(views, 0))?.margin).toEqual({ top: 5, right: 0, bottom: 0, left: 0 });
+    expect(styles.get(at(views, 1))?.margin).toEqual({ top: 20, right: 10, bottom: 10, left: 10 });
+  });
+
+  it('falls back to the static style for an undefined binding and removes it for null', () => {
+    const views = find(render(CascadeDocument).root, 'pdf-view');
+    expect(at(views, 2).rawStyle['margin-top']).toBe('7');
+    expect(at(views, 3).rawStyle['margin-top']).toBeUndefined();
+  });
+
   it('formats dates through pipes with the component locale', () => {
     const result = render(TestDocument, parent);
     expect(textContent(at(find(result.root, 'pdf-text'), 0))).toBe('22/10/2026');
@@ -222,6 +259,7 @@ describe('renderTree', () => {
       [{ provide: GREETING, useValue: 'hello' }],
       parent,
     );
+    rendered.push(withGreeting);
     const result = render(TestDocument, withGreeting);
     expect(textContent(at(find(result.root, 'pdf-text'), 1))).toBe('hello');
   });

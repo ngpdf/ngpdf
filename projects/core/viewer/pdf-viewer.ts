@@ -52,6 +52,11 @@ export class PdfViewer {
   readonly inputs = input<Record<string, unknown>>({});
   /** Milliseconds to wait after the last change before rendering, the first render included. */
   readonly debounce = input(300);
+  /**
+   * The most bytes a fetched image may have, as in `renderToBlob`. No cap by default. A new value
+   * renders again.
+   */
+  readonly maxImageBytes = input<number>();
   /** The iframe's accessible name. */
   readonly label = input('PDF preview');
   /** The PDF of each render that is shown. */
@@ -88,18 +93,24 @@ export class PdfViewer {
   });
 
   constructor() {
-    // A new document or debounce needs a new resource; new inputs reach the current one. The old
+    // A new document, debounce or cap needs a new resource; new inputs reach the current one. The old
     // one stays on screen until the new one has a PDF, unless it never had one itself.
     effect(() => {
       if (!this.browser) return;
       const document = this.document();
       const debounce = this.debounce();
+      const maxImageBytes = this.maxImageBytes();
       untracked(() => {
         const old = this.pdf();
         if (old?.url()) this.replacePrevious(old);
         else old?.destroy();
         this.pdf.set(
-          pdfResource(document, { inputs: () => this.inputs(), debounce, injector: this.injector }),
+          pdfResource(document, {
+            inputs: () => this.inputs(),
+            debounce,
+            injector: this.injector,
+            ...(maxImageBytes !== undefined && { maxImageBytes }),
+          }),
         );
       });
     });
