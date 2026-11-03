@@ -3,7 +3,8 @@ import { PDF_ELEMENTS } from '@ngpdf/core';
 
 /**
  * Styled runs inside one paragraph, each in a pdf-span, an inline link, a note cut to two lines,
- * a policy cut to the height of its box, and a rotated stamp that links to the invoice.
+ * a policy cut to the height of its box, superscripts and a subscript, and a rotated stamp that
+ * links to the invoice.
  */
 @Component({
   selector: 'app-span-sample',
@@ -35,6 +36,14 @@ import { PDF_ELEMENTS } from '@ngpdf/core';
           style="width: 160; height: 30; text-overflow: ellipsis; margin-bottom: 8; background-color: #f1f5f9"
         >
           {{ returns }}
+        </pdf-text>
+        <pdf-text style="margin-bottom: 8">
+          Floor area 42 m<pdf-span style="vertical-align: super">2</pdf-span>, sealed against
+          H<pdf-span style="vertical-align: sub">2</pdf-span>O<pdf-link
+            href="https://example.com/sealing"
+            style="color: #1a56db; text-decoration: underline"
+            ><pdf-span style="vertical-align: super">1</pdf-span></pdf-link
+          >.
         </pdf-text>
         <pdf-text>
           Ships to

@@ -362,15 +362,22 @@ function drawBox(
       const lineLeft = alignedX(contentLeft, contentWidth, textLine.width, style.textAlign);
       const spacing = style.textAlign === 'justify' ? wordSpacing(textLine, contentWidth) : 0;
       let gapsBefore = 0;
-      // The link being followed along the line: one area per line fragment of a pdf-link.
-      let linked: { url: string; left: number; right: number } | undefined;
+      // The link being followed along the line: one area per line fragment of a pdf-link. Each
+      // run adds the line box moved with its shift and its own ascent and descent, so a shifted
+      // glyph stays clickable in a short line; the area is cut to the line box, which already
+      // holds the shifted runs, so it never reaches into the lines around it. `top` and `bottom`
+      // are from the line's top.
+      let linked:
+        { url: string; left: number; right: number; top: number; bottom: number } | undefined;
       const closeLink = (): void => {
         if (!linked) return;
+        const top = Math.max(0, linked.top);
+        const bottom = Math.min(textLine.height, linked.bottom);
         const area = {
           x: linked.left,
-          y: lineTop,
+          y: lineTop + top,
           w: linked.right - linked.left,
-          h: textLine.height,
+          h: bottom - top,
         };
         pushLink(out, matrix, area, linked.url);
         linked = undefined;
@@ -380,14 +387,21 @@ function drawBox(
         const gaps = spacing > 0 ? wordGaps(run.text) : 0;
         gapsBefore += gaps;
         const right = x + run.width + gaps * spacing;
+        const shift = run.shift ?? 0;
+        const glyphTop = textLine.ascent - shift - run.ascent;
+        const top = Math.min(-shift, glyphTop);
+        const bottom = Math.max(textLine.height - shift, glyphTop + run.ascent + run.descent);
         if (run.link !== undefined && linked?.url === run.link) {
           linked.right = right;
+          linked.top = Math.min(linked.top, top);
+          linked.bottom = Math.max(linked.bottom, bottom);
         } else {
           closeLink();
-          if (run.link !== undefined) linked = { url: run.link, left: x, right };
+          if (run.link !== undefined) linked = { url: run.link, left: x, right, top, bottom };
         }
+        const baseline = lineTop + textLine.ascent - shift;
         if (run.emoji) {
-          drawEmoji(run, run.emoji, x, lineTop + textLine.ascent, numbering.options.metrics, out);
+          drawEmoji(run, run.emoji, x, baseline, numbering.options.metrics, out);
           continue;
         }
         const ink = paint(run.color);
@@ -395,8 +409,8 @@ function drawBox(
         out.push({
           op: 'text',
           x,
-          // Runs of different sizes share the line's baseline.
-          y: lineTop + textLine.ascent - run.ascent,
+          // Runs of different sizes share the line's baseline, less any vertical-align shift.
+          y: baseline - run.ascent,
           text: run.text,
           font: run.font,
           size: run.size,
