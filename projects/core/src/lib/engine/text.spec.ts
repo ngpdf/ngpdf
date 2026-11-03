@@ -880,6 +880,16 @@ describe('layoutRanges with maxLines', () => {
     expect(last?.font).toBe('font:0');
   });
 
+  it('takes the ellipsis font from the list of the range the cut ends in', () => {
+    const line = clamped(1, 60, [
+      { text: '日本語', style, fonts: { chain: ['font:jp', 'Helvetica'] } },
+      { text: japanese, style, fonts: { chain: ['font:jp', 'Times-Roman'] } },
+    ]).lines[0];
+    const last = line?.runs.at(-1);
+    expect(last?.text).toBe('…');
+    expect(last?.font).toBe('Times-Roman');
+  });
+
   it('reports the ellipsis as missing when no font of the list has "…" or "."', () => {
     const missing = vi.fn();
     const line = japaneseLine(['font:jp'], missing);
