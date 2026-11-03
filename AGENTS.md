@@ -136,6 +136,10 @@ NGPDF_APT=poppler-utils ./scripts/dev node scripts/server-check.mjs   # packed d
   any stage reads it (`dissolveHosts`): no space, no sheet, no drawing, no anchors or bookmarks;
   a link to an anchor in it warns like one to a missing name. `flex` is the default; any other
   value throws `ngpdf: invalid value "<v>" for display on <tag>; use flex or none`. Not inherited.
+- **Keywords:** every style property that takes keywords reads them trimmed and in any case, and
+  throws on any other keyword through `oneOf` in `engine/keyword.ts`:
+  `ngpdf: invalid value "<v>" for <property> on <tag>; use a, b or c`. No property falls back or
+  ignores an unknown keyword. Unknown properties are ignored.
 - **Page sizes, in points:** A3 841.89×1190.55, A4 595.28×841.89, A5 419.53×595.28, Letter
   612×792, Legal 612×1008, or `[width, height]`. Landscape swaps them.
 - **Fonts:**

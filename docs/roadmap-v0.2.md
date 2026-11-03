@@ -28,13 +28,6 @@ it does not affect a correct document. Items that change behaviour need a design
 
 - **Cancel sibling fetches** with an `AbortController` when one image fails.
 
-## Robustness
-
-- **Unknown keywords.** Keywords are matched case-insensitively, but an unknown one throws for
-  `text-align`, the other `oneOf` properties and `font-weight`, falls back to `normal` for
-  `font-style`, and is ignored by `break-before` and `break-inside`; pick one policy (fallback or
-  throw).
-
 ## Tooling
 
 - **The e2e Chrome can leak** when `puppeteer.launch` finishes after the script's timeout.

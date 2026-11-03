@@ -789,8 +789,8 @@ describe('paginatePage: page breaks', () => {
     expect(pages).toHaveLength(1);
   });
 
-  it('ignores break-after keywords other than page and avoid', () => {
-    const first = el('pdf-view', { height: '20', 'break-after': 'column' });
+  it('does not break after break-after: auto', () => {
+    const first = el('pdf-view', { height: '20', 'break-after': 'auto' });
     expect(paginate(page([first, el('pdf-view', { height: '20' })]))).toHaveLength(1);
   });
 

@@ -5,7 +5,15 @@ section: Reference
 order: 11
 ---
 
-These are all the style properties ngpdf reads. Any other property is ignored without a warning. An invalid value for a property in this list throws an `ngpdf:` error and the render rejects, except where the tables say what other values do (`font-style`, `break-before`, `break-after` and `break-inside`).
+These are all the style properties ngpdf reads. Any other property is ignored without a warning. An invalid value for a property in this list throws an `ngpdf:` error and the render rejects.
+
+For a property that takes keywords, a keyword outside its list throws, for every such property, and the message names the value as you wrote it, the property, the element and the keywords it takes:
+
+```
+ngpdf: invalid value "middle" for text-align on pdf-text; use left, center, right or justify
+```
+
+A typo or a CSS keyword ngpdf doesn't support, such as `break-before: left` or `font-style: oblique 10deg`, fails the render instead of being dropped without a sign.
 
 In the tables:
 
@@ -24,7 +32,7 @@ All text properties are inherited by child elements.
 | `font-family` | a list of family names: [registered fonts](/docs/text-and-fonts#custom-fonts) and Courier, Times or Helvetica | Helvetica |
 | `font-size` | length ≥ 0 | `10` |
 | `font-weight` | a number from 1 to 1000, `thin` (100), `extralight` (200), `light` (300), `normal` (400), `medium` (500), `semibold` (600), `bold` (700), `extrabold` (800), `black` (900), or `bolder` and `lighter` from the inherited weight; anything else throws. See [Fonts](/docs/text-and-fonts#fonts) | normal (400) |
-| `font-style` | `italic`, `oblique` (italic); anything else is normal | normal |
+| `font-style` | `normal`, `italic`, `oblique` (drawn italic) | normal |
 | `line-height` | number (× font size), `N%`, length, `normal` (keeps the inherited value) | `1.2` |
 | `text-align` | `left`, `center`, `right`, `justify` | `left` |
 | `text-decoration` | `none`, `underline`, `line-through` | `none` |
@@ -122,9 +130,9 @@ In `border`, a missing width is 1 and a missing color is black. The width keywor
 | Property | Values | Default |
 | --- | --- | --- |
 | `object-fit` | `contain`, `cover` | `contain` |
-| `break-before` | `page` starts a new sheet; other values do nothing | |
-| `break-after` | `page` starts a new sheet after the element; `avoid` or `avoid-page` keeps it on a sheet with what follows; other values do nothing | |
-| `break-inside` | `avoid` or `avoid-page` keeps a `pdf-text`, a column `pdf-view` or a `pdf-table` on one sheet when it fits on one; other values do nothing | `auto` |
+| `break-before` | `page` starts a new sheet; `auto` does nothing | `auto` |
+| `break-after` | `page` starts a new sheet after the element; `avoid` or `avoid-page` keeps it on a sheet with what follows; `auto` does nothing | `auto` |
+| `break-inside` | `avoid` or `avoid-page` keeps a `pdf-text`, a column `pdf-view` or a `pdf-table` on one sheet when it fits on one; `auto` does nothing | `auto` |
 | `orphans` | integer ≥ 1: the fewest lines of a `pdf-text` before a page break (inherited) | `2` |
 | `widows` | integer ≥ 1: the fewest lines of a `pdf-text` after a page break (inherited) | `2` |
 
@@ -157,7 +165,7 @@ Some styles are ignored in specific places:
 - `auto` in `padding` or a `padding-*` side;
 - a negative `font-size`, padding, gap, border width or radius (margins can be negative, as in CSS);
 - a color that is not one of the forms above, including `hsl()`, `currentColor` and `var()`;
-- a keyword outside the lists above for `text-align`, `text-decoration`, `text-transform`, `flex-direction`, `justify-content`, `align-items`, `align-self`, `object-fit`, `overflow` and `position`, in any case;
+- a keyword outside the lists above for any keyword property: `font-weight`, `font-style`, `text-align`, `text-decoration`, `text-transform`, `hyphens`, `display`, `flex-direction`, `justify-content`, `align-items`, `align-self`, `border-style` and its sides, `object-fit`, `overflow`, `position`, `break-before`, `break-after` and `break-inside`, in any case;
 - `position: fixed` and `position: sticky`;
 - a `transform` function other than the seven above, such as `skew()`, `matrix()` or `rotate3d()`, an angle without a unit (other than `0`) and a `transform-origin` with three values;
 - a value that is not a number for `flex-grow`, `flex-shrink` and `opacity`;

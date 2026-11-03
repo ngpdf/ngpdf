@@ -33,9 +33,9 @@ You pick a face with three properties:
 | `font-weight` | above 500 | bold |
 | | 500 or less | regular |
 | `font-style` | `italic` or `oblique` | italic |
-| | anything else | upright |
+| | `normal` | upright |
 
-`font-weight` is a number from 1 to 1000 or one of the names below, in any case. Any other value throws `ngpdf: invalid value "<value>" for font-weight on <tag>`, and the message lists the allowed values. The standard fonts have only a regular and a bold face, so 100 to 500 is regular and 600 to 900 is bold; a [registered family](#custom-fonts) can have a face for every weight.
+`font-weight` is a number from 1 to 1000 or one of the names below, in any case. Any other value throws `ngpdf: invalid value "<value>" for font-weight on <tag>`, and the message lists the allowed values. `font-style` is `normal`, `italic` or `oblique`; any other value throws the same way. The standard fonts have only a regular and a bold face, so 100 to 500 is regular and 600 to 900 is bold; a [registered family](#custom-fonts) can have a face for every weight.
 
 | Name | Weight |
 | --- | --- |

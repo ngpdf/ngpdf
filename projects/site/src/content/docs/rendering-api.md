@@ -269,7 +269,7 @@ The returned promise rejects with an `Error`. Errors from ngpdf start with `ngpd
 | `ngpdf: unknown unit in "<value>" on <element>` | A unit other than `pt`, `px`, `in`, `cm`, `mm` or `%`. |
 | `ngpdf: invalid length "<value>" on <element>` | A length that does not start with a number. |
 | `ngpdf: expected a length in "<value>" on <element>` | A percentage or `auto` where only a length is allowed. |
-| `ngpdf: invalid value "<value>" for <property> on <element>` | A keyword or number that the property does not accept. |
+| `ngpdf: invalid value "<value>" for <property> on <element>` | A keyword or number that the property does not accept. For a keyword property, the message ends with `; use` and the keywords it takes. |
 | `ngpdf: expected 1 to 4 values in "<value>" on <element>` | `margin`, `padding`, `border-width` or `border-color` with too many values. |
 | `ngpdf: too many values in "<value>" on <element>` | A `border` with more than three parts. |
 | `ngpdf: expected 1 to 3 values in "<value>" on <element>`, `ngpdf: invalid flex-grow in …`, `ngpdf: invalid flex-shrink in …` | An invalid `flex` shorthand. |

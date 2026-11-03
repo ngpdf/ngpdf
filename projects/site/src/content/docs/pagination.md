@@ -110,7 +110,7 @@ On a wrapper, the break happens before its first unit. On a repeated table heade
 - On a wrapper, the next sheet starts after its last unit. A split `pdf-text` breaks after its last line, never between its lines.
 - Inside a unit, the break comes after the whole unit: `break-after: page` on a `pdf-cell` breaks after its row.
 - When nothing follows on that `pdf-page`, it does nothing, so the last element never adds a blank sheet.
-- `break-after: avoid` or `avoid-page` keeps the element with what follows instead; see [Keeping a heading with what follows](#keeping-a-heading-with-what-follows). Other values do nothing.
+- `break-after: avoid` or `avoid-page` keeps the element with what follows instead; see [Keeping a heading with what follows](#keeping-a-heading-with-what-follows). `auto` does nothing, and any other value throws.
 
 ## Keeping a view or table on one sheet
 

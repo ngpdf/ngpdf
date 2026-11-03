@@ -1,4 +1,5 @@
 import { createNode, propsOf, type PdfNode } from '../tree/node';
+import { keywordOf, oneOf } from './keyword';
 import { MAX_NESTING, show } from './limits';
 import { parseColor, type Color } from './color';
 
@@ -195,7 +196,7 @@ const UNIT_FACTORS = new Map<string, number>([
   ['mm', POINTS_PER_INCH / 25.4],
 ]);
 
-const BORDER_STYLES = new Set([
+const BORDER_STYLE_KEYWORDS = Object.freeze([
   'none',
   'hidden',
   'solid',
@@ -206,7 +207,8 @@ const BORDER_STYLES = new Set([
   'ridge',
   'inset',
   'outset',
-]);
+] as const);
+const BORDER_STYLES = new Set<string>(BORDER_STYLE_KEYWORDS);
 
 /** A border style keyword, and the CSS style it stands in for when that one is drawn solid. */
 interface ParsedBorderStyle {
@@ -214,9 +216,8 @@ interface ParsedBorderStyle {
   readonly unsupported: string | null;
 }
 
-function parseBorderStyle(value: string, tag?: string): ParsedBorderStyle {
-  const keyword = value.trim().toLowerCase();
-  if (!BORDER_STYLES.has(keyword)) return fail(`invalid border style "${show(value)}"`, tag);
+/** A keyword already checked against `BORDER_STYLES`, in lower case. */
+function parseBorderStyle(keyword: string): ParsedBorderStyle {
   if (keyword === 'none' || keyword === 'hidden') return { style: 'none', unsupported: null };
   if (keyword === 'solid' || keyword === 'dashed' || keyword === 'dotted') {
     return { style: keyword, unsupported: null };
@@ -399,7 +400,7 @@ export function parseBorder(value: string, tag?: string): BorderParts {
       width = parseBorderWidth(token, tag);
     } else if (BORDER_STYLES.has(token.toLowerCase())) {
       if (style !== null) return fail(`expected one border style in "${show(value)}"`, tag);
-      style = parseBorderStyle(token, tag);
+      style = parseBorderStyle(token.toLowerCase());
     } else {
       color = parseColor(token, tag);
     }
@@ -883,23 +884,6 @@ function allSides<T>(value: T): Edges<T> {
   return { top: value, right: value, bottom: value, left: value };
 }
 
-/** CSS keywords are case-insensitive, so `CENTER` and ` center ` both read as `center`. */
-function keywordOf(value: string): string {
-  return value.trim().toLowerCase();
-}
-
-function oneOf<T extends string>(
-  value: string,
-  allowed: readonly T[],
-  property: string,
-  tag: string,
-): T {
-  const keyword = keywordOf(value);
-  const found = allowed.find((candidate) => candidate === keyword);
-  if (found === undefined) return fail(`invalid value "${show(value)}" for ${property}`, tag);
-  return found;
-}
-
 /** The named weights, in order; each is 100 times its place plus 100. */
 export const WEIGHT_NAMES = Object.freeze([
   'thin',
@@ -1014,7 +998,11 @@ function apply(
     return;
   }
   if (side && property === `border-${side}-style`) {
-    style.borderStyle = withSide(style.borderStyle, side, borderStyleOf(value, tag, warn));
+    style.borderStyle = withSide(
+      style.borderStyle,
+      side,
+      borderStyleOf(value, property, tag, warn),
+    );
     return;
   }
   if (side && property === `border-${side}-width`) {
@@ -1040,8 +1028,8 @@ function apply(
       style.fontWeight = fontWeightOf(value, style.fontWeight, tag);
       break;
     case 'font-style': {
-      const keyword = keywordOf(value);
-      style.fontStyle = keyword === 'italic' || keyword === 'oblique' ? 'italic' : 'normal';
+      const keyword = oneOf(value, ['normal', 'italic', 'oblique'], property, tag);
+      style.fontStyle = keyword === 'normal' ? 'normal' : 'italic';
       break;
     }
     case 'text-align':
@@ -1159,7 +1147,11 @@ function apply(
       style.borderWidth = parseEdgeValues(value, (token) => parseBorderWidth(token, tag), tag);
       break;
     case 'border-style':
-      style.borderStyle = parseEdgeValues(value, (token) => borderStyleOf(token, tag, warn), tag);
+      style.borderStyle = parseEdgeValues(
+        value,
+        (token) => borderStyleOf(token, property, tag, warn),
+        tag,
+      );
       break;
     case 'border-color':
       style.borderColor = parseEdgeValues(value, (token) => parseColor(token, tag), tag);
@@ -1235,14 +1227,18 @@ function apply(
       break;
     }
     case 'break-before':
-      style.breakBefore = style.breakBefore || keywordOf(value) === 'page';
+      style.breakBefore =
+        style.breakBefore || oneOf(value, ['auto', 'page'], property, tag) === 'page';
       break;
-    case 'break-after':
-      style.breakAfter = style.breakAfter || keywordOf(value) === 'page';
-      style.keepWithNext = ['avoid', 'avoid-page'].includes(keywordOf(value));
+    case 'break-after': {
+      const keyword = oneOf(value, ['auto', 'page', 'avoid', 'avoid-page'], property, tag);
+      style.breakAfter = style.breakAfter || keyword === 'page';
+      style.keepWithNext = keyword === 'avoid' || keyword === 'avoid-page';
       break;
+    }
     case 'break-inside':
-      style.breakInside = ['avoid', 'avoid-page'].includes(keywordOf(value)) ? 'avoid' : 'auto';
+      style.breakInside =
+        oneOf(value, ['auto', 'avoid', 'avoid-page'], property, tag) === 'auto' ? 'auto' : 'avoid';
       break;
     case 'orphans':
     case 'widows':
@@ -1279,10 +1275,11 @@ function warnUnsupported(style: string, warn: Warn): void {
 }
 
 /** One `border-style` value; a style drawn solid warns. */
-function borderStyleOf(value: string, tag: string, warn: Warn): BorderStyle {
+function borderStyleOf(value: string, property: string, tag: string, warn: Warn): BorderStyle {
   if (tokenize(value).length !== 1)
     return fail(`expected one border style in "${show(value)}"`, tag);
-  const { style, unsupported } = parseBorderStyle(value, tag);
+  const keyword = oneOf(value, BORDER_STYLE_KEYWORDS, property, tag);
+  const { style, unsupported } = parseBorderStyle(keyword);
   if (unsupported !== null) warnUnsupported(unsupported, warn);
   return style;
 }

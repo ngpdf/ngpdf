@@ -85,8 +85,4 @@ These items are in the [v0.2 roadmap](https://github.com/ngpdf/ngpdf/blob/main/d
 - A size cap on fetched images.
 - Cancelling the other image downloads when one fails.
 
-### Robustness
-
-- One policy for unknown keywords, fallback or throw (still to be decided). Today `font-style` falls back to `normal`, `break-before`, `break-after` and `break-inside` ignore them, and the other keyword properties throw.
-
 Ideas and bug reports are welcome on [GitHub issues](https://github.com/ngpdf/ngpdf/issues).
