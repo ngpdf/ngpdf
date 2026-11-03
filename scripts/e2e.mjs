@@ -144,11 +144,13 @@ const DOCUMENTS = [
     paths: {
       // The rounded dashed card: one closed outline, so the dashes run round its corners.
       'm l c c l c c l c c l c c l S dashed': 1,
-      // The two dotted fields and the dashed cut line.
-      'm l S dashed': 3,
+      // The two dotted fields.
+      'm l S dotted': 2,
+      // The dashed cut line.
+      'm l S dashed': 1,
       // The stub: three solid sides and its dotted left side, each from mid-corner to mid-corner.
       'm c l c S': 3,
-      'm c l c S dashed': 1,
+      'm c l c S dotted': 1,
     },
   },
 ];
@@ -449,7 +451,7 @@ function notesOf(pdf) {
 
 /**
  * Each painted path in the page content streams, as its path operators, then its paint operator,
- * then `dashed` when a dash pattern is set; the result counts each such key. Clipping paths (`n`)
+ * then `dotted` (a 0 first dash) or `dashed` when a dash pattern is set; the result counts each such key. Clipping paths (`n`)
  * are left out. pdfkit compresses the content, so each FlateDecode stream is inflated first.
  */
 function pathsOf(pdf) {
@@ -467,17 +469,21 @@ function pathsOf(pdf) {
     }
     // Only page content: a font or image stream does not open a graphics state.
     if (!/^q$/m.test(content)) continue;
-    const dashes = [false];
+    const dashes = [null];
     let path = [];
     let operands = [];
     for (const [token] of content.matchAll(/\[[^\]]*\]|\S+/g)) {
       if (token === 'q') dashes.push(dashes.at(-1));
       else if (token === 'Q') dashes.pop();
-      else if (token === 'd') dashes[dashes.length - 1] = /\d/.test(operands.at(-2) ?? '');
-      else if (['m', 'l', 'c', 'v', 'y', 'h', 're'].includes(token)) path.push(token);
+      else if (token === 'd') {
+        // A dash pattern starting with a 0 dash draws dots (with round caps); `[]` is solid.
+        const pattern = operands.at(-2) ?? '';
+        const dotted = /^\[\s*0(?:\.0*)?(?:\s|\])/.test(pattern);
+        dashes[dashes.length - 1] = /\d/.test(pattern) ? (dotted ? 'dotted' : 'dashed') : null;
+      } else if (['m', 'l', 'c', 'v', 'y', 'h', 're'].includes(token)) path.push(token);
       else if (['f', 'f*', 'S', 's', 'B', 'B*', 'b', 'b*', 'n'].includes(token)) {
         if (token !== 'n' && path.length > 0) {
-          const key = `${path.join(' ')} ${token}${dashes.at(-1) ? ' dashed' : ''}`;
+          const key = `${path.join(' ')} ${token}${dashes.at(-1) ? ` ${dashes.at(-1)}` : ''}`;
           counts[key] = (counts[key] ?? 0) + 1;
         }
         path = [];

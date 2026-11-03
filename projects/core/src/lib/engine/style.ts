@@ -380,7 +380,7 @@ export function parseEdges(value: string, tag?: string): Edges<Length> {
 export function parseBorder(value: string, tag?: string): BorderParts {
   let width: number | null = null;
   let color: Color | null = null;
-  let style: ParsedBorderStyle = { style: 'solid', unsupported: null };
+  let style: ParsedBorderStyle | null = null;
   const tokens = tokenize(value);
   if (tokens.length > 3) return fail(`too many values in "${show(value)}"`, tag);
   for (const token of tokens) {
@@ -394,6 +394,7 @@ export function parseBorder(value: string, tag?: string): BorderParts {
     ) {
       width = parseBorderWidth(token, tag);
     } else if (BORDER_STYLES.has(token.toLowerCase())) {
+      if (style !== null) return fail(`expected one border style in "${show(value)}"`, tag);
       style = parseBorderStyle(token, tag);
     } else {
       color = parseColor(token, tag);
@@ -402,8 +403,8 @@ export function parseBorder(value: string, tag?: string): BorderParts {
   return {
     width: width ?? 1,
     color: color ?? BLACK,
-    style: style.style,
-    unsupportedStyle: style.unsupported,
+    style: style?.style ?? 'solid',
+    unsupportedStyle: style?.unsupported ?? null,
   };
 }
 

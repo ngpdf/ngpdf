@@ -258,6 +258,11 @@ describe('resolveStyles', () => {
     expect(() => styleOf({ 'border-style': 'wavy' })).toThrow(/^ngpdf:/);
     expect(() => styleOf({ 'border-style': 'solid solid solid solid solid' })).toThrow(/^ngpdf:/);
     expect(() => styleOf({ 'border-top-style': 'solid dashed' })).toThrow(/^ngpdf:/);
+    // A shorthand takes one style, as in CSS.
+    expect(() => styleOf({ border: '1 double dashed' })).toThrow(
+      /^ngpdf: expected one border style/,
+    );
+    expect(() => styleOf({ 'border-left': 'solid 1 none' })).toThrow(/^ngpdf:/);
   });
 
   it('gives a none or hidden side no width, in any declaration order', () => {
