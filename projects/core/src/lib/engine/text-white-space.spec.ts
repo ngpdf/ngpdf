@@ -57,7 +57,10 @@ describe('white-space', () => {
 
   it('reads CRLF and a lone CR as one line break', () => {
     expect(texts('a\r\nb\rc', 'pre')).toEqual(['a', 'b', 'c']);
+    expect(texts('a\r\nb\rc', 'pre-line')).toEqual(['a', 'b', 'c']);
     expect(texts('a\r\n\r\nb', 'pre-wrap')).toEqual(['a', '', 'b']);
+    expect(texts('a\r\n\r\nb', 'pre-line')).toEqual(['a', '', 'b']);
+    expect(texts('a\r\nb\rc', 'normal')).toEqual(['a b c']);
   });
 
   it('keeps every space under pre and does not wrap, so a long line overflows', () => {
