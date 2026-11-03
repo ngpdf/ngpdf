@@ -5,7 +5,7 @@ section: Reference
 order: 11
 ---
 
-These are all the style properties ngpdf reads. Any other property is ignored without a warning. An invalid value for a property in this list throws an `ngpdf:` error and the render rejects, except where the tables say what other values do (`font-weight`, `font-style`, `break-before`, `break-after` and `break-inside`).
+These are all the style properties ngpdf reads. Any other property is ignored without a warning. An invalid value for a property in this list throws an `ngpdf:` error and the render rejects, except where the tables say what other values do (`font-style`, `break-before`, `break-after` and `break-inside`).
 
 In the tables:
 
@@ -23,7 +23,7 @@ All text properties are inherited by child elements.
 | `color` | color | `black` |
 | `font-family` | a list of family names: [registered fonts](/docs/text-and-fonts#custom-fonts) and Courier, Times or Helvetica | Helvetica |
 | `font-size` | length ≥ 0 | `10` |
-| `font-weight` | `bold`, `bolder`, a number ≥ 600 (bold); anything else is normal | normal |
+| `font-weight` | a number from 1 to 1000, `thin` (100), `extralight` (200), `light` (300), `normal` (400), `medium` (500), `semibold` (600), `bold` (700), `extrabold` (800), `black` (900), or `bolder` and `lighter` from the inherited weight; anything else throws. See [Fonts](/docs/text-and-fonts#fonts) | normal (400) |
 | `font-style` | `italic`, `oblique` (italic); anything else is normal | normal |
 | `line-height` | number (× font size), `N%`, length, `normal` (keeps the inherited value) | `1.2` |
 | `text-align` | `left`, `center`, `right`, `justify` | `left` |
@@ -50,7 +50,9 @@ Without a registered family in the list: `font-family` contains `courier` or `mo
 | `justify-content` | `flex-start`, `center`, `flex-end`, `space-between`, `space-around`, `space-evenly` | `flex-start` |
 | `align-items` | `stretch`, `flex-start`, `center`, `flex-end` | `stretch` |
 | `align-self` | `auto`, `stretch`, `flex-start`, `center`, `flex-end` | `auto` |
-| `gap` | length (one value) | `0` |
+| `gap` | `<row> [<column>]`: one or two lengths/% ≥ 0; one value sets both | `0` |
+| `row-gap` | length/% ≥ 0: space between the children of a column; a % is of the container's content height | `0` |
+| `column-gap` | length/% ≥ 0: space between the children of a row; a % is of the container's content width | `0` |
 | `flex` | see below | |
 | `flex-grow` | number | `0` |
 | `flex-shrink` | number | `1` |
@@ -128,7 +130,7 @@ In `border`, a missing width is 1 and a missing color is black. The width keywor
 Everything else is ignored, including:
 
 - `display`, `z-index`, `overflow-x`, `overflow-y`;
-- `flex-wrap`, `align-content`, `row-gap`, `column-gap`, `order`;
+- `flex-wrap`, `align-content`, `order`;
 - `box-shadow`;
 - `font`, `word-spacing`, `white-space`, `vertical-align`;
 - custom properties (`--name`).
@@ -137,7 +139,7 @@ Some styles are ignored in specific places:
 
 - on a component host element (with a warning);
 - `width`, `height`, the `min-`/`max-` sizes and `margin` on a `pdf-page`;
-- horizontal padding, left and right borders, margins, `justify-content`, `flex-direction` and `gap` on a `pdf-row` inside a table;
+- horizontal padding, left and right borders, margins, `justify-content`, `flex-direction` and the column gap (`column-gap`, or the column part of `gap`) on a `pdf-row` inside a table;
 - margins, `min-width` and `max-width` on a `pdf-cell` inside a table;
 - position and size styles other than `height` on `pdf-page-number`;
 - `position`, `top`, `right`, `bottom` and `left` on a `pdf-page`, a `pdf-row` and a `pdf-cell`;
@@ -146,10 +148,11 @@ Some styles are ignored in specific places:
 ## Throws
 
 - an unknown unit: `em`, `rem`, `vh`, `vw` and the like;
-- a percentage or `auto` in `gap`, `font-size`, `border-radius`, a `border-*-radius` corner, `border-width` or a border's width;
+- `auto` in `gap`, `row-gap` or `column-gap`, or more than two values in `gap`;
+- a percentage or `auto` in `font-size`, `border-radius`, a `border-*-radius` corner, `border-width` or a border's width;
 - an elliptical radius such as `border-radius: 4 / 8`;
 - `auto` in `padding` or a `padding-*` side;
-- a negative `font-size`, padding, border width or radius (margins can be negative, as in CSS);
+- a negative `font-size`, padding, gap, border width or radius (margins can be negative, as in CSS);
 - a color that is not one of the forms above, including `hsl()`, `currentColor` and `var()`;
 - a keyword outside the lists above for `text-align`, `text-decoration`, `text-transform`, `flex-direction`, `justify-content`, `align-items`, `align-self`, `object-fit`, `overflow` and `position`, in any case;
 - `position: fixed` and `position: sticky`;

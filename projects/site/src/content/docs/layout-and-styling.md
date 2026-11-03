@@ -42,13 +42,17 @@ Every element is a flex container. The defaults follow CSS flexbox, with one dif
 | `justify-content` | `flex-start`, `center`, `flex-end`, `space-between`, `space-around`, `space-evenly` | `flex-start` |
 | `align-items` | `stretch`, `flex-start`, `center`, `flex-end` | `stretch` |
 | `align-self` | `auto`, `stretch`, `flex-start`, `center`, `flex-end` | `auto` |
-| `gap` | one length | `0` |
+| `gap` | `<row> [<column>]`, lengths or `%`; one value sets both | `0` |
+| `row-gap` | length, `%` | `0` |
+| `column-gap` | length, `%` | `0` |
 | `flex` | `<grow> [<shrink>] [<basis>]`, `auto`, `none` | |
 | `flex-grow` | number | `0` |
 | `flex-shrink` | number | `1` |
 | `flex-basis` | length, `%`, `auto` | `auto` |
 
-`flex: 1` means grow 1, shrink 1, basis 0, as in CSS. `row-reverse`, `column-reverse`, `flex-wrap`, `align-content`, `baseline` and separate `row-gap`/`column-gap` are not supported.
+`flex: 1` means grow 1, shrink 1, basis 0, as in CSS. `row-reverse`, `column-reverse`, `flex-wrap`, `align-content` and `baseline` are not supported.
+
+`row-gap` is the space between the children of a column, and `column-gap` the space between the children of a row. Without `flex-wrap`, a column uses only its row gap and a row only its column gap, as in a browser. A percentage is of the container's content box: its height for `row-gap`, its width for `column-gap`. A negative gap throws. When a column breaks across pages, the row gap before the first child on the new page is dropped: that child starts at the top of the content area.
 
 Sizing uses `width`, `height`, `min-width`, `min-height`, `max-width` and `max-height`, plus `margin` and `padding` with one to four values, or per side (`margin-top`, `padding-left`, and so on).
 

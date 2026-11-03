@@ -12,6 +12,12 @@ export interface Edges<T> {
   readonly left: T;
 }
 
+/**
+ * A gap in points, or a percentage of the container's content box: its height for a row gap, its
+ * width for a column gap. Never negative.
+ */
+export type Gap = number | { readonly percent: number };
+
 /** A length in points, or a percentage of the element's own border box. */
 export type Offset = number | { readonly percent: number };
 
@@ -34,7 +40,8 @@ export interface TextStyle {
   /** The CSS `font-family` list as written; `fonts.ts` turns it into fonts. */
   readonly fontFamily: string;
   readonly fontSize: number;
-  readonly fontWeight: 'normal' | 'bold';
+  /** From 1 to 1000; 400 is normal and 700 bold. */
+  readonly fontWeight: number;
   readonly fontStyle: 'normal' | 'italic';
   /** Multiplier of the font size. */
   readonly lineHeight: number;
@@ -93,7 +100,10 @@ export interface ResolvedStyle extends TextStyle {
     'flex-start' | 'center' | 'flex-end' | 'space-between' | 'space-around' | 'space-evenly';
   readonly alignItems: AlignItems;
   readonly alignSelf: 'auto' | AlignItems;
-  readonly gap: number;
+  /** Space between lines of a column's children (CSS `row-gap`). */
+  readonly rowGap: Gap;
+  /** Space between a row's children (CSS `column-gap`). */
+  readonly columnGap: Gap;
   readonly width: Length;
   readonly height: Length;
   readonly minWidth: Length;
@@ -164,7 +174,7 @@ export const ROOT_TEXT_STYLE: TextStyle = Object.freeze({
   color: BLACK,
   fontFamily: 'Helvetica',
   fontSize: 10,
-  fontWeight: 'normal',
+  fontWeight: 400,
   fontStyle: 'normal',
   lineHeight: 1.2,
   textAlign: 'left',
@@ -355,8 +365,8 @@ function parseCorners(value: string, tag?: string): Corners<number> {
   return { topLeft: a, topRight: b, bottomRight: c, bottomLeft: d };
 }
 
-/** Padding takes a length or a percentage: CSS has no `auto` or negative padding. */
-function parsePadding(value: string, tag?: string): Length {
+/** Padding and gaps take a length or a percentage: CSS has no `auto` or negative ones. */
+function parseSpacing(value: string, tag?: string): Gap {
   const length = parseLength(value, tag);
   if (length === 'auto') return fail(`expected a length in "${show(value)}"`, tag);
   return rejectNegative(length, value, tag);
@@ -896,11 +906,43 @@ function oneOf<T extends string>(
   return found;
 }
 
-function fontWeightOf(value: string): TextStyle['fontWeight'] {
+/** The named weights, in order; each is 100 times its place plus 100. */
+export const WEIGHT_NAMES = Object.freeze([
+  'thin',
+  'extralight',
+  'light',
+  'normal',
+  'medium',
+  'semibold',
+  'bold',
+  'extrabold',
+  'black',
+] as const);
+
+/** `bolder` and `lighter` against the inherited weight, as the CSS table has them. */
+function bolder(weight: number): number {
+  if (weight < 350) return 400;
+  if (weight < 550) return 700;
+  return weight < 900 ? 900 : weight;
+}
+
+function lighter(weight: number): number {
+  if (weight < 100) return weight;
+  if (weight < 550) return 100;
+  return weight < 750 ? 400 : 700;
+}
+
+function fontWeightOf(value: string, inherited: number, tag: string): number {
   const keyword = keywordOf(value);
-  if (keyword === 'bold' || keyword === 'bolder') return 'bold';
+  if (keyword === 'bolder') return bolder(inherited);
+  if (keyword === 'lighter') return lighter(inherited);
+  const named = WEIGHT_NAMES.indexOf(keyword as (typeof WEIGHT_NAMES)[number]);
+  if (named >= 0) return (named + 1) * 100;
   const weight = parseNumber(keyword);
-  return weight !== null && weight >= 600 ? 'bold' : 'normal';
+  if (weight !== null && weight >= 1 && weight <= 1000) return weight;
+  return fail(
+    `invalid value "${show(value)}" for font-weight on ${tag}; expected a number from 1 to 1000, ${WEIGHT_NAMES.join(', ')}, bolder or lighter`,
+  );
 }
 
 const SIDES: readonly Side[] = ['top', 'right', 'bottom', 'left'];
@@ -915,7 +957,8 @@ function defaultStyle(node: PdfNode, inherited: TextStyle): Mutable<ResolvedStyl
     justifyContent: 'flex-start',
     alignItems: 'stretch',
     alignSelf: 'auto',
-    gap: 0,
+    rowGap: 0,
+    columnGap: 0,
     width: 'auto',
     height: 'auto',
     minWidth: 'auto',
@@ -965,7 +1008,7 @@ function apply(
     return;
   }
   if (side && property === `padding-${side}`) {
-    style.padding = withSide(style.padding, side, parsePadding(value, tag));
+    style.padding = withSide(style.padding, side, parseSpacing(value, tag));
     return;
   }
   if (side && property === `border-${side}`) {
@@ -999,7 +1042,8 @@ function apply(
       style.fontSize = rejectNegative(parsePoints(value, tag), value, tag);
       break;
     case 'font-weight':
-      style.fontWeight = fontWeightOf(value);
+      // The style still holds the inherited weight: a rule sets font-weight once.
+      style.fontWeight = fontWeightOf(value, style.fontWeight, tag);
       break;
     case 'font-style': {
       const keyword = keywordOf(value);
@@ -1069,8 +1113,21 @@ function apply(
         tag,
       );
       break;
-    case 'gap':
-      style.gap = parsePoints(value, tag);
+    case 'gap': {
+      const tokens = tokenize(value);
+      if (tokens.length < 1 || tokens.length > 2) {
+        return fail(`expected 1 or 2 values in "${show(value)}"`, tag);
+      }
+      const [row = '', column = row] = tokens;
+      style.rowGap = parseSpacing(row, tag);
+      style.columnGap = parseSpacing(column, tag);
+      break;
+    }
+    case 'row-gap':
+      style.rowGap = parseSpacing(value, tag);
+      break;
+    case 'column-gap':
+      style.columnGap = parseSpacing(value, tag);
       break;
     case 'width':
       style.width = parseLength(value, tag);
@@ -1094,7 +1151,7 @@ function apply(
       style.margin = parseEdges(value, tag);
       break;
     case 'padding':
-      style.padding = parseEdgeValues(value, (token) => parsePadding(token, tag), tag);
+      style.padding = parseEdgeValues(value, (token) => parseSpacing(token, tag), tag);
       break;
     case 'border': {
       const border = parseBorder(value, tag);
