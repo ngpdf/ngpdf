@@ -1422,6 +1422,14 @@ describe('paginatePage: position', () => {
     expect(placedOf(pages, stamp).y).toBeCloseTo(CONTENT_TOP, 6);
   });
 
+  it('keeps an absolute box whose top is just above the bottom of a tall page on its sheet', () => {
+    // 0.05pt is under the page-fit slack of a 14340pt page, but the top is still on the sheet.
+    const last = block();
+    const stamp = badge({ top: '14339.95', left: '0', height: '0.04' });
+    const pages = paginate(page([last, stamp], {}, { size: [200, 14340] }));
+    expect(nodesOn(pages)).toEqual([[last, stamp]]);
+  });
+
   it('groups an absolute box taken out of a unit with the faded views it leaves', () => {
     const stamp = badge({ top: '0', left: '0' });
     const inner = el('pdf-view', { opacity: '0.4' }, [block(), stamp]);

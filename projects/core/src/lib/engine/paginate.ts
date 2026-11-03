@@ -1431,7 +1431,7 @@ export function paginatePage(
     for (const candidate of pieces) if (candidate.flowTop <= float.top + EPSILON) piece = candidate;
     let page = piece?.page ?? above?.page ?? 0;
     let y = float.top + (piece?.shift ?? above?.unitShift ?? frame.top);
-    if (y >= frame.bottom - slack) {
+    if (y >= frame.bottom - EPSILON) {
       const below = placements[found + 1];
       if (below) {
         page = below.page;
