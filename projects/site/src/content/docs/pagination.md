@@ -253,7 +253,7 @@ A `pdf-page-number` shows the sheet's number. Put it directly inside a `pdf-page
 
 - `format` replaces `{page}` with the sheet's number and `{total}` with the number of sheets in the whole document, across all `pdf-page` elements. Each token can appear any number of times. The default format is `{page} / {total}`.
 - It sits at the bottom of the content area, inside the page padding, across the content width, on every sheet that `pdf-page` produces. It is taken out of the flow wherever you write it among the page's children, so `break-before` and `break-after` on it do nothing.
-- It reserves its height on every sheet: one line of its font (`font-size × line-height`) plus its own vertical padding and borders, or its `height` if you set one. Content and bottom fixed views stop above it.
+- It reserves its height on every sheet: one line of its font (`font-size × line-height`) plus its own vertical padding and borders, or its `height` if you set one. Content and bottom fixed views stop above it. Its text sits in the middle of that line, as in a `pdf-text`.
 - It is right-aligned unless it, or an element above it, sets `text-align`.
 - Text styles apply: `font-size`, `color`, `font-weight` and the rest. Other position styles are ignored.
 - The text is drawn on one line and does not wrap. Content you put inside the element is ignored.

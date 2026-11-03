@@ -249,6 +249,11 @@ NGPDF_APT=poppler-utils ./scripts/dev node scripts/server-check.mjs   # packed d
   `font-size`, `font-weight`, `font-style`, `text-decoration`, `letter-spacing`,
   `text-transform` and `hyphens`. The paragraph breaks as one text, and runs of different sizes
   share a baseline. A `pdf-span` outside a `pdf-text` throws.
+- **Line height:** a line is its largest run's `font-size × line-height` tall. As in CSS, each
+  run's leading is its own `font-size × line-height` less its ascent and descent, split half
+  above and half below it, and negative when that run's height is less than its ascent plus
+  descent. The run that reaches highest above its baseline sets the line's baseline. The page
+  number's line is split the same way. Pagination only sees the line heights.
 - **Links:** `<pdf-link [href]>` is a column `pdf-view` where a view can go and an inline run like
   a `pdf-span` inside a `pdf-text`. It changes nothing visually.
   - Only absolute `http:`, `https:` and `mailto:` URLs are written, normalized by `URL`. Any other
