@@ -206,17 +206,21 @@ describe('download', () => {
   });
 
   it('downloadPdf works with an explicit injector', async () => {
-    stubUrls();
+    const { revoke } = stubUrls();
     const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(vi.fn());
+    // Fake timers, so the revoke runs here and not on whatever URL a later test stubs.
+    vi.useFakeTimers();
     await downloadPdf(TestDocument, {
       injector: TestBed.inject(EnvironmentInjector),
       fileName: 'a.pdf',
     });
     expect(click).toHaveBeenCalledOnce();
+    vi.runAllTimers();
+    expect(revoke).toHaveBeenCalledExactlyOnceWith('blob:ngpdf-test');
   });
 
   it('removes the anchor and revokes the URL when click throws', async () => {
-    // Its own URL: a revoke that an earlier test left on a timer also lands on this stub.
+    // Its own URL, so the revoke checked below can only be this test's.
     const { revoke } = stubUrls('blob:ngpdf-blocked');
     vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {
       throw new Error('click blocked');
