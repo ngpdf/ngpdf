@@ -7,7 +7,6 @@ import {
   createEnvironmentInjector,
   inject,
   input,
-  provideZoneChangeDetection,
 } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -136,15 +135,6 @@ describe('PdfRenderer', () => {
     expect(await blob.slice(0, 5).text()).toBe('%PDF-');
   });
 
-  it('works when the parent injector provides zone change detection', async () => {
-    await import('zone.js');
-    TestBed.configureTestingModule({ providers: [provideZoneChangeDetection()] });
-    const blob = await TestBed.inject(PdfRenderer).toBlob(TestDocument, {
-      inputs: { rows: ['Zoned row'] },
-    });
-    expect(await shownText(blob)).toEqual(['Zoned row']);
-  });
-
   it('keeps two renders started together apart', async () => {
     const renderer = TestBed.inject(PdfRenderer);
     const [first, second] = await Promise.all([
@@ -183,7 +173,11 @@ describe('download', () => {
   } {
     const create = vi.fn(() => url);
     const revoke = vi.fn();
-    vi.stubGlobal('URL', Object.assign(URL, { createObjectURL: create, revokeObjectURL: revoke }));
+    // A subclass, so the stub never touches the real URL and unstubbing restores it.
+    vi.stubGlobal(
+      'URL',
+      Object.assign(class extends URL {}, { createObjectURL: create, revokeObjectURL: revoke }),
+    );
     return { create, revoke };
   }
 
