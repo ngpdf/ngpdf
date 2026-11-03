@@ -2607,6 +2607,23 @@ describe('vertical-align', () => {
     expect(area!.y + area!.h).toBeCloseTo(36 + line!.height, 6);
   });
 
+  it('gives a link with a raised and a lowered run one area over the whole line box', () => {
+    const paragraph = el('pdf-text', { 'font-size': '10' }, [
+      el(
+        'pdf-link',
+        {},
+        [sup('1'), el('pdf-span', { 'vertical-align': 'sub' }, [createNode('text', '', '2')])],
+        { href: 'https://example.com/' },
+      ),
+    ]);
+    const laid = layout(page([paragraph]))[0]!;
+    const [line] = laid.placed[0]!.box.text!.lines;
+    const links = only(list(laid, 0, 1), 'link');
+    expect(links).toHaveLength(1);
+    expect(links[0]!.y).toBeCloseTo(36, 6);
+    expect(links[0]!.h).toBeCloseTo(line!.height, 6);
+  });
+
   it('keeps the whole linked superscript clickable in a short line', () => {
     const paragraph = el('pdf-text', { 'font-size': '10', 'line-height': '0.5' }, [
       createNode('text', '', 'x'),
