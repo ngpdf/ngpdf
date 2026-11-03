@@ -280,14 +280,15 @@ export function parseLength(value: string, tag?: string): Length {
   const end = scanNumber(text);
   if (end === 0) return fail(`invalid length "${show(value)}"`, tag);
   const amount = Number(text.slice(0, end));
-  if (!Number.isFinite(amount)) {
-    return fail(`invalid length "${show(value)}" (not a finite number)`, tag);
-  }
+  const notFinite = () => fail(`invalid length "${show(value)}" (not a finite number)`, tag);
+  if (!Number.isFinite(amount)) return notFinite();
   const unit = text.slice(end).toLowerCase();
   if (unit === '%') return { percent: amount };
   const factor = UNIT_FACTORS.get(unit);
   if (factor === undefined) return fail(`unknown unit in "${show(value)}"`, tag);
-  return amount * factor;
+  // 1e308 is finite, but 1e308in is not once it is in points.
+  const points = amount * factor;
+  return Number.isFinite(points) ? points : notFinite();
 }
 
 /** A length that must resolve to points (no percent, no auto). */
@@ -418,11 +419,10 @@ const ANGLE_UNITS = new Map<string, number>([
 function parseAngle(token: string, fn: string, tag?: string): number {
   const end = scanNumber(token);
   const amount = Number(token.slice(0, end));
-  const factor =
-    end > 0 && Number.isFinite(amount)
-      ? ANGLE_UNITS.get(token.slice(end).toLowerCase())
-      : undefined;
-  if (factor !== undefined) return amount * factor;
+  const factor = end > 0 ? ANGLE_UNITS.get(token.slice(end).toLowerCase()) : undefined;
+  // Infinity from the number or from the unit (1e308turn) fails the same check.
+  const radians = factor === undefined ? NaN : amount * factor;
+  if (Number.isFinite(radians)) return radians;
   if (parseNumber(token) === 0) return 0;
   return fail(`invalid angle "${show(token)}" in "${show(fn)}"`, tag);
 }
@@ -630,10 +630,9 @@ function angleOf(token: string, tag?: string): number | null {
   const amount = Number(token.slice(0, end));
   const unit = token.slice(end).toLowerCase();
   const factor = unit === '' && amount === 0 ? 1 : ANGLE_DEGREES.get(unit);
-  if (end === 0 || factor === undefined || !Number.isFinite(amount)) {
-    return fail(`invalid gradient angle "${show(token)}"`, tag);
-  }
-  return amount * factor;
+  const degrees = end === 0 || factor === undefined ? NaN : amount * factor;
+  if (!Number.isFinite(degrees)) return fail(`invalid gradient angle "${show(token)}"`, tag);
+  return degrees;
 }
 
 /** `to <side>` or `to <side> <side>`, one side per axis. */

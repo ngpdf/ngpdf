@@ -103,6 +103,19 @@ describe('numbers in exponent form', () => {
     expect(() => styleOf({ opacity: '1e999' })).toThrow(/^ngpdf: invalid value "1e999"/);
     expect(parseLength('1e-400')).toBe(0);
   });
+
+  it('throws when a unit turns a finite number into a non-finite one', () => {
+    expect(() => parseLength('1e308in')).toThrow(
+      'ngpdf: invalid length "1e308in" (not a finite number)',
+    );
+    expect(() => parseLength(`1${'0'.repeat(308)}cm`)).toThrow(/\(not a finite number\)/);
+    expect(() => styleOf({ transform: 'rotate(1e308turn)' })).toThrow(
+      /^ngpdf: invalid angle "1e308turn"/,
+    );
+    expect(() => styleOf({ 'background-image': 'linear-gradient(1e308turn, red, blue)' })).toThrow(
+      /^ngpdf: invalid gradient angle "1e308turn"/,
+    );
+  });
 });
 
 describe('resolveStyles', () => {
