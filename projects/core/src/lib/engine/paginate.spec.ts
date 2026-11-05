@@ -3158,6 +3158,19 @@ describe('paginatePage: auto height', () => {
     expect(pages.map((laid) => laid.height)).toEqual([50, 40]);
   });
 
+  it('keeps the bottom margin of a table whose last row splits across sheets', () => {
+    const cell = el(
+      'pdf-cell',
+      {},
+      Array.from({ length: 15 }, () => block(1000)),
+    );
+    const tall = el('pdf-table', { 'margin-bottom': '9' }, [el('pdf-row', {}, [cell])], {
+      columns: ['1fr'],
+    });
+    const pages = paginate(auto([tall]));
+    expect(pages.map((laid) => laid.height)).toEqual([10 + 14000 + 10, 10 + 1000 + 9 + 10]);
+  });
+
   it('covers the whole grown sheet with the page background', () => {
     const root = auto([block(30), block(60, { 'break-before': 'page' })], {
       padding: '10',

@@ -2025,21 +2025,29 @@ export function paginatePage(
   // fixed views, the page number, the padding) moves up with it.
   const lastPlacement = placements.at(-1);
   const below = new Set(bottoms);
-  return pages.map((built) => {
+  // Where a unit ends: its sheet, and page y minus flow y at its bottom. A split row ends with
+  // its last piece.
+  const endOf = (placement: Placement): { page: number; shift: number } => {
+    const piece = placement.pieces?.at(-1);
+    return piece
+      ? { page: piece.page, shift: piece.bottom - placement.unit.bottom }
+      : { page: placement.page, shift: placement.unitShift };
+  };
+  return pages.map((built, index) => {
     let end = built.end;
     for (const piece of built.decorations) {
       if (piece.box.node !== page) end = Math.max(end, piece.y + piece.box.h);
     }
     // The wrappers closing with the sheet's last unit end there, drawn or not.
     const lastHere = placements[built.lastUnit];
-    if (lastHere && !lastHere.pieces) {
+    const lastEnd = lastHere && endOf(lastHere);
+    if (lastHere && lastEnd?.page === index) {
       const closes = closesAt.get(built.lastUnit) ?? lastHere.unit.bottom;
-      end = Math.max(end, closes + lastHere.unitShift);
+      end = Math.max(end, closes + lastEnd.shift);
     }
     // The last unit's bottom margin, which no box covers, counts on the sheet it ends.
-    if (lastPlacement && !lastPlacement.pieces && built === at(pages, lastPlacement.page)) {
-      end = Math.max(end, laid.h + lastPlacement.unitShift);
-    }
+    const flowEnd = lastPlacement && endOf(lastPlacement);
+    if (flowEnd?.page === index) end = Math.max(end, laid.h + flowEnd.shift);
     // A sheet is never 0 tall, which PDF does not allow.
     const height = Math.max(1, Math.min(end, frame.bottom) + frame.height - frame.bottom);
     const shift = height - frame.height;
