@@ -29,6 +29,7 @@ import { NotesSample } from './documents/notes-sample';
 import { SpanSample } from './documents/span-sample';
 import { Preview } from './preview';
 import { SplitRowSample } from './documents/split-row-sample';
+import { TwoColumnSample } from './documents/two-column-sample';
 import { WhiteSpaceSample } from './documents/white-space-sample';
 
 const DOCUMENT_NAMES = [
@@ -44,6 +45,7 @@ const DOCUMENT_NAMES = [
   'secure-sample',
   'hyphens-sample',
   'split-row-sample',
+  'two-column-sample',
   'opacity-sample',
   'notes-sample',
   'canvas-sample',
@@ -162,6 +164,8 @@ export class App {
         return renderToBlob(HyphensSample, { injector: this.hyphenation });
       case 'split-row-sample':
         return this.pdf.toBlob(SplitRowSample);
+      case 'two-column-sample':
+        return this.pdf.toBlob(TwoColumnSample);
       case 'opacity-sample':
         return this.pdf.toBlob(OpacitySample);
       case 'notes-sample':

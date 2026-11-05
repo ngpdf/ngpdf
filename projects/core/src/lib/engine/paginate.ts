@@ -10,7 +10,7 @@ export interface PlacedBox {
   readonly y: number;
   /**
    * Page y below which nothing of the box is drawn: a unit taller than the content area, or a
-   * piece of a split table row, whose absolute boxes are cut at the bottom of the sheet.
+   * piece of a split row, whose absolute boxes are cut at the bottom of the sheet.
    */
   readonly clipBottom?: number;
   /** On a sliced decoration: this piece's top or bottom edge is a page cut, so no border there. */
@@ -197,7 +197,7 @@ interface Unit extends Flowed {
   readonly groups: readonly OpacityGroup[];
   readonly bottom: number;
   readonly header: Header | null;
-  /** A body row of a table that may split across sheets when it is taller than a page. */
+  /** A table body row or a row view that may split across sheets when taller than a page. */
   readonly splits?: true;
   /** A line of a wrapping pdf-page, named so in the warning when it is taller than a page. */
   readonly pageLine?: true;
@@ -338,7 +338,7 @@ function isWrapper(box: Box): boolean {
   if (box.style.transform.length > 0 || empty) return false;
   return (
     box.node.tag === 'pdf-table' ||
-    // A clipping view is one unit, like a row view: its clip can't be cut across sheets.
+    // A clipping view is one unit: its clip can't be cut across sheets.
     ((box.node.tag === 'pdf-view' || box.node.tag === 'pdf-link') &&
       box.style.overflow === 'visible' &&
       (box.style.flexDirection === 'column' ? !wrapsColumns(box) : wrapsLines(box)))
@@ -410,6 +410,19 @@ function lineBox(row: Box, line: readonly Box[]): Box {
     border: NO_BORDER,
     children: line.map((child) => ({ ...child, x: child.x - left, y: child.y - top })),
   };
+}
+
+/**
+ * A row view or link, or a line of a wrapping row (a pdf-page's too), which can split across
+ * sheets like a table row when it is taller than a page.
+ */
+function isRowView(box: Box): boolean {
+  const tag = box.node.tag;
+  return (
+    (tag === 'pdf-view' || tag === 'pdf-link' || tag === 'pdf-page') &&
+    box.style.flexDirection === 'row' &&
+    box.style.flexWrap === 'nowrap'
+  );
 }
 
 /**
@@ -551,8 +564,11 @@ function collectUnits(
     }
     if (!isWrapper(box)) {
       const own = detach(box, { box, x, top, groups, dx, dy }, contains(box));
-      // A header row that is not repeated stays whole, like one that is.
-      const splits = inTable && box.node.tag === 'pdf-row' && !isHeaderRow(box.node);
+      // A header row that is not repeated stays whole, like one that is. A row view, or a line of
+      // a wrapping row, splits like a body row, its flow children as the cells.
+      const splits = inTable
+        ? box.node.tag === 'pdf-row' && !isHeaderRow(box.node)
+        : isRowView(box);
       // A faded unit that lost absolute boxes to the flow gets its group here, so the group also
       // holds them; any other draws its own group, inside its transform.
       const taken = own !== box;
@@ -969,6 +985,13 @@ function presenceOf(box: Box): number {
   return Math.max(box.style.minPresenceAhead, ...inFlow(box).map(presenceOf));
 }
 
+/** What a unit taller than a page is called in the warning. */
+function nameOf(flowed: Flowed): string {
+  const { node } = flowed.box;
+  if ('pageLine' in flowed && flowed.pageLine) return `a wrapped line of ${node.tag}`;
+  return isHeaderRow(node) ? `${node.tag} header` : node.tag;
+}
+
 function at<T>(list: readonly T[], index: number): T {
   const item = list[index];
   if (item === undefined) throw new Error(`ngpdf: pagination lost unit ${String(index)}`);
@@ -1029,12 +1052,70 @@ function collectBreaks(box: Box, top: number, pageHeight: number, out: number[])
 }
 
 /**
+ * The bottom of a box's content, in its own y, as if it were not stretched: a row stretches its
+ * children to its height, and a split row draws each piece only as tall as its content needs.
+ */
+function contentEnd(box: Box): number {
+  const { style, padding, border } = box;
+  if (style.height !== 'auto' || box.image || box.node.tag === 'pdf-canvas') return box.h;
+  const top = padding.top + border.top;
+  const bottom = padding.bottom + border.bottom;
+  const inner = box.text
+    ? top + box.text.height
+    : inFlow(box).reduce((end, child) => Math.max(end, child.y + contentEnd(child)), top);
+  return Math.min(box.h, inner + bottom);
+}
+
+/**
+ * A flow child of a row view as a cell of a split row: in a column box of its own, as tall as the
+ * row's content box and drawing nothing, where it keeps its place in the row.
+ */
+function rowViewCell(row: Box, child: Box, pageHeight: number): SplitCell {
+  const insetTop = row.padding.top + row.border.top;
+  const above = child.y - insetTop;
+  const box: Box = {
+    node: row.node,
+    style: {
+      ...row.style,
+      flexDirection: 'column',
+      position: 'static',
+      padding: ZERO_EDGES,
+      borderWidth: NO_BORDER,
+      backgroundColor: null,
+      backgroundImage: null,
+      breakBefore: false,
+      breakAfter: false,
+      breakInside: 'auto',
+      keepWithNext: false,
+      minPresenceAhead: 0,
+      // The row carries its own opacity.
+      opacity: 1,
+    },
+    x: child.x,
+    y: insetTop,
+    w: child.w,
+    h: Math.max(0, row.h - insetTop - row.padding.bottom - row.border.bottom),
+    padding: NO_BORDER,
+    border: NO_BORDER,
+    children: [{ ...child, x: 0, y: above }],
+  };
+  const end = above + contentEnd(child);
+  const found: number[] = [];
+  collectBreaks(child, above, pageHeight, found);
+  const breaks = [...new Set(found)]
+    .filter((y) => y > EPSILON && y < end - EPSILON)
+    .sort((a, b) => a - b);
+  return { box, breaks, end };
+}
+
+/**
  * The cells of a row taller than a page, ready to split; null when none of them can break. A
  * cell's content pushed down by `justify-content` is moved back to its top: each piece is drawn
- * from the top.
+ * from the top. A row view's cells are its flow children (`rowViewCell`).
  */
 function splitCells(row: Box, pageHeight: number): SplitCell[] | null {
   const cells = inFlow(row).map((cell): SplitCell => {
+    if (row.node.tag !== 'pdf-row') return rowViewCell(row, cell, pageHeight);
     const inset = cell.padding.top + cell.border.top;
     const flow = inFlow(cell);
     const lead = Math.max(0, (flow[0]?.y ?? inset) - inset);
@@ -1224,13 +1305,38 @@ function sliceBox(
   return cutPiece({ ...piece, children }, cutTop, cutBottom, slice);
 }
 
-/** A split row's piece: its cells all as tall as the piece, each holding its own part. */
+/**
+ * A row view's child that the row stretched to its bottom fills each piece, as a table cell does:
+ * its background and side borders run down the piece, with its bottom border on the last one.
+ */
+function stretch(
+  content: Box[],
+  child: Box,
+  height: number,
+  pieceHeight: number,
+  piece: RowPiece,
+): void {
+  const part = content[0];
+  if (!part || child.y + child.h < height - EPSILON) return;
+  content[0] = {
+    ...part,
+    h: Math.max(part.h, pieceHeight - part.y),
+    ...(part.cut && { cut: { ...part.cut, bottom: !piece.last } }),
+  };
+}
+
+/**
+ * A split row's piece: its cells all as tall as the piece, each holding its own part. The row's
+ * own absolute boxes go on the piece their top lands in: the piece covers row y's from `from` to
+ * the next piece's `from`, `to`.
+ */
 function rowPieceBox(
   row: Box,
   cells: readonly SplitCell[],
   piece: RowPiece,
   offset: number,
   height: number,
+  range: { readonly from: number; readonly to: number },
 ): Box {
   const insetTop = row.padding.top + row.border.top;
   const insetBottom = row.padding.bottom + row.border.bottom;
@@ -1247,8 +1353,17 @@ function rowPieceBox(
     // The piece that reaches the cell's end; later ones hold nothing of it.
     const ends = to >= cell.end - EPSILON && (piece.first || from < cell.end - EPSILON);
     const content = sliceChildren(cell.box, 0, pieceTop, from, to, ends);
+    if (row.node.tag !== 'pdf-row') {
+      stretch(content, at(cell.box.children, 0), cell.box.h, h, piece);
+    }
     return cutPiece({ ...cell.box, y, h, children: content }, !piece.first, !piece.last, slice);
   });
+  for (const child of row.children) {
+    const lands =
+      (piece.first || child.y >= range.from - EPSILON) &&
+      (piece.last || child.y < range.to - EPSILON);
+    if (isAbsolute(child) && lands) children.push({ ...child, y: child.y - range.from });
+  }
   const { anchor, ...rest } = row;
   return {
     ...(piece.first && anchor !== undefined ? { ...rest, anchor } : rest),
@@ -1288,8 +1403,8 @@ function fixedViewLeft(margin: Edges<Length>, width: number, contentWidth: numbe
  * Breaks one pdf-page's content into pages. The content is laid out once at the content width
  * with unbounded height; units keep the vertical offsets between them from that layout, and a
  * unit moved to a new page starts at the content top (after the padding and border of the
- * wrappers that open with it). A unit is never split, except a table row taller than a page,
- * which goes in pieces, one per sheet.
+ * wrappers that open with it). A unit is never split, except a table row or a row view taller
+ * than a page, which goes in pieces, one per sheet.
  */
 export function paginatePage(
   page: PdfNode,
@@ -1533,13 +1648,7 @@ export function paginatePage(
     const { box } = at;
     const drawn = { box, x: x + at.dx, y: y + at.dy, ...grouped(groups) };
     if (y + box.h > frame.bottom + slack) {
-      const what =
-        'pageLine' in at && at.pageLine
-          ? `a wrapped line of ${box.node.tag}`
-          : isHeaderRow(box.node)
-            ? `${box.node.tag} header`
-            : box.node.tag;
-      warn(`ngpdf: ${what} is taller than a page and is cut at the bottom`);
+      warn(`ngpdf: ${nameOf(at)} is taller than a page and is cut at the bottom`);
       on.placed.push({ ...drawn, clipBottom: frame.bottom });
     } else {
       on.placed.push(drawn);
@@ -1629,17 +1738,27 @@ export function paginatePage(
       next = replan();
       stops = nextStops(cells, starts, room(next.top, false), reserve, slack, true);
     }
+    // Where each piece starts in row y: a later one where the cell furthest behind resumes.
+    const froms = pieces.map((piece) => {
+      let start = piece.first ? 0 : Infinity;
+      for (const [i, cell] of cells.entries()) {
+        const from = at(piece.starts, i);
+        if (from < cell.end - EPSILON) start = Math.min(start, insetTop + from);
+      }
+      return start;
+    });
     // The pieces go in after their sheets' headers; a gradient runs over them end to end.
     const height = pieces.reduce((sum, piece) => sum + piece.h, 0);
     const sliced = pieces.length > 1 && row.style.backgroundImage !== null;
     let offset = 0;
-    for (const piece of pieces) {
+    for (const [k, piece] of pieces.entries()) {
       const top = piece.plan.top;
       if (top + piece.h > frame.bottom + slack) {
-        warn(`ngpdf: ${row.node.tag} is taller than a page and is cut at the bottom`);
+        warn(`ngpdf: ${nameOf(unit)} is taller than a page and is cut at the bottom`);
       }
+      const range = { from: at(froms, k), to: froms[k + 1] ?? Infinity };
       piece.built.placed.push({
-        box: rowPieceBox(row, cells, piece, offset, height),
+        box: rowPieceBox(row, cells, piece, offset, height, range),
         x: frame.left + unit.x + unit.dx,
         y: top + unit.dy,
         clipBottom: frame.bottom,
@@ -1659,14 +1778,8 @@ export function paginatePage(
       page: head.page,
       unitShift: head.plan.top - unit.top,
       leadShift: head.plan.leadTop - head.plan.leadFlow,
-      pieces: pieces.map((piece) => {
-        // A later piece starts where the cell that is furthest behind resumes.
-        let start = piece.first ? 0 : Infinity;
-        for (const [i, cell] of cells.entries()) {
-          const from = at(piece.starts, i);
-          if (from < cell.end - EPSILON) start = Math.min(start, insetTop + from);
-        }
-        const flowTop = unit.top + start;
+      pieces: pieces.map((piece, k) => {
+        const flowTop = unit.top + at(froms, k);
         return {
           page: piece.page,
           flowTop,

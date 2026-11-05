@@ -43,7 +43,7 @@ export interface Box {
    */
   readonly shift?: { readonly x: number; readonly y: number };
   /**
-   * Set by pagination on a piece of a box inside a split table row: the edges that are sheet
+   * Set by pagination on a piece of a box inside a split row (a table row or a row view): the edges that are sheet
    * cuts, drawn without a border, and for a gradient the piece's offset in the whole box.
    */
   readonly cut?: {

@@ -187,11 +187,11 @@ NGPDF_APT=poppler-utils ./scripts/dev node scripts/server-check.mjs   # packed d
   - Units are the children of a page, at any depth through column `pdf-view`s and tables. A table
     yields its rows as units. A row `pdf-view` is one unit, and so is a column `pdf-view` with a
     `transform` or an `overflow` other than `visible`.
-  - A unit is never split, except a table row taller than a page (below). A `pdf-text` that
-    would be a unit is cut into line groups instead: the first `orphans` lines, each line between,
-    and the last `widows` lines (2 and 2 by default). A short text, `break-inside: avoid`, a fixed
-    `height`, a `max-height`, a `transform` or an `overflow` other than `visible` keeps it one
-    unit.
+  - A unit is never split, except a table row or a row `pdf-view` taller than a page (below). A
+    `pdf-text` that would be a unit is cut into line groups instead: the first `orphans` lines,
+    each line between, and the last `widows` lines (2 and 2 by default). A short text,
+    `break-inside: avoid`, a fixed `height`, a `max-height`, a `transform` or an `overflow` other
+    than `visible` keeps it one unit.
   - A `header` row repeats at the top of every page its table runs onto. A header taller than the
     page's content area, or one that can't go on a page with the table's first row (a row that
     fits a page only without it and can't split below it), is laid out once, as plain rows. A
@@ -208,6 +208,15 @@ NGPDF_APT=poppler-utils ./scripts/dev node scripts/server-check.mjs   # packed d
     other than `visible`, a header row, and a row with nothing to break stay one unit. So does a
     row that fits a page without its header when a piece of it can't fit below the header: it
     goes on a sheet of its own without the header, so no piece is cut at the bottom.
+  - A row `pdf-view` or block `pdf-link` taller than a page splits the same way, its flow
+    children as the cells, and so does a line of a wrapping row (a wrapping `pdf-page`'s too).
+    No `wrap` input: `break-inside: avoid`, a fixed `height`, a `max-height`, a `transform` or an
+    `overflow` other than `visible` keep it one unit. Each child keeps its place in the row on the
+    first piece and carries on from the top of later ones. A child stretched to the row's bottom
+    fills every piece; a shorter one is drawn as far as its content goes. A child is measured by its
+    content, not by the height the row stretched it to. The row's absolute children go on the
+    piece their top lands in. `min-presence-ahead` and `break-after: avoid` treat it as a split
+    table row.
   - `breakBefore` starts a new page, and `breakAfter` starts one after the element.
   - `break-after: avoid` (or `avoid-page`) moves an element to the next page with the unit after
     it when that unit does not fit. An element at the top of a page, a chain that would not fit on

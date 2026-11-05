@@ -996,8 +996,12 @@ describe('displayList', () => {
         spacer,
         text('hidden'),
       ]);
-      // A row view is one unit, so the page cannot split it.
-      const style = { 'flex-direction': 'row', 'background-color': '#abc' };
+      // A row view kept whole is one unit, so the page cannot split it.
+      const style = {
+        'flex-direction': 'row',
+        'break-inside': 'avoid',
+        'background-color': '#abc',
+      };
       const unit = el('pdf-view', { ...style, 'border-bottom': '2 solid #000' }, [column]);
       return layout(page([unit, el('pdf-page-number', { height: '9' }, [], { format: 'n' })]))[0]!;
     }
@@ -1051,7 +1055,10 @@ describe('displayList', () => {
         el('pdf-view', { height: '768.89' }),
         el('pdf-view', { height: '100', 'border-top': '4 solid #000' }),
       ]);
-      const unit = el('pdf-view', { 'flex-direction': 'row' }, [left, right]);
+      const unit = el('pdf-view', { 'flex-direction': 'row', 'break-inside': 'avoid' }, [
+        left,
+        right,
+      ]);
       const laid = layout(page([unit]))[0]!;
       const limit = laid.placed[0]!.clipBottom!;
       expect(limit).toBeCloseTo(805.89, 6);
@@ -1074,7 +1081,10 @@ describe('displayList', () => {
         el('pdf-view', { height: '720' }),
         el('pdf-view', { height: '100', 'border-top': '4 solid #000' }),
       ]);
-      const unit = el('pdf-view', { 'flex-direction': 'row' }, [left, right]);
+      const unit = el('pdf-view', { 'flex-direction': 'row', 'break-inside': 'avoid' }, [
+        left,
+        right,
+      ]);
       const root = page([unit], { padding: '40' }, { size: [600, 800], orientation: 'portrait' });
       const laid = layout(root)[0]!;
       expect(laid.placed[0]!.clipBottom).toBe(760);
