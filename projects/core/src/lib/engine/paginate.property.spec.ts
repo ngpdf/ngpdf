@@ -194,4 +194,63 @@ describe('paginatePage properties', () => {
       { numRuns: 60 },
     );
   });
+  it('draws every line of a split row view once, in order, above the content bottom', () => {
+    fc.assert(
+      fc.property(
+        fc.array(
+          fc.tuple(fc.integer({ min: 0, max: 220 }), fc.integer({ min: 6, max: 30 }), fc.boolean()),
+          { minLength: 1, maxLength: 4 },
+        ),
+        fc.integer({ min: 0, max: 700 }),
+        fc.boolean(),
+        (children, before, nested) => {
+          const contents = children.map(([count], c) =>
+            Array.from({ length: count }, (_, i) => `c${String(c)}w${String(i)}`).join(' '),
+          );
+          // Equal widths, wide enough for every word.
+          const share = { 'flex-grow': '1', 'flex-basis': '0' };
+          const texts = children.map(([, size], c) => {
+            const style = { ...share, 'font-size': String(size), 'line-height': '1' };
+            return adopt(el('pdf-text', style), [createNode('text', '', contents[c])]);
+          });
+          // Each text straight in the row, or in a column view of its own.
+          const view = adopt(
+            el('pdf-view', { 'flex-direction': 'row' }),
+            texts.map((text, c) => (children[c]![2] ? adopt(el('pdf-view', share), [text]) : text)),
+          );
+          const content = nested ? adopt(el('pdf-view', { padding: '4' }), [view]) : view;
+          const page = adopt(el('pdf-page', { padding: '36' }, { size: 'A4' }), [
+            el('pdf-view', { height: String(before) }),
+            content,
+            el('pdf-page-number', { height: '9' }),
+          ]);
+          const warnings: string[] = [];
+          const pages = paginatePage(page, resolveStyles(page), {
+            yoga,
+            metrics: writer,
+            images: new Map(),
+            warn: (message) => warnings.push(message),
+          });
+          expect(warnings).toEqual([]);
+
+          const drawn = texts.map((): string[] => []);
+          const walk = (box: Box): void => {
+            const index = texts.indexOf(box.node);
+            if (index >= 0) drawn[index]!.push(...(box.text?.lines ?? []).map((l) => l.text));
+            box.children.forEach(walk);
+          };
+          for (const laid of pages) {
+            for (const placed of laid.placed) {
+              walk(placed.box);
+              expect(placed.y + placed.box.h).toBeLessThanOrEqual(CONTENT_BOTTOM + 1e-6);
+            }
+          }
+          drawn.forEach((lines, c) => {
+            expect(lines.join(' ')).toBe(contents[c]);
+          });
+        },
+      ),
+      { numRuns: 60 },
+    );
+  });
 });

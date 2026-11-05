@@ -1,6 +1,6 @@
 ---
 title: Pagination
-description: How ngpdf breaks content into pages - pagination units, table rows taller than a page, text that breaks between lines with orphans and widows, repeated table headers, breakBefore, breakAfter, keeping a view or table together and pdf-page-number formats.
+description: How ngpdf breaks content into pages - pagination units, table rows and row views taller than a page, text that breaks between lines with orphans and widows, repeated table headers, breakBefore, breakAfter, keeping a view or table together and pdf-page-number formats.
 section: Guide
 order: 6
 ---
@@ -9,7 +9,7 @@ You do not place page breaks by hand. ngpdf lays out each `pdf-page` at its cont
 
 ## Units
 
-ngpdf moves content between pages in whole units. A unit is never split, but a long `pdf-text` is cut into several units, so it can break between its lines (see [Text across pages](#text-across-pages)), and a table row taller than a page splits between the lines of its cells (see [Rows taller than a page](#rows-taller-than-a-page)).
+ngpdf moves content between pages in whole units. A unit is never split, but a long `pdf-text` is cut into several units, so it can break between its lines (see [Text across pages](#text-across-pages)), and a table row or a row `pdf-view` taller than a page splits between the lines of its cells or children (see [Rows taller than a page](#rows-taller-than-a-page) and [Row views taller than a page](#row-views-taller-than-a-page)).
 
 Starting from the children of the `pdf-page`, ngpdf looks inside some elements and treats others as units:
 
@@ -20,7 +20,7 @@ Starting from the children of the `pdf-page`, ngpdf looks inside some elements a
 | `pdf-view` with a `transform` | one unit, with everything inside it, so it is never cut across sheets |
 | `pdf-view` with `overflow: hidden`, `clip`, `scroll` or `auto` | one unit, with everything inside it, so its clip is never split |
 | `pdf-table` | a wrapper: each of its rows is a unit; a row taller than a page splits instead (see [Rows taller than a page](#rows-taller-than-a-page)) |
-| `pdf-view` with `flex-direction: row` that does not wrap | one unit, with everything inside it |
+| `pdf-view` or block `pdf-link` with `flex-direction: row` that does not wrap | one unit, with everything inside it; one taller than a page splits instead (see [Row views taller than a page](#row-views-taller-than-a-page)) |
 | column `pdf-view` with `flex-wrap` whose children went into more than one column | one unit, with everything inside it |
 | `pdf-text` | its lines, grouped by `orphans` and `widows`; one unit if it is short, has `break-inside: avoid`, a fixed height, a `transform` or an `overflow` other than `visible` |
 | `pdf-row`, `pdf-image`, an empty `pdf-view` or one that holds only absolute elements and notes | one unit |
@@ -35,10 +35,10 @@ If the page's own `flex-direction` is `row`, its whole content is one unit, unle
 
 ### Wrapping rows
 
-A row with `flex-wrap: wrap` or `wrap-reverse` breaks between its lines and never through one. Each line is a unit with every child on it, so a card on a line is never cut from the rest of the line.
+A row with `flex-wrap: wrap` or `wrap-reverse` breaks between its lines. Each line is a unit with every child on it, so a line that fits on an empty sheet is never cut, and a card on it never leaves the rest of the line. Only a line taller than a sheet splits, as below.
 
 - A line goes to the next sheet whole when it does not fit. The row gap (or `align-content` space) before it is dropped there, and the line starts at the top of the content area, as a child of a column does.
-- A line taller than the content area goes on a sheet of its own and is clipped, as any [unit taller than a page](#units-taller-than-a-page). On a wrapping `pdf-page` the warning names the line: `ngpdf: a wrapped line of pdf-page is taller than a page and is cut at the bottom`.
+- A line taller than the content area splits across sheets like a [row view](#row-views-taller-than-a-page), with the children on the line as its columns. A line with nothing that can break, such as a tall image or a box with a fixed height, goes on a sheet of its own and is clipped, as any [unit taller than a page](#units-taller-than-a-page). On a wrapping `pdf-page` the warning names the line: `ngpdf: a wrapped line of pdf-page is taller than a page and is cut at the bottom`.
 - The row's background and border are sliced per sheet like a [wrapper's](#wrapper-backgrounds-and-borders), and `break-inside: avoid`, `break-before`, `break-after` work on it as on a column `pdf-view`.
 - With `wrap-reverse`, the lines go on the sheets top to bottom as drawn, so the first children end up last.
 - `align-content` is not worked out again per sheet: lines keep the places Yoga gave them in the single layout of the page, apart from the space dropped before a line that moves to a new sheet. It only matters when the row has free space on the cross axis, such as a fixed `height` taller than its lines.
@@ -46,7 +46,7 @@ A row with `flex-wrap: wrap` or `wrap-reverse` breaks between its lines and neve
 
 ### Keep units small
 
-A row `pdf-view` that does not wrap or a `pdf-view` with a `transform` or an `overflow` other than `visible` is never split, with everything inside it, text included. A table row is split only when it is taller than a page. Avoid putting long lists in a row `pdf-view`; give it `flex-wrap: wrap` and it breaks between its lines.
+A `pdf-view` with a `transform` or an `overflow` other than `visible` is never split, with everything inside it, text included. A table row or a row `pdf-view` that does not wrap is split only when it is taller than a page; one that fits moves to the next sheet whole. A row `pdf-view` with `flex-wrap: wrap` breaks between its lines.
 
 ## Text across pages
 
@@ -62,7 +62,7 @@ A `pdf-text` that is a unit by the rules above, as a child of the page or of a c
 - A text longer than a page continues over as many pages as it needs. The first `orphans` and last `widows` lines always stay together, and a page in the middle keeps at least as many lines as the larger of the two. Each page takes as many lines as fit while the rest can still be laid out that way, so with lines of very different heights, such as a very large `pdf-span`, a page can end early or the text can start on the next page.
 - When no layout keeps those limits, because a few lines are taller than most of a page, lines are placed one by one between the first and last groups, and a page in the middle can have fewer lines.
 - Its top padding and border stay with its first lines, the bottom ones with its last lines. A background or border is sliced like a [wrapper's](#wrapper-backgrounds-and-borders).
-- A `pdf-text` inside a row `pdf-view` is part of that unit and does not break. Inside a table row, it breaks only when the row is taller than a page, as described below.
+- A `pdf-text` inside a row `pdf-view` or a table row is part of that unit. It breaks only when the row is taller than a page, as described below.
 
 ### Rows taller than a page
 
@@ -79,13 +79,53 @@ A table row that fits on an empty page (below its repeated header, if the table 
 
 `break-inside: avoid` on the row keeps it one unit, clipped as below. So does a fixed `height` or `max-height`, a `transform` or an `overflow` other than `visible` on the row. Header rows never split.
 
+### Row views taller than a page
+
+A `pdf-view` or block `pdf-link` with `flex-direction: row` that is taller than an empty sheet splits the same way as a table row, with its children as the cells. This is how a two-column layout with a long main column runs over several pages:
+
+```html
+<pdf-view style="flex-direction: row; column-gap: 24">
+  <pdf-view style="flex: 1">
+    @for (paragraph of article(); track $index) {
+      <pdf-text style="margin-bottom: 8">{{ paragraph }}</pdf-text>
+    }
+  </pdf-view>
+  <pdf-view style="width: 150; background-color: #f2f2f2; padding: 8">
+    <pdf-text>{{ sidebar() }}</pdf-text>
+  </pdf-view>
+</pdf-view>
+```
+
+- A row view that fits on an empty sheet moves whole, as before. Only a taller one splits, so documents that already fit keep their pages.
+- It starts on the current sheet when at least one line of each non-empty child fits there, and otherwise on the next sheet.
+- Each child breaks on its own: a `pdf-text` between its lines, a column `pdf-view` between its children (and inside them, the same way). `orphans` and `widows` don't apply. Content that can't break, such as an image, a nested row `pdf-view` or a box with a fixed height, moves whole to the next piece, or is clipped when it is taller than a page.
+- Every piece is as tall as its tallest child piece on that sheet.
+- The row's background and border are sliced per piece, with no border drawn at a cut. A child the row stretched to its full height (the default `align-items: stretch`) fills every piece too, so a sidebar's background runs down each sheet. A child that is shorter, such as with `align-items: flex-start`, is drawn only as far as its content goes.
+- On the first sheet each child keeps its place in the row, its margins included. On the next sheets, each child's content carries on from the top of the piece.
+- An absolute element of the row is drawn on the sheet where its top lands.
+- `min-presence-ahead` and `break-after: avoid` treat a split row view as they treat a split table row: neither moves it, since it is taller than a page. A `min-presence-ahead` on a child counts for the whole row when the row fits a page.
+
+`break-inside: avoid`, a fixed `height` or `max-height`, a `transform` or an `overflow` other than `visible` on the row view keep it one unit, clipped with the warning below. There is no separate switch: `break-inside: avoid` keeps a view whole, and `break-inside: auto` (the default) lets it split.
+
+### Which views split
+
+| View | Fits on an empty sheet | Taller than an empty sheet |
+| --- | --- | --- |
+| column `pdf-view` | breaks between its children | breaks between its children |
+| column `pdf-view` with `break-inside: avoid` | moves whole | breaks between its children |
+| row `pdf-view` | moves whole | splits, each child on its own |
+| row `pdf-view` with `break-inside: avoid`, a fixed `height` or a `max-height` | moves whole | one unit, clipped |
+| row `pdf-view` with `flex-wrap: wrap` | breaks between its lines | breaks between its lines; a line taller than a sheet splits like a row view |
+| `pdf-view` with a `transform` or an `overflow` other than `visible` | moves whole | one unit, clipped |
+| column `pdf-view` with `flex-wrap` whose children went into more than one column | moves whole | one unit, clipped |
+
 ### Units taller than a page
 
 A unit taller than the content area goes on a sheet of its own and is clipped at the bottom of the content area. In development mode ngpdf logs a warning such as:
 
 `ngpdf: pdf-view is taller than a page and is cut at the bottom`
 
-Text lines that would cross the cut are not drawn, and images, backgrounds and side borders are cut at it. A `pdf-text` that can break between lines, and a table row whose cells can, continue on the next page instead. Only a group of lines that is itself taller than the content area, such as one line in a very large `pdf-span`, is still clipped.
+Text lines that would cross the cut are not drawn, and images, backgrounds and side borders are cut at it. A `pdf-text` that can break between lines, and a table row or row `pdf-view` whose content can, continue on the next page instead. Only a group of lines that is itself taller than the content area, such as one line in a very large `pdf-span`, is still clipped.
 
 ## Wrapper backgrounds and borders
 
