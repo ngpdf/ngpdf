@@ -274,7 +274,7 @@ describe('compileSvg', () => {
       expect(() => compile(`<svg><defs>${path}</defs>${uses(9)}</svg>`)).not.toThrow();
       const started = performance.now();
       expect(() => compile(`<svg><defs>${path}</defs>${uses(10)}</svg>`)).toThrow(
-        `ngpdf: pdf-svg draws more than ${String(MAX_SVG_SEGMENTS)} path segments, gradient stops and dashes`,
+        `ngpdf: pdf-svg drawing is over its budget of ${String(MAX_SVG_SEGMENTS)} path segments, gradient stops, dashes and attributes`,
       );
       expect(performance.now() - started).toBeLessThan(2000);
     });
@@ -469,7 +469,7 @@ describe('compileSvg', () => {
     it('counts dash lengths and only the stops of painted gradients toward the budget', () => {
       const dashes = `<g stroke="red" stroke-dasharray="${'1 '.repeat(100_000)}">${'<line x2="1"/>'.repeat(10)}</g>`;
       expect(() => compile(`<svg>${dashes}</svg>`)).toThrow(
-        'path segments, gradient stops and dashes',
+        'path segments, gradient stops, dashes and attributes',
       );
       // A gradient that paints one color builds no stops and spends nothing.
       const flat = `<linearGradient id="g" x2="0">${'<stop stop-color="red"/>'.repeat(20_000)}</linearGradient>`;
@@ -481,6 +481,27 @@ describe('compileSvg', () => {
       expect(performance.now() - started).toBeLessThan(2000);
     });
 
+    it('counts the attributes of every element visited, use copies included', () => {
+      const line = `<line id="l" stroke-dasharray="${'1 '.repeat(100_000)}" x2="1"/>`;
+      const started = performance.now();
+      expect(() =>
+        compile(`<svg><defs>${line}</defs>${'<use href="#l"/>'.repeat(40_000)}</svg>`),
+      ).toThrow('path segments, gradient stops, dashes and attributes');
+      expect(performance.now() - started).toBeLessThan(2000);
+    });
+
+    it('reads the stops of a gradient that many gradients point at once', () => {
+      const base = `<linearGradient id="base">${'<stop stop-color="red"/>'.repeat(20_000)}</linearGradient>`;
+      const links = Array.from(
+        { length: 10_000 },
+        (_, i) =>
+          `<linearGradient id="g${String(i)}" href="#base" x2="0"/><rect width="1" height="1" fill="url(#g${String(i)})"/>`,
+      ).join('');
+      const started = performance.now();
+      expect(shapes(compile(`<svg>${base}${links}</svg>`))).toHaveLength(10_000);
+      expect(performance.now() - started).toBeLessThan(3000);
+    });
+
     it('counts the stops of each painted gradient toward the segment budget', () => {
       const markup = (rects: number): string =>
         `<svg><linearGradient id="g">${'<stop stop-color="red"/>'.repeat(20_000)}</linearGradient>${'<rect width="1" height="1" fill="url(#g)"/>'.repeat(rects)}</svg>`;
@@ -488,7 +509,7 @@ describe('compileSvg', () => {
       expect(shapes(compile(markup(49)))).toHaveLength(49);
       const started = performance.now();
       expect(() => compile(markup(20_000))).toThrow(
-        `ngpdf: pdf-svg draws more than ${String(MAX_SVG_SEGMENTS)} path segments, gradient stops and dashes`,
+        `ngpdf: pdf-svg drawing is over its budget of ${String(MAX_SVG_SEGMENTS)} path segments, gradient stops, dashes and attributes`,
       );
       expect(performance.now() - started).toBeLessThan(2000);
     });

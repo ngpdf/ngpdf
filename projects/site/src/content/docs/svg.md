@@ -84,7 +84,7 @@ An SVG often comes from users or another server, so the parser bounds its work a
   - elements: 50,000;
   - nesting: 64 levels;
   - `use`: 16 levels deep, and at most 50,000 elements drawn in all. A `use` that points at itself or an ancestor stops at the depth limit, and billion-laughs style references stop at the element limit before anything is drawn.
-  - what is drawn: 1,000,000 path segments, gradient stops and dash lengths in all, counting each copy a `use` draws, each shape a gradient paints and each dashed stroke.
+  - what is drawn: a budget of 1,000,000 path segments, gradient stops, dash lengths and attribute bytes (an eighth of each), counting each copy a `use` draws, each shape a gradient paints and each dashed stroke. A file drawn once never gets near it.
 - A URL is never read past 1 MB, whatever `maxImageBytes` allows, and a larger `Blob` is refused before it is read.
 
 ## Errors
@@ -98,4 +98,4 @@ An SVG often comes from users or another server, so the parser bounds its work a
 | `ngpdf: pdf-svg nesting deeper than 64` | Elements nested too deep. |
 | `ngpdf: pdf-svg use nested deeper than 16` | A chain of `use` elements is too deep, or one points at itself. |
 | `ngpdf: pdf-svg use expands to more than 50000 elements` | `use` elements draw too many elements in all. |
-| `ngpdf: pdf-svg draws more than 1000000 path segments, gradient stops and dashes` | The drawing is too large once `use` copies and gradients are counted. |
+| `ngpdf: pdf-svg drawing is over its budget of 1000000 path segments, gradient stops, dashes and attributes` | The drawing is too large once `use` copies, gradients and dashes are counted. |

@@ -24,8 +24,8 @@ export interface ResolvedGradient {
   readonly element: XmlElement;
   /** An attribute of the gradient, or of the first gradient its `href` chain has it on. */
   readonly attribute: (name: string) => string | undefined;
-  /** Offsets clamped and in order; each color's alpha has the stop's opacity in it. */
-  readonly stops: readonly { readonly offset: number; readonly color: Color }[];
+  /** Offsets clamped and in order. */
+  readonly stops: readonly GradientColorStop[];
   readonly transform: Matrix;
 }
 
@@ -95,6 +95,35 @@ function padStops(stops: GradientStop[]): GradientStop[] {
 // Stops and their colors take no percentages, so any viewport resolves them.
 const NO_VIEWPORT: Viewport = { width: 0, height: 0 };
 
+export interface GradientColorStop {
+  readonly offset: number;
+  /** Its alpha has the stop's opacity in it. */
+  readonly color: Color;
+}
+
+/** The stops of `owner`, offsets clamped to [0, 1] and never going back. */
+function stopsOf(
+  owner: XmlElement,
+  color: Color,
+  warn: (message: string) => void,
+): GradientColorStop[] {
+  const base = initialStyle(color);
+  let previous = 0;
+  const stops: GradientColorStop[] = [];
+  for (const stop of owner.children) {
+    if (stop.name !== 'stop') continue;
+    const style = computeStyle(stop, base, NO_VIEWPORT, warn);
+    const offset = Math.min(
+      1,
+      Math.max(previous, coordinate(stop.attributes.get('offset'), 0, true, 1)),
+    );
+    previous = offset;
+    const stopColor = style.stopColor === 'current' ? style.color : style.stopColor;
+    stops.push({ offset, color: { ...stopColor, a: stopColor.a * style.stopOpacity } });
+  }
+  return stops;
+}
+
 /**
  * Resolves `gradient` once: its `href` chain (at most 16 gradients), its stops and its
  * `gradientTransform`. Stop offsets are clamped to [0, 1] and never go back; `currentColor` in a
@@ -105,6 +134,8 @@ export function resolveGradient(
   ids: ReadonlyMap<string, XmlElement>,
   color: Color,
   warn: (message: string) => void,
+  /** Stops by the gradient that holds them, shared by every gradient that points at it. */
+  stopsCache: Map<XmlElement, readonly GradientColorStop[]> = new Map(),
 ): ResolvedGradient {
   const chain = chainOf(gradient, ids, warn);
   const attribute = (name: string): string | undefined => {
@@ -119,19 +150,11 @@ export function resolveGradient(
     warn(`ngpdf: pdf-svg does not support spreadMethod="${show(spread)}"; drawn as pad`);
   }
   const owner = chain.find((element) => element.children.some((child) => child.name === 'stop'));
-  const base = initialStyle(color);
-  let previous = 0;
-  const stops: { offset: number; color: Color }[] = [];
-  for (const stop of owner?.children ?? []) {
-    if (stop.name !== 'stop') continue;
-    const style = computeStyle(stop, base, NO_VIEWPORT, warn);
-    const offset = Math.min(
-      1,
-      Math.max(previous, coordinate(stop.attributes.get('offset'), 0, true, 1)),
-    );
-    previous = offset;
-    const stopColor = style.stopColor === 'current' ? style.color : style.stopColor;
-    stops.push({ offset, color: { ...stopColor, a: stopColor.a * style.stopOpacity } });
+  let stops: readonly GradientColorStop[] = [];
+  if (owner) {
+    const cached = stopsCache.get(owner);
+    stops = cached ?? stopsOf(owner, color, warn);
+    if (!cached) stopsCache.set(owner, stops);
   }
   const transformText = attribute('gradientTransform');
   let transform = transformText === undefined ? IDENTITY : parseTransform(transformText);

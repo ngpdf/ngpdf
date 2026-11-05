@@ -2,7 +2,13 @@ import { toHex, type Color } from '../color';
 import { show } from '../limits';
 import type { Corners } from '../style';
 import type { DrawOp, GradientFill, Matrix, PathSegment } from '../writer';
-import { gradientPaint, hrefOf, resolveGradient, type ResolvedGradient } from './gradient';
+import {
+  gradientPaint,
+  hrefOf,
+  resolveGradient,
+  type GradientColorStop,
+  type ResolvedGradient,
+} from './gradient';
 import {
   computeStyle,
   initialStyle,
@@ -27,9 +33,10 @@ import { MAX_SVG_ELEMENTS, type XmlElement } from './xml';
 export const MAX_USE_DEPTH = 16;
 
 /**
- * The most path segments, gradient stops and dash lengths one SVG may draw. A 1 MB path has about
- * 250,000; `use`, and shapes sharing a gradient or a dash pattern, repeat them, and this bounds
- * what the copies cost.
+ * The most work one SVG may cost to draw: path segments, gradient stops, dash lengths and an eighth
+ * of the attribute text, for every element visited. A 1 MB path has about 250,000 segments; `use`,
+ * and shapes sharing a gradient or a dash pattern, repeat them, and this bounds what the copies
+ * cost.
  */
 export const MAX_SVG_SEGMENTS = 1_000_000;
 
@@ -196,11 +203,12 @@ export function compileSvg(
     segmentCount += count;
     if (segmentCount > MAX_SVG_SEGMENTS) {
       throw new Error(
-        `ngpdf: pdf-svg draws more than ${String(MAX_SVG_SEGMENTS)} path segments, gradient stops and dashes`,
+        `ngpdf: pdf-svg drawing is over its budget of ${String(MAX_SVG_SEGMENTS)} path segments, gradient stops, dashes and attributes`,
       );
     }
   };
   const gradients = new Map<XmlElement, ResolvedGradient>();
+  const gradientStops = new Map<XmlElement, readonly GradientColorStop[]>();
   // A shape drawn again through `use` is parsed once per viewport size.
   const outlines = new Map<
     XmlElement,
@@ -232,7 +240,7 @@ export function compileSvg(
         }
         let resolved = gradients.get(target);
         if (!resolved) {
-          resolved = resolveGradient(target, ids, color, warn);
+          resolved = resolveGradient(target, ids, color, warn, gradientStops);
           gradients.set(target, resolved);
         }
         const result = gradientPaint(resolved, bounds(), viewport, opacity);
@@ -312,6 +320,13 @@ export function compileSvg(
         `ngpdf: pdf-svg use expands to more than ${String(MAX_SVG_ELEMENTS)} elements`,
       );
     }
+    // Its attributes are parsed again on every visit, a `use` copy included, so each visit pays
+    // for their length. Path data and points are parsed once (see `outlines`).
+    let attributeLength = 0;
+    for (const [name, value] of element.attributes) {
+      if (name !== 'd' && name !== 'points') attributeLength += value.length;
+    }
+    spend(Math.ceil(attributeLength / 8));
     const style = computeStyle(element, parent, viewport, warn);
     if (!style.display || style.opacity <= 0) return [];
     let matrix: Matrix = IDENTITY;
