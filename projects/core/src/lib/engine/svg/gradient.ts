@@ -155,16 +155,20 @@ export function gradientPaint(
   opacity: number,
 ): GradientPaint {
   const { attribute, transform } = resolved;
-  const stops: GradientStop[] = resolved.stops.map((stop) => ({
-    offset: stop.offset,
-    color: toHex(stop.color),
-    opacity: stop.color.a * opacity,
-  }));
+  // Built only for a gradient it returns: the caller counts those stops, and one color costs nothing.
+  const stopsOf = (): GradientStop[] =>
+    padStops(
+      resolved.stops.map((stop) => ({
+        offset: stop.offset,
+        color: toHex(stop.color),
+        opacity: stop.color.a * opacity,
+      })),
+    );
   const last = resolved.stops.at(-1);
   if (!last) return { kind: 'none' };
   const only: Color = { ...last.color, a: last.color.a * opacity };
   const solid = (): GradientPaint => ({ kind: 'solid', color: only });
-  if (stops.length === 1) return solid();
+  if (resolved.stops.length === 1) return solid();
 
   const boxUnits = attribute('gradientUnits')?.trim() !== 'userSpaceOnUse';
   if (boxUnits && !(bounds.w > 0 && bounds.h > 0)) return { kind: 'none' };
@@ -184,7 +188,7 @@ export function gradientPaint(
     if (x1 === x2 && y1 === y2) return solid();
     return {
       kind: 'gradient',
-      gradient: { kind: 'linear', x1, y1, x2, y2, stops: padStops(stops), matrix },
+      gradient: { kind: 'linear', x1, y1, x2, y2, stops: stopsOf(), matrix },
     };
   }
   const radius = diagonal(viewport);
@@ -206,7 +210,7 @@ export function gradientPaint(
       scaleY: 1,
       ...(fx !== cx && { fx }),
       ...(fy !== cy && { fy }),
-      stops: padStops(stops),
+      stops: stopsOf(),
       matrix,
     },
   };

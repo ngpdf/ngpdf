@@ -136,6 +136,13 @@ describe('computeStyle', () => {
     expect(warn).toHaveBeenCalledTimes(11);
   });
 
+  it('rejects a url() fallback without recursing into a long run of them', () => {
+    const warn = vi.fn();
+    const style = styleOf(`<g fill="${'url(#a) '.repeat(30_000)}"/>`, undefined, warn);
+    expect(style.fill.kind).toBe('color');
+    expect(warn).toHaveBeenCalledOnce();
+  });
+
   it('ignores a url() with no closing parenthesis', () => {
     const warn = vi.fn();
     expect(styleOf('<g style="fill: url(#a"/>', undefined, warn).fill.kind).toBe('color');

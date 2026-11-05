@@ -148,8 +148,10 @@ function parsePaint(text: string, warn: (message: string) => void): Paint | null
   const rest = trimmed.slice(close + 1).trim();
   let fallback: Paint | null = null;
   if (rest !== '') {
+    // A fallback is never a url(), so one is not parsed: a long run of them would recurse.
+    if (rest.toLowerCase().startsWith('url(')) return null;
     fallback = parsePaint(rest, warn);
-    if (fallback === null || fallback.kind === 'url') return null;
+    if (fallback === null) return null;
   }
   if (!reference.startsWith('#')) {
     warn(`ngpdf: pdf-svg skipped the external reference "${show(reference)}"`);

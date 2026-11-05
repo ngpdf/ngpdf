@@ -27,8 +27,9 @@ import { MAX_SVG_ELEMENTS, type XmlElement } from './xml';
 export const MAX_USE_DEPTH = 16;
 
 /**
- * The most path segments and gradient stops one SVG may draw. A 1 MB path has about 250,000;
- * `use` and shapes sharing a gradient repeat them, and this bounds what the copies cost.
+ * The most path segments, gradient stops and dash lengths one SVG may draw. A 1 MB path has about
+ * 250,000; `use`, and shapes sharing a gradient or a dash pattern, repeat them, and this bounds
+ * what the copies cost.
  */
 export const MAX_SVG_SEGMENTS = 1_000_000;
 
@@ -195,7 +196,7 @@ export function compileSvg(
     segmentCount += count;
     if (segmentCount > MAX_SVG_SEGMENTS) {
       throw new Error(
-        `ngpdf: pdf-svg draws more than ${String(MAX_SVG_SEGMENTS)} path segments and gradient stops`,
+        `ngpdf: pdf-svg draws more than ${String(MAX_SVG_SEGMENTS)} path segments, gradient stops and dashes`,
       );
     }
   };
@@ -266,6 +267,8 @@ export function compileSvg(
         ? paintOf(style.stroke, style.strokeOpacity, style, bounds, viewport)
         : null;
     if (!fill && !stroke) return [];
+    // The writer writes the dash pattern again for each stroked shape.
+    if (stroke && style.dashArray) spend(style.dashArray.length);
     return [
       {
         op: 'shape',
