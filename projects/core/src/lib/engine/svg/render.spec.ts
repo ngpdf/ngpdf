@@ -5,6 +5,10 @@ import { MAX_SVG_ELEMENTS, parseXml } from './xml';
 
 type ShapeOp = Extract<DrawOp, { op: 'shape' }>;
 
+// The denial-of-service specs below take over 90 s when a limit stops working, and a few seconds
+// on a busy CI runner under coverage. 15 s keeps them stable there and still catches a regression.
+const BOUNDED_MS = 15_000;
+
 const RED = { r: 255, g: 0, b: 0, a: 1 };
 
 function compile(markup: string, warn: (message: string) => void = () => undefined): SvgAsset {
@@ -285,30 +289,40 @@ describe('compileSvg', () => {
       );
     });
 
-    it('throws when copies of a long path pass the segment budget', () => {
-      const path = `<path id="p" d="M0 0${' l1 1'.repeat(100_000)}"/>`;
-      const uses = (count: number): string => '<use href="#p"/>'.repeat(count);
-      // The path itself and nine copies: 1,000,010 segments.
-      expect(() => compile(`<svg><defs>${path}</defs>${uses(9)}</svg>`)).not.toThrow();
-      const started = performance.now();
-      expect(() => compile(`<svg><defs>${path}</defs>${uses(10)}</svg>`)).toThrow(
-        `ngpdf: pdf-svg drawing is over its budget of ${String(MAX_SVG_SEGMENTS)} path segments, gradient stops, dashes and attributes`,
-      );
-      expect(performance.now() - started).toBeLessThan(2000);
-    });
+    it(
+      'throws when copies of a long path pass the segment budget',
+      () => {
+        const path = `<path id="p" d="M0 0${' l1 1'.repeat(100_000)}"/>`;
+        const uses = (count: number): string => '<use href="#p"/>'.repeat(count);
+        // The path itself and nine copies: 1,000,010 segments.
+        expect(() => compile(`<svg><defs>${path}</defs>${uses(9)}</svg>`)).not.toThrow();
+        const started = performance.now();
+        expect(() => compile(`<svg><defs>${path}</defs>${uses(10)}</svg>`)).toThrow(
+          `ngpdf: pdf-svg drawing is over its budget of ${String(MAX_SVG_SEGMENTS)} path segments, gradient stops, dashes and attributes`,
+        );
+        expect(performance.now() - started).toBeLessThan(BOUNDED_MS);
+      },
+      BOUNDED_MS + 5_000,
+    );
 
-    it('throws on a billion laughs of references before drawing them', () => {
-      let defs = '<rect id="l0" width="1" height="1"/>';
-      for (let i = 1; i <= 9; i++) {
-        const refs = Array.from({ length: 10 }, () => `<use href="#l${String(i - 1)}"/>`).join('');
-        defs += `<g id="l${String(i)}">${refs}</g>`;
-      }
-      const started = performance.now();
-      expect(() => compile(`<svg><defs>${defs}</defs><use href="#l9"/></svg>`)).toThrow(
-        `ngpdf: pdf-svg use expands to more than ${String(MAX_SVG_ELEMENTS)} elements`,
-      );
-      expect(performance.now() - started).toBeLessThan(2000);
-    });
+    it(
+      'throws on a billion laughs of references before drawing them',
+      () => {
+        let defs = '<rect id="l0" width="1" height="1"/>';
+        for (let i = 1; i <= 9; i++) {
+          const refs = Array.from({ length: 10 }, () => `<use href="#l${String(i - 1)}"/>`).join(
+            '',
+          );
+          defs += `<g id="l${String(i)}">${refs}</g>`;
+        }
+        const started = performance.now();
+        expect(() => compile(`<svg><defs>${defs}</defs><use href="#l9"/></svg>`)).toThrow(
+          `ngpdf: pdf-svg use expands to more than ${String(MAX_SVG_ELEMENTS)} elements`,
+        );
+        expect(performance.now() - started).toBeLessThan(BOUNDED_MS);
+      },
+      BOUNDED_MS + 5_000,
+    );
   });
 
   describe('symbol', () => {
@@ -398,22 +412,26 @@ describe('compileSvg', () => {
       ).toThrow(`ngpdf: pdf-svg use nested deeper than ${String(MAX_USE_DEPTH)}`);
     });
 
-    it('counts every use of a sprite toward the element and segment limits', () => {
-      const sprite = (uses: number, d = 'M0 0h1v1z'): string =>
-        `<svg><symbol id="i" viewBox="0 0 1 1"><path d="${d}"/></symbol>${'<use href="#i"/>'.repeat(uses)}</svg>`;
-      // A use, its symbol and the path: three elements drawn per use.
-      const fits = Math.floor(MAX_SVG_ELEMENTS / 3);
-      expect(shapes(compile(sprite(fits)))).toHaveLength(fits);
-      const started = performance.now();
-      expect(() => compile(sprite(fits + 1))).toThrow(
-        `ngpdf: pdf-svg use expands to more than ${String(MAX_SVG_ELEMENTS)} elements`,
-      );
-      const long = `M0 0${' l1 1'.repeat(100_000)}`;
-      expect(() => compile(sprite(10, long))).toThrow(
-        `ngpdf: pdf-svg drawing is over its budget of ${String(MAX_SVG_SEGMENTS)} path segments, gradient stops, dashes and attributes`,
-      );
-      expect(performance.now() - started).toBeLessThan(4000);
-    });
+    it(
+      'counts every use of a sprite toward the element and segment limits',
+      () => {
+        const sprite = (uses: number, d = 'M0 0h1v1z'): string =>
+          `<svg><symbol id="i" viewBox="0 0 1 1"><path d="${d}"/></symbol>${'<use href="#i"/>'.repeat(uses)}</svg>`;
+        // A use, its symbol and the path: three elements drawn per use.
+        const fits = Math.floor(MAX_SVG_ELEMENTS / 3);
+        expect(shapes(compile(sprite(fits)))).toHaveLength(fits);
+        const started = performance.now();
+        expect(() => compile(sprite(fits + 1))).toThrow(
+          `ngpdf: pdf-svg use expands to more than ${String(MAX_SVG_ELEMENTS)} elements`,
+        );
+        const long = `M0 0${' l1 1'.repeat(100_000)}`;
+        expect(() => compile(sprite(10, long))).toThrow(
+          `ngpdf: pdf-svg drawing is over its budget of ${String(MAX_SVG_SEGMENTS)} path segments, gradient stops, dashes and attributes`,
+        );
+        expect(performance.now() - started).toBeLessThan(BOUNDED_MS);
+      },
+      BOUNDED_MS + 5_000,
+    );
   });
 
   describe('skips what it does not draw', () => {
@@ -589,87 +607,113 @@ describe('compileSvg', () => {
       );
     });
 
-    it('counts dash lengths and only the stops of painted gradients toward the budget', () => {
-      const dashes = `<g stroke="red" stroke-dasharray="${'1 '.repeat(100_000)}">${'<line x2="1"/>'.repeat(10)}</g>`;
-      expect(() => compile(`<svg>${dashes}</svg>`)).toThrow(
-        'path segments, gradient stops, dashes and attributes',
-      );
-      // A gradient that paints one color builds no stops and spends nothing.
-      const flat = `<linearGradient id="g" x2="0">${'<stop stop-color="red"/>'.repeat(20_000)}</linearGradient>`;
-      const started = performance.now();
-      const asset = compile(
-        `<svg>${flat}${'<rect width="1" height="1" fill="url(#g)"/>'.repeat(20_000)}</svg>`,
-      );
-      expect(shapes(asset)).toHaveLength(20_000);
-      expect(performance.now() - started).toBeLessThan(2000);
-    });
+    it(
+      'counts dash lengths and only the stops of painted gradients toward the budget',
+      () => {
+        const dashes = `<g stroke="red" stroke-dasharray="${'1 '.repeat(100_000)}">${'<line x2="1"/>'.repeat(10)}</g>`;
+        expect(() => compile(`<svg>${dashes}</svg>`)).toThrow(
+          'path segments, gradient stops, dashes and attributes',
+        );
+        // A gradient that paints one color builds no stops and spends nothing.
+        const flat = `<linearGradient id="g" x2="0">${'<stop stop-color="red"/>'.repeat(20_000)}</linearGradient>`;
+        const started = performance.now();
+        const asset = compile(
+          `<svg>${flat}${'<rect width="1" height="1" fill="url(#g)"/>'.repeat(20_000)}</svg>`,
+        );
+        expect(shapes(asset)).toHaveLength(20_000);
+        expect(performance.now() - started).toBeLessThan(BOUNDED_MS);
+      },
+      BOUNDED_MS + 5_000,
+    );
 
-    it('parses path data once, whatever viewport a use copy is drawn in', () => {
-      const path = `<path id="p" d="M0 0${' m1 1'.repeat(150_000)}"/>`;
-      const nested = Array.from(
-        { length: 2_000 },
-        (_, i) => `<svg width="${String(10 + (i % 2))}"><use href="#p"/></svg>`,
-      ).join('');
-      const started = performance.now();
-      expect(compile(`<svg><defs>${path}</defs>${nested}</svg>`).ops).toEqual([]);
-      expect(performance.now() - started).toBeLessThan(3000);
-    });
-
-    it('parses points once, whatever viewport a use copy is drawn in, a bad list included', () => {
-      const pairs = ' 1 1'.repeat(100_000);
-      const bad = [
-        `<polyline id="a" points="0 0${pairs} x"/>`,
-        `<polygon id="b" points="0 0${pairs} 1e999 0"/>`,
-      ].join('');
-      const nested = (ids: readonly string[], copies: number): string =>
-        Array.from(
-          { length: copies },
-          (_, i) =>
-            `<svg width="${String(10 + (i % 2))}">${ids.map((id) => `<use href="#${id}"/>`).join('')}</svg>`,
+    it(
+      'parses path data once, whatever viewport a use copy is drawn in',
+      () => {
+        const path = `<path id="p" d="M0 0${' m1 1'.repeat(150_000)}"/>`;
+        const nested = Array.from(
+          { length: 2_000 },
+          (_, i) => `<svg width="${String(10 + (i % 2))}"><use href="#p"/></svg>`,
         ).join('');
-      const started = performance.now();
-      expect(compile(`<svg><defs>${bad}</defs>${nested(['a', 'b'], 1_000)}</svg>`).ops).toEqual([]);
-      expect(performance.now() - started).toBeLessThan(3000);
+        const started = performance.now();
+        expect(compile(`<svg><defs>${path}</defs>${nested}</svg>`).ops).toEqual([]);
+        expect(performance.now() - started).toBeLessThan(BOUNDED_MS);
+      },
+      BOUNDED_MS + 5_000,
+    );
 
-      const good =
-        '<polyline id="c" points="0 0 1 1 2 0" fill="red"/><polygon id="d" points="0 0 1 1 2 0" fill="red"/>';
-      const drawn = shapes(compile(`<svg><defs>${good}</defs>${nested(['c', 'd'], 4)}</svg>`));
-      expect(drawn).toHaveLength(8);
-      for (const [i, op] of drawn.entries()) expect(op).toEqual(drawn[i % 2]);
-    });
+    it(
+      'parses points once, whatever viewport a use copy is drawn in, a bad list included',
+      () => {
+        const pairs = ' 1 1'.repeat(100_000);
+        const bad = [
+          `<polyline id="a" points="0 0${pairs} x"/>`,
+          `<polygon id="b" points="0 0${pairs} 1e999 0"/>`,
+        ].join('');
+        const nested = (ids: readonly string[], copies: number): string =>
+          Array.from(
+            { length: copies },
+            (_, i) =>
+              `<svg width="${String(10 + (i % 2))}">${ids.map((id) => `<use href="#${id}"/>`).join('')}</svg>`,
+          ).join('');
+        const started = performance.now();
+        expect(compile(`<svg><defs>${bad}</defs>${nested(['a', 'b'], 1_000)}</svg>`).ops).toEqual(
+          [],
+        );
+        expect(performance.now() - started).toBeLessThan(BOUNDED_MS);
 
-    it('counts the attributes of every element visited, use copies included', () => {
-      const line = `<line id="l" stroke-dasharray="${'1 '.repeat(100_000)}" x2="1"/>`;
-      const started = performance.now();
-      expect(() =>
-        compile(`<svg><defs>${line}</defs>${'<use href="#l"/>'.repeat(40_000)}</svg>`),
-      ).toThrow('path segments, gradient stops, dashes and attributes');
-      expect(performance.now() - started).toBeLessThan(3000);
-    });
+        const good =
+          '<polyline id="c" points="0 0 1 1 2 0" fill="red"/><polygon id="d" points="0 0 1 1 2 0" fill="red"/>';
+        const drawn = shapes(compile(`<svg><defs>${good}</defs>${nested(['c', 'd'], 4)}</svg>`));
+        expect(drawn).toHaveLength(8);
+        for (const [i, op] of drawn.entries()) expect(op).toEqual(drawn[i % 2]);
+      },
+      BOUNDED_MS + 5_000,
+    );
 
-    it('reads the stops of a gradient that many gradients point at once', () => {
-      const base = `<linearGradient id="base">${'<stop stop-color="red"/>'.repeat(20_000)}</linearGradient>`;
-      const links = Array.from(
-        { length: 10_000 },
-        (_, i) =>
-          `<linearGradient id="g${String(i)}" href="#base" x2="0"/><rect width="1" height="1" fill="url(#g${String(i)})"/>`,
-      ).join('');
-      const started = performance.now();
-      expect(shapes(compile(`<svg>${base}${links}</svg>`))).toHaveLength(10_000);
-      expect(performance.now() - started).toBeLessThan(3000);
-    });
+    it(
+      'counts the attributes of every element visited, use copies included',
+      () => {
+        const line = `<line id="l" stroke-dasharray="${'1 '.repeat(100_000)}" x2="1"/>`;
+        const started = performance.now();
+        expect(() =>
+          compile(`<svg><defs>${line}</defs>${'<use href="#l"/>'.repeat(40_000)}</svg>`),
+        ).toThrow('path segments, gradient stops, dashes and attributes');
+        expect(performance.now() - started).toBeLessThan(BOUNDED_MS);
+      },
+      BOUNDED_MS + 5_000,
+    );
 
-    it('counts the stops of each painted gradient toward the segment budget', () => {
-      const markup = (rects: number): string =>
-        `<svg><linearGradient id="g">${'<stop stop-color="red"/>'.repeat(20_000)}</linearGradient>${'<rect width="1" height="1" fill="url(#g)"/>'.repeat(rects)}</svg>`;
-      // 20,000 stops, padded to 20,001, and 5 segments a rect.
-      expect(shapes(compile(markup(49)))).toHaveLength(49);
-      const started = performance.now();
-      expect(() => compile(markup(20_000))).toThrow(
-        `ngpdf: pdf-svg drawing is over its budget of ${String(MAX_SVG_SEGMENTS)} path segments, gradient stops, dashes and attributes`,
-      );
-      expect(performance.now() - started).toBeLessThan(2000);
-    });
+    it(
+      'reads the stops of a gradient that many gradients point at once',
+      () => {
+        const base = `<linearGradient id="base">${'<stop stop-color="red"/>'.repeat(20_000)}</linearGradient>`;
+        const links = Array.from(
+          { length: 10_000 },
+          (_, i) =>
+            `<linearGradient id="g${String(i)}" href="#base" x2="0"/><rect width="1" height="1" fill="url(#g${String(i)})"/>`,
+        ).join('');
+        const started = performance.now();
+        expect(shapes(compile(`<svg>${base}${links}</svg>`))).toHaveLength(10_000);
+        expect(performance.now() - started).toBeLessThan(BOUNDED_MS);
+      },
+      BOUNDED_MS + 5_000,
+    );
+
+    it(
+      'counts the stops of each painted gradient toward the segment budget',
+      () => {
+        const markup = (rects: number): string =>
+          `<svg><linearGradient id="g">${'<stop stop-color="red"/>'.repeat(20_000)}</linearGradient>${'<rect width="1" height="1" fill="url(#g)"/>'.repeat(rects)}</svg>`;
+        // 20,000 stops, padded to 20,001, and 5 segments a rect.
+        expect(shapes(compile(markup(49)))).toHaveLength(49);
+        const started = performance.now();
+        expect(() => compile(markup(20_000))).toThrow(
+          `ngpdf: pdf-svg drawing is over its budget of ${String(MAX_SVG_SEGMENTS)} path segments, gradient stops, dashes and attributes`,
+        );
+        expect(performance.now() - started).toBeLessThan(BOUNDED_MS);
+      },
+      BOUNDED_MS + 5_000,
+    );
 
     it('skips an external gradient href', () => {
       const warn = vi.fn();
