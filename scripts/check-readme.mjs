@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 /** Root README sections copied into the package README, matched by the start of the heading. */
-export const SYNCED_SECTIONS = ['Install', 'Example', 'v0.1 limits'];
+export const SYNCED_SECTIONS = ['Install', 'Example', 'Limits'];
 
 /** `## ` sections as [heading, trimmed body] pairs, in order. */
 function sectionsOf(markdown) {

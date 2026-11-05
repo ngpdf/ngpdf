@@ -1,9 +1,9 @@
-# Roadmap: v0.2
+# Roadmap
 
-What v0.1 leaves for later. Each item was found during the v0.1 build or its reviews and was
-deferred on purpose: v0.1 either documents it as a limit (see "v0.1 limits" in the README) or
-it does not affect a correct document. Items that change behaviour need a design update first
-(`AGENTS.md`, "Out of v0.1").
+What ngpdf leaves for later. Each item was found during a build or a review and was deferred on
+purpose: it is either documented as a limit (see "Limits" in the README) or does not affect a
+correct document. Items that change behaviour need a design update first (`AGENTS.md`, "Out of
+scope").
 
 ## Layout
 
@@ -28,7 +28,6 @@ it does not affect a correct document. Items that change behaviour need a design
 
 ## Tooling
 
-- **The e2e Chrome can leak** when `puppeteer.launch` finishes after the script's timeout.
 - Spec hygiene: some component specs destroy in the test body instead of `finally`/`afterEach`,
   a global `URL` stub and the zone.js import leak into later tests, and a few assertions use loose
   `toMatchObject`.

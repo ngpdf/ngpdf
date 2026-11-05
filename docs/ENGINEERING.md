@@ -74,8 +74,7 @@ These invariants are checked for any input:
   if pdftotext opens it without one.
 - `node scripts/e2e.mjs --update` rewrites the expected files. A PR that changes them shows the
   text diff, and a person checks the PDFs by eye before merging.
-- Image comparison of rendered pages (`pdftoppm` + pixel diff) is planned for v0.2, once custom
-  fonts make rendering font-stable.
+- Image comparison of rendered pages (`pdftoppm` + pixel diff) is not in place yet.
 - Chrome runs on the profile `e2e/out/chrome-profile`. puppeteer starts it in its own process
   group, so a run killed with SIGKILL leaves it running; the next run kills the processes that
   carry that profile's `--user-data-dir` flag and deletes the profile before it starts Chrome.
@@ -257,7 +256,8 @@ package:**
 
 ## Releases
 
-- **Versions:** Semantic Versioning, starting at `0.1.0`. Under `0.x`, a minor bump may break.
+- **Versions:** Semantic Versioning. Since `1.0.0`, breaking changes to the elements, their inputs,
+  the style properties, `PdfRenderer` and the server entry point only come in a new major version.
 - **Changes:** each PR that changes the package adds a changeset (`@changesets/cli`). The release PR
   turns the changesets into `CHANGELOG.md` and the version.
 - **`VERSION`:** the exported `VERSION` is a literal in `projects/core/src/version.ts`.

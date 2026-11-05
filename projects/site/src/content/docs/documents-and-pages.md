@@ -339,4 +339,4 @@ It is a boolean attribute: the bare attribute means `true`. For any other elemen
 
 ## Vertical space on a page
 
-A page is laid out with unbounded height and then cut into sheets. So `justify-content: center` on a page does not center content vertically on the sheet, and an element cannot take "the rest of the page" height. Give such an element a fixed height instead. Filling the remaining height is planned for v0.2.
+A page is laid out with unbounded height and then cut into sheets. So `justify-content: center` on a page does not center content vertically on the sheet, and an element cannot take "the rest of the page" height. Give such an element a fixed height instead. Filling the remaining height is [planned](/docs/limitations-and-roadmap#planned).

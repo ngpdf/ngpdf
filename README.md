@@ -102,15 +102,17 @@ await pdf.download(CommunicatorsList, { inputs: { items }, fileName: 'communicat
 // or: const blob = await pdf.toBlob(CommunicatorsList, { inputs: { items } });
 ```
 
-The header row repeats on every page, rows are never split, and the text stays selectable.
+The header row repeats on every page, a row moves to the next page whole unless it is taller
+than a page, and the text stays selectable.
 
-## v0.1 limits
+## Limits
 
 - In the standard PDF fonts, WinAnsi only: a character outside it is drawn as `?`, with a warning
   in development mode. Register your own fonts with `providePdfFonts` for anything else.
 - Inside a `pdf-table`, horizontal padding, borders and margins on a row are ignored. Put
   horizontal padding on the `pdf-cell`s.
-- A unit taller than a page (a row, or a `pdf-view` in a column) is clipped to its page.
+- A unit taller than a page (a table row or row `pdf-view` that can't split, or a `pdf-view` in a
+  column) is clipped to its page.
 - Children and images of a rounded view are clipped to its corners only with an `overflow` other than `visible`.
 - A bare number is in points, except in `line-height`, where it multiplies the font size as in
   CSS (`line-height: 1.4`). Write `line-height: 14pt` for points.
@@ -122,8 +124,8 @@ The header row repeats on every page, rows are never split, and the text stays s
   for the document component you render: style its `pdf-document` or `pdf-page`, not its host.
 - Colors are hex (3, 4, 6 or 8 digits), `rgb()`/`rgba()`, the CSS named colors and
   `transparent`. Other forms, such as `hsl()`, throw.
-- A table header row is not repeated on a page whose first row fits only without it (with a
-  dev-mode warning).
+- A table header row is not repeated on a page whose first row fits only without it and can't
+  split below it (with a dev-mode warning).
 - Images fetched from a URL have no size limit unless you set `maxImageBytes`.
 
 ## Demo

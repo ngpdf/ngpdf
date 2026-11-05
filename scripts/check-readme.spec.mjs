@@ -12,30 +12,30 @@ describe('checkReadme', () => {
     expect(checkReadme(root, core)).toEqual([]);
   });
 
-  it('syncs Install, the example and the v0.1 limits', () => {
-    expect(SYNCED_SECTIONS).toEqual(['Install', 'Example', 'v0.1 limits']);
+  it('syncs Install, the example and the limits', () => {
+    expect(SYNCED_SECTIONS).toEqual(['Install', 'Example', 'Limits']);
   });
 
   it('reports a missing section and a section whose text differs', () => {
     const root = doc([
       ['Install', 'npm i'],
       ['Example: one', 'code'],
-      ['v0.1 limits', '- a'],
+      ['Limits', '- a'],
     ]);
     const core = doc([
       ['Install', 'npm i'],
-      ['v0.1 limits', '- b'],
+      ['Limits', '- b'],
     ]);
     expect(checkReadme(root, core)).toEqual([
       'projects/core/README.md has no "## Example: one" section',
-      'projects/core/README.md "## v0.1 limits" differs from README.md',
+      'projects/core/README.md "## Limits" differs from README.md',
     ]);
   });
 
   it('reports a synced section missing from the root README', () => {
     expect(checkReadme(doc([['Install', 'x']]), doc([['Install', 'x']]))).toEqual([
       'README.md has no section starting "## Example"',
-      'README.md has no section starting "## v0.1 limits"',
+      'README.md has no section starting "## Limits"',
     ]);
   });
 });

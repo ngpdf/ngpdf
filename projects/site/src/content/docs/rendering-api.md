@@ -194,7 +194,7 @@ A canvas viewer built on pdf.js would work in every browser, but it is a large d
 ```ts
 import { VERSION } from '@ngpdf/core';
 
-console.log(VERSION.full); // for example '0.7.0'
+console.log(VERSION.full); // for example '1.0.0'
 ```
 
 It comes from `@ngpdf/core` only. `@ngpdf/core/viewer` and `@ngpdf/core/server` are part of the same package, so they always have the same version.

@@ -1,13 +1,13 @@
 ---
 title: Limitations and roadmap
-description: What ngpdf v0.1 does not do yet, from fonts and page numbers to tables and images, and what is planned for the v0.2 release of @ngpdf/core.
+description: What ngpdf does not do yet, from fonts and links to tables and images, and what is planned next for @ngpdf/core.
 section: Project
 order: 14
 ---
 
-ngpdf v0.1 covers documents built from text, tables, boxes and images. This page lists what it does not do yet, and what is planned next.
+ngpdf covers documents built from text, tables, boxes, images, shapes and SVG. This page lists what it does not do yet, and what is planned next.
 
-## v0.1 limits
+## Limits
 
 ### Text and fonts
 
@@ -57,7 +57,7 @@ ngpdf v0.1 covers documents built from text, tables, boxes and images. This page
 
 ### SVG
 
-- `pdf-svg` draws a subset of SVG: no `text`, `image`, `symbol`, `clipPath`, `mask`, `filter`, `pattern`, `marker`, `<style>` sheets or animation, and gradients are drawn with `spreadMethod="pad"` only. Each part left out warns in development mode. See [SVG](/docs/svg#what-is-not-drawn).
+- `pdf-svg` draws a subset of SVG: no `text`, `image`, `clipPath`, `mask`, `filter`, `pattern`, `marker`, `<style>` sheets or animation, and gradients are drawn with `spreadMethod="pad"` only. Each part left out warns in development mode. See [SVG](/docs/svg#what-is-not-drawn).
 - No inline SVG elements in a template (`<pdf-svg><pdf-path d="…"/></pdf-svg>`): the drawing comes from `src`.
 
 ### Preview
@@ -69,14 +69,14 @@ ngpdf v0.1 covers documents built from text, tables, boxes and images. This page
 - `renderToBuffer` needs a Node version Angular 22 supports, and nothing in the document may need a DOM. See [Server rendering](/docs/server-rendering#limits).
 - `renderToBuffer` reads image and font URLs only through `fetchImage`. `renderToBlob` and `PdfRenderer.toBlob` still fetch them directly on the server, so use `renderToBuffer` there.
 
-### Not in v0.1
+### Out of scope
 
 - Forms.
 - Capturing the DOM of a page as a PDF.
 
-## Planned for v0.2
+## Planned
 
-These items are in the [v0.2 roadmap](https://github.com/ngpdf/ngpdf/blob/main/docs/roadmap-v0.2.md). Items that change behaviour go through a design update first, so details may change.
+These items are in the [roadmap](https://github.com/ngpdf/ngpdf/blob/main/docs/roadmap.md). Items that change behaviour go through a design update first, so details may change.
 
 ### Layout
 
@@ -84,7 +84,6 @@ These items are in the [v0.2 roadmap](https://github.com/ngpdf/ngpdf/blob/main/d
 
 ### Images
 
-- A size cap on fetched images.
 - Cancelling the other image downloads when one fails.
 
 Ideas and bug reports are welcome on [GitHub issues](https://github.com/ngpdf/ngpdf/issues).
