@@ -3157,6 +3157,14 @@ describe('paginatePage: row views taller than a page', () => {
     expect(warn).not.toHaveBeenCalled();
     expect(pages).toHaveLength(2);
     expect(linesOf(pages[1]!, long)).toEqual(words('a', 76, 100));
+    // The empty bar has nothing to slice, and still runs down both pieces.
+    const bars = pages.map((laid) => boxesOf(laid, bar).map(({ box }) => box));
+    expect(bars.map((list) => list.map((box) => box.h))).toEqual([
+      [expect.closeTo(760, 6)],
+      [expect.closeTo(240, 6)],
+    ]);
+    expect(bars[0]![0]!.cut).toMatchObject({ top: false, bottom: true });
+    expect(bars[1]![0]!.cut).toMatchObject({ top: true, bottom: false });
   });
 
   it('keeps the space above a child that starts lower in the row', () => {

@@ -1331,7 +1331,8 @@ function sliceBox(
 
 /**
  * A row view's child that the row stretched to its bottom fills each piece, as a table cell does:
- * its background and side borders run down the piece, with its bottom border on the last one.
+ * its background and side borders run down the piece, with its bottom border on the last one. A
+ * child with nothing to slice, such as an empty bar, gets a piece of its own on every sheet.
  */
 function stretch(
   content: Box[],
@@ -1339,13 +1340,24 @@ function stretch(
   height: number,
   pieceHeight: number,
   piece: RowPiece,
+  slice: { readonly offset: number; readonly height: number },
 ): void {
-  const part = content[0];
-  if (!part || child.y + child.h < height - EPSILON) return;
+  if (child.y + child.h < height - EPSILON) return;
+  const empty = !child.text && !child.image && child.node.tag !== 'pdf-canvas';
+  const part =
+    content[0] ??
+    (empty && child.children.every(isAbsolute) ? { ...child, y: 0, children: [] } : undefined);
+  if (!part) return;
+  const { anchor, ...rest } = part;
+  const cut = {
+    top: !piece.first,
+    bottom: !piece.last,
+    ...(part.style.backgroundImage !== null && { slice }),
+  };
   content[0] = {
-    ...part,
-    h: Math.max(part.h, pieceHeight - part.y),
-    ...(part.cut && { cut: { ...part.cut, bottom: !piece.last } }),
+    ...(piece.first && anchor !== undefined ? { ...rest, anchor } : rest),
+    h: pieceHeight - part.y,
+    ...((cut.top || cut.bottom) && { cut }),
   };
 }
 
@@ -1378,7 +1390,7 @@ function rowPieceBox(
     const ends = to >= cell.end - EPSILON && (piece.first || from < cell.end - EPSILON);
     const content = sliceChildren(cell.box, 0, pieceTop, from, to, ends);
     if (row.node.tag !== 'pdf-row') {
-      stretch(content, at(cell.box.children, 0), cell.box.h, h, piece);
+      stretch(content, at(cell.box.children, 0), cell.box.h, h, piece, slice);
     }
     return cutPiece({ ...cell.box, y, h, children: content }, !piece.first, !piece.last, slice);
   });
