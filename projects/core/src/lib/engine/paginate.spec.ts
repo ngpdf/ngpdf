@@ -819,15 +819,17 @@ describe('paginatePage: min-presence-ahead', () => {
     ]);
   });
 
-  it('moves a short text, and leaves a split text carried from an earlier sheet', () => {
-    const text = (lines: number, style: Record<string, string> = {}): PdfNode => {
-      const words = Array.from({ length: lines }, (_, i) => `w${String(i)}`).join(' ');
-      const node = el('pdf-text', { width: '25', 'font-size': '10', 'line-height': '1', ...style });
-      const run = createNode('text', '', words);
-      run.parent = node;
-      node.children.push(run);
-      return node;
-    };
+  /** A text of `lines` lines, one word per line, each 10pt high. */
+  const text = (lines: number, style: Record<string, string> = {}): PdfNode => {
+    const words = Array.from({ length: lines }, (_, i) => `w${String(i)}`).join(' ');
+    const node = el('pdf-text', { width: '25', 'font-size': '10', 'line-height': '1', ...style });
+    const run = createNode('text', '', words);
+    run.parent = node;
+    node.children.push(run);
+    return node;
+  };
+
+  it('moves a text that fits whole, and leaves one split across sheets where it ends', () => {
     const first = filler(40);
     const [heading, body] = [text(2, ahead(30)), block(5)];
     expect(nodesOn(paginate(page([first, heading, body])))).toEqual([[first], [heading, body]]);
@@ -837,6 +839,22 @@ describe('paginatePage: min-presence-ahead', () => {
     const after = block(5);
     const pages = paginate(page([tall, long, after]));
     expect(nodesOn(pages)[1]).toEqual([long, long, after]);
+  });
+
+  it('leaves the tail of a carried text where its plan put it, with the unit joined to it', () => {
+    // Groups [w0 w1], [w2] and [w3 w4]: the text breaks after w1, so w2 opens the second sheet.
+    // The block joined to the last group by break-after: avoid asks for more room than is left
+    // below it there; moving the chain would leave that sheet with w2 alone, under `widows`.
+    const first = filler(25);
+    const long = text(5, { 'break-after': 'avoid' });
+    const asking = block(10, ahead(AREA - 30));
+    const after = block(5);
+    const pages = paginate(page([first, long, asking, after]));
+    const lines = (laid: PageLayout) =>
+      laid.placed.flatMap((p) => p.box.text?.lines.map((line) => line.text) ?? []);
+    expect(lines(pages[0]!)).toEqual(['w0', 'w1']);
+    expect(lines(pages[1]!)).toEqual(['w2', 'w3', 'w4']);
+    expect(nodesOn(pages)[1]).toEqual([long, long, asking, after]);
   });
 });
 
