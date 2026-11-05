@@ -492,6 +492,29 @@ describe('compileSvg', () => {
       expect(performance.now() - started).toBeLessThan(3000);
     });
 
+    it('parses points once, whatever viewport a use copy is drawn in, a bad list included', () => {
+      const pairs = ' 1 1'.repeat(100_000);
+      const bad = [
+        `<polyline id="a" points="0 0${pairs} x"/>`,
+        `<polygon id="b" points="0 0${pairs} 1e999 0"/>`,
+      ].join('');
+      const nested = (ids: readonly string[], copies: number): string =>
+        Array.from(
+          { length: copies },
+          (_, i) =>
+            `<svg width="${String(10 + (i % 2))}">${ids.map((id) => `<use href="#${id}"/>`).join('')}</svg>`,
+        ).join('');
+      const started = performance.now();
+      expect(compile(`<svg><defs>${bad}</defs>${nested(['a', 'b'], 1_000)}</svg>`).ops).toEqual([]);
+      expect(performance.now() - started).toBeLessThan(3000);
+
+      const good =
+        '<polyline id="c" points="0 0 1 1 2 0" fill="red"/><polygon id="d" points="0 0 1 1 2 0" fill="red"/>';
+      const drawn = shapes(compile(`<svg><defs>${good}</defs>${nested(['c', 'd'], 4)}</svg>`));
+      expect(drawn).toHaveLength(8);
+      for (const [i, op] of drawn.entries()) expect(op).toEqual(drawn[i % 2]);
+    });
+
     it('counts the attributes of every element visited, use copies included', () => {
       const line = `<line id="l" stroke-dasharray="${'1 '.repeat(100_000)}" x2="1"/>`;
       const started = performance.now();
