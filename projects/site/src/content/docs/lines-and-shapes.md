@@ -123,6 +123,7 @@ These reject the render:
 
 - an element inside the canvas: `ngpdf: pdf-canvas cannot have children (found <pdf-view>)`, naming the first one; text inside it is ignored;
 - a number that is `NaN` or infinite: `ngpdf: pdf-canvas lineTo got a non-finite number`, naming the method;
+- a painted point, line width or dash length past ±1e9 points once the transform is applied, Infinity included: `ngpdf: pdf-canvas fill has the number 1e+22, past ±1e9`, naming `fill`, `stroke` or `fillAndStroke`. The PDF writer cannot write numbers past ±1e21;
 - an unknown option, such as `lineCap('flat')`: `ngpdf: pdf-canvas unknown lineCap "flat"`;
 - a color the `color` style would refuse: `ngpdf: invalid color "…" on pdf-canvas`;
 - a negative line width or radius, a dash length of 0, an opacity outside 0 to 1, or a `restore()` without a `save()`;

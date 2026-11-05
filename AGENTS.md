@@ -90,6 +90,10 @@ NGPDF_APT=poppler-utils ./scripts/dev node scripts/server-check.mjs   # packed d
 - **Bounded work.** Parsers are linear (no super-linear regex). Nesting deeper than 64 elements,
   a text node longer than 1 MB, a pdf-canvas with more than 100,000 calls or a non-finite
   number, and a pdf-svg past its limits (below) throw an `ngpdf:` error.
+- **Writable numbers.** pdfkit throws a bare `unsupported number` past ±1e21. No number in a
+  `DrawOp` goes past ±1e9 (`MAX_DRAW_NUMBER`, `engine/bounds.ts`): pdf-svg and pdf-canvas refuse
+  one with their own `ngpdf: pdf-svg …`/`ngpdf: pdf-canvas …` error, and the pdfkit writer checks
+  every op, page size and gradient matrix again before pdfkit sees it.
 
 ## Product rules
 
@@ -357,8 +361,8 @@ NGPDF_APT=poppler-utils ./scripts/dev node scripts/server-check.mjs   # packed d
   - `paint(ctx, size)` runs once per render, after layout, with the content box size; a canvas in
     a fixed view or a repeated header reuses its shapes on each sheet. Points are from the top
     left of the content box, and the drawing is clipped to it. A canvas is one unit.
-  - A non-finite number, an unknown option or more than 100,000 calls on one canvas throws
-    `ngpdf: pdf-canvas …`; an error thrown by `paint` rejects the render with
+  - A non-finite number, a painted number past ±1e9 after the transform, an unknown option or
+    more than 100,000 calls on one canvas throws `ngpdf: pdf-canvas …`; an error thrown by `paint` rejects the render with
     `ngpdf: pdf-canvas paint failed: <message>`.
 - **SVG:** `<pdf-svg [src]>` draws an SVG as vector shapes where a `pdf-image` can go. `src` is
   markup (a string starting with `<` after spaces), a data URL, an http(s) URL read like an image
@@ -374,7 +378,9 @@ NGPDF_APT=poppler-utils ./scripts/dev node scripts/server-check.mjs   # packed d
     warns once per render, and an invalid value is ignored with a warning.
   - Limits: 1 MB of UTF-8 source (also for fetched URLs and Blobs, before reading), 50,000
     elements, 64 levels of nesting, 16 levels of `use`, 50,000 elements drawn and a budget of
-    1,000,000 path segments, gradient stops, dash lengths and attribute characters / 2 drawn, each throwing `ngpdf: pdf-svg …`. A gradient `href`
+    1,000,000 path segments, gradient stops, dash lengths and attribute characters / 2 drawn, and
+    every number a drawn element writes within ±1e9 in its own space (the viewBox fit too), each
+    throwing `ngpdf: pdf-svg …`. A gradient `href`
     chain stops after 16 gradients with a warning. Malformed markup throws
     `ngpdf: invalid SVG: <reason> at <offset>`, a failed read `ngpdf: could not load SVG …`.
 - **Out of v0.1:**

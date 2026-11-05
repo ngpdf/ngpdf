@@ -4,6 +4,7 @@ import { stubFetch } from '../../testing/stub-fetch';
 import { testFont } from '../../testing/test-fonts';
 import { testPng, testRows } from '../../testing/test-png';
 import type { PdfPerSheetContext } from '../tree/per-sheet';
+import type { PdfCanvasContext } from '../tree/canvas-context';
 import { renderDocument, type FontSource } from './index';
 import { createPdfkitWriter, type DocumentInfo, type PageOps, type PdfWriter } from './writer';
 
@@ -550,6 +551,65 @@ describe('renderDocument', () => {
     await expect(
       renderDocument(host({}, [page]), { writer: recordingWriter(), dev: false }),
     ).rejects.toThrow('ngpdf: pdf-canvas paint failed: no data');
+  });
+
+  describe('numbers past what the PDF writer can write', () => {
+    const svgPage = (markup: string): PdfNode =>
+      host({}, [el('pdf-page', {}, [el('pdf-svg', { width: '40' }, [], { src: markup })])]);
+    const canvasPage = (paint: unknown): PdfNode =>
+      host({}, [el('pdf-page', {}, [el('pdf-canvas', { height: '20' }, [], { paint })])]);
+    const GRADIENT =
+      '<defs><linearGradient id="g" gradientUnits="userSpaceOnUse" x2="1e22"><stop offset="0"/><stop offset="1" stop-color="red"/></linearGradient></defs>';
+
+    it.each([
+      ['a rect width', '<svg width="10" height="10"><rect width="1e22" height="5"/></svg>'],
+      ['a path coordinate', '<svg width="10" height="10"><path d="M0 0 L1e22 0 L0 5Z"/></svg>'],
+      [
+        'a transform',
+        '<svg width="10" height="10"><rect width="5" height="5" transform="scale(1e30)"/></svg>',
+      ],
+      [
+        'a stroke width',
+        '<svg width="10" height="10"><line x2="5" stroke="red" stroke-width="1e22"/></svg>',
+      ],
+      [
+        'a dash',
+        '<svg width="10" height="10"><line x2="5" stroke="red" stroke-dasharray="1e22 1"/></svg>',
+      ],
+      [
+        'a gradient coordinate',
+        `<svg width="10" height="10">${GRADIENT}<rect width="5" height="5" fill="url(#g)"/></svg>`,
+      ],
+      [
+        'a viewBox fitted at a huge scale',
+        '<svg viewBox="0 0 1e-20 1e-20" width="10" height="10"><rect width="1e-20" height="1e-20"/></svg>',
+      ],
+    ])('rejects a pdf-svg with %s past ±1e9 with a pdf-svg error', async (_, markup) => {
+      await expect(renderDocument(svgPage(markup), { writer: real, dev: false })).rejects.toThrow(
+        /^ngpdf: pdf-svg .*past ±1e9/,
+      );
+    });
+
+    it('draws a pdf-svg whose numbers are large but writable', async () => {
+      const markup =
+        '<svg viewBox="0 0 10 10"><rect x="-1e8" y="-1e8" width="2e8" height="2e8" fill="red"/></svg>';
+      await expect(
+        renderDocument(svgPage(markup), { writer: real, dev: false }),
+      ).resolves.toBeInstanceOf(Blob);
+    });
+
+    it.each([
+      ['a coordinate', (ctx: PdfCanvasContext) => ctx.moveTo(0, 0).lineTo(1e22, 0).stroke()],
+      ['a scale', (ctx: PdfCanvasContext) => ctx.scale(1e30).rect(0, 0, 1, 1).fill()],
+      [
+        'a product past a float',
+        (ctx: PdfCanvasContext) => ctx.scale(1e200).rect(0, 0, 1e200, 1).fill(),
+      ],
+    ])('rejects a pdf-canvas with %s past ±1e9 with a pdf-canvas error', async (_, paint) => {
+      await expect(renderDocument(canvasPage(paint), { writer: real, dev: false })).rejects.toThrow(
+        /^ngpdf: pdf-canvas fill|^ngpdf: pdf-canvas stroke/,
+      );
+    });
   });
 
   it('rejects a pdf-image with children before fetching it, naming the element', async () => {

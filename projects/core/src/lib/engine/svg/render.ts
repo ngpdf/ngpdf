@@ -1,4 +1,5 @@
 import { toHex, type Color } from '../color';
+import { DRAW_NUMBER_LIMIT, unwritable } from '../bounds';
 import { show } from '../limits';
 import type { Corners } from '../style';
 import type { DrawOp, GradientFill, Matrix, PathSegment } from '../writer';
@@ -84,6 +85,19 @@ const DEFAULT_WIDTH = 300;
 const DEFAULT_HEIGHT = 150;
 
 const finite = (values: readonly number[]): boolean => values.every(Number.isFinite);
+
+/**
+ * Throws when what `element` writes holds a number past what the writer takes. Each number is
+ * checked in its own space, not on the page: a large drawing scaled down onto a page is fine.
+ */
+export function refuseUnwritable(element: string, value: unknown): void {
+  const number = unwritable(value);
+  if (number !== undefined) {
+    throw new Error(
+      `ngpdf: pdf-svg <${element}> has the number ${String(number)}, past ${DRAW_NUMBER_LIMIT}`,
+    );
+  }
+}
 
 function segmentsFinite(segments: readonly PathSegment[]): boolean {
   return segments.every((segment) => {
@@ -285,23 +299,23 @@ export function compileSvg(
     if (!fill && !stroke) return [];
     // The writer writes the dash pattern again for each stroked shape.
     if (stroke && style.dashArray) spend(style.dashArray.length);
-    return [
-      {
-        op: 'shape',
-        segments,
-        ...(fill && { fill: { ...fill, rule: style.fillRule } }),
-        ...(stroke && {
-          stroke: {
-            ...stroke,
-            width: style.strokeWidth,
-            cap: style.lineCap,
-            join: style.lineJoin,
-            miterLimit: style.miterLimit,
-            ...(style.dashArray && { dash: { pattern: style.dashArray, phase: style.dashOffset } }),
-          },
-        }),
-      },
-    ];
+    const op: DrawOp = {
+      op: 'shape',
+      segments,
+      ...(fill && { fill: { ...fill, rule: style.fillRule } }),
+      ...(stroke && {
+        stroke: {
+          ...stroke,
+          width: style.strokeWidth,
+          cap: style.lineCap,
+          join: style.lineJoin,
+          miterLimit: style.miterLimit,
+          ...(style.dashArray && { dash: { pattern: style.dashArray, phase: style.dashOffset } }),
+        },
+      }),
+    };
+    refuseUnwritable(element.name, op);
+    return [op];
   };
 
   const children = (
@@ -433,6 +447,7 @@ export function compileSvg(
         content = shape(element, style, viewport);
     }
     if (!finite(matrix) || !finite(inner)) return [];
+    if (content.length > 0) refuseUnwritable(name, [matrix, inner, clip]);
     return wrap(content, matrix, style.opacity, clip, inner);
   };
 

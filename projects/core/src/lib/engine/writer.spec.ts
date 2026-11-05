@@ -1145,6 +1145,69 @@ describe('createPdfkitWriter', () => {
       });
     });
 
+    describe('numbers past ±1e9', () => {
+      const LINE = { op: 'line', x1: 0, y1: 0, x2: 10, y2: 0, width: 1, color: '#000000' } as const;
+
+      it('throws an ngpdf error for a number in an op past ±1e9, before pdfkit sees it', async () => {
+        await expect(pdfText([{ ...LINE, x2: 1e22, opacity: 1 }])).rejects.toThrow(
+          'ngpdf: cannot write the number 1e+22 in a line op; drawings stay within ±1e9',
+        );
+        await expect(pdfText([{ ...LINE, opacity: 1, dash: [1e22, 1] }])).rejects.toThrow(
+          'ngpdf: cannot write the number 1e+22 in a line op',
+        );
+        await expect(
+          pdfText([
+            { op: 'transform', matrix: [1, 0, 0, 1, Number.NaN, 0] },
+            { op: 'untransform' },
+          ]),
+        ).rejects.toThrow('ngpdf: cannot write the number NaN in a transform op');
+      });
+
+      it('throws an ngpdf error for a page size past ±1e9', async () => {
+        await expect(writer.write([{ width: 1e22, height: 10, ops: [] }], info)).rejects.toThrow(
+          'ngpdf: cannot write the number 1e+22 in a page size',
+        );
+      });
+
+      it('throws an ngpdf error for a gradient drawn at a scale past ±1e9', async () => {
+        const stops = [
+          { offset: 0, color: '#ff0000', opacity: 1 },
+          { offset: 1, color: '#0000ff', opacity: 1 },
+        ];
+        const scale = { op: 'transform', matrix: [1e8, 0, 0, 1e8, 0, 0] } as const;
+        await expect(
+          pdfText([
+            scale,
+            scale,
+            {
+              op: 'rect',
+              x: 0,
+              y: 0,
+              w: 1e-12,
+              h: 1e-12,
+              radii: SQUARE,
+              opacity: 1,
+              gradient: { kind: 'linear', x1: 0, y1: 0, x2: 1, y2: 0, stops },
+            },
+            { op: 'untransform' },
+            { op: 'untransform' },
+          ]),
+        ).rejects.toThrow('ngpdf: cannot write a gradient drawn at a scale past ±1e9');
+      });
+
+      it('bounds the box of a group drawn at a tiny scale', async () => {
+        const pdf = await pdfText([
+          { op: 'transform', matrix: [1e-20, 0, 0, 1e-20, 0, 0] },
+          { op: 'group', opacity: 0.5 },
+          { op: 'rect', x: 0, y: 0, w: 1, h: 1, radii: SQUARE, fill: '#ff0000', opacity: 1 },
+          { op: 'ungroup' },
+          { op: 'untransform' },
+        ]);
+        // The 200pt page, 2e22 wide at this scale, cut at 1e9.
+        expect(pdf).toContain('/BBox [0 0 1000000000 1000000000]');
+      });
+    });
+
     describe('groups', () => {
       const RED: DrawOp = {
         op: 'rect',

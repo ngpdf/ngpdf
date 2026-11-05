@@ -140,6 +140,20 @@ describe('compileSvg', () => {
     it('leaves out a shape with numbers past what a float holds', () => {
       expect(compile('<svg><rect width="1e308" height="1e308" x="1e308"/></svg>').ops).toEqual([]);
     });
+
+    it('throws on a number past ±1e9, naming the element', () => {
+      expect(() => compile('<svg><rect width="1e22" height="1"/></svg>')).toThrow(
+        'ngpdf: pdf-svg <rect> has the number 1e+22, past ±1e9',
+      );
+      expect(() =>
+        compile('<svg><g transform="translate(0 -2e9)"><rect width="1" height="1"/></g></svg>'),
+      ).toThrow('ngpdf: pdf-svg <g> has the number -2000000000, past ±1e9');
+      expect(() =>
+        compile('<svg><svg width="2e9"><rect width="1" height="1"/></svg></svg>'),
+      ).toThrow('ngpdf: pdf-svg <svg> has the number 2000000000, past ±1e9');
+      // Within it, however large: the transform that brings it onto the page may shrink it.
+      expect(shapes(compile('<svg><rect x="-1e9" width="2e9" height="1"/></svg>'))).toHaveLength(1);
+    });
   });
 
   describe('structure', () => {

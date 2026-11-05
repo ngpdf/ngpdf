@@ -8,7 +8,7 @@ import { fitImage, type ImageAsset } from './images';
 import { pageNumberFormat, type Box } from './layout';
 import type { OpacityGroup, PageLayout, PlacedBox } from './paginate';
 import type { BorderStyle, Corners, Offset, ResolvedStyle, TransformFunction } from './style';
-import type { SvgAsset } from './svg/render';
+import { refuseUnwritable, type SvgAsset } from './svg/render';
 import { viewBoxMatrix } from './svg/viewport';
 import { wordGaps, type TextLine, type TextRun } from './text';
 import {
@@ -524,6 +524,8 @@ function drawSvg(
   const clipHeight = Math.min(top + height, limit) - top;
   if (svg.ops.length === 0 || !(clipHeight > 0 && width > 0 && height > 0)) return;
   const fit = viewBoxMatrix(svg.viewBox, svg.aspect, width, height);
+  // A tiny viewBox in a box of any size scales past what the writer takes.
+  refuseUnwritable('svg', fit);
   out.push(
     { op: 'clip', x: left, y: top, w: width, h: clipHeight, radii: NOT_ROUNDED },
     { op: 'transform', matrix: multiply([1, 0, 0, 1, left, top], fit) },

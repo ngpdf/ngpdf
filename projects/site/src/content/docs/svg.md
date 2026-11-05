@@ -86,6 +86,7 @@ An SVG often comes from users or another server, so the parser bounds its work a
   - nesting: 64 levels;
   - `use`: 16 levels deep, and at most 50,000 elements drawn in all, each `symbol` drawn through a `use` included. A `use` that points at itself or an ancestor, directly or through a `symbol`, stops at the depth limit, and billion-laughs style references stop at the element limit before anything is drawn.
   - what is drawn: a budget of 1,000,000 path segments, gradient stops, dash lengths and attribute characters, counting each copy a `use` draws, each shape a gradient paints and each dashed stroke. Each element visited pays half the length of its attribute values, rounded up; `d` and `points` are paid for by their path segments instead.
+  - numbers: every number a drawn element writes stays within ±1e9 (a billion points, about 350 km). That covers path coordinates, shape sizes, `stroke-width`, dashes, `stroke-miterlimit`, gradient coordinates, each `transform`, a nested `svg`'s size, and the scale that fits the root's `viewBox` into the box. Each is checked in its own coordinates, not on the page, so a large drawing scaled down onto a page, or a huge background rectangle, still renders. The PDF writer cannot write numbers past ±1e21, and the bound leaves room for the products it computes for gradients. A number that is not finite once read, such as `1e308in` in points, still leaves its element out as before.
 - A URL is never read past 1 MB, whatever `maxImageBytes` allows, and a larger `Blob` is refused before it is read.
 
 ## Errors
@@ -99,4 +100,5 @@ An SVG often comes from users or another server, so the parser bounds its work a
 | `ngpdf: pdf-svg nesting deeper than 64` | Elements nested too deep. |
 | `ngpdf: pdf-svg use nested deeper than 16` | A chain of `use` elements is too deep, or one points at itself. |
 | `ngpdf: pdf-svg use expands to more than 50000 elements` | `use` elements draw too many elements in all. |
+| `ngpdf: pdf-svg <rect> has the number 1e+22, past ±1e9` | A drawn element, here a `rect`, writes a number past ±1e9: a coordinate, size, stroke width, dash, gradient coordinate or transform. `<svg>` names a nested `svg`, or the root when its `viewBox` is fitted at such a scale. |
 | `ngpdf: pdf-svg drawing is over its budget of 1000000 path segments, gradient stops, dashes and attributes` | The drawing is too large once `use` copies, gradients and dashes are counted. |

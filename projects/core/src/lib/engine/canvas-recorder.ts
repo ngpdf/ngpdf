@@ -5,6 +5,7 @@ import type {
   PdfCanvasLineJoin,
   PdfCanvasSize,
 } from '../tree/canvas-context';
+import { DRAW_NUMBER_LIMIT, unwritable } from './bounds';
 import { parseColor, toHex, type Color } from './color';
 import type { DrawOp, Matrix, PathSegment, Point } from './writer';
 
@@ -165,8 +166,17 @@ export function recordCanvas(paint: unknown, size: PdfCanvasSize): readonly Shap
     check(radius >= 0, `${method} must not have a negative radius`);
   };
 
-  /** Records the path with the paints asked for, if any leaves ink, and starts a new path. */
-  const paintPath = (fill: Color | null, stroke: Color | null, rule: PdfCanvasFillRule): void => {
+  /**
+   * Records the path with the paints asked for, if any leaves ink, and starts a new path. Its
+   * points, width and dash are checked after the transform: a finite call can still reach past
+   * what the writer takes, or overflow to Infinity.
+   */
+  const paintPath = (
+    method: string,
+    fill: Color | null,
+    stroke: Color | null,
+    rule: PdfCanvasFillRule,
+  ): void => {
     const segments = path;
     path = [];
     start = null;
@@ -200,7 +210,13 @@ export function recordCanvas(paint: unknown, size: PdfCanvasSize): readonly Shap
           },
         }),
     };
-    if (shape.fill || shape.stroke) shapes.push(shape);
+    if (!shape.fill && !shape.stroke) return;
+    const number = unwritable(shape);
+    check(
+      number === undefined,
+      `${method} has the number ${String(number)}, past ${DRAW_NUMBER_LIMIT}`,
+    );
+    shapes.push(shape);
   };
   const ruleOf = (rule: unknown): PdfCanvasFillRule => {
     if (rule === undefined) return 'nonzero';
@@ -305,18 +321,23 @@ export function recordCanvas(paint: unknown, size: PdfCanvasSize): readonly Shap
     fill(fill, rule) {
       count('fill', []);
       const kind = ruleOf(rule);
-      paintPath(fill === undefined ? state.fill : ink(fill), null, kind);
+      paintPath('fill', fill === undefined ? state.fill : ink(fill), null, kind);
       return this;
     },
     stroke(stroke) {
       count('stroke', []);
-      paintPath(null, stroke === undefined ? state.stroke : ink(stroke), 'nonzero');
+      paintPath('stroke', null, stroke === undefined ? state.stroke : ink(stroke), 'nonzero');
       return this;
     },
     fillAndStroke(fill, stroke) {
       count('fillAndStroke', []);
       const fillColor = fill === undefined ? state.fill : ink(fill);
-      paintPath(fillColor, stroke === undefined ? state.stroke : ink(stroke), 'nonzero');
+      paintPath(
+        'fillAndStroke',
+        fillColor,
+        stroke === undefined ? state.stroke : ink(stroke),
+        'nonzero',
+      );
       return this;
     },
 
