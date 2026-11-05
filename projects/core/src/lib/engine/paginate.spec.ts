@@ -806,6 +806,19 @@ describe('paginatePage: min-presence-ahead', () => {
     ]);
   });
 
+  it('leaves a break-after: avoid chain too tall for a page where it is', () => {
+    // Moving the kicker and heading would not keep them with the tall block: it needs a sheet
+    // of its own either way, so the move would only add a sheet.
+    const first = filler(50);
+    const kicker = block(10, { 'break-after': 'avoid' });
+    const heading = block(10, { ...ahead(40), 'break-after': 'avoid' });
+    const tall = block(AREA - 5);
+    expect(nodesOn(paginate(page([first, kicker, heading, tall])))).toEqual([
+      [first, kicker, heading],
+      [tall],
+    ]);
+  });
+
   it('moves a short text, and leaves a split text carried from an earlier sheet', () => {
     const text = (lines: number, style: Record<string, string> = {}): PdfNode => {
       const words = Array.from({ length: lines }, (_, i) => `w${String(i)}`).join(' ');

@@ -176,7 +176,7 @@ On a wrapper, the break happens before its first unit. On a repeated table heade
 - It works on any element that is a unit, such as a `pdf-text`, a `pdf-image` or a row in a table, and on a column `pdf-view`, a `pdf-text` split into line groups or a `pdf-table`, which then move whole. A value on a cell counts for its whole row. A row that moves gets its table's header repeated above it, as usual.
 - It applies only when the element fits whole in what is left of the sheet. One that does not moves or splits as it would without it, and the last part of an element split across sheets stays where it lands.
 - A `header` row's own value is ignored, whether the header repeats or not.
-- It works on its own next to [`break-after: avoid`](#keeping-a-heading-with-what-follows). When an element moves because of it, the elements before it joined to it by `break-after: avoid` move with it.
+- It works on its own next to [`break-after: avoid`](#keeping-a-heading-with-what-follows). When an element moves because of it, the elements before it joined to it by `break-after: avoid` move with it. A joined group that would not fit on an empty sheet is left where it is, as `break-after: avoid` leaves it.
 
 ## Positioned elements
 

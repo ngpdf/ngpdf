@@ -1668,6 +1668,8 @@ export function paginatePage(
     // could leave the page before with fewer lines than `orphans` and `widows` ask for.
     const carriedTail =
       index > textFirst && index <= textLast && at(placements, textFirst).page < pages.length - 1;
+    // Whether the `break-after: avoid` chain starting here fits on an empty page.
+    let chainFits = true;
     if (joined(index) && !(index > 0 && joined(index - 1)) && current.units > 0 && !carriedTail) {
       let end = index + 1;
       while (joined(end)) end++;
@@ -1687,10 +1689,8 @@ export function paginatePage(
       // opens with the table and already spans the header.
       const repeated =
         unit.header && unit.header.top < chainTop ? unit.header.height + unit.header.gap : 0;
-      if (
-        chainBottom - chainTop + repeated <= contentHeight + slack &&
-        next.top - unit.top + chainBottom > frame.bottom + slack
-      ) {
+      chainFits = chainBottom - chainTop + repeated <= contentHeight + slack;
+      if (chainFits && next.top - unit.top + chainBottom > frame.bottom + slack) {
         startPage();
         previousBottom = null;
         next = plan();
@@ -1700,7 +1700,8 @@ export function paginatePage(
     // `min-presence-ahead` moves to the next one, with the `break-after: avoid` chain that ends at
     // it. Checked where the chain starts, or at the unit when there is no chain. The last unit,
     // and one a forced page break follows, have nothing after them on this sheet to make room for.
-    if (!(index > 0 && joined(index - 1)) && current.units > 0 && !carriedTail) {
+    // A chain too tall for a page is left alone, as above: moving it would only add a sheet.
+    if (chainFits && !(index > 0 && joined(index - 1)) && current.units > 0 && !carriedTail) {
       let end = index;
       while (joined(end)) end++;
       const shift = next.top - unit.top;
