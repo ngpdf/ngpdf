@@ -1,7 +1,7 @@
 import { propsOf, type PdfNode } from '../tree/node';
 import { layoutBox, pageDpi, type Box, type LayoutContext } from './layout';
 import type { TextBlock } from './text';
-import type { Edges, Length, ResolvedStyle } from './style';
+import { parseLength, type Edges, type Length, type ResolvedStyle } from './style';
 
 export interface PlacedBox {
   readonly box: Box;
@@ -115,19 +115,55 @@ function fitSlack(height: number): number {
   return Math.max(EPSILON, height * 2 ** -17);
 }
 
-/** The page's size in points from its `size` and `orientation` props; landscape swaps them. */
+/**
+ * The page's size in points from its `size` and `orientation` props; landscape swaps them,
+ * whichever way round the size is.
+ */
 export function pageSize(page: PdfNode): { width: number; height: number } {
   const props = propsOf(page);
   const size = props['size'] ?? 'A4';
-  const label = typeof size === 'string' ? size : JSON.stringify(size);
-  const pair = Array.isArray(size) ? size : PAGE_SIZES.get(label.toLowerCase());
-  const [width, height] = (pair ?? []) as unknown[];
-  if (typeof width !== 'number' || typeof height !== 'number' || !(width > 0 && height > 0)) {
+  const sides = sizeInPoints(size);
+  if (!sides) {
+    const label = typeof size === 'string' ? size : JSON.stringify(size);
     throw new Error(`ngpdf: unknown page size "${label}" on pdf-page`);
   }
+  const [width, height] = sides;
   return props['orientation'] === 'landscape'
     ? { width: height, height: width }
     : { width, height };
+}
+
+/**
+ * `[width, height]` from a name, a pair of sides, one side for a square, or the CSS `@page`
+ * string of one or two lengths; undefined when it is none of these.
+ */
+function sizeInPoints(size: unknown): readonly [number, number] | undefined {
+  if (typeof size === 'string') {
+    const named = PAGE_SIZES.get(size.toLowerCase());
+    if (named) return named;
+    const lengths = size.trim().split(/\s+/);
+    return lengths.length <= 2
+      ? sizeInPoints(lengths.length === 1 ? [size, size] : lengths)
+      : undefined;
+  }
+  if (typeof size === 'number') return sizeInPoints([size, size]);
+  if (!Array.isArray(size) || size.length !== 2) return undefined;
+  const width = sideInPoints(size[0]);
+  const height = sideInPoints(size[1]);
+  return width !== undefined && height !== undefined ? [width, height] : undefined;
+}
+
+/** One side: points, or a length in pt, px, in, cm or mm. Undefined unless finite and above 0. */
+function sideInPoints(side: unknown): number | undefined {
+  let points: unknown = side;
+  if (typeof side === 'string') {
+    try {
+      points = parseLength(side);
+    } catch {
+      return undefined;
+    }
+  }
+  return typeof points === 'number' && Number.isFinite(points) && points > 0 ? points : undefined;
 }
 
 /** A box at its position in the full-height layout of the page content (the flow). */

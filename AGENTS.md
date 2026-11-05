@@ -147,7 +147,10 @@ NGPDF_APT=poppler-utils ./scripts/dev node scripts/server-check.mjs   # packed d
 - **Page sizes, in points:** ISO A0–A10, B0–B10, C0–C10, 2A0, 4A0, RA0–RA4, SRA0–SRA4,
   JIS-B0–JIS-B10, Letter, Legal, Executive, Folio, Tabloid, Ledger (= Tabloid, portrait, as in CSS)
   and ID1, all portrait; millimetres × 72 / 25.4 rounded to 2 decimals (A4 595.28×841.89), inches
-  × 72. Names match in any case. Or `[width, height]`. Landscape swaps them.
+  × 72. Names match in any case. Or your own: `[width, height]` with each side a number of points
+  or a length in pt, px, in, cm or mm (the style parser), one number or length for a square, or
+  the CSS `@page` string of two lengths. Any other unit, or a side not finite and above 0, throws
+  `ngpdf: unknown page size`. Landscape always swaps them.
 - **Fonts:**
   - The 12 text faces of the standard PDF fonts, WinAnsi encoding. In them, a character outside
     WinAnsi becomes `?`, with one dev-mode warning per render naming the characters.

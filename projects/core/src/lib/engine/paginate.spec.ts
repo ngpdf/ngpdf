@@ -1075,6 +1075,93 @@ describe('page geometry', () => {
     });
   });
 
+  function sizeOf(size: unknown, orientation?: string): [number, number] {
+    const { width, height } = pageSize(el('pdf-page', {}, [], { size, orientation }));
+    return [width, height];
+  }
+
+  function expectSize(size: unknown, width: number, height: number, orientation?: string): void {
+    const [w, h] = sizeOf(size, orientation);
+    expect(w).toBeCloseTo(width, 9);
+    expect(h).toBeCloseTo(height, 9);
+  }
+
+  it.each([
+    [['210mm', '297mm'], (210 * 72) / 25.4, (297 * 72) / 25.4],
+    [['21cm', '29.7cm'], (21 * 72) / 2.54, (29.7 * 72) / 2.54],
+    [['8.5in', '11in'], 612, 792],
+    [['300px', '400pt'], 300, 400],
+    [['300', ' 400 '], 300, 400],
+    [[300, '4in'], 300, 288],
+    [['10MM', '1IN'], (10 * 72) / 25.4, 72],
+  ])('takes a [width, height] size with units: %j', (size, width, height) => {
+    expectSize(size, width, height);
+  });
+
+  it('takes one number or numeric string as a square page', () => {
+    expectSize(400, 400, 400);
+    expectSize('400', 400, 400);
+    expectSize('1.5e2', 150, 150);
+  });
+
+  it('takes the CSS @page string forms', () => {
+    expectSize('210mm 297mm', (210 * 72) / 25.4, (297 * 72) / 25.4);
+    expectSize('  4in\t5in ', 288, 360);
+    expectSize('10cm', (10 * 72) / 2.54, (10 * 72) / 2.54);
+  });
+
+  it('paginates on a size given in lengths', () => {
+    const units = Array.from({ length: 3 }, () => el('pdf-view', { height: '60' }));
+    const pages = paginate(page(units, {}, { size: '100mm 50mm' }));
+    expect(pages).toHaveLength(2);
+    for (const laid of pages) {
+      expect(laid.width).toBeCloseTo((100 * 72) / 25.4, 9);
+      expect(laid.height).toBeCloseTo((50 * 72) / 25.4, 9);
+    }
+    expect(pages.map((laid) => laid.placed.map((placed) => placed.y))).toEqual([[0, 60], [0]]);
+  });
+
+  it('still takes a name before a length', () => {
+    expect(sizeOf('A4')).toEqual([595.28, A4_HEIGHT]);
+  });
+
+  it('always swaps the sides for landscape, whatever their order', () => {
+    expectSize(['210mm', '297mm'], (297 * 72) / 25.4, (210 * 72) / 25.4, 'landscape');
+    expectSize('297mm 210mm', (210 * 72) / 25.4, (297 * 72) / 25.4, 'landscape');
+    expectSize(400, 400, 400, 'landscape');
+  });
+
+  it.each([
+    ['50%'],
+    [['50%', '100']],
+    ['2em'],
+    [['10em', '10em']],
+    ['auto'],
+    [['auto', '400']],
+    [['10vw', '400']],
+    ['10furlongs'],
+    [0],
+    ['0'],
+    [-400],
+    ['-10mm'],
+    [['100', 0]],
+    [Infinity],
+    [[Infinity, 400]],
+    [NaN],
+    ['1e400'],
+    ['1e308in'],
+    [''],
+    ['   '],
+    ['1in 2in 3in'],
+    [[100, 200, 300]],
+    [[100]],
+    [[]],
+    [true],
+    [{}],
+  ])('rejects %j as a page size', (size) => {
+    expect(() => sizeOf(size)).toThrow(/^ngpdf: unknown page size ".*" on pdf-page$/);
+  });
+
   // Millimetres × 72 / 25.4, rounded to 2 decimals like A4; inches × 72.
   it.each([
     ['A0', 2383.94, 3370.39],

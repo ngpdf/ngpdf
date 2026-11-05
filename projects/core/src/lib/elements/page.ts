@@ -4,9 +4,13 @@ import type { PdfNode } from '../tree/node';
 type UpTo4 = 0 | 1 | 2 | 3 | 4;
 type UpTo10 = UpTo4 | 5 | 6 | 7 | 8 | 9 | 10;
 
+/** A length string in the units styles take, other than `%`: `'210mm'`, `'4in'`, `'400'`. */
+type PageLengthString = `${number}` | `${number}${'pt' | 'px' | 'in' | 'cm' | 'mm'}`;
+
 /**
- * A named paper size or `[width, height]` in points. Names are listed in their canonical
- * spelling; at run time they match in any case.
+ * A named paper size, `[width, height]` (each a number of points or a length string), one number
+ * or length for a square page, or the CSS `@page` string of two lengths (`'210mm 297mm'`). Names
+ * and units are listed in their canonical spelling; at run time they match in any case.
  */
 export type PageSize =
   | `${'A' | 'B' | 'C' | 'JIS-B'}${UpTo10}`
@@ -20,7 +24,10 @@ export type PageSize =
   | 'Tabloid'
   | 'Ledger'
   | 'ID1'
-  | readonly [number, number];
+  | number
+  | PageLengthString
+  | `${PageLengthString} ${PageLengthString}`
+  | readonly [number | PageLengthString, number | PageLengthString];
 export type PageOrientation = 'portrait' | 'landscape';
 
 @Component({
