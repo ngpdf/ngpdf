@@ -998,8 +998,12 @@ describe('displayList', () => {
         spacer,
         text('hidden'),
       ]);
-      // A row view is one unit, so the page cannot split it.
-      const style = { 'flex-direction': 'row', 'background-color': '#abc' };
+      // A row view kept whole is one unit, so the page cannot split it.
+      const style = {
+        'flex-direction': 'row',
+        'break-inside': 'avoid',
+        'background-color': '#abc',
+      };
       const unit = el('pdf-view', { ...style, 'border-bottom': '2 solid #000' }, [column]);
       return layout(page([unit, el('pdf-page-number', { height: '9' }, [], { format: 'n' })]))[0]!;
     }
@@ -1053,7 +1057,10 @@ describe('displayList', () => {
         el('pdf-view', { height: '768.89' }),
         el('pdf-view', { height: '100', 'border-top': '4 solid #000' }),
       ]);
-      const unit = el('pdf-view', { 'flex-direction': 'row' }, [left, right]);
+      const unit = el('pdf-view', { 'flex-direction': 'row', 'break-inside': 'avoid' }, [
+        left,
+        right,
+      ]);
       const laid = layout(page([unit]))[0]!;
       const limit = laid.placed[0]!.clipBottom!;
       expect(limit).toBeCloseTo(805.89, 6);
@@ -1076,7 +1083,10 @@ describe('displayList', () => {
         el('pdf-view', { height: '720' }),
         el('pdf-view', { height: '100', 'border-top': '4 solid #000' }),
       ]);
-      const unit = el('pdf-view', { 'flex-direction': 'row' }, [left, right]);
+      const unit = el('pdf-view', { 'flex-direction': 'row', 'break-inside': 'avoid' }, [
+        left,
+        right,
+      ]);
       const root = page([unit], { padding: '40' }, { size: [600, 800], orientation: 'portrait' });
       const laid = layout(root)[0]!;
       expect(laid.placed[0]!.clipBottom).toBe(760);
@@ -1441,6 +1451,27 @@ describe('links', () => {
     expect(first.w).toBeCloseTo(595.28 - 72, 3);
   });
 
+  it('gives a row link split across sheets one rectangle per sheet, its piece', () => {
+    const column = (count: number): PdfNode =>
+      el(
+        'pdf-view',
+        { 'flex-grow': '1' },
+        Array.from({ length: count }, () => el('pdf-view', { height: '100' })),
+      );
+    const pages = layout(page([link({ 'flex-direction': 'row' }, [column(10), column(2)])]));
+    expect(pages).toHaveLength(2);
+    const links = pages.map((laid, index) => only(list(laid, index, 2), 'link'));
+    expect(links.map((found) => found.length)).toEqual([1, 1]);
+    const [first, second] = [links[0]![0]!, links[1]![0]!];
+    for (const rect of [first, second]) {
+      expect(rect).toMatchObject({ kind: 'uri', url: URL_A, x: 36, y: 36 });
+      expect(rect.w).toBeCloseTo(595.28 - 72, 3);
+    }
+    // Seven 100pt boxes fit the 769.89pt content area; the other three go on the second sheet.
+    expect(first.h).toBeCloseTo(700, 3);
+    expect(second.h).toBeCloseTo(300, 3);
+  });
+
   it('cuts a link at the bottom of the content area, as a clipped box is', () => {
     const tall = link({ 'flex-direction': 'row' }, [el('pdf-view', { height: '1000' })]);
     const [rect] = only(list(layout(page([tall]))[0]!, 0, 1), 'link');
@@ -1448,7 +1479,9 @@ describe('links', () => {
     expect(rect!.h).toBeCloseTo(841.89 - 72, 6);
     const spacer = el('pdf-view', { height: '780' });
     const inner = el('pdf-text', {}, [link({}, [createNode('text', '', 'below')])]);
-    const unit = el('pdf-view', { 'flex-direction': 'row' }, [el('pdf-view', {}, [spacer, inner])]);
+    const unit = el('pdf-view', { 'flex-direction': 'row', 'break-inside': 'avoid' }, [
+      el('pdf-view', {}, [spacer, inner]),
+    ]);
     expect(only(list(layout(page([unit]))[0]!, 0, 1), 'link')).toEqual([]);
   });
 

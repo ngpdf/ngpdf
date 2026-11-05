@@ -44,11 +44,11 @@ ngpdf v0.1 covers documents built from text, tables, boxes and images. This page
 
 - Inside a `pdf-table`, horizontal padding, borders and margins on a row are ignored. Put horizontal padding on the `pdf-cell`s.
 - A table header row is not repeated on a page whose first row fits only without it and can't split. It warns in development mode.
-- A split table row draws every cell from the top of each piece: `align-items`, `align-self` and the space `justify-content` adds above a cell's content are ignored.
+- A split table row draws every cell from the top of each piece: `align-items`, `align-self` and the space `justify-content` adds above a cell's content are ignored. A split row `pdf-view` keeps its children's places on the first piece only.
 
 ### Pagination
 
-- A unit taller than a page (a row `pdf-view`, a table row that can't split, or a `pdf-view` in a column) is clipped to its page. So is a `pdf-text` that stays one unit: one inside a row, or one with `break-inside: avoid`, a fixed `height` or `max-height`, a `transform`, or fewer than `orphans + widows` lines. A transformed unit is cut in its own coordinates, before the transform, so the cut turns with it. A straight border line across the cut is drawn only down to it; a rounded border side across it can still reach up to half its width below. Other text breaks between lines instead.
+- A unit taller than a page (a table row or row `pdf-view` that can't split, or a `pdf-view` in a column) is clipped to its page. So is a `pdf-text` that stays one unit: one inside a row that stays whole, or one with `break-inside: avoid`, a fixed `height` or `max-height`, a `transform`, or fewer than `orphans + widows` lines. A transformed unit is cut in its own coordinates, before the transform, so the cut turns with it. A straight border line across the cut is drawn only down to it; a rounded border side across it can still reach up to half its width below. Other text breaks between lines instead.
 
 ### Images
 

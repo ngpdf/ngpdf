@@ -140,7 +140,7 @@ In `border`, a missing width is 1 and a missing color is black. The width keywor
 | `object-fit` | `contain`, `cover` | `contain` |
 | `break-before` | `page` starts a new sheet; `auto` does nothing | `auto` |
 | `break-after` | `page` starts a new sheet after the element; `avoid` or `avoid-page` keeps it on a sheet with what follows; `auto` does nothing | `auto` |
-| `break-inside` | `avoid` or `avoid-page` keeps a `pdf-text`, a column `pdf-view` or a `pdf-table` on one sheet when it fits on one; `auto` does nothing | `auto` |
+| `break-inside` | `avoid` or `avoid-page` keeps a `pdf-text`, a column `pdf-view` or a `pdf-table` on one sheet when it fits on one, and keeps a table row or row `pdf-view` taller than a page from splitting ([which views split](/docs/pagination#which-views-split)); `auto` does nothing | `auto` |
 | `min-presence-ahead` | `0` or a length: when less than this is left on the sheet below the element, it moves to the next sheet; see [Leaving room after an element](/docs/pagination#leaving-room-after-an-element) | `0` |
 | `orphans` | integer ≥ 1: the fewest lines of a `pdf-text` before a page break (inherited) | `2` |
 | `widows` | integer ≥ 1: the fewest lines of a `pdf-text` after a page break (inherited) | `2` |

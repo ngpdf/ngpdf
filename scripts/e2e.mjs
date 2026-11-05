@@ -87,6 +87,12 @@ const DOCUMENTS = [
     pages: 3,
     contains: ['Inspection log', 'Note 01:', 'Note 48:', 'Follow up next week', 'Page 3 of 3'],
   },
+  // A row view taller than a page: a long article column beside a short sidebar, split per sheet.
+  {
+    name: 'two-column-sample',
+    pages: 3,
+    contains: ['River survey, spring', 'At a glance', 'Section 01.', 'Section 22.', 'Page 3 of 3'],
+  },
   { name: 'opacity-sample', pages: 1, contains: ['Faded content', 'Not approved yet.'] },
   {
     name: 'notes-sample',
