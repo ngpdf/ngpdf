@@ -714,6 +714,15 @@ describe('paginatePage: min-presence-ahead', () => {
     const section = el('pdf-view', { ...ahead(40), 'break-after': 'page' }, [a, b]);
     const after = block(5);
     expect(nodesOn(paginate(page([roomy, section, after])))).toEqual([[roomy, a, b], [after]]);
+    // A break before a column view after it is asked by the view, not by its first unit.
+    const close = filler(50);
+    const title = block(20, ahead(40));
+    const [c, d] = [block(), block()];
+    const chapter = el('pdf-view', { 'break-before': 'page' }, [c, d]);
+    expect(nodesOn(paginate(page([close, title, chapter])))).toEqual([
+      [close, title],
+      [c, d],
+    ]);
   });
 
   it('measures the room above the page number and fixed bottom views', () => {
