@@ -19,7 +19,8 @@ this project calls for it. Where the simplest correct answer is no pattern, this
  resolveStyles      → Map<PdfNode, ResolvedStyle>
  loadImages         → Map<PdfNode, ImageAsset>         ┐ the only async I/O, in
  registerUsedFonts  → FontRegistry (named fonts only)  │ parallel: URLs fetched on
- loadEmoji          → Map<string, ImageAsset>          ┘ demand
+ loadEmoji          → Map<string, ImageAsset>          │ demand
+ loadSvgs           → Map<PdfNode, SvgAsset>           ┘ (parsed by engine/svg/)
  layoutBox (Yoga)   → Box tree
  paginatePage       → PageLayout[]
  per sheet: fillSlots → layout of each pdfPerSheet view    (calls back again)
@@ -31,15 +32,15 @@ this project calls for it. Where the simplest correct answer is no pattern, this
 **Architecture pattern: pipes and filters, with a functional core and an imperative shell.**
 
 - Each stage is a function from the previous stage's output to a new value.
-- A stage does not mutate its input and keeps no state between calls. Every stage but the three
+- A stage does not mutate its input and keeps no state between calls. Every stage but the four
   loaders does no I/O.
 - `paintCanvases` is the one stage that runs user code: each pdf-canvas's `paint`, once per
   render (once per sheet inside a `pdfPerSheet` template), against a recorder (`canvas-recorder.ts`) that turns its calls into `shape` ops. The
   display list only places and clips those ops, so it stays a function of its input.
 - The I/O sits at the edges, in the imperative shell:
   - Angular's change detection at the start;
-  - the loaders, `loadImages`, `registerUsedFonts` and `loadEmoji`: the boundary where the
-    shell fetches images, fonts and emoji images, in parallel and before layout, so every stage
+  - the loaders, `loadImages`, `registerUsedFonts`, `loadEmoji` and `loadSvgs`: the boundary where
+    the shell fetches images, fonts, emoji images and SVGs, in parallel and before layout, so every stage
     after them runs synchronously, with no I/O;
   - pdfkit writing bytes at the end.
 
@@ -169,7 +170,7 @@ invalidation would buy nothing here.
   stage that collects children (pages, rows, cells, pagination units, layout) would otherwise
   have to look through hosts.
 - **Decision.** `dissolveHosts` copies the document's tree with every element that is not one of
-  the thirteen `pdf-*` elements replaced by its children, like CSS `display: contents`. A host's
+  the fourteen `pdf-*` elements replaced by its children, like CSS `display: contents`. A host's
   own style is ignored, with one dev-mode warning per tag. The stages after it never see a host.
   The same copy leaves out every element with `display: none` and all it holds, so no stage
   lays out, draws or collects anchors from a hidden element.
@@ -191,7 +192,7 @@ invalidation would buy nothing here.
 - **Context.** The writer and the tests act on fifteen draw operation kinds: `rect`, `line`,
   `path`, `shape`, `text`, `image`, `transform` with its closing `untransform`, `clip` with its
   closing `unclip`, `group` with its closing `ungroup`, `link`, `anchor` and `note`. A `shape` is
-  a pdf-canvas path: its `PathSegment`s may `move` and `close`, which an open `path` op's never do.
+  a pdf-canvas or pdf-svg path, filled or stroked with a color or a gradient: its `PathSegment`s may `move` and `close`, which an open `path` op's never do.
 - **Decision.** `DrawOp` is a TypeScript discriminated union. Code that handles it uses a
   `switch (op.op)` with an `assertNever` default, so adding a kind fails to compile wherever it is
   not handled.
@@ -239,7 +240,7 @@ projects/core/src/lib/elements/   pdf-* components, pdfPerSheet, PDF_ELEMENTS (e
 projects/core/src/lib/render/     render-tree, PdfRenderer facade       (eager)
 projects/core/src/lib/engine/     hosts, color, style, anchors, fonts, text, images, emoji, layout,
                                   paginate, per-sheet, canvas-recorder, display-list, writer,
-                                  index (lazy)
+                                  index, svg/ (pdf-svg: tokenizer, path data, styles) (lazy)
 projects/core/schematics/         ng add: an example document; with --demo-route, a demo page and route
 projects/core/viewer/             pdf-viewer, entry point @ngpdf/core/viewer (own chunk)
 projects/core/server/             renderToBuffer, entry point @ngpdf/core/server (Node)

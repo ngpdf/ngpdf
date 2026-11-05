@@ -16,6 +16,7 @@ const PDF_ELEMENTS = new Set([
   'pdf-cell',
   'pdf-page-number',
   'pdf-canvas',
+  'pdf-svg',
 ]);
 
 /**

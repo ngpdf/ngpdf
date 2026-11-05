@@ -493,6 +493,55 @@ describe('renderDocument', () => {
     });
   });
 
+  it('draws a pdf-svg in its color, sized by its viewBox, with its warnings once', async () => {
+    const writer = recordingWriter();
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const logo =
+      '<svg viewBox="0 0 20 10"><rect width="20" height="10" fill="currentColor"/><text>x</text><text>y</text></svg>';
+    const svgs = [0, 1].map(() =>
+      el('pdf-svg', { width: '40', color: '#0000ff' }, [], { src: logo }),
+    );
+    await renderDocument(
+      host({}, [el('pdf-page', {}, [el('app-logo', {}, svgs)], { size: 'A4' })]),
+      {
+        writer,
+        dev: true,
+      },
+    );
+    const ops = writer.recorded[0]!.pages[0]!.ops;
+    expect(ops.filter((op) => op.op === 'clip')).toMatchObject([
+      { w: 40, h: 20 },
+      { w: 40, h: 20 },
+    ]);
+    expect(ops.find((op) => op.op === 'shape')).toMatchObject({ fill: { color: '#0000ff' } });
+    expect(
+      warn.mock.calls.filter(([message]) => message === 'ngpdf: pdf-svg does not draw <text>'),
+    ).toHaveLength(1);
+  });
+
+  it('loads a pdf-svg in a pdfPerSheet view, reading its source once', async () => {
+    const fetchFn = vi.fn(() =>
+      Promise.resolve(new Response('<svg width="10" height="10"><circle r="5"/></svg>')),
+    );
+    stubFetch(fetchFn);
+    const writer = recordingWriter();
+    const slot = perSheetSlot();
+    const footer = el('pdf-view', {}, [el('pdf-svg', {}, [], { src: '/mark.svg' }), slot], {
+      fixed: 'bottom',
+    });
+    const rows = [0, 1, 2].map(() => el('pdf-view', { height: '500' }));
+    await renderDocument(host({}, [el('pdf-page', {}, [footer, ...rows], { size: 'A4' })]), {
+      writer,
+      dev: false,
+      perSheet: () => el('pdf-view', {}, [el('pdf-svg', {}, [], { src: '/mark.svg' })]),
+    });
+    expect(fetchFn).toHaveBeenCalledOnce();
+    const shapes = writer.recorded[0]!.pages.map(
+      (p) => p.ops.filter((op) => op.op === 'shape').length,
+    );
+    expect(shapes).toEqual([2, 2, 2]);
+  });
+
   it('rejects the render with the error a pdf-canvas paint throws', async () => {
     const paint = () => {
       throw new Error('no data');

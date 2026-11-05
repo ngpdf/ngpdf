@@ -52,8 +52,13 @@ ngpdf v0.1 covers documents built from text, tables, boxes and images. This page
 
 ### Images
 
-- PNG and JPEG only.
+- PNG and JPEG only. SVG is drawn by [`pdf-svg`](/docs/svg) instead.
 - Images fetched from a URL have no size limit unless you set `maxImageBytes`.
+
+### SVG
+
+- `pdf-svg` draws a subset of SVG: no `text`, `image`, `symbol`, `clipPath`, `mask`, `filter`, `pattern`, `marker`, `<style>` sheets or animation, and gradients are drawn with `spreadMethod="pad"` only. Each part left out warns in development mode. See [SVG](/docs/svg#what-is-not-drawn).
+- No inline SVG elements in a template (`<pdf-svg><pdf-path d="…"/></pdf-svg>`): the drawing comes from `src`.
 
 ### Preview
 
@@ -66,7 +71,6 @@ ngpdf v0.1 covers documents built from text, tables, boxes and images. This page
 
 ### Not in v0.1
 
-- SVG.
 - Forms.
 - Capturing the DOM of a page as a PDF.
 

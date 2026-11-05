@@ -74,7 +74,7 @@ export interface GradientStop {
   readonly opacity: number;
 }
 
-export type GradientFill =
+export type GradientFill = (
   | {
       readonly kind: 'linear';
       readonly x1: number;
@@ -83,7 +83,10 @@ export type GradientFill =
       readonly y2: number;
       readonly stops: readonly GradientStop[];
     }
-  /** Circles around (cx, cy), squashed vertically by `scaleY` into ellipses. */
+  /**
+   * Circles around (cx, cy), squashed vertically by `scaleY` into ellipses. The inner circle is
+   * centred on (fx, fy) when they are set, an SVG gradient's focal point.
+   */
   | {
       readonly kind: 'radial';
       readonly cx: number;
@@ -91,8 +94,14 @@ export type GradientFill =
       readonly r1: number;
       readonly r2: number;
       readonly scaleY: number;
+      readonly fx?: number;
+      readonly fy?: number;
       readonly stops: readonly GradientStop[];
-    };
+    }
+) & {
+  /** Maps the gradient's own space to the space it is drawn in; the identity without. */
+  readonly matrix?: Matrix;
+};
 
 /** How a stroke is broken up; a stroke without it is solid. */
 export interface StrokePattern {
@@ -141,7 +150,7 @@ export type DrawOp =
       readonly color: string;
       readonly opacity: number;
     } & StrokePattern)
-  /** A path drawn in a pdf-canvas, filled, stroked or both. */
+  /** A path drawn in a pdf-canvas or a pdf-svg, filled, stroked or both. */
   | {
       readonly op: 'shape';
       /** Starts with a `move`. */
@@ -150,6 +159,8 @@ export type DrawOp =
         readonly color: string;
         readonly opacity: number;
         readonly rule: PdfCanvasFillRule;
+        /** Paints instead of `color`; its stops carry their own opacity. */
+        readonly gradient?: GradientFill;
       };
       readonly stroke?: {
         readonly color: string;
@@ -157,7 +168,12 @@ export type DrawOp =
         readonly width: number;
         readonly cap: PdfCanvasLineCap;
         readonly join: PdfCanvasLineJoin;
+        /** PDF's default, 10, without. */
+        readonly miterLimit?: number;
+        /** Lengths of 0 are allowed: with round caps they draw dots. */
         readonly dash?: { readonly pattern: readonly number[]; readonly phase: number };
+        /** Paints instead of `color`; its stops carry their own opacity. */
+        readonly gradient?: GradientFill;
       };
     }
   | {
@@ -1095,11 +1111,20 @@ function outline(doc: Doc, op: Extract<DrawOp, { op: 'rect' }>): void {
  */
 function shading(doc: Doc, fill: GradientFill): PDFKit.PDFGradient {
   let gradient: PDFKit.PDFGradient;
+  let space: readonly number[] = IDENTITY;
   if (fill.kind === 'linear') {
     gradient = doc.linearGradient(fill.x1, fill.y1, fill.x2, fill.y2);
   } else {
-    gradient = doc.radialGradient(0, 0, fill.r1, 0, 0, fill.r2);
-    (gradient as unknown as GradientTransform).setTransform(1, 0, 0, fill.scaleY, fill.cx, fill.cy);
+    // The focal point, in the circle's space before it is squashed.
+    const fx = (fill.fx ?? fill.cx) - fill.cx;
+    const fy = ((fill.fy ?? fill.cy) - fill.cy) / fill.scaleY;
+    gradient = doc.radialGradient(fx, fy, fill.r1, 0, 0, fill.r2);
+    space = [1, 0, 0, fill.scaleY, fill.cx, fill.cy];
+  }
+  if (fill.matrix) space = then(space, fill.matrix);
+  if (space !== IDENTITY) {
+    const [a = 1, b = 0, c = 0, d = 1, e = 0, f = 0] = space;
+    (gradient as unknown as GradientTransform).setTransform(a, b, c, d, e, f);
   }
   for (const stop of fill.stops) gradient.stop(stop.offset, stop.color, stop.opacity);
   return gradient;
@@ -1287,11 +1312,20 @@ function pdfNumber(value: number): string {
 function drawShape(doc: Doc, op: Extract<DrawOp, { op: 'shape' }>): void {
   const { fill, stroke } = op;
   doc.save();
-  if (fill) doc.fillColor(fill.color).fillOpacity(fill.opacity);
+  if (fill) {
+    doc.fillColor(fill.gradient ? shading(doc, fill.gradient) : fill.color);
+    doc.fillOpacity(fill.opacity);
+  }
   if (stroke) {
     doc.lineWidth(stroke.width).lineCap(stroke.cap).lineJoin(stroke.join);
-    doc.strokeColor(stroke.color).strokeOpacity(stroke.opacity);
-    if (stroke.dash) doc.dash([...stroke.dash.pattern], { phase: stroke.dash.phase });
+    if (stroke.miterLimit !== undefined) doc.miterLimit(stroke.miterLimit);
+    doc.strokeColor(stroke.gradient ? shading(doc, stroke.gradient) : stroke.color);
+    doc.strokeOpacity(stroke.opacity);
+    // Written directly, as for borders: pdfkit's `dash()` refuses lengths of 0.
+    if (stroke.dash) {
+      const lengths = stroke.dash.pattern.map(pdfNumber).join(' ');
+      doc.addContent(`[${lengths}] ${pdfNumber(stroke.dash.phase)} d`);
+    }
   }
   for (const segment of op.segments) pathTo(doc, segment);
   if (fill && stroke) doc.fillAndStroke(undefined, undefined, fill.rule);

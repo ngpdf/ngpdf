@@ -29,6 +29,7 @@ import {
   type PerSheetView,
 } from './per-sheet';
 import { securityOf } from './security';
+import { loadSvgs } from './svg/load';
 import { resolveStyles } from './style';
 import { TextMeasureCache, type Hyphenate } from './text';
 import {
@@ -74,7 +75,7 @@ export interface RenderDocumentOptions {
   readonly emoji?: EmojiSource;
   /** Renders a `pdfPerSheet` template for one sheet; the eager half passes it. */
   readonly perSheet?: RenderPerSheet;
-  /** The most bytes a fetched `pdf-image` URL may have; no cap when undefined. */
+  /** The most bytes a fetched `pdf-image` or `pdf-svg` URL may have; no cap when undefined. */
   readonly maxImageBytes?: number;
 }
 
@@ -269,13 +270,15 @@ export async function renderDocument(
     const styles = resolveStyles(tree, warn);
     const fonts = new Map<string, RegisteredFace[]>();
     // Emoji images load with the others, before layout, so measuring stays synchronous.
-    const [{ images, loads }, , found] = await Promise.all([
+    const [{ images, loads }, , found, svgLoaded] = await Promise.all([
       loadImages(tree, writer, undefined, options.server, maxImageBytes),
       registerUsedFonts(options.fonts ?? [], styles, writer, fonts),
       loadEmoji(tree, options.emoji, writer, warn, undefined, options.server),
+      loadSvgs(tree, styles, warn, undefined, options.server, maxImageBytes),
     ]);
-    // Image loads and emoji tried so far; a pdfPerSheet sheet's content loads only new ones.
+    // Image and SVG loads and emoji tried so far; a pdfPerSheet sheet's content loads only new ones.
     const imageLoads = new Map(loads);
+    const svgLoads = new Map(svgLoaded.loads);
     const seenEmoji = new Set(found.tried);
     const emoji = new Map(found.images);
     // One text cache per render, passed down like the metrics and images, so renders share nothing.
@@ -289,6 +292,7 @@ export async function renderDocument(
       yoga,
       metrics: writer,
       images,
+      svgs: svgLoaded.svgs,
       warn,
       warnChars,
       textCache,
@@ -316,18 +320,21 @@ export async function renderDocument(
       const pageStyle = styles.get(view.page);
       if (!pageStyle) throw new Error('ngpdf: no resolved style for <pdf-page>');
       const viewStyles = resolveStyles(filled.view, warn, { style: pageStyle, depth: 3 });
-      const [viewImages, , viewEmoji] = await Promise.all([
+      const [viewImages, , viewEmoji, viewSvgs] = await Promise.all([
         loadImages(filled.view, writer, undefined, options.server, maxImageBytes, imageLoads),
         registerUsedFonts(options.fonts ?? [], viewStyles, writer, fonts),
         loadEmoji(filled.view, options.emoji, writer, warn, undefined, options.server, seenEmoji),
+        loadSvgs(filled.view, viewStyles, warn, undefined, options.server, maxImageBytes, svgLoads),
       ]);
       for (const [src, load] of viewImages.loads) imageLoads.set(src, load);
+      for (const [src, load] of viewSvgs.loads) svgLoads.set(src, load);
       for (const sequence of viewEmoji.tried) seenEmoji.add(sequence);
       for (const [sequence, asset] of viewEmoji.images) emoji.set(sequence, asset);
       const width = fixedViewWidth(view.page, pageStyle, viewStyles.get(filled.view));
       const viewCtx: LayoutContext = {
         ...ctx,
         images: viewImages.images,
+        svgs: viewSvgs.svgs,
         anchors: marksOf(filled.origins, collected),
       };
       return placeSheetView(placed, filled.view, viewStyles, width, viewCtx, () => {
