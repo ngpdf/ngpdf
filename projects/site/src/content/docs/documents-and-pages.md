@@ -227,12 +227,13 @@ For your own size, give the sides in points or in the units styles take (`pt`, `
 | `size="210mm 297mm"` | the CSS `@page` form: width, then height |
 | `[size]="400"` or `size="400"` | a square page, 400 × 400 pt |
 | `size="10cm"` | a square page, 10 × 10 cm |
+| `[size]="[226, 'auto']"` or `size="80mm auto"` | a fixed width, and as tall as the content: see [Pages that grow with their content](#pages-that-grow-with-their-content) |
 
 Names are tried first, so `size="A4"` is always the named size.
 
 `orientation` is `portrait` (the default) or `landscape`. Landscape always swaps width and height, for named sizes and your own: `size="297mm 210mm" orientation="landscape"` gives a portrait page 210 × 297 mm. Give your own size the way round you want it and leave `orientation` out.
 
-Size names and units match in any case at run time, so `a4`, `A4`, `jis-b5` and `10MM` all work in a size that comes from data. The `PageSize` type lists the spellings shown on this page, so a type-checked template or binding should use those. A size that is not one of the forms above fails with `ngpdf: unknown page size "<size>" on pdf-page`. That covers an unknown name, a side that is zero, negative or not finite, `%`, `em`, `auto` or any other unit, and a string with more than two lengths.
+Size names and units match in any case at run time, so `a4`, `A4`, `jis-b5` and `10MM` all work in a size that comes from data. The `PageSize` type lists the spellings shown on this page, so a type-checked template or binding should use those. A size that is not one of the forms above fails with `ngpdf: unknown page size "<size>" on pdf-page`. That covers an unknown name, a side that is zero, negative or not finite, `%`, `em` or any other unit, `auto` anywhere but the height, and a string with more than two lengths.
 
 For a size in a field, use the exported `PageSize` type:
 
@@ -252,6 +253,29 @@ export class PagesDocument {
 ```
 
 To convert: 1in = 72pt, 1cm = 72/2.54pt (about 28.35pt), 1mm = 72/25.4pt (about 2.83pt).
+
+### Pages that grow with their content
+
+Receipts and thermal printer slips have a fixed width and no fixed height. Give `auto` as the height, in any case, and the sheet is as tall as its content plus the page's padding and border:
+
+```html
+<pdf-page [size]="[226, 'auto']" style="padding: 10; font-size: 8">
+  <pdf-text>Receipt</pdf-text>
+  @for (line of lines; track line.id) {
+    <pdf-text>{{ line.name }}</pdf-text>
+  }
+  <pdf-page-number format="{page} / {total}" />
+</pdf-page>
+```
+
+`['80mm', 'auto']` and `size="80mm auto"` work the same way.
+
+- Only the height can be `auto`. `auto` as the width fails with `ngpdf: unknown page size`.
+- `orientation="landscape"` with an auto height fails with `ngpdf: orientation "landscape" needs a page height; pdf-page has an auto height`. Give the width you want instead.
+- `fixed="top"` views draw at the top as on any page. `fixed="bottom"` views and the page number go right after the content, at the bottom of the grown sheet, and still keep their space, so content never runs into them.
+- `break-before: page` and `break-after: page` inside the page start a new sheet, and each sheet is as tall as its own content. The page number and `pdfPerSheet` count those sheets as usual.
+- The page's background and border cover the whole sheet.
+- A sheet grows to at most 14400pt (200in), the largest page PDF allows without a user unit. Content taller than that breaks onto more sheets of up to 14400pt each, as on a page of fixed size, with one development-mode warning: `ngpdf: a pdf-page with an auto height is taller than 14400pt and breaks onto more sheets`. There is no option for a smaller maximum.
 
 ## Image resolution (dpi)
 

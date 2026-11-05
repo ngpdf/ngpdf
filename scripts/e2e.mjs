@@ -190,6 +190,14 @@ const DOCUMENTS = [
     pages: 1,
     contains: ['Marta Quintela', 'Lagoa Serena, 01234-000', 'REF 2026 0417 B'],
   },
+  // An 80 mm receipt on a page with an auto height: one sheet as tall as its lines.
+  {
+    name: 'receipt-sample',
+    pages: 1,
+    contains: ['Corner Bakery', 'Total', 'Thank you, come again', 'Receipt 1 of 1'],
+    // Width and height of each sheet in whole points, from its /MediaBox.
+    sizes: [[227, 152]],
+  },
 ];
 
 const update = process.argv.includes('--update');
@@ -452,6 +460,17 @@ function pdfString(text, start) {
 }
 
 /**
+ * The [width, height] of each page's /MediaBox in whole points, in the order pdfkit writes the
+ * page objects (page order), from the uncompressed page dictionaries.
+ */
+function sizesOf(pdf) {
+  const text = pdf.toString('latin1');
+  return [
+    ...text.matchAll(/\/MediaBox \[\s*([\d.-]+)\s+([\d.-]+)\s+([\d.-]+)\s+([\d.-]+)\s*\]/g),
+  ].map(([, x0, y0, x1, y1]) => [Math.round(x1 - x0), Math.round(y1 - y0)]);
+}
+
+/**
  * The Text annotations of a pdfkit file, in page order and then in each page's /Annots order:
  * the page each one is on (1-based), its icon name, author, open flag and contents. pdfkit
  * writes annotations and pages as uncompressed dictionaries, one object each.
@@ -674,6 +693,11 @@ try {
       const want = JSON.stringify(document.notes);
       const got = JSON.stringify(notesOf(readFileSync(join(OUT, `${document.name}.pdf`))));
       if (want !== got) problems.push(`notes: expected ${want}, got ${got}`);
+    }
+    if (document.sizes) {
+      const want = JSON.stringify(document.sizes);
+      const got = JSON.stringify(sizesOf(readFileSync(join(OUT, `${document.name}.pdf`))));
+      if (want !== got) problems.push(`sheet sizes: expected ${want}, got ${got}`);
     }
     if (document.paths) {
       const found = pathsOf(readFileSync(join(OUT, `${document.name}.pdf`)));

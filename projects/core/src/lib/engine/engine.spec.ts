@@ -1228,6 +1228,42 @@ describe('renderDocument with pdfPerSheet', () => {
     ]);
   });
 
+  it('gives each sheet of an auto-height page its own height, footer and page number', async () => {
+    const writer = recordingWriter();
+    const render = footerRender();
+    const footer = el('pdf-view', {}, [perSheetSlot()], { fixed: 'bottom' });
+    const number = el('pdf-page-number', { 'font-size': '10' }, [], { format: '{page}/{total}' });
+    const page = el(
+      'pdf-page',
+      { padding: '10' },
+      [
+        footer,
+        el('pdf-view', { height: '100' }),
+        el('pdf-view', { height: '300', 'break-before': 'page' }),
+        number,
+      ],
+      { size: [226, 'auto'] },
+    );
+    await renderDocument(host({}, [page]), { writer, dev: false, perSheet: render });
+    const sheets = writer.recorded[0]!.pages;
+    expect(sheets.map((sheet) => sheet.width)).toEqual([226, 226]);
+    // Content, footer and page number, each sheet: the second is 200pt taller.
+    const [first, second] = sheets.map((sheet) => sheet.height);
+    expect(second! - first!).toBeCloseTo(200, 6);
+    expect(first).toBeLessThan(200);
+    expect(sheets.map(texts)).toEqual([
+      ['Sheet 1 of 2', '1/2'],
+      ['Sheet 2 of 2', '2/2'],
+    ]);
+    for (const sheet of sheets) {
+      const [label, pageNumber] = sheet.ops.flatMap((op) => (op.op === 'text' ? [op] : []));
+      // The footer sits right below the content, the page number below it, both on the sheet.
+      expect(label!.y).toBeGreaterThan(sheet.height - 10 - 12 - 30);
+      expect(pageNumber!.y).toBeGreaterThan(label!.y);
+      expect(pageNumber!.y).toBeLessThan(sheet.height - 10);
+    }
+  });
+
   it('lays out each sheet at the width of a fixed view centred with margin: 0 auto', async () => {
     const writer = recordingWriter();
     const footer = el(
