@@ -481,6 +481,17 @@ describe('compileSvg', () => {
       expect(performance.now() - started).toBeLessThan(2000);
     });
 
+    it('parses path data once, whatever viewport a use copy is drawn in', () => {
+      const path = `<path id="p" d="M0 0${' m1 1'.repeat(150_000)}"/>`;
+      const nested = Array.from(
+        { length: 2_000 },
+        (_, i) => `<svg width="${String(10 + (i % 2))}"><use href="#p"/></svg>`,
+      ).join('');
+      const started = performance.now();
+      expect(compile(`<svg><defs>${path}</defs>${nested}</svg>`).ops).toEqual([]);
+      expect(performance.now() - started).toBeLessThan(3000);
+    });
+
     it('counts the attributes of every element visited, use copies included', () => {
       const line = `<line id="l" stroke-dasharray="${'1 '.repeat(100_000)}" x2="1"/>`;
       const started = performance.now();

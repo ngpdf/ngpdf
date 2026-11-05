@@ -61,6 +61,9 @@ interface ShapePaint {
 
 const NOT_ROUNDED: Corners<number> = { topLeft: 0, topRight: 0, bottomRight: 0, bottomLeft: 0 };
 
+/** Shapes whose outline reads no length, so the viewport never changes it. */
+const UNSIZED = new Set(['polyline', 'polygon']);
+
 /** Drawn, each in its own way below. */
 const SHAPES = new Set(['path', 'rect', 'circle', 'ellipse', 'line', 'polyline', 'polygon']);
 const CONTAINERS = new Set(['svg', 'g', 'use']);
@@ -209,7 +212,7 @@ export function compileSvg(
   };
   const gradients = new Map<XmlElement, ResolvedGradient>();
   const gradientStops = new Map<XmlElement, readonly GradientColorStop[]>();
-  // A shape drawn again through `use` is parsed once per viewport size.
+  // A shape drawn again through `use` is parsed once, or once per viewport size when it has lengths.
   const outlines = new Map<
     XmlElement,
     { viewport: Viewport; segments: readonly PathSegment[] | null }
@@ -256,7 +259,11 @@ export function compileSvg(
   const shape = (element: XmlElement, style: SvgStyle, viewport: Viewport): DrawOp[] => {
     if (!style.visible) return [];
     let outline = outlines.get(element);
-    if (outline?.viewport.width !== viewport.width || outline.viewport.height !== viewport.height) {
+    // Path data and points take no percentages, so they are parsed once whatever the viewport.
+    const fixed = element.name === 'path' || UNSIZED.has(element.name);
+    const stale =
+      outline?.viewport.width !== viewport.width || outline.viewport.height !== viewport.height;
+    if (!outline || (stale && !fixed)) {
       const parsed = shapeSegments(element, viewport);
       outline = { viewport, segments: parsed && segmentsFinite(parsed) ? parsed : null };
       outlines.set(element, outline);
