@@ -43,7 +43,7 @@ export class BadgeDocument {
 | an `ArrayBuffer` | used as it is |
 | a `Uint8Array`, such as a Node `Buffer` | its bytes, as it is (a view into a larger buffer reads only its own bytes) |
 
-The format is detected from the bytes, not from the URL, the file name or the MIME type. PNG and JPEG are supported. SVG, GIF, WebP and other formats fail with `image is neither PNG nor JPEG`. To use them, draw them on a `<canvas>` and pass `canvas.toBlob(…, 'image/png')`:
+The format is detected from the bytes, not from the URL, the file name or the MIME type. PNG and JPEG are supported. GIF, WebP and other formats fail with `image is neither PNG nor JPEG`, and so does SVG: draw an SVG with [`pdf-svg`](/docs/svg) instead, which keeps it as vector shapes. To use the other formats, draw them on a `<canvas>` and pass `canvas.toBlob(…, 'image/png')`:
 
 ```ts
 export function canvasToPng(canvas: HTMLCanvasElement): Promise<Blob> {

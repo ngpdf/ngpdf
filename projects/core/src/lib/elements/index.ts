@@ -9,6 +9,7 @@ import { PdfPageNumber } from './page-number';
 import { PdfPerSheet } from './per-sheet';
 import { PdfRow } from './row';
 import { PdfSpan } from './span';
+import { PdfSvg } from './svg';
 import { PdfTable } from './table';
 import { PdfText } from './text';
 import { PdfView } from './view';
@@ -25,6 +26,7 @@ export {
   PdfPerSheet,
   PdfRow,
   PdfSpan,
+  PdfSvg,
   PdfTable,
   PdfText,
   PdfView,
@@ -48,5 +50,6 @@ export const PDF_ELEMENTS = [
   PdfCell,
   PdfPageNumber,
   PdfCanvas,
+  PdfSvg,
   PdfPerSheet,
 ] as const;

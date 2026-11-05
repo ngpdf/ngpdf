@@ -1543,9 +1543,10 @@ interface Pending {
 /**
  * A `pdf-image` is measured by Yoga, and a measured node cannot have children: without this check
  * Yoga fails deep in layout with an unclear error. A `pdf-canvas` has no content: a child would
- * size it and be drawn. Their text is ignored, so only elements count.
+ * size it and be drawn. A `pdf-svg` draws its source only. Their text is ignored, so only
+ * elements count.
  */
-const CHILDLESS = new Set(['pdf-image', 'pdf-canvas']);
+const CHILDLESS = new Set(['pdf-image', 'pdf-canvas', 'pdf-svg']);
 
 function checkLeafChildren(node: PdfNode): void {
   if (!CHILDLESS.has(node.tag)) return;

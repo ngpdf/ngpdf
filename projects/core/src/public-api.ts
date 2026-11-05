@@ -12,6 +12,7 @@ export {
   PdfPerSheet,
   PdfRow,
   PdfSpan,
+  PdfSvg,
   PdfTable,
   PdfText,
   PdfView,

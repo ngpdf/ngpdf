@@ -8,6 +8,8 @@ import { fitImage, type ImageAsset } from './images';
 import { pageNumberFormat, type Box } from './layout';
 import type { OpacityGroup, PageLayout, PlacedBox } from './paginate';
 import type { BorderStyle, Corners, Offset, ResolvedStyle, TransformFunction } from './style';
+import type { SvgAsset } from './svg/render';
+import { viewBoxMatrix } from './svg/viewport';
 import { wordGaps, type TextLine, type TextRun } from './text';
 import {
   NOTE_SIZE,
@@ -465,6 +467,8 @@ function drawBox(
     }
   }
 
+  if (box.svg) drawSvg(box.svg, contentLeft, contentTop, contentWidth, contentHeight, limit, out);
+
   if (contains) drawDeferred(absolutes, limit, numbering, out);
 
   if (clips) out.push({ op: 'unclip' });
@@ -503,6 +507,31 @@ function innerRadii(radii: Corners<number>, border: Box['border']): Corners<numb
 const NOT_CUT = { top: false, bottom: false } as const;
 
 const NOT_ROUNDED: Corners<number> = { topLeft: 0, topRight: 0, bottomRight: 0, bottomLeft: 0 };
+
+/**
+ * A pdf-svg's drawing, its viewBox fitted into the content box by its `preserveAspectRatio` and
+ * clipped to the box, cut at `limit` like a canvas.
+ */
+function drawSvg(
+  svg: SvgAsset,
+  left: number,
+  top: number,
+  width: number,
+  height: number,
+  limit: number,
+  out: DrawOp[],
+): void {
+  const clipHeight = Math.min(top + height, limit) - top;
+  if (svg.ops.length === 0 || !(clipHeight > 0 && width > 0 && height > 0)) return;
+  const fit = viewBoxMatrix(svg.viewBox, svg.aspect, width, height);
+  out.push(
+    { op: 'clip', x: left, y: top, w: width, h: clipHeight, radii: NOT_ROUNDED },
+    { op: 'transform', matrix: multiply([1, 0, 0, 1, left, top], fit) },
+  );
+  // One by one: a large drawing would pass too many arguments to one push.
+  for (const op of svg.ops) out.push(op);
+  out.push({ op: 'untransform' }, { op: 'unclip' });
+}
 
 /** A recorded canvas shape moved to the canvas's content box; a faded canvas's group fades it. */
 function placeShape(shape: ShapeOp, dx: number, dy: number): ShapeOp {

@@ -754,6 +754,67 @@ describe('createPdfkitWriter', () => {
       );
     });
 
+    it('fills and strokes a shape with gradients mapped by their matrix', async () => {
+      const stops = [
+        { offset: 0, color: '#ff0000', opacity: 1 },
+        { offset: 1, color: '#0000ff', opacity: 1 },
+      ];
+      const pdf = await pdfText([
+        {
+          op: 'shape',
+          segments: [
+            { kind: 'move', to: { x: 10, y: 10 } },
+            { kind: 'line', to: { x: 50, y: 10 } },
+            { kind: 'line', to: { x: 50, y: 30 } },
+            { kind: 'close' },
+          ],
+          fill: {
+            color: '#ff0000',
+            opacity: 1,
+            rule: 'nonzero',
+            gradient: {
+              kind: 'linear',
+              x1: 0,
+              y1: 0,
+              x2: 1,
+              y2: 0,
+              stops,
+              matrix: [40, 0, 0, 20, 10, 10],
+            },
+          },
+          stroke: {
+            color: '#ff0000',
+            opacity: 1,
+            width: 2,
+            cap: 'butt',
+            join: 'miter',
+            miterLimit: 6,
+            dash: { pattern: [0, 4], phase: 0 },
+            gradient: {
+              kind: 'radial',
+              cx: 0.5,
+              cy: 0.5,
+              r1: 0,
+              r2: 0.5,
+              scaleY: 1,
+              fx: 0.25,
+              stops,
+            },
+          },
+        },
+      ]);
+      expect(pdf).toContain('/Coords [0 0 1 0]');
+      // pdfkit's flip of y (1 0 0 -1 0 200) times the box mapping.
+      expect(pdf).toContain('/Matrix [40 0 0 -20 10 190]');
+      // The focal point sits a quarter left of the centre.
+      expect(pdf).toContain('/Coords [-0.25 0 0 0 0 0.5]');
+      const content = contentOf(pdf);
+      expect(content).toMatch(/\/Pattern cs\n\/Sh\d+ scn\n/);
+      expect(content).toMatch(/\/Pattern CS\n\/Sh\d+ SCN\n/);
+      expect(content).toContain('6 M\n');
+      expect(content).toContain('[0 4] 0 d\n');
+    });
+
     it('fills a shape with the nonzero rule as plain f', async () => {
       const content = contentOf(
         await pdfText([

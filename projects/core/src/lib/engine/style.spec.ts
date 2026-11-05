@@ -613,6 +613,13 @@ describe('resolveStyles', () => {
     );
   });
 
+  it('throws a clear error for a pdf-svg with an element child, which it would never draw', () => {
+    const svg = el('pdf-svg', {}, [el('pdf-text', {}, [createNode('text', '', 'x')])]);
+    expect(() => resolveStyles(el('pdf-document', {}, [svg]))).toThrow(
+      'ngpdf: pdf-svg cannot have children (found <pdf-text>)',
+    );
+  });
+
   it('throws a clear error for a pdf-canvas with an element child, which would size and draw it', () => {
     const canvas = el('pdf-canvas', {}, [el('pdf-view', { height: '40' })]);
     expect(() => resolveStyles(el('pdf-document', {}, [canvas]))).toThrow(

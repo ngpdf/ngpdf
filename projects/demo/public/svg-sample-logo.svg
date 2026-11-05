@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Made-up logo for the ngpdf demo: a sun over two hills, in a rounded badge. -->
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 120 120" width="120" height="120">
+  <title>Hillside Co-op</title>
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fde68a"/>
+      <stop offset="1" stop-color="#fb923c"/>
+    </linearGradient>
+    <radialGradient id="sun" cx="0.5" cy="0.5" r="0.5" fx="0.35" fy="0.35">
+      <stop offset="0" stop-color="#fffbeb"/>
+      <stop offset="100%" stop-color="#f59e0b"/>
+    </radialGradient>
+  </defs>
+  <rect x="4" y="4" width="112" height="112" rx="22" fill="url(#sky)" stroke="#9a3412" stroke-width="3"/>
+  <circle cx="60" cy="52" r="22" fill="url(#sun)"/>
+  <g transform="translate(60 52)" stroke="#f59e0b" stroke-width="3" stroke-linecap="round">
+    <line x1="0" y1="-30" x2="0" y2="-38" transform="rotate(0)"/>
+    <line x1="0" y1="-30" x2="0" y2="-38" transform="rotate(45)"/>
+    <line x1="0" y1="-30" x2="0" y2="-38" transform="rotate(-45)"/>
+    <line x1="0" y1="-30" x2="0" y2="-38" transform="rotate(90)"/>
+    <line x1="0" y1="-30" x2="0" y2="-38" transform="rotate(-90)"/>
+  </g>
+  <path d="M4 92 Q 35 62 66 88 T 116 82 V 94 a22 22 0 0 1 -22 22 H 26 A22 22 0 0 1 4 94 Z" fill="#15803d"/>
+  <path d="M4 102 C 40 84 80 112 116 96 L116 94 a22 22 0 0 1 -22 22 H26 a22 22 0 0 1 -22 -22 z" fill="#166534" opacity="0.9"/>
+</svg>

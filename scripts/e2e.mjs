@@ -133,6 +133,33 @@ const DOCUMENTS = [
       'm l m l S': 1,
     },
   },
+  {
+    name: 'svg-sample',
+    pages: 1,
+    contains: ['Hillside Co-op', 'What we share', 'Seeds', 'Boxes', 'Members by quarter', 'Q4'],
+    // The paths the three SVGs draw, by their operators (see `pathsOf`). The logo's faded front
+    // hill is drawn in a group (a form), which `pathsOf` does not read.
+    paths: {
+      // The logo's rounded badge, filled with its gradient and stroked.
+      'm l c l c l c l c h B': 1,
+      // The sun, and the back hill: two quadratic curves (Q, T), a line and two arcs.
+      'm c c c c h f': 1,
+      'm c c l c l c h f': 1,
+      // Five rays, the leaf's stem and the chart's four borders.
+      'm l S': 10,
+      // The icons: leaf, drop and sun disc, the sun's rays as one path, the box and its flap.
+      'm c c h S': 1,
+      'm c c c c h S': 2,
+      'm l m l m l m l S': 1,
+      'm l c l c l c l c h S': 1,
+      'm l l S': 1,
+      // The chart: three dashed grid lines, four rounded bars, the trend line and its four dots.
+      'm l S dashed': 3,
+      'm l c l c l c l c h f': 4,
+      'm l l l S': 1,
+      'm c c c c h B': 4,
+    },
+  },
   // Emoji are images, not text: pdfimages lists each of the 7 drawn, from 5 embedded images.
   { name: 'emoji-sample', pages: 1, images: 7, contains: ['© 2026 Example Club stays text.'] },
   // A pdfPerSheet footer: its text depends on the sheet it is drawn on.

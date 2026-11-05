@@ -2,6 +2,7 @@ import type { Edge, Node as YogaNode, Yoga } from 'yoga-layout/load';
 import { createNode, propsOf, type PdfNode } from '../tree/node';
 import type { TableColumn } from '../tree/table-column';
 import type { ImageAsset } from './images';
+import type { SvgAsset } from './svg/render';
 import type { AnchorMark, Anchors } from './anchors';
 import { linkUrl } from './link';
 import { noteOf, type NoteContent } from './note';
@@ -31,6 +32,8 @@ export interface Box {
   readonly border: Edges<number>;
   readonly text?: TextBlock;
   readonly image?: ImageAsset;
+  /** A pdf-svg's parsed drawing. */
+  readonly svg?: SvgAsset;
   /** The checked URL of a block pdf-link, or `#name` for a link to the anchor `name`. */
   readonly link?: string;
   /** Set on an element with an `anchor` or a `bookmark`: the display list marks its place. */
@@ -58,6 +61,8 @@ export interface LayoutContext {
   readonly yoga: Yoga;
   readonly metrics: FontMetrics;
   readonly images: ReadonlyMap<PdfNode, ImageAsset>;
+  /** The parsed drawing of each pdf-svg; one not in it is sized and drawn as an empty box. */
+  readonly svgs?: ReadonlyMap<PdfNode, SvgAsset>;
   /**
    * Dev-mode warnings (ignored table styles, table columns that did not settle), at most one of
    * each kind per `layoutBox` call. The caller decides where they go.
@@ -333,10 +338,11 @@ function dpiAbove(node: PdfNode): number {
 function sizeImage(
   node: YogaNode,
   style: ResolvedStyle,
-  asset: ImageAsset,
+  asset: { readonly width: number; readonly height: number },
   yoga: Yoga,
   parent: ResolvedStyle | undefined,
   dpi: number,
+  tag: string,
 ): void {
   const { width, height } = style;
   if (!(asset.width > 0 && asset.height > 0)) {
@@ -358,7 +364,7 @@ function sizeImage(
     // Yoga works in float32: a tiny dpi must not hand it an infinite size.
     if (!Number.isFinite(Math.fround(Math.max(natural, natural / ratio)))) {
       throw new Error(
-        `ngpdf: pdf-image natural size is too large at dpi ${String(dpi)}; set a width or a larger dpi`,
+        `ngpdf: ${tag} natural size is too large at dpi ${String(dpi)}; set a width or a larger dpi`,
       );
     }
     node.setMeasureFunc((available, mode) => {
@@ -382,7 +388,7 @@ export function pageNumberFormat(node: PdfNode): string {
 }
 
 // Elements whose text is their own content (or that hold none), never wrapped in anonymous boxes.
-const LEAVES = new Set(['pdf-text', 'pdf-image', 'pdf-page-number', 'pdf-canvas']);
+const LEAVES = new Set(['pdf-text', 'pdf-image', 'pdf-page-number', 'pdf-canvas', 'pdf-svg']);
 
 /**
  * The children of `node` as boxes: its elements, and each maximal run of text nodes between them
@@ -589,7 +595,12 @@ export function layoutBox(
     // Yoga's default, relative, gives the same layout when no box is absolute, for fewer calls.
     // The root stays relative: it is laid out where it is asked to be.
     if (positioned && current !== node) applyPosition(yoga, yogaNode, style);
-    const asset = current.tag === 'pdf-image' ? ctx.images.get(current) : undefined;
+    const asset =
+      current.tag === 'pdf-image'
+        ? ctx.images.get(current)
+        : current.tag === 'pdf-svg'
+          ? ctx.svgs?.get(current)
+          : undefined;
     if (asset) {
       sizeImage(
         yogaNode,
@@ -597,7 +608,9 @@ export function layoutBox(
         asset,
         yoga,
         current.parent ? styleFor(current.parent) : undefined,
-        dpiAbove(current),
+        // An SVG is sized in its own units, where px is 1pt whatever the page's dpi.
+        current.tag === 'pdf-svg' ? 72 : dpiAbove(current),
+        current.tag,
       );
     }
     const isText = current.tag === 'pdf-text';
@@ -721,6 +734,7 @@ export function layoutBox(
     const { node: current, yoga: yogaNode } = built;
     const style = styleFor(current);
     const image = ctx.images.get(current);
+    const svg = current.tag === 'pdf-svg' ? ctx.svgs?.get(current) : undefined;
     const link =
       current.tag === 'pdf-link' ? linkUrl(current, ctx.warn, ctx.anchors?.names) : undefined;
     const anchor = ctx.anchors?.marks.get(current);
@@ -766,6 +780,7 @@ export function layoutBox(
           }
         : {}),
       ...(image ? { image } : {}),
+      ...(svg ? { svg } : {}),
       ...(link !== undefined && { link }),
       ...(anchor && { anchor }),
       ...(isNote && { note: noteOf(current) }),

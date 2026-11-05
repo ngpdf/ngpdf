@@ -134,6 +134,9 @@ async function fetchCapped(
   return bytes;
 }
 
+/** What a source is, as the server's messages name it. */
+export type SourceKind = 'image' | 'font' | 'SVG';
+
 /**
  * How a server render reads URLs. A server that fetched any URL from a document's data could be
  * pointed at its own internal services (SSRF), so only the app's `fetchImage` reads one.
@@ -151,7 +154,7 @@ function serverRead(
   url: string,
   label: string,
   server: ServerSources,
-  kind: 'image' | 'font',
+  kind: SourceKind,
   maxBytes: number | undefined,
 ): () => Promise<Uint8Array> {
   if (!URL.canParse(url)) throw new Error(`ngpdf: relative ${kind} URL "${label}" on the server`);
@@ -178,7 +181,7 @@ export function readSource(
   src: unknown,
   fetchFn: typeof fetch | undefined,
   server?: ServerSources,
-  kind: 'image' | 'font' = 'image',
+  kind: SourceKind = 'image',
   maxBytes?: number,
 ): { label: string; read: () => Promise<Uint8Array> | Uint8Array } | undefined {
   // URL schemes are case-insensitive, so `DATA:` and `Data:` are data URLs too.
