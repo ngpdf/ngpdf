@@ -345,6 +345,23 @@ describe('recordCanvas', () => {
       );
     });
 
+    it('throws on a point, width or dash past ±1e9 after the transform, naming the paint', () => {
+      expect(fails((ctx) => ctx.moveTo(0, 0).lineTo(2e9, 0).stroke())).toThrow(
+        'ngpdf: pdf-canvas stroke has the number 2000000000, past ±1e9',
+      );
+      expect(fails((ctx) => ctx.scale(1e200).rect(0, 0, 1e200, 1).fill())).toThrow(
+        'ngpdf: pdf-canvas fill has the number Infinity, past ±1e9',
+      );
+      expect(fails((ctx) => ctx.lineWidth(2e9).moveTo(0, 0).lineTo(1, 0).fillAndStroke())).toThrow(
+        'ngpdf: pdf-canvas fillAndStroke has the number 2000000000, past ±1e9',
+      );
+      expect(fails((ctx) => ctx.dash([2e9, 1]).moveTo(0, 0).lineTo(1, 0).stroke())).toThrow(
+        'ngpdf: pdf-canvas stroke has the number 2000000000, past ±1e9',
+      );
+      // Nothing painted, nothing checked.
+      expect(record((ctx) => ctx.moveTo(0, 0).lineTo(2e9, 0))).toEqual([]);
+    });
+
     it('throws on an unknown option', () => {
       expect(fails((ctx) => ctx.lineCap('flat' as never))).toThrow(
         'ngpdf: pdf-canvas unknown lineCap "flat"',

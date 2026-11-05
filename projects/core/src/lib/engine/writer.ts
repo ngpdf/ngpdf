@@ -6,6 +6,7 @@ import type {
   PdfCanvasLineJoin,
 } from '../tree/canvas-context';
 import type { PageLayout, PageMode } from '../tree/viewer-preferences';
+import { DRAW_NUMBER_LIMIT, MAX_DRAW_NUMBER, unwritable } from './bounds';
 import { graphemeStarts } from './graphemes';
 import type { Corners } from './style';
 import Courier from 'pdfkit/standard-fonts/Courier';
@@ -866,6 +867,7 @@ export async function createPdfkitWriter(options: { compress?: boolean } = {}): 
       const forms = { count: 0 };
       try {
         for (const [index, page] of pages.entries()) {
+          refuseUnwritable([page.width, page.height], 'a page size');
           doc.addPage({ size: [page.width, page.height], margin: 0 });
           const state: PageState = { links: [], notes: [], groups: [], forms };
           for (const op of page.ops) drawOp(doc, op, dataUrls, state);
@@ -1122,6 +1124,11 @@ function shading(doc: Doc, fill: GradientFill): PDFKit.PDFGradient {
     space = [1, 0, 0, fill.scaleY, fill.cx, fill.cy];
   }
   if (fill.matrix) space = then(space, fill.matrix);
+  // pdfkit writes the pattern's matrix in the current space, its own `_ctm` times this one.
+  const pattern = then(space, (doc as unknown as PdfKitInternals)._ctm);
+  if (unwritable(pattern) !== undefined) {
+    throw new Error(`ngpdf: cannot write a gradient drawn at a scale past ${DRAW_NUMBER_LIMIT}`);
+  }
   if (space !== IDENTITY) {
     const [a = 1, b = 0, c = 0, d = 1, e = 0, f = 0] = space;
     (gradient as unknown as GradientTransform).setTransform(a, b, c, d, e, f);
@@ -1236,8 +1243,12 @@ function pageBox(ctm: readonly number[], width: number, height: number): number[
     (a * (y - f) - b * (x - e)) / det,
   ];
   const corners = [toUser(0, 0), toUser(width, 0), toUser(0, height), toUser(width, height)];
-  const xs = corners.map(([x]) => x);
-  const ys = corners.map(([, y]) => y);
+  // Under a tiny scale the page is huge in the current space, past what pdfkit writes. The box
+  // stops at MAX_DRAW_NUMBER, as far as any op in the group reaches without a scale of its own.
+  const bound = (value: number): number =>
+    Math.min(Math.max(value, -MAX_DRAW_NUMBER), MAX_DRAW_NUMBER);
+  const xs = corners.map(([x]) => bound(x));
+  const ys = corners.map(([, y]) => bound(y));
   return [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
 }
 
@@ -1334,12 +1345,26 @@ function drawShape(doc: Doc, op: Extract<DrawOp, { op: 'shape' }>): void {
   doc.restore();
 }
 
+/**
+ * The last guard before pdfkit, which throws a bare `unsupported number` past ±1e21. The stages
+ * that build ops from user input (pdf-svg, pdf-canvas) refuse these first with their own message.
+ */
+function refuseUnwritable(value: unknown, what: string): void {
+  const number = unwritable(value);
+  if (number !== undefined) {
+    throw new Error(
+      `ngpdf: cannot write the number ${String(number)} in ${what}; drawings stay within ${DRAW_NUMBER_LIMIT}`,
+    );
+  }
+}
+
 function drawOp(
   doc: Doc,
   op: DrawOp,
   dataUrls: WeakMap<Uint8Array, string>,
   state: PageState,
 ): void {
+  refuseUnwritable(op, `a ${op.op} op`);
   switch (op.op) {
     case 'rect':
       // Each fill in its own state: a gradient sets no opacity, so it would keep the color's.

@@ -225,7 +225,10 @@ direct code. Strategy would add indirection with one implementation each.
   - parsers are linear: no regex with nested quantifiers or overlapping alternatives;
   - nesting deeper than 64 elements throws `ngpdf: nesting deeper than 64`;
   - a text node longer than 1 MB throws;
-  - a pdf-canvas that makes more than 100,000 calls, or passes a non-finite number, throws.
+  - a pdf-canvas that makes more than 100,000 calls, or passes a non-finite number, throws;
+  - no number in a `DrawOp` goes past ±1e9 (`engine/bounds.ts`): pdf-svg and pdf-canvas throw
+    their own error for one, and the pdfkit writer checks every op, page size and gradient matrix
+    again, since pdfkit throws a bare `unsupported number` past ±1e21.
 
   These limits come from the ReDoS and stack-overflow bugs found in ng-native's style engine in
   October 2026.
