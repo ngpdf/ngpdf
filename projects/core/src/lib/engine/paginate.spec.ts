@@ -2955,6 +2955,19 @@ describe('paginatePage: auto height', () => {
     }
   });
 
+  it('keeps the bottom padding of a wrapper that draws nothing before a page break', () => {
+    const wrapper = el('pdf-view', { 'padding-bottom': '6' }, [block(30)]);
+    const pages = paginate(auto([wrapper, block(20, { 'break-before': 'page' })]));
+    expect(pages.map((laid) => laid.height)).toEqual([10 + 30 + 6 + 10, 10 + 20 + 10]);
+  });
+
+  it('drops a bottom margin at a page break, as CSS truncates margins at a forced break', () => {
+    const pages = paginate(
+      auto([block(30, { 'margin-bottom': '7', 'break-after': 'page' }), block(20)]),
+    );
+    expect(pages.map((laid) => laid.height)).toEqual([50, 40]);
+  });
+
   it('covers the whole grown sheet with the page background', () => {
     const root = auto([block(30), block(60, { 'break-before': 'page' })], {
       padding: '10',

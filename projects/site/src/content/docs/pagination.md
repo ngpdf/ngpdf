@@ -289,7 +289,7 @@ A `pdf-page-number` that is not a direct child of `pdf-page` is laid out where y
 
 ## Pages with an auto height
 
-A page with an auto height (`[size]="[226, 'auto']"`, see [Pages that grow with their content](/docs/documents-and-pages#pages-that-grow-with-their-content)) is cut the same way, on a sheet 14400pt tall. Each sheet then ends below its content: bottom fixed views and the page number move up to sit right after it. A page break you ask for (`break-before`, `break-after`) starts a sheet sized to its own content. Content taller than 14400pt breaks onto further sheets, with one warning.
+A page with an auto height (`[size]="[226, 'auto']"`, see [Pages that grow with their content](/docs/documents-and-pages#pages-that-grow-with-their-content)) is cut the same way, on a sheet 14400pt tall. Each sheet then ends below its content: bottom fixed views and the page number move up to sit right after it. A page break you ask for (`break-before`, `break-after`) starts a sheet sized to its own content. As in CSS, a bottom margin just before such a break is dropped; the padding and border of the wrappers that end there are kept. Content taller than 14400pt breaks onto further sheets, with one warning.
 
 ## Warnings
 

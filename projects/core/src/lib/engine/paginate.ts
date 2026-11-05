@@ -1982,6 +1982,12 @@ export function paginatePage(
     for (const piece of built.decorations) {
       if (piece.box.node !== page) end = Math.max(end, piece.y + piece.box.h);
     }
+    // The wrappers closing with the sheet's last unit end there, drawn or not.
+    const lastHere = placements[built.lastUnit];
+    if (lastHere && !lastHere.pieces) {
+      const closes = closesAt.get(built.lastUnit) ?? lastHere.unit.bottom;
+      end = Math.max(end, closes + lastHere.unitShift);
+    }
     // The last unit's bottom margin, which no box covers, counts on the sheet it ends.
     if (lastPlacement && !lastPlacement.pieces && built === at(pages, lastPlacement.page)) {
       end = Math.max(end, laid.h + lastPlacement.unitShift);
