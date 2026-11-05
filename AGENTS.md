@@ -151,6 +151,11 @@ NGPDF_APT=poppler-utils ./scripts/dev node scripts/server-check.mjs   # packed d
   or a length in pt, px, in, cm or mm (the style parser), one number or length for a square, or
   the CSS `@page` string of two lengths. Any other unit, or a side not finite and above 0, throws
   `ngpdf: unknown page size`. Landscape always swaps them.
+  - The height alone may be `auto` (any case): `[226, 'auto']`, `'80mm auto'`. Each sheet is
+    then as tall as its content plus the page's padding and border, with bottom fixed views and
+    the page number right after the content, up to 14400pt (`AUTO_HEIGHT_LIMIT`). Taller content
+    breaks onto more sheets with one dev-mode warning; a requested page break starts a sheet
+    sized to its own content. Landscape with an auto height throws.
 - **Fonts:**
   - The 12 text faces of the standard PDF fonts, WinAnsi encoding. In them, a character outside
     WinAnsi becomes `?`, with one dev-mode warning per render naming the characters.

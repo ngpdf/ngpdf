@@ -287,6 +287,10 @@ A `pdf-page-number` that is not a direct child of `pdf-page` is laid out where y
 - In the flow, it shows the number of the sheet its unit lands on. `{total}` is always the number of sheets in the whole document.
 - Inside a `pdf-text` it is flattened like any other element there; put it next to the text instead, for example in a row `pdf-view`.
 
+## Pages with an auto height
+
+A page with an auto height (`[size]="[226, 'auto']"`, see [Pages that grow with their content](/docs/documents-and-pages#pages-that-grow-with-their-content)) is cut the same way, on a sheet 14400pt tall. Each sheet then ends below its content: bottom fixed views and the page number move up to sit right after it. A page break you ask for (`break-before`, `break-after`) starts a sheet sized to its own content. Content taller than 14400pt breaks onto further sheets, with one warning.
+
 ## Warnings
 
 All of these warnings are printed with `console.warn` at the end of the render, once each, and only in development mode (when Angular's `ngDevMode` is on). Production builds print nothing.
