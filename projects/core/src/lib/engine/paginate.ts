@@ -1,7 +1,7 @@
 import { propsOf, type PdfNode } from '../tree/node';
 import { layoutBox, pageDpi, type Box, type LayoutContext } from './layout';
 import type { TextBlock } from './text';
-import type { Edges, Length, ResolvedStyle } from './style';
+import { parseLength, type Edges, type Length, type ResolvedStyle } from './style';
 
 export interface PlacedBox {
   readonly box: Box;
@@ -54,13 +54,52 @@ export interface PageLayout {
   };
 }
 
-const PAGE_SIZES = new Map<string, readonly [number, number]>([
-  ['A3', [841.89, 1190.55]],
-  ['A4', [595.28, 841.89]],
-  ['A5', [419.53, 595.28]],
-  ['Letter', [612, 792]],
-  ['Legal', [612, 1008]],
-]);
+const MM = 72 / 25.4;
+const INCH = 72;
+
+type NamedSize = readonly [name: string, width: number, height: number, unit: number];
+
+/**
+ * An ISO-style series in millimetres from its sides, longest first: size N is `sides[N + 1]` wide
+ * and `sides[N]` tall, each size being the one before cut in half.
+ */
+function series(prefix: string, [first, ...rest]: readonly [number, ...number[]]): NamedSize[] {
+  const sizes: NamedSize[] = [];
+  let height = first;
+  for (const width of rest) {
+    sizes.push([`${prefix}${String(sizes.length)}`, width, height, MM]);
+    height = width;
+  }
+  return sizes;
+}
+
+/** Every named size, portrait, in its own unit. */
+const NAMED_SIZES: readonly NamedSize[] = [
+  ['4A0', 1682, 2378, MM],
+  ['2A0', 1189, 1682, MM],
+  ...series('A', [1189, 841, 594, 420, 297, 210, 148, 105, 74, 52, 37, 26]),
+  ...series('B', [1414, 1000, 707, 500, 353, 250, 176, 125, 88, 62, 44, 31]),
+  ...series('C', [1297, 917, 648, 458, 324, 229, 162, 114, 81, 57, 40, 28]),
+  ...series('RA', [1220, 860, 610, 430, 305, 215]),
+  ...series('SRA', [1280, 900, 640, 450, 320, 225]),
+  ...series('JIS-B', [1456, 1030, 728, 515, 364, 257, 182, 128, 91, 64, 45, 32]),
+  ['Letter', 8.5, 11, INCH],
+  ['Legal', 8.5, 14, INCH],
+  ['Executive', 7.25, 10.5, INCH],
+  ['Folio', 8.5, 13, INCH],
+  ['Tabloid', 11, 17, INCH],
+  // CSS Paged Media's ledger is Tabloid's sheet, portrait; landscape gives the traditional form.
+  ['Ledger', 11, 17, INCH],
+  ['ID1', 53.98, 85.6, MM],
+];
+
+/** Named sizes in points, keyed in lower case; rounded to 2 decimals (A4 is 595.28×841.89). */
+const PAGE_SIZES = new Map<string, readonly [number, number]>(
+  NAMED_SIZES.map(([name, width, height, unit]) => [
+    name.toLowerCase(),
+    [Math.round(width * unit * 100) / 100, Math.round(height * unit * 100) / 100],
+  ]),
+);
 
 // Two positions this close are the same point.
 const EPSILON = 0.001;
@@ -69,26 +108,62 @@ const EPSILON = 0.001;
  * How far past the bottom a box may end and still fit, on a content area `height` tall. Yoga
  * returns float32 positions, and each box in a column can add half a float32 step of rounding:
  * a few hundred boxes that fill the area exactly can end some 60 steps past it. 64 steps
- * (`height / 2^17`) covers that, and stays under 0.01pt up to A3 height, so a box that much too
- * tall still moves on every named page size.
+ * (`height / 2^17`) covers that. It stays under 0.01pt up to A3 height and under 0.06pt on 4A0,
+ * the largest named size, so a box a tenth of a point too tall still moves on every one.
  */
 function fitSlack(height: number): number {
   return Math.max(EPSILON, height * 2 ** -17);
 }
 
-/** The page's size in points from its `size` and `orientation` props; landscape swaps them. */
+/**
+ * The page's size in points from its `size` and `orientation` props; landscape swaps them,
+ * whichever way round the size is.
+ */
 export function pageSize(page: PdfNode): { width: number; height: number } {
   const props = propsOf(page);
   const size = props['size'] ?? 'A4';
-  const label = typeof size === 'string' ? size : JSON.stringify(size);
-  const pair = Array.isArray(size) ? size : PAGE_SIZES.get(label);
-  const [width, height] = (pair ?? []) as unknown[];
-  if (typeof width !== 'number' || typeof height !== 'number' || !(width > 0 && height > 0)) {
+  const sides = sizeInPoints(size);
+  if (!sides) {
+    const label = typeof size === 'string' ? size : JSON.stringify(size);
     throw new Error(`ngpdf: unknown page size "${label}" on pdf-page`);
   }
+  const [width, height] = sides;
   return props['orientation'] === 'landscape'
     ? { width: height, height: width }
     : { width, height };
+}
+
+/**
+ * `[width, height]` from a name, a pair of sides, one side for a square, or the CSS `@page`
+ * string of one or two lengths; undefined when it is none of these.
+ */
+function sizeInPoints(size: unknown): readonly [number, number] | undefined {
+  if (typeof size === 'string') {
+    const named = PAGE_SIZES.get(size.toLowerCase());
+    if (named) return named;
+    const lengths = size.trim().split(/\s+/);
+    return lengths.length <= 2
+      ? sizeInPoints(lengths.length === 1 ? [size, size] : lengths)
+      : undefined;
+  }
+  if (typeof size === 'number') return sizeInPoints([size, size]);
+  if (!Array.isArray(size) || size.length !== 2) return undefined;
+  const width = sideInPoints(size[0]);
+  const height = sideInPoints(size[1]);
+  return width !== undefined && height !== undefined ? [width, height] : undefined;
+}
+
+/** One side: points, or a length in pt, px, in, cm or mm. Undefined unless finite and above 0. */
+function sideInPoints(side: unknown): number | undefined {
+  let points: unknown = side;
+  if (typeof side === 'string') {
+    try {
+      points = parseLength(side);
+    } catch {
+      return undefined;
+    }
+  }
+  return typeof points === 'number' && Number.isFinite(points) && points > 0 ? points : undefined;
 }
 
 /** A box at its position in the full-height layout of the page content (the flow). */

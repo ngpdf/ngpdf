@@ -358,6 +358,19 @@ describe('pdf-* elements', () => {
 });
 
 describe('element input types', () => {
+  it('type a page size given as one number, lengths or the CSS @page string', () => {
+    // Checked by the typecheck; the engine reads the values (paginate.spec.ts).
+    expectTypeOf<400>().toExtend<PageSize>();
+    expectTypeOf<'400'>().toExtend<PageSize>();
+    expectTypeOf<'10cm'>().toExtend<PageSize>();
+    expectTypeOf<'210mm 297mm'>().toExtend<PageSize>();
+    expectTypeOf<readonly ['210mm', '297mm']>().toExtend<PageSize>();
+    expectTypeOf<readonly [300, '4in']>().toExtend<PageSize>();
+    expectTypeOf<'50%'>().not.toExtend<PageSize>();
+    expectTypeOf<readonly ['2em', '2em']>().not.toExtend<PageSize>();
+    expectTypeOf<'auto'>().not.toExtend<PageSize>();
+  });
+
   it('accept readonly arrays, as an `as const` or a readonly field gives them', () => {
     // Checked by the typecheck (tsc over the specs); the call itself does nothing at runtime.
     expectTypeOf<readonly TableColumn[]>().toExtend<ReturnType<PdfTable['columns']>>();
