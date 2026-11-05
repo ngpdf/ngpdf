@@ -5,7 +5,7 @@ export const SITE_URL = 'https://ngpdf.dev';
 export const SITE_NAME = 'ngpdf';
 export const TAGLINE = 'PDFs as Angular components';
 export const DEFAULT_DESCRIPTION =
-  'ngpdf renders Angular components to PDF in the browser: real text, tables with repeating headers, page breaks and page numbers, with a 2 KB eager bundle.';
+  'ngpdf renders Angular components to PDF in the browser: real text, tables with repeating headers, page breaks and page numbers, with an eager bundle under 5 KB.';
 
 export const GITHUB_URL = 'https://github.com/ngpdf/ngpdf';
 export const NPM_URL = 'https://www.npmjs.com/package/@ngpdf/core';

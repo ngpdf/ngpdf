@@ -61,9 +61,8 @@ The latest minor version gets security fixes. Older minors are not supported.
 
 | Version | Supported |
 | --- | --- |
-| 0.1.x | Yes |
-
-Under `0.x`, a minor release may contain breaking changes, so a fix can mean updating to the next minor.
+| 1.x | Latest minor only |
+| < 1.0 | No |
 
 ## Dependency vulnerabilities
 

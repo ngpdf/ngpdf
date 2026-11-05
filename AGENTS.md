@@ -6,7 +6,7 @@ a lazily loaded engine lays that tree out with Yoga, breaks it into pages and wr
 pdfkit. Package `@ngpdf/core`, npm scope `@ngpdf`, GitHub `ngpdf/ngpdf`, MIT.
 
 The structure and its patterns are in `docs/ARCHITECTURE.md`, tests, lint, CI, security and
-releases are in `docs/ENGINEERING.md`, and what comes next is in `docs/roadmap-v0.2.md`. Working
+releases are in `docs/ENGINEERING.md`, and what comes next is in `docs/roadmap.md`. Working
 design notes and implementation plans live in `docs/superpowers/`, which is gitignored and stays
 on the maintainer's machine.
 Read the ones your change touches before starting. A change that would
@@ -383,7 +383,7 @@ NGPDF_APT=poppler-utils ./scripts/dev node scripts/server-check.mjs   # packed d
     throwing `ngpdf: pdf-svg …`. A gradient `href`
     chain stops after 16 gradients with a warning. Malformed markup throws
     `ngpdf: invalid SVG: <reason> at <offset>`, a failed read `ngpdf: could not load SVG …`.
-- **Out of v0.1:**
+- **Out of scope:**
   - RTL;
   - forms;
   - capturing the DOM.

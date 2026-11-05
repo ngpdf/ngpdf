@@ -9,6 +9,6 @@
     "Render with inject(PdfRenderer).download(Component, { inputs, fileName }) or .toBlob(Component, { inputs }); outside an injection context use renderToBlob/downloadPdf with an injector.",
     "Lengths without a unit are points; style with the static style attribute or [style.x] bindings, using the properties listed on the style-properties page.",
     "Table columns are declared on pdf-table with [columns] (points, 'Nfr' or 'N%'); a pdf-row with the header attribute repeats on every page.",
-    "Only the 14 standard PDF fonts (WinAnsi) are supported in v0.1; characters outside WinAnsi become '?'."
+    "In the standard PDF fonts (WinAnsi), characters outside WinAnsi become '?'; register other fonts with providePdfFonts."
   ]
 }

@@ -1,6 +1,6 @@
 # Architecture
 
-How ngpdf is built, and why. The product rules and the v0.1 scope are in `AGENTS.md`. This file
+How ngpdf is built, and why. The product rules and the scope are in `AGENTS.md`. This file
 covers the structure and the patterns. Each pattern below is used because a concrete pressure in
 this project calls for it. Where the simplest correct answer is no pattern, this file says so.
 
@@ -52,7 +52,7 @@ this project calls for it. Where the simplest correct answer is no pattern, this
   handled with locks.
 - **The bundle line.** It falls between the tree and the engine, and the pipeline crosses it in
   exactly one place.
-- **Server rendering in v0.2.** It reuses every engine stage unchanged.
+- **Server rendering.** It reuses every engine stage unchanged.
 
 **Alternative rejected: a retained, mutable layout tree updated in place, as ng-native's engine
 does.** That design pays off when a tree is re-laid out many times, as a UI is on every commit. A

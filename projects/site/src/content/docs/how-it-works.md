@@ -60,7 +60,7 @@ The draw operations are written with [pdfkit](https://pdfkit.org/), behind a sma
 
 Everything after the node tree lives in a separate chunk that your bundler splits off. It is loaded with a dynamic `import()` on the first render, and kept for the following ones. If it fails to load, for example while offline, the next render tries again. Yoga's WebAssembly module is compiled once per page load.
 
-The part of `@ngpdf/core` in your initial bundle is the elements, the renderer factory and the `PdfRenderer` service: no pdfkit, no Yoga, no style parsing. CI enforces a budget of 15 KB gzipped for it, and fails if pdfkit or Yoga reaches an initial chunk. CI measured 1,948 bytes gzipped on `main` in October 2026, about 2 KB.
+The part of `@ngpdf/core` in your initial bundle is the elements, the renderer factory and the `PdfRenderer` service: no pdfkit, no Yoga, no style parsing. CI enforces a budget of 15 KB gzipped for it, and fails if pdfkit or Yoga reaches an initial chunk. CI measured 4,536 bytes gzipped on `main` in November 2026, under 5 KB.
 
 ## Determinism
 

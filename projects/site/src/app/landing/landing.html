@@ -6,7 +6,7 @@
       <p class="hero-lede">
         A normal component, a few <code>pdf-*</code> elements, and the browser writes a real PDF:
         text you can select, tables whose header comes back on every page, page numbers at the
-        bottom. No server and no screenshots.
+        bottom. No server needed and no screenshots.
       </p>
       <site-copy-command [command]="installCommand" />
       <div class="hero-actions">
@@ -78,38 +78,51 @@
       <div>
         <dt>Tables</dt>
         <dd>
-          Columns declared once in points, percentages or <code>fr</code>. Header rows repeat on
-          every page; rows are never split.
+          Columns declared once in points, percentages, <code>fr</code> or <code>auto</code>. Header
+          rows repeat on every page; a row splits only when it is too tall for a page below its
+          header.
         </dd>
       </div>
       <div>
         <dt>Pages</dt>
-        <dd>A3, A4, A5, Letter, Legal or any size, portrait or landscape, with page numbers.</dd>
+        <dd>
+          Every standard paper size or your own, portrait or landscape, with page numbers. A page
+          can grow with its content, for receipts.
+        </dd>
       </div>
       <div>
         <dt>Text</dt>
-        <dd>Real text with line breaking, the 14 standard PDF fonts, alignment, decoration.</dd>
+        <dd>
+          Real text with line breaking, the standard PDF fonts or your own, alignment, decoration.
+        </dd>
       </div>
       <div>
         <dt>Images</dt>
-        <dd>PNG and JPEG from a URL, a data URL, a Blob or an ArrayBuffer; contain or cover.</dd>
+        <dd>
+          PNG and JPEG from a URL, a data URL, a Blob or an ArrayBuffer; contain or cover. SVG drawn
+          as vector shapes.
+        </dd>
+      </div>
+      <div>
+        <dt>Runs</dt>
+        <dd>In the browser, or in Node with <code>renderToBuffer</code>.</dd>
       </div>
       <div>
         <dt>Weight</dt>
-        <dd>About 2 KB gzipped on your first load. The engine arrives on the first render.</dd>
+        <dd>Under 5 KB gzipped on your first load. The engine arrives on the first render.</dd>
       </div>
       <div>
         <dt>Output</dt>
         <dd>
-          The same input gives the same bytes. No PDF JavaScript, actions or attachments are ever
+          The same input gives the same bytes. No PDF JavaScript, forms or attachments are ever
           written.
         </dd>
       </div>
       <div class="not-yet">
         <dt>Not yet</dt>
         <dd>
-          Custom fonts, links, server rendering, splitting a paragraph across pages. They are
-          <a routerLink="/docs/limitations-and-roadmap">on the roadmap</a>.
+          Right-to-left text, forms and capturing a page's DOM. See the
+          <a routerLink="/docs/limitations-and-roadmap">limits and roadmap</a>.
         </dd>
       </div>
     </dl>
@@ -158,7 +171,7 @@
             <th scope="row">Page breaks</th>
             <td>Wherever the image is cut</td>
             <td>You work them out</td>
-            <td>Automatic; rows stay whole</td>
+            <td>Automatic; a row splits only when it can't fit on one page</td>
           </tr>
           <tr>
             <th scope="row">Repeating table header</th>

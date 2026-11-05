@@ -13,7 +13,7 @@ import { PDF_ELEMENTS } from '@ngpdf/core';
           {{ 'Gerado em ' + (capturedAt() | date: 'dd/MM/yyyy HH:mm') }}
         </pdf-text>
         <!--
-          The image fills the rest of the page (v0.1 has no "fill remaining height"): A4 landscape
+          The image fills the rest of the page (there is no "fill remaining height"): A4 landscape
           is 595.28 high, minus 2 x 36 padding = 523.28; the title takes 20 x 1.2 = 24, the date
           line 10 x 1.2 = 12 plus margins 4 + 14 = 18, so 54 in all. 523.28 - 54 = 469.28,
           rounded down so the image never spills onto a second page.
