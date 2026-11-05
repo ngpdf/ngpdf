@@ -293,6 +293,106 @@ describe('compileSvg', () => {
     });
   });
 
+  describe('symbol', () => {
+    it('draws a symbol only through use, placed and clipped like a nested svg', () => {
+      const warn = vi.fn();
+      const asset = compile(
+        '<svg viewBox="0 0 100 100"><symbol id="s" viewBox="0 0 4 4"><rect width="4" height="4"/></symbol><use href="#s" x="10" y="20" width="40" height="20"/></svg>',
+        warn,
+      );
+      expect(opKinds(asset)).toEqual([
+        'transform',
+        'clip',
+        'transform',
+        'shape',
+        'untransform',
+        'unclip',
+        'untransform',
+      ]);
+      expect(asset.ops[0]).toEqual({ op: 'transform', matrix: [1, 0, 0, 1, 10, 20] });
+      expect(asset.ops[1]).toMatchObject({ op: 'clip', x: 0, y: 0, w: 40, h: 20 });
+      // xMidYMid meet: scaled by 5 and centred across.
+      expect(asset.ops[2]).toEqual({ op: 'transform', matrix: [5, 0, 0, 5, 10, 0] });
+      expect(warn).not.toHaveBeenCalled();
+    });
+
+    it('never draws a symbol on its own, and says nothing of it', () => {
+      const warn = vi.fn();
+      const asset = compile(
+        '<svg><symbol id="s"><rect width="1" height="1"/></symbol><g><symbol><rect width="1" height="1"/></symbol></g></svg>',
+        warn,
+      );
+      expect(asset.ops).toEqual([]);
+      expect(warn).not.toHaveBeenCalled();
+    });
+
+    it("sizes the symbol from the use, then from the symbol's own width and height, then 100%", () => {
+      const asset = compile(
+        '<svg viewBox="0 0 50 50"><symbol id="s" width="10" height="5" viewBox="0 0 1 1"><rect width="1" height="1"/></symbol><symbol id="t"><rect width="50%" height="1"/></symbol><use href="#s"/><use href="#s" width="20"/><use href="#s" width="oops"/><use href="#t"/></svg>',
+      );
+      const clips = asset.ops.filter((op) => op.op === 'clip');
+      expect(clips.map((op) => [op.w, op.h])).toEqual([
+        [10, 5],
+        [20, 5],
+        [10, 5],
+        [50, 50],
+      ]);
+      expect(shapes(asset)[3]?.segments).toContainEqual({ kind: 'line', to: { x: 25, y: 0 } });
+    });
+
+    it("applies the symbol's preserveAspectRatio, x and y, and skips an empty size", () => {
+      const asset = compile(
+        '<svg><symbol id="s" x="3" y="4" viewBox="0 0 1 1" preserveAspectRatio="none"><rect width="1" height="1"/></symbol><use href="#s" width="10" height="5"/><use href="#s" width="0"/><symbol id="e" viewBox="0 0 0 1"><rect width="1" height="1"/></symbol><use href="#e"/></svg>',
+      );
+      expect(opKinds(asset)).toEqual([
+        'transform',
+        'clip',
+        'transform',
+        'shape',
+        'untransform',
+        'unclip',
+        'untransform',
+      ]);
+      expect(asset.ops[0]).toEqual({ op: 'transform', matrix: [1, 0, 0, 1, 3, 4] });
+      expect(asset.ops[2]).toEqual({ op: 'transform', matrix: [10, 0, 0, 5, 0, 0] });
+    });
+
+    it('inherits from the use, so one icon takes several colours', () => {
+      const asset = compile(
+        '<svg><symbol id="i"><rect width="1" height="1" fill="currentColor"/></symbol><use href="#i" color="blue"/><use href="#i" color="lime"/></svg>',
+      );
+      expect(shapes(asset).map((shape) => shape.fill?.color)).toEqual(['#0000ff', '#00ff00']);
+    });
+
+    it('throws on a symbol that points at itself, directly or through another', () => {
+      expect(() =>
+        compile('<svg><symbol id="a"><use href="#a"/></symbol><use href="#a"/></svg>'),
+      ).toThrow(`ngpdf: pdf-svg use nested deeper than ${String(MAX_USE_DEPTH)}`);
+      expect(() =>
+        compile(
+          '<svg><symbol id="a"><use href="#b"/></symbol><symbol id="b"><g><use href="#a"/></g></symbol><use href="#a"/></svg>',
+        ),
+      ).toThrow(`ngpdf: pdf-svg use nested deeper than ${String(MAX_USE_DEPTH)}`);
+    });
+
+    it('counts every use of a sprite toward the element and segment limits', () => {
+      const sprite = (uses: number, d = 'M0 0h1v1z'): string =>
+        `<svg><symbol id="i" viewBox="0 0 1 1"><path d="${d}"/></symbol>${'<use href="#i"/>'.repeat(uses)}</svg>`;
+      // A use, its symbol and the path: three elements drawn per use.
+      const fits = Math.floor(MAX_SVG_ELEMENTS / 3);
+      expect(shapes(compile(sprite(fits)))).toHaveLength(fits);
+      const started = performance.now();
+      expect(() => compile(sprite(fits + 1))).toThrow(
+        `ngpdf: pdf-svg use expands to more than ${String(MAX_SVG_ELEMENTS)} elements`,
+      );
+      const long = `M0 0${' l1 1'.repeat(100_000)}`;
+      expect(() => compile(sprite(10, long))).toThrow(
+        `ngpdf: pdf-svg drawing is over its budget of ${String(MAX_SVG_SEGMENTS)} path segments, gradient stops, dashes and attributes`,
+      );
+      expect(performance.now() - started).toBeLessThan(4000);
+    });
+  });
+
   describe('skips what it does not draw', () => {
     it('warns once per element it does not draw', () => {
       const warn = vi.fn();

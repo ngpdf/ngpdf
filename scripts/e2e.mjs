@@ -136,7 +136,7 @@ const DOCUMENTS = [
   {
     name: 'svg-sample',
     pages: 1,
-    contains: ['Hillside Co-op', 'What we share', 'Seeds', 'Boxes', 'Members by quarter', 'Q4'],
+    contains: ['Hillside Co-op', 'What we share', 'Seeds', 'Care', 'Members by quarter', 'Q4'],
     // The paths the three SVGs draw, by their operators (see `pathsOf`). The logo's faded front
     // hill is drawn in a group (a form), which `pathsOf` does not read.
     paths: {
@@ -153,6 +153,8 @@ const DOCUMENTS = [
       'm l m l m l m l S': 1,
       'm l c l c l c l c h S': 1,
       'm l l S': 1,
+      // The heart, a symbol drawn through use: a curve, two arcs as two curves each and a curve.
+      'm c c c c c c h S': 1,
       // The chart: three dashed grid lines, four rounded bars, the trend line and its four dots.
       'm l S dashed': 3,
       'm l c l c l c l c h f': 4,
