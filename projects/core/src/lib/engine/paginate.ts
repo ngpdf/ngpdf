@@ -1075,13 +1075,19 @@ function collectBreaks(box: Box, top: number, pageHeight: number, out: number[])
   });
 }
 
+/** An image, canvas or SVG: drawn to fill its box, so all of it is content. */
+function isPicture(box: Box): boolean {
+  const tag = box.node.tag;
+  return box.image !== undefined || tag === 'pdf-canvas' || tag === 'pdf-svg';
+}
+
 /**
  * The bottom of a box's content, in its own y, as if it were not stretched: a row stretches its
  * children to its height, and a split row draws each piece only as tall as its content needs.
  */
 function contentEnd(box: Box): number {
   const { style, padding, border } = box;
-  if (style.height !== 'auto' || box.image || box.node.tag === 'pdf-canvas') return box.h;
+  if (style.height !== 'auto' || isPicture(box)) return box.h;
   const top = padding.top + border.top;
   const bottom = padding.bottom + border.bottom;
   const inner = box.text
@@ -1343,7 +1349,7 @@ function stretch(
   slice: { readonly offset: number; readonly height: number },
 ): void {
   if (child.y + child.h < height - EPSILON) return;
-  const empty = !child.text && !child.image && child.node.tag !== 'pdf-canvas';
+  const empty = !child.text && !isPicture(child);
   const part =
     content[0] ??
     (empty && child.children.every(isAbsolute) ? { ...child, y: 0, children: [] } : undefined);

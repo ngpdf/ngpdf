@@ -3167,6 +3167,14 @@ describe('paginatePage: row views taller than a page', () => {
     expect(bars[1]![0]!.cut).toMatchObject({ top: true, bottom: false });
   });
 
+  it('draws a stretched picture once, on the first piece', () => {
+    const svg = el('pdf-svg', { width: '50' });
+    const pages = paginate(page([row([column([lines(100)]), svg])]));
+    expect(pages).toHaveLength(2);
+    expect(boxesOf(pages[0]!, svg)).toHaveLength(1);
+    expect(boxesOf(pages[1]!, svg)).toEqual([]);
+  });
+
   it('keeps the space above a child that starts lower in the row', () => {
     const long = lines(100);
     const pushed = lines(3, 10, 'b');
