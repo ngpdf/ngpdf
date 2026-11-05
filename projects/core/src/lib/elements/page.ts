@@ -9,8 +9,10 @@ type PageLengthString = `${number}` | `${number}${'pt' | 'px' | 'in' | 'cm' | 'm
 
 /**
  * A named paper size, `[width, height]` (each a number of points or a length string), one number
- * or length for a square page, or the CSS `@page` string of two lengths (`'210mm 297mm'`). Names
- * and units are listed in their canonical spelling; at run time they match in any case.
+ * or length for a square page, or the CSS `@page` string of two lengths (`'210mm 297mm'`). The
+ * height may be `'auto'` (`[226, 'auto']`, `'80mm auto'`): each sheet is as tall as its content,
+ * up to 14400pt. Names, units and `auto` are listed in their canonical spelling; at run time they
+ * match in any case.
  */
 export type PageSize =
   | `${'A' | 'B' | 'C' | 'JIS-B'}${UpTo10}`
@@ -26,8 +28,8 @@ export type PageSize =
   | 'ID1'
   | number
   | PageLengthString
-  | `${PageLengthString} ${PageLengthString}`
-  | readonly [number | PageLengthString, number | PageLengthString];
+  | `${PageLengthString} ${PageLengthString | 'auto'}`
+  | readonly [number | PageLengthString, number | PageLengthString | 'auto'];
 export type PageOrientation = 'portrait' | 'landscape';
 
 @Component({

@@ -31,6 +31,7 @@ import { Preview } from './preview';
 import { SplitRowSample } from './documents/split-row-sample';
 import { TwoColumnSample } from './documents/two-column-sample';
 import { WhiteSpaceSample } from './documents/white-space-sample';
+import { ReceiptSample } from './documents/receipt-sample';
 
 const DOCUMENT_NAMES = [
   'capture-report',
@@ -53,6 +54,7 @@ const DOCUMENT_NAMES = [
   'per-sheet-sample',
   'borders-sample',
   'white-space-sample',
+  'receipt-sample',
 ] as const;
 export type DemoDocument = (typeof DOCUMENT_NAMES)[number];
 
@@ -180,6 +182,8 @@ export class App {
         return this.pdf.toBlob(BordersSample);
       case 'white-space-sample':
         return this.pdf.toBlob(WhiteSpaceSample);
+      case 'receipt-sample':
+        return this.pdf.toBlob(ReceiptSample);
     }
   }
 

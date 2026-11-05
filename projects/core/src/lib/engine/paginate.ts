@@ -116,10 +116,17 @@ function fitSlack(height: number): number {
 }
 
 /**
- * The page's size in points from its `size` and `orientation` props; landscape swaps them,
- * whichever way round the size is.
+ * The tallest sheet a page with an auto height grows to: 200in, the largest page PDF 1.x allows
+ * without `/UserUnit`. Content taller than that breaks onto more sheets.
  */
-export function pageSize(page: PdfNode): { width: number; height: number } {
+export const AUTO_HEIGHT_LIMIT = 14400;
+
+/**
+ * The page's size in points from its `size` and `orientation` props; landscape swaps them,
+ * whichever way round the size is. A page with an auto height is `auto`, and as tall as it may
+ * grow; landscape has no height to swap with there, so it throws.
+ */
+export function pageSize(page: PdfNode): { width: number; height: number; auto?: true } {
   const props = propsOf(page);
   const size = props['size'] ?? 'A4';
   const sides = sizeInPoints(size);
@@ -128,16 +135,24 @@ export function pageSize(page: PdfNode): { width: number; height: number } {
     throw new Error(`ngpdf: unknown page size "${label}" on pdf-page`);
   }
   const [width, height] = sides;
-  return props['orientation'] === 'landscape'
-    ? { width: height, height: width }
-    : { width, height };
+  const landscape = props['orientation'] === 'landscape';
+  if (height === 'auto') {
+    if (landscape) {
+      throw new Error(
+        'ngpdf: orientation "landscape" needs a page height; pdf-page has an auto height',
+      );
+    }
+    return { width, height: AUTO_HEIGHT_LIMIT, auto: true };
+  }
+  return landscape ? { width: height, height: width } : { width, height };
 }
 
 /**
  * `[width, height]` from a name, a pair of sides, one side for a square, or the CSS `@page`
- * string of one or two lengths; undefined when it is none of these.
+ * string of one or two lengths; undefined when it is none of these. Only the height of a pair
+ * may be `auto`.
  */
-function sizeInPoints(size: unknown): readonly [number, number] | undefined {
+function sizeInPoints(size: unknown): readonly [number, number | 'auto'] | undefined {
   if (typeof size === 'string') {
     const named = PAGE_SIZES.get(size.toLowerCase());
     if (named) return named;
@@ -149,8 +164,12 @@ function sizeInPoints(size: unknown): readonly [number, number] | undefined {
   if (typeof size === 'number') return sizeInPoints([size, size]);
   if (!Array.isArray(size) || size.length !== 2) return undefined;
   const width = sideInPoints(size[0]);
-  const height = sideInPoints(size[1]);
+  const height = isAuto(size[1]) ? 'auto' : sideInPoints(size[1]);
   return width !== undefined && height !== undefined ? [width, height] : undefined;
+}
+
+function isAuto(side: unknown): boolean {
+  return typeof side === 'string' && side.trim().toLowerCase() === 'auto';
 }
 
 /** One side: points, or a length in pt, px, in, cm or mm. Undefined unless finite and above 0. */
@@ -843,6 +862,8 @@ function collectUnits(
 interface PageFrame {
   readonly width: number;
   readonly height: number;
+  /** The height is `auto`: each sheet is cut to its content, up to `height`. */
+  readonly auto: boolean;
   readonly left: number;
   readonly top: number;
   readonly contentWidth: number;
@@ -856,12 +877,13 @@ function frameOf(
 ): Omit<PageFrame, 'bottom'> & {
   readonly innerBottom: number;
 } {
-  const { width, height } = pageSize(page);
+  const { width, height, auto } = pageSize(page);
   const pad = (side: keyof Edges<Length>): number =>
     lengthIn(style.padding[side], width) + style.borderWidth[side];
   return {
     width,
     height,
+    auto: auto === true,
     left: pad('left'),
     top: pad('top'),
     contentWidth: Math.max(0, width - pad('left') - pad('right')),
@@ -914,6 +936,8 @@ function measurePageNumber(
 
 interface PageBuilder {
   readonly placed: PlacedBox[];
+  /** Page y of the lowest box placed from the flow, for a page with an auto height. */
+  end: number;
   readonly decorations: PlacedBox[];
   readonly headers: Set<Header>;
   units: number;
@@ -1539,9 +1563,18 @@ export function paginatePage(
   let cursor = 0;
   // Flow bottom of the last unit placed on this page; null right after a page break.
   let previousBottom: number | null = 0;
-  const startPage = (): void => {
+  let warnedAuto = false;
+  // `asked`: a page break in the content starts this sheet, not the lack of room on the last one.
+  const startPage = (asked = false): void => {
+    if (frame.auto && !asked && pages.length > 0 && !warnedAuto) {
+      warnedAuto = true;
+      warn(
+        `ngpdf: a pdf-page with an auto height is taller than ${String(AUTO_HEIGHT_LIMIT)}pt and breaks onto more sheets`,
+      );
+    }
     current = {
       placed: [...fixedViews],
+      end: frame.top,
       decorations: [],
       headers: new Set(),
       units: 0,
@@ -1647,6 +1680,7 @@ export function paginatePage(
   ): void => {
     const { box } = at;
     const drawn = { box, x: x + at.dx, y: y + at.dy, ...grouped(groups) };
+    on.end = Math.max(on.end, y + box.h);
     if (y + box.h > frame.bottom + slack) {
       warn(`ngpdf: ${nameOf(at)} is taller than a page and is cut at the bottom`);
       on.placed.push({ ...drawn, clipBottom: frame.bottom });
@@ -1757,6 +1791,7 @@ export function paginatePage(
         warn(`ngpdf: ${nameOf(unit)} is taller than a page and is cut at the bottom`);
       }
       const range = { from: at(froms, k), to: froms[k + 1] ?? Infinity };
+      piece.built.end = Math.max(piece.built.end, top + piece.h);
       piece.built.placed.push({
         box: rowPieceBox(row, cells, piece, offset, height, range),
         x: frame.left + unit.x + unit.dx,
@@ -1794,7 +1829,7 @@ export function paginatePage(
     const before = units[index - 1];
     const afterPrevious = breaksAfter.has(index - 1) || (before && asksForBreakAfter(before.box));
     if ((breaksAt.has(index) || asksForBreak(unit.box) || afterPrevious) && current.units > 0) {
-      startPage();
+      startPage(true);
       previousBottom = null;
     }
     // A row taller than a page below its header splits, when its cells can break.
@@ -2082,17 +2117,59 @@ export function paginatePage(
     }
   }
 
-  return pages.map((built) => ({
+  const sheet = (built: PageBuilder, shift: number): PageLayout => ({
     width: frame.width,
-    height: frame.height,
+    height: frame.height + shift,
     content: {
       x: base.left,
       y: base.top,
       w: base.contentWidth,
-      h: Math.max(0, base.innerBottom - base.top),
+      h: Math.max(0, base.innerBottom + shift - base.top),
     },
     placed: built.placed,
     decorations: built.decorations,
-    ...(pageNumber ? { pageNumber } : {}),
-  }));
+    ...(pageNumber
+      ? { pageNumber: shift === 0 ? pageNumber : { ...pageNumber, y: pageNumber.y + shift } }
+      : {}),
+  });
+  if (!frame.auto) return pages.map((built) => sheet(built, 0));
+
+  // An auto height: each sheet ends below its lowest box, and what sits under the flow (bottom
+  // fixed views, the page number, the padding) moves up with it.
+  const lastPlacement = placements.at(-1);
+  const below = new Set(bottoms);
+  // Where a unit ends: its sheet, and page y minus flow y at its bottom. A split row ends with
+  // its last piece.
+  const endOf = (placement: Placement): { page: number; shift: number } => {
+    const piece = placement.pieces?.at(-1);
+    return piece
+      ? { page: piece.page, shift: piece.bottom - placement.unit.bottom }
+      : { page: placement.page, shift: placement.unitShift };
+  };
+  return pages.map((built, index) => {
+    let end = built.end;
+    for (const piece of built.decorations) {
+      if (piece.box.node !== page) end = Math.max(end, piece.y + piece.box.h);
+    }
+    // The wrappers closing with the sheet's last unit end there, drawn or not.
+    const lastHere = placements[built.lastUnit];
+    const lastEnd = lastHere && endOf(lastHere);
+    if (lastHere && lastEnd?.page === index) {
+      const closes = closesAt.get(built.lastUnit) ?? lastHere.unit.bottom;
+      end = Math.max(end, closes + lastEnd.shift);
+    }
+    // The last unit's bottom margin, which no box covers, counts on the sheet it ends.
+    const flowEnd = lastPlacement && endOf(lastPlacement);
+    if (flowEnd?.page === index) end = Math.max(end, laid.h + flowEnd.shift);
+    // A sheet is never 0 tall, which PDF does not allow.
+    const height = Math.max(1, Math.min(end, frame.bottom) + frame.height - frame.bottom);
+    const shift = height - frame.height;
+    const decorations = built.decorations.map((piece) =>
+      piece.box.node === page ? { ...piece, box: { ...piece.box, h: height } } : piece,
+    );
+    const placed = built.placed.map((item) =>
+      below.has(item) ? { ...item, y: item.y + shift } : item,
+    );
+    return sheet({ ...built, placed, decorations }, shift);
+  });
 }

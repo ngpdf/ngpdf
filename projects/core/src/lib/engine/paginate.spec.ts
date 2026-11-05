@@ -3297,3 +3297,180 @@ describe('paginatePage: row views taller than a page', () => {
     expect(linesOf(pages[1]!, text)).toEqual(words('a', 66, 100));
   });
 });
+
+describe('paginatePage: auto height', () => {
+  const MM80 = (80 * 72) / 25.4;
+  const LIMIT = 14400;
+  const TALLER =
+    'ngpdf: a pdf-page with an auto height is taller than 14400pt and breaks onto more sheets';
+  const block = (height: number, style: Record<string, string> = {}): PdfNode =>
+    el('pdf-view', { height: String(height), ...style });
+  const fixed = (where: 'top' | 'bottom', height: number): PdfNode =>
+    el('pdf-view', { height: String(height) }, [], { fixed: where });
+  const auto = (children: PdfNode[], style: Record<string, string> = { padding: '10' }) =>
+    page(children, style, { size: [226, 'auto'] });
+
+  it.each([
+    [[226, 'auto'], 226],
+    [['80mm', 'auto'], MM80],
+    [['80mm', ' AUTO '], MM80],
+    ['80mm auto', MM80],
+    ['  80mm\tAuto ', MM80],
+    ['226 auto', 226],
+  ])('takes %j as a fixed width and an auto height', (size, width) => {
+    const laid = pageSize(el('pdf-page', {}, [], { size }));
+    expect(laid.width).toBeCloseTo(width, 9);
+    expect(laid.auto).toBe(true);
+    expect(laid.height).toBe(LIMIT);
+  });
+
+  it.each([[['auto', 400]], [['auto', 'auto']], ['auto 400'], ['auto auto'], ['auto']])(
+    'rejects %j: only the height may be auto',
+    (size) => {
+      expect(() => pageSize(el('pdf-page', {}, [], { size }))).toThrow(
+        /^ngpdf: unknown page size ".*" on pdf-page$/,
+      );
+    },
+  );
+
+  it('has no auto flag on a page of fixed size', () => {
+    expect(pageSize(el('pdf-page', {}, [], { size: [226, 400] }))).toEqual({
+      width: 226,
+      height: 400,
+    });
+  });
+
+  it('throws on landscape with an auto height', () => {
+    const node = el('pdf-page', {}, [], { size: [226, 'auto'], orientation: 'landscape' });
+    expect(() => pageSize(node)).toThrow(
+      'ngpdf: orientation "landscape" needs a page height; pdf-page has an auto height',
+    );
+    expect(() =>
+      pageSize(el('pdf-page', {}, [], { size: [226, 'auto'], orientation: 'portrait' })),
+    ).not.toThrow();
+  });
+
+  it('makes one sheet as tall as its content and padding', () => {
+    const pages = paginate(auto([block(30), block(50, { 'margin-top': '5' })]));
+    expect(pages).toHaveLength(1);
+    const [laid] = pages;
+    expect(laid!.width).toBe(226);
+    expect(laid!.height).toBeCloseTo(10 + 30 + 5 + 50 + 10, 6);
+    expect(laid!.content).toEqual({ x: 10, y: 10, w: 206, h: 85 });
+    expect(laid!.placed.map((placed) => placed.y)).toEqual([10, 45]);
+  });
+
+  it('counts the border and the bottom margin of the last child', () => {
+    const pages = paginate(
+      auto([block(30, { 'margin-bottom': '7' })], { padding: '10', 'border-width': '2' }),
+    );
+    expect(pages[0]!.height).toBeCloseTo(12 + 30 + 7 + 12, 6);
+  });
+
+  it('is only its padding tall when it has no content', () => {
+    expect(paginate(auto([]))[0]!.height).toBeCloseTo(20, 6);
+  });
+
+  it('puts bottom fixed views and the page number right after the content', () => {
+    const top = fixed('top', 15);
+    const footer = fixed('bottom', 20);
+    const pages = paginate(auto([top, block(40), footer, pageNumber()]));
+    expect(pages).toHaveLength(1);
+    const [laid] = pages;
+    expect(laid!.height).toBeCloseTo(10 + 15 + 40 + 20 + NUMBER_HEIGHT + 10, 6);
+    const placed = (node: PdfNode) => laid!.placed.find((p) => p.box.node === node)!;
+    expect(placed(top).y).toBeCloseTo(10, 6);
+    expect(placed(footer).y).toBeCloseTo(10 + 15 + 40, 6);
+    expect(laid!.pageNumber!.y).toBeCloseTo(10 + 15 + 40 + 20, 6);
+    expect(laid!.content.h).toBeCloseTo(laid!.height - 20, 6);
+  });
+
+  it('starts a sheet of its own height at each page break', () => {
+    const pages = paginate(
+      auto([
+        block(30),
+        block(50, { 'break-before': 'page' }),
+        block(20, { 'break-after': 'page' }),
+        block(5),
+      ]),
+    );
+    expect(pages.map((laid) => laid.height)).toEqual([50, 90, 25]);
+    expect(pages.map((laid) => laid.placed.map((placed) => placed.y))).toEqual([
+      [10],
+      [10, 60],
+      [10],
+    ]);
+  });
+
+  it('ends a sheet at a page break inside a wrapper, with its decoration cut there', () => {
+    const wrapper = el('pdf-view', { 'background-color': '#eee', padding: '4' }, [
+      block(30),
+      block(20, { 'break-before': 'page' }),
+    ]);
+    const pages = paginate(auto([wrapper]));
+    expect(pages.map((laid) => laid.height)).toEqual([10 + 4 + 30 + 10, 10 + 20 + 4 + 10]);
+    for (const laid of pages) {
+      const piece = laid.decorations[0]!;
+      expect(piece.y + piece.box.h).toBeCloseTo(laid.height - 10, 6);
+    }
+  });
+
+  it('keeps the bottom padding of a wrapper that draws nothing before a page break', () => {
+    const wrapper = el('pdf-view', { 'padding-bottom': '6' }, [block(30)]);
+    const pages = paginate(auto([wrapper, block(20, { 'break-before': 'page' })]));
+    expect(pages.map((laid) => laid.height)).toEqual([10 + 30 + 6 + 10, 10 + 20 + 10]);
+  });
+
+  it('drops a bottom margin at a page break, as CSS truncates margins at a forced break', () => {
+    const pages = paginate(
+      auto([block(30, { 'margin-bottom': '7', 'break-after': 'page' }), block(20)]),
+    );
+    expect(pages.map((laid) => laid.height)).toEqual([50, 40]);
+  });
+
+  it('keeps the bottom margin of a table whose last row splits across sheets', () => {
+    const cell = el(
+      'pdf-cell',
+      {},
+      Array.from({ length: 15 }, () => block(1000)),
+    );
+    const tall = el('pdf-table', { 'margin-bottom': '9' }, [el('pdf-row', {}, [cell])], {
+      columns: ['1fr'],
+    });
+    const pages = paginate(auto([tall]));
+    expect(pages.map((laid) => laid.height)).toEqual([10 + 14000 + 10, 10 + 1000 + 9 + 10]);
+  });
+
+  it('covers the whole grown sheet with the page background', () => {
+    const root = auto([block(30), block(60, { 'break-before': 'page' })], {
+      padding: '10',
+      'background-color': '#fafafa',
+    });
+    const pages = paginate(root);
+    for (const laid of pages) {
+      const decoration = laid.decorations[0]!;
+      expect(decoration.box.node).toBe(root);
+      expect([decoration.y, decoration.box.w, decoration.box.h]).toEqual([0, 226, laid.height]);
+    }
+  });
+
+  it('breaks content taller than 14400pt onto more sheets, with one warning', () => {
+    const warn = vi.fn<(message: string) => void>();
+    const blocks = Array.from({ length: 15 }, () => block(1000));
+    const pages = paginate(auto(blocks), warn);
+    expect(pages.map((laid) => laid.height)).toEqual([10 + 14000 + 10, 10 + 1000 + 10]);
+    expect(warn).toHaveBeenCalledWith(TALLER);
+    expect(warn).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not warn when only page breaks start sheets', () => {
+    const warn = vi.fn<(message: string) => void>();
+    paginate(auto([block(30), block(30, { 'break-before': 'page' })]), warn);
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it('keeps a fixed-height page as it was', () => {
+    const pages = paginate(page([block(30)], { padding: '10' }, { size: [226, 400] }));
+    expect(pages[0]!.height).toBe(400);
+  });
+});
