@@ -156,6 +156,8 @@ export interface ResolvedStyle extends TextStyle {
   /** `break-after: avoid`: keep this element on a page with what follows it. */
   readonly keepWithNext: boolean;
   readonly breakInside: 'auto' | 'avoid';
+  /** `min-presence-ahead`: the room, in points, an element needs below it on its sheet; 0 is off. */
+  readonly minPresenceAhead: number;
   /**
    * The most lines a text keeps; the last kept line ends in an ellipsis when text was cut. Null for
    * no limit.
@@ -1028,6 +1030,7 @@ function defaultStyle(node: PdfNode, inherited: TextStyle): Mutable<ResolvedStyl
     breakAfter: propsOf(node)['breakAfter'] === true,
     keepWithNext: false,
     breakInside: 'auto',
+    minPresenceAhead: 0,
     maxLines: null,
     textOverflow: 'clip',
   };
@@ -1342,6 +1345,9 @@ function apply(
       style.breakInside =
         oneOf(value, ['auto', 'avoid', 'avoid-page'], property, tag) === 'auto' ? 'auto' : 'avoid';
       break;
+    case 'min-presence-ahead':
+      style.minPresenceAhead = minPresenceOf(value, tag);
+      break;
     case 'orphans':
     case 'widows':
       style[property] = lineCountOf(value, property, tag);
@@ -1355,6 +1361,17 @@ function apply(
     default:
       break;
   }
+}
+
+/** `0` or a length in points, never negative: a percentage or a keyword names no room. */
+function minPresenceOf(value: string, tag: string): number {
+  const keyword = keywordOf(value);
+  const code = keyword.charCodeAt(0);
+  const length = code >= 97 && code <= 122 ? 'auto' : parseLength(value, tag);
+  if (typeof length !== 'number') {
+    return invalidKeyword(value, 'min-presence-ahead', tag, '0 or a length');
+  }
+  return rejectNegative(length, value, tag);
 }
 
 function lineCountOf(value: string, property: string, tag: string): number {

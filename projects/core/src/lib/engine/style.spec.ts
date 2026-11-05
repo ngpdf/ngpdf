@@ -926,6 +926,35 @@ describe('resolveStyles property coverage', () => {
     );
   });
 
+  it('reads min-presence-ahead as a length in points, not inherited, default 0', () => {
+    expect(styleOf({}).minPresenceAhead).toBe(0);
+    expect(styleOf({ 'min-presence-ahead': '80pt' }).minPresenceAhead).toBe(80);
+    expect(styleOf({ 'min-presence-ahead': ' 40 ' }).minPresenceAhead).toBe(40);
+    expect(styleOf({ 'min-presence-ahead': '1in' }).minPresenceAhead).toBe(72);
+    expect(styleOf({ 'min-presence-ahead': '0' }).minPresenceAhead).toBe(0);
+    expect(styleOf({ 'min-presence-ahead': '10px' }, 'pdf-row').minPresenceAhead).toBe(10);
+    const text = el('pdf-text');
+    const view = el('pdf-view', { 'min-presence-ahead': '50' }, [text]);
+    expect(resolveStyles(view).get(text)?.minPresenceAhead).toBe(0);
+  });
+
+  it('throws on a keyword, a percentage or a negative min-presence-ahead', () => {
+    for (const value of ['auto', 'none', 'big']) {
+      expect(() => styleOf({ 'min-presence-ahead': value })).toThrow(
+        `ngpdf: invalid value "${value}" for min-presence-ahead on pdf-view; use 0 or a length`,
+      );
+    }
+    expect(() => styleOf({ 'min-presence-ahead': '10%' })).toThrow(
+      'ngpdf: invalid value "10%" for min-presence-ahead on pdf-view; use 0 or a length',
+    );
+    expect(() => styleOf({ 'min-presence-ahead': '-5pt' })).toThrow(
+      'ngpdf: expected a non-negative length in "-5pt" on pdf-view',
+    );
+    expect(() => styleOf({ 'min-presence-ahead': '3em' })).toThrow(
+      'ngpdf: unknown unit in "3em" on pdf-view',
+    );
+  });
+
   it('reads break-inside: avoid, not inherited', () => {
     expect(styleOf({}).breakInside).toBe('auto');
     expect(styleOf({ 'break-inside': 'avoid' }).breakInside).toBe('avoid');
