@@ -208,6 +208,10 @@ describe('compileSvg', () => {
       expect(compile('<svg><svg width="0"><rect width="1" height="1"/></svg></svg>').ops).toEqual(
         [],
       );
+      // 1e308in is finite, but not once it is in points.
+      expect(
+        compile('<svg><svg width="1e308in"><rect width="1" height="1"/></svg></svg>').ops,
+      ).toEqual([]);
       expect(
         compile('<svg><svg viewBox="0 0 0 1"><rect width="1" height="1"/></svg></svg>').ops,
       ).toEqual([]);
@@ -328,10 +332,11 @@ describe('compileSvg', () => {
 
     it("sizes the symbol from the use, then from the symbol's own width and height, then 100%", () => {
       const asset = compile(
-        '<svg viewBox="0 0 50 50"><symbol id="s" width="10" height="5" viewBox="0 0 1 1"><rect width="1" height="1"/></symbol><symbol id="t"><rect width="50%" height="1"/></symbol><use href="#s"/><use href="#s" width="20"/><use href="#s" width="oops"/><use href="#t"/><use href="#s" width="-1"/><symbol id="n" width="-5" height="-1"><rect width="1" height="1"/></symbol><use href="#n"/></svg>',
+        '<svg viewBox="0 0 50 50"><symbol id="s" width="10" height="5" viewBox="0 0 1 1"><rect width="1" height="1"/></symbol><symbol id="t"><rect width="50%" height="1"/></symbol><use href="#s"/><use href="#s" width="20"/><use href="#s" width="oops"/><use href="#t"/><use href="#s" width="-1"/><symbol id="n" width="-5" height="-1"><rect width="1" height="1"/></symbol><use href="#n"/><use href="#s" width="1e308in"/></svg>',
       );
       const clips = asset.ops.filter((op) => op.op === 'clip');
-      // A negative size is ignored (SVG 2), so the next one in line applies.
+      // A negative size is ignored (SVG 2), and so is one past what a float holds, so the next
+      // one in line applies.
       expect(clips.map((op) => [op.w, op.h])).toEqual([
         [10, 5],
         [20, 5],
@@ -339,6 +344,7 @@ describe('compileSvg', () => {
         [50, 50],
         [10, 5],
         [50, 50],
+        [10, 5],
       ]);
       expect(shapes(asset)[3]?.segments).toContainEqual({ kind: 'line', to: { x: 25, y: 0 } });
     });

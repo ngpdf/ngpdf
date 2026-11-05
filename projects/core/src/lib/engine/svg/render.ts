@@ -388,20 +388,21 @@ export function compileSvg(
       }
       // A symbol drawn through a `use` is drawn as a nested svg (SVG 2, the `use` element): the
       // use's `width` and `height` win over the symbol's own, and both default to 100%. A
-      // missing, invalid or negative size is ignored, so the next one in line applies.
+      // missing, invalid or negative size is ignored, so the next one in line applies, and so is
+      // one past what a float holds (1e308in), which the writer could not write.
       case 'symbol':
       case 'svg': {
         const side = (attribute: string, reference: number): number => {
           if (name !== 'symbol') return length(attribute, reference, reference);
           for (const source of [use, element]) {
             const value = parseLength(source?.attributes.get(attribute) ?? '', reference);
-            if (value !== null && value >= 0) return value;
+            if (value !== null && value >= 0 && Number.isFinite(value)) return value;
           }
           return reference;
         };
         const w = side('width', viewport.width);
         const h = side('height', viewport.height);
-        if (!(w > 0 && h > 0)) return [];
+        if (!(w > 0 && h > 0 && finite([w, h]))) return [];
         matrix = multiply(matrix, [
           1,
           0,
