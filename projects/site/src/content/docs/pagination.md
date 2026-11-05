@@ -35,7 +35,7 @@ If the page's own `flex-direction` is `row`, its whole content is one unit, unle
 
 ### Wrapping rows
 
-A row with `flex-wrap: wrap` or `wrap-reverse` breaks between its lines and never through one. Each line is a unit with every child on it, so a card on a line is never cut from the rest of the line.
+A row with `flex-wrap: wrap` or `wrap-reverse` breaks between its lines. Each line is a unit with every child on it, so a line that fits on an empty sheet is never cut, and a card on it never leaves the rest of the line. Only a line taller than a sheet splits, as below.
 
 - A line goes to the next sheet whole when it does not fit. The row gap (or `align-content` space) before it is dropped there, and the line starts at the top of the content area, as a child of a column does.
 - A line taller than the content area splits across sheets like a [row view](#row-views-taller-than-a-page), with the children on the line as its columns. A line with nothing that can break, such as a tall image or a box with a fixed height, goes on a sheet of its own and is clipped, as any [unit taller than a page](#units-taller-than-a-page). On a wrapping `pdf-page` the warning names the line: `ngpdf: a wrapped line of pdf-page is taller than a page and is cut at the bottom`.

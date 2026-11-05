@@ -3089,6 +3089,30 @@ describe('paginatePage: row views taller than a page', () => {
     expect(boxesOf(pages[1]!, article)[0]!.y).toBeCloseTo(CONTENT_TOP, 6);
   });
 
+  it('splits a row pdf-link, each piece one link area over its part', () => {
+    const long = lines(100);
+    const link = el('pdf-link', { 'flex-direction': 'row' }, [long, lines(3, 10, 'b')], {
+      href: 'https://example.com/survey',
+    });
+    const pages = paginate(page([link]));
+    expect(pages).toHaveLength(2);
+    expect(linesOf(pages[0]!, long)).toEqual(words('a', 0, 76));
+    expect(linesOf(pages[1]!, long)).toEqual(words('a', 76, 100));
+    const pieces = pages.map((laid) => piecesOf(laid, link));
+    expect(pieces.map((list) => list.map((p) => p.box.link))).toEqual([
+      ['https://example.com/survey'],
+      ['https://example.com/survey'],
+    ]);
+    // Only the piece carries the link: the boxes around its children don't add areas of their own.
+    for (const [piece] of pieces) {
+      expect(piece!.box.children.every((child) => child.link === undefined)).toBe(true);
+    }
+    expect(pieces.map(([piece]) => piece!.box.h)).toEqual([
+      expect.closeTo(760, 6),
+      expect.closeTo(240, 6),
+    ]);
+  });
+
   it('breaks each child on its own, every piece as tall as its tallest child piece', () => {
     // Texts straight in the row break between their lines too.
     const small = lines(100);
