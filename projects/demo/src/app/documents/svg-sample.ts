@@ -6,7 +6,10 @@ interface Quarter {
   readonly members: number;
 }
 
-/** One icon per name, drawn in the color of the pdf-svg through currentColor. */
+/**
+ * One icon per name, drawn in the color of the pdf-svg through currentColor. The heart is a
+ * `symbol` with its own 48 × 48 viewBox, as in an icon sprite, which the `use` scales to 24 × 24.
+ */
 const ICONS = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
   stroke-linecap="round" stroke-linejoin="round">
   <defs>
@@ -15,7 +18,10 @@ const ICONS = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke
     <g id="sun"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2"/></g>
     <g id="box"><rect x="3" y="7" width="18" height="13" rx="2"/><polyline points="3 7 12 13 21 7"/></g>
   </defs>
-  <use href="#ICON"/>
+  <symbol id="heart" viewBox="0 0 48 48" stroke-width="4">
+    <path d="M24 41S6 30 6 17a9 9 0 0 1 18-4 9 9 0 0 1 18 4c0 13-18 24-18 24z"/>
+  </symbol>
+  <use href="#ICON" width="24" height="24"/>
 </svg>`;
 
 /** A logo from a file, an icon set and a small chart, all drawn by pdf-svg. */
@@ -62,6 +68,7 @@ export class SvgSample {
     { name: 'drop', label: 'Water' },
     { name: 'sun', label: 'Solar' },
     { name: 'box', label: 'Boxes' },
+    { name: 'heart', label: 'Care' },
   ].map((icon) => ({ ...icon, svg: ICONS.replace('#ICON', `#${icon.name}`) }));
 
   readonly quarters: readonly Quarter[] = [

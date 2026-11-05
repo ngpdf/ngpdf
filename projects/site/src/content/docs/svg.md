@@ -55,7 +55,8 @@ The drawing is clipped to the content box. A `pdf-svg` takes `padding`, borders,
 
 ## What is drawn
 
-- Elements: `svg` (nested too), `g`, `path`, `rect` (with `rx` and `ry`), `circle`, `ellipse`, `line`, `polyline`, `polygon`, `defs`, `linearGradient` and `radialGradient` with their `stop`s, and `use`.
+- Elements: `svg` (nested too), `g`, `path`, `rect` (with `rx` and `ry`), `circle`, `ellipse`, `line`, `polyline`, `polygon`, `defs`, `linearGradient` and `radialGradient` with their `stop`s, `use` and `symbol`.
+- A `symbol` is drawn only through a `use`, like an icon from a sprite: `<use href="#icon-check" width="24" height="24"/>`. It is drawn as a nested `svg`, with its own `viewBox` and `preserveAspectRatio`, placed at the `use`'s `x` and `y` and clipped to its size. That size is the `use`'s `width` and `height`, or else the `symbol`'s own, or else 100% of the drawing around it; a negative size is skipped the same way. The `use` passes its `fill`, `color` and other inherited properties down, so one `symbol` can be drawn in several colours.
 - `path` takes the whole `d` grammar: every command, relative and absolute, implicit repeats and arcs. Path data with an error is drawn up to the error, as browsers do.
 - Painting: `fill`, `stroke`, `stroke-width`, `stroke-linecap`, `stroke-linejoin`, `stroke-miterlimit`, `stroke-dasharray`, `stroke-dashoffset`, `fill-rule`, `opacity`, `fill-opacity`, `stroke-opacity`, `transform` (`matrix`, `translate`, `scale`, `rotate`, `skewX` and `skewY`), `display="none"` and `visibility` (a hidden element paints nothing, but a child set back to `visible` does).
 - These come as attributes or in an inline `style`, which wins over the attributes, and they are inherited the SVG way. `inherit` takes the parent's value.
@@ -66,7 +67,7 @@ The drawing is clipped to the content box. A `pdf-svg` takes `padding`, borders,
 
 ## What is not drawn
 
-`text`, `image`, `symbol`, `clipPath`, `mask`, `filter`, `pattern`, `marker`, `<style>` sheets, `foreignObject` and animation are left out, and the rest of the picture still draws. The `clip-path`, `mask`, `filter` and `marker` properties are left out the same way, and a `spreadMethod` other than `pad` is drawn as `pad`.
+`text`, `image`, `clipPath`, `mask`, `filter`, `pattern`, `marker`, `<style>` sheets, `foreignObject` and animation are left out, and the rest of the picture still draws. The `clip-path`, `mask`, `filter` and `marker` properties are left out the same way, and a `spreadMethod` other than `pad` is drawn as `pad`.
 
 In development mode, each element or feature left out gets one warning per render that names it, such as `ngpdf: pdf-svg does not draw <text>`. An invalid value, such as an unknown colour or a negative `stroke-width`, is ignored with a warning, the way SVG ignores it, and the inherited value applies. `em` and `ex` lengths are not read.
 
@@ -83,7 +84,7 @@ An SVG often comes from users or another server, so the parser bounds its work a
   - the source: 1 MB (1,048,576 bytes of UTF-8);
   - elements: 50,000;
   - nesting: 64 levels;
-  - `use`: 16 levels deep, and at most 50,000 elements drawn in all. A `use` that points at itself or an ancestor stops at the depth limit, and billion-laughs style references stop at the element limit before anything is drawn.
+  - `use`: 16 levels deep, and at most 50,000 elements drawn in all, each `symbol` drawn through a `use` included. A `use` that points at itself or an ancestor, directly or through a `symbol`, stops at the depth limit, and billion-laughs style references stop at the element limit before anything is drawn.
   - what is drawn: a budget of 1,000,000 path segments, gradient stops, dash lengths and attribute characters, counting each copy a `use` draws, each shape a gradient paints and each dashed stroke. Each element visited pays half the length of its attribute values, rounded up; `d` and `points` are paid for by their path segments instead.
 - A URL is never read past 1 MB, whatever `maxImageBytes` allows, and a larger `Blob` is refused before it is read.
 

@@ -8,7 +8,7 @@ What we share
 
 
 
-     Seeds              Water              Solar   Boxes
+   Seeds           Water          Solar           Boxes   Care
 
 
 Members by quarter
@@ -16,4 +16,4 @@ Members by quarter
 
 
 
-      Q1                 Q2                 Q3      Q4
+      Q1                   Q2               Q3            Q4

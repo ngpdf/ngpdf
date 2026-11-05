@@ -66,7 +66,7 @@ const UNSIZED = new Set(['polyline', 'polygon']);
 
 /** Drawn, each in its own way below. */
 const SHAPES = new Set(['path', 'rect', 'circle', 'ellipse', 'line', 'polyline', 'polygon']);
-const CONTAINERS = new Set(['svg', 'g', 'use']);
+const CONTAINERS = new Set(['svg', 'g', 'use', 'symbol']);
 
 /** Never drawn on their own, and nothing to warn about: they hold no picture or are read by reference. */
 const SILENT = new Set([
@@ -139,7 +139,8 @@ function wrap(
  * Turns a parsed SVG into draw ops in its root's user space. `color` is the pdf-svg's own color,
  * what `currentColor` means at the root. Elements and features ngpdf does not draw are left out
  * with one warning each, and the rest is drawn. A `use` may point only at an `#id` of the same
- * file; past 16 levels of `use` or 50,000 elements drawn through them, it throws.
+ * file; past 16 levels of `use` or 50,000 elements drawn through them, it throws. A `symbol` is
+ * drawn only through a `use`, as a nested `svg` whose `width` and `height` the `use` may set.
  */
 export function compileSvg(
   root: XmlElement,
@@ -310,14 +311,21 @@ export function compileSvg(
     depth: number,
   ): DrawOp[] => element.children.flatMap((child) => visit(child, style, viewport, depth));
 
+  /**
+   * Draws `element` and what it holds. `use` is the `use` element that points at it, if any: a
+   * `symbol` is drawn only through one, which may set its `width` and `height`.
+   */
   const visit = (
     element: XmlElement,
     parent: SvgStyle,
     viewport: Viewport,
     depth: number,
+    use?: XmlElement,
   ): DrawOp[] => {
     const { name } = element;
     if (SILENT.has(name) || name.includes(':') || name === 'script' || name === 'style') return [];
+    // Like `defs`, a symbol on its own holds a picture that only a `use` draws.
+    if (name === 'symbol' && !use) return [];
     if (!SHAPES.has(name) && !CONTAINERS.has(name)) {
       warn(`ngpdf: pdf-svg does not draw <${name}>`);
       return [];
@@ -375,13 +383,26 @@ export function compileSvg(
           length('x', viewport.width, 0),
           length('y', viewport.height, 0),
         ]);
-        content = visit(target, style, viewport, depth + 1);
+        content = visit(target, style, viewport, depth + 1, element);
         break;
       }
+      // A symbol drawn through a `use` is drawn as a nested svg (SVG 2, the `use` element): the
+      // use's `width` and `height` win over the symbol's own, and both default to 100%. A
+      // missing, invalid or negative size is ignored, so the next one in line applies, and so is
+      // one past what a float holds (1e308in), which the writer could not write.
+      case 'symbol':
       case 'svg': {
-        const w = length('width', viewport.width, viewport.width);
-        const h = length('height', viewport.height, viewport.height);
-        if (!(w > 0 && h > 0)) return [];
+        const side = (attribute: string, reference: number): number => {
+          if (name !== 'symbol') return length(attribute, reference, reference);
+          for (const source of [use, element]) {
+            const value = parseLength(source?.attributes.get(attribute) ?? '', reference);
+            if (value !== null && value >= 0 && Number.isFinite(value)) return value;
+          }
+          return reference;
+        };
+        const w = side('width', viewport.width);
+        const h = side('height', viewport.height);
+        if (!(w > 0 && h > 0 && finite([w, h]))) return [];
         matrix = multiply(matrix, [
           1,
           0,
