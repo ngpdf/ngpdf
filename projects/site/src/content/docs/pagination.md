@@ -161,6 +161,23 @@ On a wrapper, the break happens before its first unit. On a repeated table heade
 - A view or table with `break-inside: avoid` after it counts with its whole height.
 - It is a style only; there is no input for it, and it is not inherited.
 
+## Leaving room after an element
+
+`min-presence-ahead` asks for room below an element. When the element would end a sheet with less than that much space left under it, it moves to the next sheet, so a section title never sits at the very bottom with its first paragraph on the next sheet:
+
+```html
+<pdf-text style="font-size: 14; font-weight: bold; min-presence-ahead: 80pt">Totals</pdf-text>
+<pdf-text>The figures below cover the whole year…</pdf-text>
+```
+
+- It takes `0` (the default, which turns it off) or a length in any unit ngpdf reads. A percentage, a keyword or a negative length throws. It is a style only, and it is not inherited.
+- The space left is measured to the bottom of the content area, above the page number and any [fixed footer](#fixed-headers-and-footers), which keep their own space.
+- An element already at the top of a sheet stays there. So does the last element of a `pdf-page`, and one a page break follows (its own `break-after: page` or `breakAfter`, or a `break-before: page` or `breakBefore` on what comes next), since nothing follows it on that sheet.
+- It works on any element that is a unit, such as a `pdf-text`, a `pdf-image` or a row in a table, and on a column `pdf-view`, a `pdf-text` split into line groups or a `pdf-table`, which then move whole. A value on a cell counts for its whole row. A row that moves gets its table's header repeated above it, as usual.
+- It applies only when the element fits whole in what is left of the sheet. One that does not moves or splits as it would without it, and the last part of an element split across sheets stays where it lands.
+- A `header` row's own value is ignored, whether the header repeats or not.
+- It works on its own next to [`break-after: avoid`](#keeping-a-heading-with-what-follows). When an element moves because of it, the elements before it joined to it by `break-after: avoid` move with it. A joined group that would not fit on an empty sheet is left where it is, as `break-after: avoid` leaves it.
+
 ## Positioned elements
 
 An element with [`position: absolute`](/docs/layout-and-styling#positioning) is never a unit. It never moves, splits or pushes other units, and page breaks asked for on it or inside it do nothing.

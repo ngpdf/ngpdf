@@ -668,6 +668,196 @@ describe('paginatePage: break-after: avoid', () => {
   });
 });
 
+describe('paginatePage: min-presence-ahead', () => {
+  const AREA = A4_HEIGHT - 2 * PADDING;
+  const filler = (room: number): PdfNode => el('pdf-view', { height: String(AREA - room) });
+  const block = (height = 20, style: Record<string, string> = {}): PdfNode =>
+    el('pdf-view', { height: String(height), ...style });
+  const ahead = (value: number) => ({ 'min-presence-ahead': String(value) });
+  const nodesOn = (pages: PageLayout[]): PdfNode[][] =>
+    pages.map((laid) => laid.placed.map((p) => p.box.node));
+
+  it('moves an element to the next sheet when less than the value is left below it', () => {
+    // 50pt left: 30pt below the heading, less than 40.
+    const first = filler(50);
+    const [heading, body] = [block(20, ahead(40)), block(10)];
+    expect(nodesOn(paginate(page([first, heading, body])))).toEqual([[first], [heading, body]]);
+  });
+
+  it('leaves it where it is when the value is left below it, or with the default 0', () => {
+    const first = filler(60);
+    const [heading, body] = [block(20, ahead(40)), block(10)];
+    expect(nodesOn(paginate(page([first, heading, body])))).toEqual([[first, heading, body]]);
+    const tight = filler(25);
+    const [plain, after] = [block(20), block(10)];
+    expect(nodesOn(paginate(page([tight, plain, after])))).toEqual([[tight, plain], [after]]);
+  });
+
+  it('never moves the first unit on a sheet or the last unit of the page', () => {
+    const [top, body] = [block(AREA - 10, ahead(40)), block(5)];
+    expect(nodesOn(paginate(page([top, body])))).toEqual([[top, body]]);
+    const first = filler(50);
+    const last = block(20, ahead(40));
+    expect(nodesOn(paginate(page([first, last])))).toEqual([[first, last]]);
+  });
+
+  it('never moves an element a forced page break follows', () => {
+    const first = filler(50);
+    const [own, body] = [block(20, { ...ahead(40), 'break-after': 'page' }), block(10)];
+    expect(nodesOn(paginate(page([first, own, body])))).toEqual([[first, own], [body]]);
+    const tight = filler(50);
+    const [heading, next] = [block(20, ahead(40)), block(10, { 'break-before': 'page' })];
+    expect(nodesOn(paginate(page([tight, heading, next])))).toEqual([[tight, heading], [next]]);
+    // On a column view, its own break after counts too.
+    const roomy = filler(70);
+    const [a, b] = [block(), block()];
+    const section = el('pdf-view', { ...ahead(40), 'break-after': 'page' }, [a, b]);
+    const after = block(5);
+    expect(nodesOn(paginate(page([roomy, section, after])))).toEqual([[roomy, a, b], [after]]);
+    // A break before a column view after it is asked by the view, not by its first unit.
+    const close = filler(50);
+    const title = block(20, ahead(40));
+    const [c, d] = [block(), block()];
+    const chapter = el('pdf-view', { 'break-before': 'page' }, [c, d]);
+    expect(nodesOn(paginate(page([close, title, chapter])))).toEqual([
+      [close, title],
+      [c, d],
+    ]);
+  });
+
+  it('measures the room above the page number and fixed bottom views', () => {
+    // 60pt left of the padding box, but the page number and footer take 9 + 15 of it.
+    const first = filler(60);
+    const footer = el('pdf-view', { height: '15' }, [], { fixed: 'bottom' });
+    const [heading, body] = [block(20, ahead(30)), block(5)];
+    const pages = paginate(page([first, heading, body, footer, pageNumber()]));
+    const flow = pages.map((laid) =>
+      laid.placed.map((p) => p.box.node).filter((node) => node !== footer),
+    );
+    expect(flow).toEqual([[first], [heading, body]]);
+  });
+
+  it('moves a column view whole when it would end too close to the bottom', () => {
+    const first = filler(70);
+    const [a, b] = [block(), block()];
+    const section = el('pdf-view', ahead(40), [a, b]);
+    const after = block(5);
+    expect(nodesOn(paginate(page([first, section, after])))).toEqual([[first], [a, b, after]]);
+  });
+
+  it('leaves an element that does not fit the sheet to the usual flow', () => {
+    const first = filler(10);
+    const [heading, body] = [block(20, ahead(40)), block(5)];
+    expect(nodesOn(paginate(page([first, heading, body])))).toEqual([[first], [heading, body]]);
+  });
+
+  it('moves a table row, with the header repeated above it on the next sheet', () => {
+    const header = row(20, true);
+    const rows = Array.from({ length: 3 }, () => row());
+    const asking = el('pdf-row', { height: '20', ...ahead(30) }, [el('pdf-cell')]);
+    const last = row();
+    // Header and four rows fill all but 25pt: 5pt left below the asking row.
+    const first = filler(125);
+    const rowsTable = el('pdf-table', {}, [header, ...rows, asking, last], { columns: ['1fr'] });
+    expect(nodesOn(paginate(page([first, rowsTable])))).toEqual([
+      [first, header, ...rows],
+      [header, asking, last],
+    ]);
+  });
+
+  it('counts a value on a cell for its row', () => {
+    const first = filler(30);
+    const asking = el('pdf-row', { height: '20' }, [el('pdf-cell', ahead(20))]);
+    const next = row();
+    const rows = el('pdf-table', {}, [asking, next], { columns: ['1fr'] });
+    expect(nodesOn(paginate(page([first, rows])))).toEqual([[first], [asking, next]]);
+  });
+
+  it("ignores a header row's own value", () => {
+    const header = el('pdf-row', { height: '20', ...ahead(AREA) }, [el('pdf-cell')], {
+      header: true,
+    });
+    const body = row();
+    const first = filler(100);
+    const rows = el('pdf-table', {}, [header, body, row()], { columns: ['1fr'] });
+    expect(nodesOn(paginate(page([first, rows])))[0]).toEqual([
+      first,
+      header,
+      body,
+      rows.children[2],
+    ]);
+    // A table of header rows only lays them out as plain rows: the value is still ignored.
+    const tight = filler(50);
+    const only = el('pdf-row', { height: '20', ...ahead(40) }, [el('pdf-cell')], {
+      header: true,
+    });
+    const after = block(5);
+    const plain = el('pdf-table', {}, [only], { columns: ['1fr'] });
+    expect(nodesOn(paginate(page([tight, plain, after])))).toEqual([[tight, only, after]]);
+  });
+
+  it('moves the break-after: avoid chain that ends at a moved element with it', () => {
+    const first = filler(70);
+    const kicker = block(20, { 'break-after': 'avoid' });
+    const [heading, body] = [block(20, ahead(40)), block(5)];
+    expect(nodesOn(paginate(page([first, kicker, heading, body])))).toEqual([
+      [first],
+      [kicker, heading, body],
+    ]);
+  });
+
+  it('leaves a break-after: avoid chain too tall for a page where it is', () => {
+    // Moving the kicker and heading would not keep them with the tall block: it needs a sheet
+    // of its own either way, so the move would only add a sheet.
+    const first = filler(50);
+    const kicker = block(10, { 'break-after': 'avoid' });
+    const heading = block(10, { ...ahead(40), 'break-after': 'avoid' });
+    const tall = block(AREA - 5);
+    expect(nodesOn(paginate(page([first, kicker, heading, tall])))).toEqual([
+      [first, kicker, heading],
+      [tall],
+    ]);
+  });
+
+  /** A text of `lines` lines, one word per line, each 10pt high. */
+  const text = (lines: number, style: Record<string, string> = {}): PdfNode => {
+    const words = Array.from({ length: lines }, (_, i) => `w${String(i)}`).join(' ');
+    const node = el('pdf-text', { width: '25', 'font-size': '10', 'line-height': '1', ...style });
+    const run = createNode('text', '', words);
+    run.parent = node;
+    node.children.push(run);
+    return node;
+  };
+
+  it('moves a text that fits whole, and leaves one split across sheets where it ends', () => {
+    const first = filler(40);
+    const [heading, body] = [text(2, ahead(30)), block(5)];
+    expect(nodesOn(paginate(page([first, heading, body])))).toEqual([[first], [heading, body]]);
+    // Groups [w0 w1], [w2] and [w3 w4]: the tail lands on the second sheet, near its bottom.
+    const tall = filler(25);
+    const long = text(5, ahead(AREA));
+    const after = block(5);
+    const pages = paginate(page([tall, long, after]));
+    expect(nodesOn(pages)[1]).toEqual([long, long, after]);
+  });
+
+  it('leaves the tail of a carried text where its plan put it, with the unit joined to it', () => {
+    // Groups [w0 w1], [w2] and [w3 w4]: the text breaks after w1, so w2 opens the second sheet.
+    // The block joined to the last group by break-after: avoid asks for more room than is left
+    // below it there; moving the chain would leave that sheet with w2 alone, under `widows`.
+    const first = filler(25);
+    const long = text(5, { 'break-after': 'avoid' });
+    const asking = block(10, ahead(AREA - 30));
+    const after = block(5);
+    const pages = paginate(page([first, long, asking, after]));
+    const lines = (laid: PageLayout) =>
+      laid.placed.flatMap((p) => p.box.text?.lines.map((line) => line.text) ?? []);
+    expect(lines(pages[0]!)).toEqual(['w0', 'w1']);
+    expect(lines(pages[1]!)).toEqual(['w2', 'w3', 'w4']);
+    expect(nodesOn(pages)[1]).toEqual([long, long, asking, after]);
+  });
+});
+
 describe('paginatePage: page breaks', () => {
   it('starts a new page at breakBefore', () => {
     const first = el('pdf-view', { height: '20' });

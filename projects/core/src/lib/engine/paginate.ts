@@ -417,6 +417,7 @@ function lineBox(row: Box, line: readonly Box[]): Box {
       breakBefore: false,
       breakAfter: false,
       keepWithNext: false,
+      minPresenceAhead: 0,
       // The row's group, with its background, carries its opacity.
       opacity: 1,
     },
@@ -772,6 +773,7 @@ function collectUnits(
       breakBefore: false,
       breakAfter: false,
       keepWithNext: false,
+      minPresenceAhead: 0,
       // The text's group, with its background, carries its opacity.
       opacity: 1,
     };
@@ -980,6 +982,15 @@ function asksForBreakAfter(box: Box): boolean {
 /** Like `asksForBreakAfter`, for `break-after: avoid`. */
 function asksToKeepWithNext(box: Box): boolean {
   return box.style.keepWithNext || inFlow(box).some(asksToKeepWithNext);
+}
+
+/**
+ * The most room a unit asks for below it with `min-presence-ahead`, its own or that of an element
+ * inside it (a cell of a row). A header row's value is ignored.
+ */
+function presenceOf(box: Box): number {
+  if (isHeaderRow(box.node)) return 0;
+  return Math.max(box.style.minPresenceAhead, ...inFlow(box).map(presenceOf));
 }
 
 function at<T>(list: readonly T[], index: number): T {
@@ -1415,6 +1426,18 @@ export function paginatePage(
       keptAt.set(wrapper.first, [...(keptAt.get(wrapper.first) ?? []), wrapper]);
     }
   }
+  // Elements with `min-presence-ahead`, by the unit they open at: the room they ask for below
+  // them, from their bottom in the flow, and the unit they close with.
+  const presenceAt = new Map<number, { last: number; bottom: number; room: number }[]>();
+  const asksForRoom = (first: number, last: number, bottom: number, room: number): void => {
+    if (room > 0) presenceAt.set(first, [...(presenceAt.get(first) ?? []), { last, bottom, room }]);
+  };
+  for (const wrapper of wrappers) {
+    if (!isHeaderRow(wrapper.box.node)) {
+      asksForRoom(wrapper.first, wrapper.last, wrapper.bottom, wrapper.box.style.minPresenceAhead);
+    }
+  }
+  for (const [i, unit] of units.entries()) asksForRoom(i, i, unit.bottom, presenceOf(unit.box));
   // A header row's break goes before the first unit under the header, not where it repeats.
   for (const [i, unit] of units.entries()) {
     if (unit.header?.breakBefore && units[i - 1]?.header !== unit.header) breaksAt.add(i);
@@ -1755,6 +1778,8 @@ export function paginatePage(
     // could leave the page before with fewer lines than `orphans` and `widows` ask for.
     const carriedTail =
       index > textFirst && index <= textLast && at(placements, textFirst).page < pages.length - 1;
+    // Whether the `break-after: avoid` chain starting here fits on an empty page.
+    let chainFits = true;
     if (joined(index) && !(index > 0 && joined(index - 1)) && current.units > 0 && !carriedTail) {
       let end = index + 1;
       while (joined(end)) end++;
@@ -1774,10 +1799,33 @@ export function paginatePage(
       // opens with the table and already spans the header.
       const repeated =
         unit.header && unit.header.top < chainTop ? unit.header.height + unit.header.gap : 0;
-      if (
-        chainBottom - chainTop + repeated <= contentHeight + slack &&
-        next.top - unit.top + chainBottom > frame.bottom + slack
-      ) {
+      chainFits = chainBottom - chainTop + repeated <= contentHeight + slack;
+      if (chainFits && next.top - unit.top + chainBottom > frame.bottom + slack) {
+        startPage();
+        previousBottom = null;
+        next = plan();
+      }
+    }
+    // An element that lands whole on this sheet with less room below it than its
+    // `min-presence-ahead` moves to the next one, with the `break-after: avoid` chain that ends at
+    // it. Checked where the chain starts, or at the unit when there is no chain. The last unit,
+    // and one a forced page break follows, have nothing after them on this sheet to make room for.
+    // A chain too tall for a page is left alone, as above: moving it would only add a sheet.
+    if (chainFits && !(index > 0 && joined(index - 1)) && current.units > 0 && !carriedTail) {
+      let end = index;
+      while (joined(end)) end++;
+      const shift = next.top - unit.top;
+      let tooClose = false;
+      for (let k = index; k <= end && !tooClose; k++) {
+        tooClose = (presenceAt.get(k) ?? []).some(
+          (element) =>
+            element.last < units.length - 1 &&
+            !breaksBetween(element.last) &&
+            shift + element.bottom <= frame.bottom + slack &&
+            shift + element.bottom + element.room > frame.bottom + slack,
+        );
+      }
+      if (tooClose) {
         startPage();
         previousBottom = null;
         next = plan();
