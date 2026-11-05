@@ -167,7 +167,7 @@ An SVG drawing, drawn as vector shapes, where a `pdf-image` can go.
 | --- | --- | --- | --- |
 | `src` | `string \| Blob` | required | SVG markup, a `data:image/svg+xml` URL, a URL to fetch, or a `Blob`. |
 
-Sizing follows the aspect ratio of the SVG's `viewBox`; with both `width` and `height` set, the SVG's `preserveAspectRatio` places the drawing. Its `color` is what `currentColor` means in the SVG. See [SVG](/docs/svg).
+Sizing follows the SVG's natural size: the root's `width` and `height`, with a missing one taken from the `viewBox` ratio. With both `width` and `height` set on the element, the SVG's `preserveAspectRatio` places the drawing. Its `color` is what `currentColor` means in the SVG. See [SVG](/docs/svg).
 
 ## pdf-table
 

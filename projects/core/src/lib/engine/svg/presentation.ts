@@ -38,6 +38,8 @@ export interface SvgStyle {
   /** Null when solid. */
   readonly dashArray: readonly number[] | null;
   readonly dashOffset: number;
+  /** `visibility`: a hidden element paints nothing, but its children may be visible again. */
+  readonly visible: boolean;
   // Not inherited.
   readonly opacity: number;
   readonly display: boolean;
@@ -64,6 +66,7 @@ export function initialStyle(color: Color): SvgStyle {
     miterLimit: 4,
     dashArray: null,
     dashOffset: 0,
+    visible: true,
     opacity: 1,
     display: true,
     transform: null,
@@ -299,6 +302,11 @@ export function computeStyle(
       case 'stroke-dashoffset':
         take('dashOffset', parseLength(trimmed, diagonal(viewport)));
         return;
+      case 'visibility': {
+        const visible = trimmed === 'visible' ? true : null;
+        take('visible', trimmed === 'hidden' || trimmed === 'collapse' ? false : visible);
+        return;
+      }
       case 'display':
         style.display = trimmed !== 'none';
         return;
@@ -306,7 +314,7 @@ export function computeStyle(
         style.transform = trimmed;
         return;
       default:
-        // Other properties (font-size, visibility, …) do not change what ngpdf draws.
+        // Other properties (font-size, …) do not change what ngpdf draws.
         return;
     }
   };

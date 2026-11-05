@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { DrawOp } from '../writer';
-import { compileSvg, MAX_USE_DEPTH, type SvgAsset } from './render';
+import { compileSvg, MAX_SVG_SEGMENTS, MAX_USE_DEPTH, type SvgAsset } from './render';
 import { MAX_SVG_ELEMENTS, parseXml } from './xml';
 
 type ShapeOp = Extract<DrawOp, { op: 'shape' }>;
@@ -127,6 +127,14 @@ describe('compileSvg', () => {
       const [shape] = shapes(compile('<svg><line x2="5" stroke="red"/></svg>'));
       expect(shape?.fill).toBeUndefined();
       expect(shape?.stroke?.color).toBe('#ff0000');
+    });
+
+    it('hides an element with visibility hidden, but not a visible child', () => {
+      const asset = compile(
+        '<svg><g visibility="hidden"><rect width="1" height="1"/><rect width="2" height="2" style="visibility: visible"/></g><rect width="3" height="3" visibility="collapse"/></svg>',
+      );
+      expect(shapes(asset)).toHaveLength(1);
+      expect(shapes(asset)[0]?.segments[1]).toEqual({ kind: 'line', to: { x: 2, y: 0 } });
     });
 
     it('leaves out a shape with numbers past what a float holds', () => {
@@ -257,6 +265,18 @@ describe('compileSvg', () => {
       expect(() => compile('<svg><g id="g"><use href="#g"/></g></svg>')).toThrow(
         'ngpdf: pdf-svg use nested deeper',
       );
+    });
+
+    it('throws when copies of a long path pass the segment budget', () => {
+      const path = `<path id="p" d="M0 0${' l1 1'.repeat(100_000)}"/>`;
+      const uses = (count: number): string => '<use href="#p"/>'.repeat(count);
+      // The path itself and nine copies: 1,000,010 segments.
+      expect(() => compile(`<svg><defs>${path}</defs>${uses(9)}</svg>`)).not.toThrow();
+      const started = performance.now();
+      expect(() => compile(`<svg><defs>${path}</defs>${uses(10)}</svg>`)).toThrow(
+        `ngpdf: pdf-svg draws more than ${String(MAX_SVG_SEGMENTS)} path segments and gradient stops`,
+      );
+      expect(performance.now() - started).toBeLessThan(2000);
     });
 
     it('throws on a billion laughs of references before drawing them', () => {
@@ -420,6 +440,42 @@ describe('compileSvg', () => {
         ['ngpdf: pdf-svg does not support spreadMethod="reflect"; drawn as pad'],
         ['ngpdf: pdf-svg ignored the invalid value "nope" for gradientTransform'],
       ]);
+    });
+
+    it('follows at most 16 gradients through href, with a warning', () => {
+      let gradients =
+        '<linearGradient id="g16"><stop stop-color="red"/><stop offset="1" stop-color="blue"/></linearGradient>';
+      for (let i = 0; i < 16; i++) {
+        gradients += `<linearGradient id="g${String(i)}" href="#g${String(i + 1)}"/>`;
+      }
+      const warn = vi.fn();
+      const tail = compile(
+        `<svg>${gradients}<rect width="1" height="1" fill="url(#g1)"/></svg>`,
+        warn,
+      );
+      expect(gradientOf(tail)?.stops).toHaveLength(2);
+      expect(warn).not.toHaveBeenCalled();
+      const head = compile(
+        `<svg>${gradients}<rect width="1" height="1" fill="url(#g0) lime"/></svg>`,
+        warn,
+      );
+      // The stops are past the end of the chain it reads: no stops paints nothing.
+      expect(head.ops).toEqual([]);
+      expect(warn).toHaveBeenCalledWith(
+        'ngpdf: pdf-svg gradient href chain longer than 16; the rest is ignored',
+      );
+    });
+
+    it('counts the stops of each painted gradient toward the segment budget', () => {
+      const markup = (rects: number): string =>
+        `<svg><linearGradient id="g">${'<stop stop-color="red"/>'.repeat(20_000)}</linearGradient>${'<rect width="1" height="1" fill="url(#g)"/>'.repeat(rects)}</svg>`;
+      // 20,000 stops, padded to 20,001, and 5 segments a rect.
+      expect(shapes(compile(markup(49)))).toHaveLength(49);
+      const started = performance.now();
+      expect(() => compile(markup(20_000))).toThrow(
+        `ngpdf: pdf-svg draws more than ${String(MAX_SVG_SEGMENTS)} path segments and gradient stops`,
+      );
+      expect(performance.now() - started).toBeLessThan(2000);
     });
 
     it('skips an external gradient href', () => {

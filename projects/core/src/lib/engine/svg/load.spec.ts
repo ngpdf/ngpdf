@@ -83,6 +83,19 @@ describe('loadSvgs', () => {
     ).rejects.toThrow('ngpdf: could not load SVG "/a.svg": larger than 10 bytes');
   });
 
+  it('never reads a URL or a Blob past the SVG limit, whatever maxImageBytes allows', async () => {
+    const fetchFn = vi.fn(() => Promise.resolve(new Response(' '.repeat(MAX_SVG_BYTES + 1))));
+    await expect(loadSvgs(root(svgNode('/big.svg')), new Map(), noWarn, fetchFn)).rejects.toThrow(
+      `ngpdf: could not load SVG "/big.svg": larger than ${String(MAX_SVG_BYTES)} bytes`,
+    );
+    const blob = new Blob([' '.repeat(MAX_SVG_BYTES + 1)]);
+    const read = vi.spyOn(blob, 'arrayBuffer');
+    await expect(loadSvgs(root(svgNode(blob)), new Map(), noWarn)).rejects.toThrow(
+      `ngpdf: pdf-svg source is larger than ${String(MAX_SVG_BYTES)} bytes`,
+    );
+    expect(read).not.toHaveBeenCalled();
+  });
+
   it('reads URLs on the server only through fetchImage', async () => {
     await expect(
       loadSvgs(root(svgNode('https://example.com/a.svg')), new Map(), noWarn, undefined, {}),
@@ -118,9 +131,9 @@ describe('loadSvgs', () => {
       await expect(loadSvgs(root(svgNode(wide)), new Map(), noWarn)).rejects.toThrow(message);
     });
 
-    it('in bytes read', async () => {
-      const blob = new Blob([big(MAX_SVG_BYTES + 1)]);
-      await expect(loadSvgs(root(svgNode(blob)), new Map(), noWarn)).rejects.toThrow(message);
+    it('in bytes decoded from a data URL', async () => {
+      const url = `data:image/svg+xml;base64,${btoa(big(MAX_SVG_BYTES + 1))}`;
+      await expect(loadSvgs(root(svgNode(url)), new Map(), noWarn)).rejects.toThrow(message);
     });
   });
 

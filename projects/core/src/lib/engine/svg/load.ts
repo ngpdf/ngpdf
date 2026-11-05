@@ -30,13 +30,16 @@ async function parseSource(
   server: ServerSources | undefined,
   maxBytes: number | undefined,
 ): Promise<XmlElement> {
+  // A Blob says its size, so a large one is refused before it is read.
+  if (src instanceof Blob && src.size > MAX_SVG_BYTES) tooLarge();
   if (typeof src === 'string' && isMarkup(src)) {
     checkMarkupSize(src);
     return parseXml(src, warn);
   }
   const source =
     typeof src === 'string' || src instanceof Blob
-      ? readSource(src, fetchFn, server, 'SVG', maxBytes)
+      ? // A URL is never read past the SVG limit, whatever maxImageBytes allows.
+        readSource(src, fetchFn, server, 'SVG', Math.min(maxBytes ?? MAX_SVG_BYTES, MAX_SVG_BYTES))
       : undefined;
   const label = source?.label ?? typeof src;
   let bytes: Uint8Array;

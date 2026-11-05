@@ -2,7 +2,7 @@ import { toHex, type Color } from '../color';
 import { show } from '../limits';
 import type { Corners } from '../style';
 import type { DrawOp, GradientFill, Matrix, PathSegment } from '../writer';
-import { gradientPaint, hrefOf } from './gradient';
+import { gradientPaint, hrefOf, resolveGradient, type ResolvedGradient } from './gradient';
 import {
   computeStyle,
   initialStyle,
@@ -25,6 +25,12 @@ import { MAX_SVG_ELEMENTS, type XmlElement } from './xml';
 
 /** How deep `use` elements may point at elements holding more `use` elements. */
 export const MAX_USE_DEPTH = 16;
+
+/**
+ * The most path segments and gradient stops one SVG may draw. A 1 MB path has about 250,000;
+ * `use` and shapes sharing a gradient repeat them, and this bounds what the copies cost.
+ */
+export const MAX_SVG_SEGMENTS = 1_000_000;
 
 /** A parsed SVG, ready for the display list to place in a box. */
 export interface SvgAsset {
@@ -184,6 +190,21 @@ export function compileSvg(
   if (parsedBox === 'empty') return { ...asset, ops: [] };
 
   let drawn = 0;
+  let segmentCount = 0;
+  const spend = (count: number): void => {
+    segmentCount += count;
+    if (segmentCount > MAX_SVG_SEGMENTS) {
+      throw new Error(
+        `ngpdf: pdf-svg draws more than ${String(MAX_SVG_SEGMENTS)} path segments and gradient stops`,
+      );
+    }
+  };
+  const gradients = new Map<XmlElement, ResolvedGradient>();
+  // A shape drawn again through `use` is parsed once per viewport size.
+  const outlines = new Map<
+    XmlElement,
+    { viewport: Viewport; segments: readonly PathSegment[] | null }
+  >();
 
   const paintOf = (
     paint: Paint,
@@ -208,18 +229,32 @@ export function compileSvg(
         if (!target || (target.name !== 'linearGradient' && target.name !== 'radialGradient')) {
           return paint.fallback ? paintOf(paint.fallback, opacity, style, bounds, viewport) : null;
         }
-        const result = gradientPaint(target, ids, bounds(), viewport, style.color, opacity, warn);
+        let resolved = gradients.get(target);
+        if (!resolved) {
+          resolved = resolveGradient(target, ids, color, warn);
+          gradients.set(target, resolved);
+        }
+        const result = gradientPaint(resolved, bounds(), viewport, opacity);
         if (result.kind === 'none') return null;
         // Its alpha has the opacity in it already.
         if (result.kind === 'solid') return solid(result.color, 1);
+        spend(result.gradient.stops.length);
         const first = result.gradient.stops[0];
         return { color: first?.color ?? '#000000', opacity: 1, gradient: result.gradient };
       }
     }
   };
   const shape = (element: XmlElement, style: SvgStyle, viewport: Viewport): DrawOp[] => {
-    const segments = shapeSegments(element, viewport);
-    if (!segments || !segmentsFinite(segments)) return [];
+    if (!style.visible) return [];
+    let outline = outlines.get(element);
+    if (outline?.viewport.width !== viewport.width || outline.viewport.height !== viewport.height) {
+      const parsed = shapeSegments(element, viewport);
+      outline = { viewport, segments: parsed && segmentsFinite(parsed) ? parsed : null };
+      outlines.set(element, outline);
+    }
+    const { segments } = outline;
+    if (!segments) return [];
+    spend(segments.length);
     let cached: Bounds | null = null;
     const bounds = (): Bounds => (cached ??= boundsOf(segments));
     const fill =

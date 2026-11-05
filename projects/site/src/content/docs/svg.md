@@ -45,7 +45,7 @@ The parser is ngpdf's own, not the browser's `DOMParser`, so a `pdf-svg` renders
 
 Sizing works like `pdf-image`:
 
-- Set `width` or `height` and the other side follows the aspect ratio of the root's `viewBox`, or of its `width` and `height` without one.
+- Set `width` or `height` and the other side follows the SVG's natural size: the root's `width` and `height`, with a missing one taken from the `viewBox` ratio. When the root sets both, their ratio wins over a `viewBox` of another shape.
 - Set neither and the SVG takes the root's `width` and `height` (`px` is 1pt, as everywhere in ngpdf), or its `viewBox` size. With none of them it is 300 × 150, the size a browser gives it.
 - Set both, and `preserveAspectRatio` on the root places the drawing in the box: `xMidYMid meet` by default, any of the nine alignments, `meet` or `slice`, or `none` to stretch it.
 
@@ -57,10 +57,10 @@ The drawing is clipped to the content box. A `pdf-svg` takes `padding`, borders,
 
 - Elements: `svg` (nested too), `g`, `path`, `rect` (with `rx` and `ry`), `circle`, `ellipse`, `line`, `polyline`, `polygon`, `defs`, `linearGradient` and `radialGradient` with their `stop`s, and `use`.
 - `path` takes the whole `d` grammar: every command, relative and absolute, implicit repeats and arcs. Path data with an error is drawn up to the error, as browsers do.
-- Painting: `fill`, `stroke`, `stroke-width`, `stroke-linecap`, `stroke-linejoin`, `stroke-miterlimit`, `stroke-dasharray`, `stroke-dashoffset`, `fill-rule`, `opacity`, `fill-opacity`, `stroke-opacity`, `transform` (`matrix`, `translate`, `scale`, `rotate`, `skewX` and `skewY`) and `display="none"`.
+- Painting: `fill`, `stroke`, `stroke-width`, `stroke-linecap`, `stroke-linejoin`, `stroke-miterlimit`, `stroke-dasharray`, `stroke-dashoffset`, `fill-rule`, `opacity`, `fill-opacity`, `stroke-opacity`, `transform` (`matrix`, `translate`, `scale`, `rotate`, `skewX` and `skewY`), `display="none"` and `visibility` (a hidden element paints nothing, but a child set back to `visible` does).
 - These come as attributes or in an inline `style`, which wins over the attributes, and they are inherited the SVG way. `inherit` takes the parent's value.
 - Colours take what the `color` style property takes, plus `currentColor`. At the root, `currentColor` is the `pdf-svg`'s own `color`, so one icon can be drawn in several colours.
-- A gradient is used with `fill="url(#id)"` or `stroke="url(#id)"`, with an optional fallback colour after it. Gradients take `gradientUnits`, `gradientTransform`, a radial focal point (`fx`, `fy`, `fr`) and attributes and stops from another gradient through `href`.
+- A gradient is used with `fill="url(#id)"` or `stroke="url(#id)"`, with an optional fallback colour after it. Gradients take `gradientUnits`, `gradientTransform`, a radial focal point (`fx`, `fy`, `fr`) and attributes and stops from other gradients through `href`, up to 16 gradients in a chain.
 - `opacity` on an element draws it and what it holds as one picture, faded together, as `opacity` does on a `pdf-view`.
 - Lengths take `px`, `pt`, `pc`, `in`, `cm`, `mm` and `%`, with ngpdf's units: `px` is 1pt.
 
@@ -84,6 +84,8 @@ An SVG often comes from users or another server, so the parser bounds its work a
   - elements: 50,000;
   - nesting: 64 levels;
   - `use`: 16 levels deep, and at most 50,000 elements drawn in all. A `use` that points at itself or an ancestor stops at the depth limit, and billion-laughs style references stop at the element limit before anything is drawn.
+  - what is drawn: 1,000,000 path segments and gradient stops in all, counting each copy a `use` draws and each shape a gradient paints.
+- A URL is never read past 1 MB, whatever `maxImageBytes` allows, and a larger `Blob` is refused before it is read.
 
 ## Errors
 
@@ -96,3 +98,4 @@ An SVG often comes from users or another server, so the parser bounds its work a
 | `ngpdf: pdf-svg nesting deeper than 64` | Elements nested too deep. |
 | `ngpdf: pdf-svg use nested deeper than 16` | A chain of `use` elements is too deep, or one points at itself. |
 | `ngpdf: pdf-svg use expands to more than 50000 elements` | `use` elements draw too many elements in all. |
+| `ngpdf: pdf-svg draws more than 1000000 path segments and gradient stops` | The drawing is too large once `use` copies and gradients are counted. |

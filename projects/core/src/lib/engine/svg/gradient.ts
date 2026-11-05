@@ -16,6 +16,19 @@ export type GradientPaint =
 
 const GRADIENTS = new Set(['linearGradient', 'radialGradient']);
 
+/** How many gradients one may take attributes and stops from through `href`, itself included. */
+export const MAX_GRADIENT_CHAIN = 16;
+
+/** What a gradient element resolves to once per compile, before any shape paints with it. */
+export interface ResolvedGradient {
+  readonly element: XmlElement;
+  /** An attribute of the gradient, or of the first gradient its `href` chain has it on. */
+  readonly attribute: (name: string) => string | undefined;
+  /** Offsets clamped and in order; each color's alpha has the stop's opacity in it. */
+  readonly stops: readonly { readonly offset: number; readonly color: Color }[];
+  readonly transform: Matrix;
+}
+
 /** The `href` (or SVG 1.1's `xlink:href`) of an element. */
 export function hrefOf(element: XmlElement): string | undefined {
   return element.attributes.get('href') ?? element.attributes.get('xlink:href');
@@ -32,6 +45,12 @@ function chainOf(
   for (let current = gradient; ;) {
     const href = hrefOf(current);
     if (href === undefined) break;
+    if (chain.length >= MAX_GRADIENT_CHAIN) {
+      warn(
+        `ngpdf: pdf-svg gradient href chain longer than ${String(MAX_GRADIENT_CHAIN)}; the rest is ignored`,
+      );
+      break;
+    }
     if (!href.startsWith('#')) {
       warn(`ngpdf: pdf-svg skipped the external reference "${show(href)}"`);
       break;
@@ -73,21 +92,20 @@ function padStops(stops: GradientStop[]): GradientStop[] {
   return stops;
 }
 
+// Stops and their colors take no percentages, so any viewport resolves them.
+const NO_VIEWPORT: Viewport = { width: 0, height: 0 };
+
 /**
- * The paint of the gradient `gradient` on a shape with bounding box `bounds`, at `opacity` (the
- * fill or stroke opacity, folded into the stops). Attributes and stops missing on it come from
- * the gradients its `href` chain points at. Stop offsets are clamped to [0, 1] and never go back.
- * Only `spreadMethod="pad"` is drawn; another warns and is drawn as pad.
+ * Resolves `gradient` once: its `href` chain (at most 16 gradients), its stops and its
+ * `gradientTransform`. Stop offsets are clamped to [0, 1] and never go back; `currentColor` in a
+ * stop is `color`. Only `spreadMethod="pad"` is drawn; another warns and is drawn as pad.
  */
-export function gradientPaint(
+export function resolveGradient(
   gradient: XmlElement,
   ids: ReadonlyMap<string, XmlElement>,
-  bounds: Bounds,
-  viewport: Viewport,
   color: Color,
-  opacity: number,
   warn: (message: string) => void,
-): GradientPaint {
+): ResolvedGradient {
   const chain = chainOf(gradient, ids, warn);
   const attribute = (name: string): string | undefined => {
     for (const element of chain) {
@@ -103,27 +121,18 @@ export function gradientPaint(
   const owner = chain.find((element) => element.children.some((child) => child.name === 'stop'));
   const base = initialStyle(color);
   let previous = 0;
-  const stops: GradientStop[] = [];
-  let lastColor: Color | null = null;
+  const stops: { offset: number; color: Color }[] = [];
   for (const stop of owner?.children ?? []) {
     if (stop.name !== 'stop') continue;
-    const style = computeStyle(stop, base, viewport, warn);
+    const style = computeStyle(stop, base, NO_VIEWPORT, warn);
     const offset = Math.min(
       1,
       Math.max(previous, coordinate(stop.attributes.get('offset'), 0, true, 1)),
     );
     previous = offset;
     const stopColor = style.stopColor === 'current' ? style.color : style.stopColor;
-    lastColor = { ...stopColor, a: stopColor.a * style.stopOpacity * opacity };
-    stops.push({ offset, color: toHex(lastColor), opacity: lastColor.a });
+    stops.push({ offset, color: { ...stopColor, a: stopColor.a * style.stopOpacity } });
   }
-  if (!lastColor) return { kind: 'none' };
-  const only = lastColor;
-  const solid = (): GradientPaint => ({ kind: 'solid', color: only });
-  if (stops.length === 1) return solid();
-
-  const boxUnits = attribute('gradientUnits')?.trim() !== 'userSpaceOnUse';
-  if (boxUnits && !(bounds.w > 0 && bounds.h > 0)) return { kind: 'none' };
   const transformText = attribute('gradientTransform');
   let transform = transformText === undefined ? IDENTITY : parseTransform(transformText);
   if (transform === null) {
@@ -132,6 +141,33 @@ export function gradientPaint(
     );
     transform = IDENTITY;
   }
+  return { element: gradient, attribute, stops, transform };
+}
+
+/**
+ * The paint of a resolved gradient on a shape with bounding box `bounds`, at `opacity` (the fill
+ * or stroke opacity, folded into the stops).
+ */
+export function gradientPaint(
+  resolved: ResolvedGradient,
+  bounds: Bounds,
+  viewport: Viewport,
+  opacity: number,
+): GradientPaint {
+  const { attribute, transform } = resolved;
+  const stops: GradientStop[] = resolved.stops.map((stop) => ({
+    offset: stop.offset,
+    color: toHex(stop.color),
+    opacity: stop.color.a * opacity,
+  }));
+  const last = resolved.stops.at(-1);
+  if (!last) return { kind: 'none' };
+  const only: Color = { ...last.color, a: last.color.a * opacity };
+  const solid = (): GradientPaint => ({ kind: 'solid', color: only });
+  if (stops.length === 1) return solid();
+
+  const boxUnits = attribute('gradientUnits')?.trim() !== 'userSpaceOnUse';
+  if (boxUnits && !(bounds.w > 0 && bounds.h > 0)) return { kind: 'none' };
   const matrix: Matrix = boxUnits
     ? multiply([bounds.w, 0, 0, bounds.h, bounds.x, bounds.y], transform)
     : transform;
@@ -140,7 +176,7 @@ export function gradientPaint(
   const { width, height } = viewport;
   const full = (size: number): number => (boxUnits ? 1 : size);
 
-  if (gradient.name === 'linearGradient') {
+  if (resolved.element.name === 'linearGradient') {
     const x1 = at('x1', 0, width);
     const y1 = at('y1', 0, height);
     const x2 = at('x2', full(width), width);
