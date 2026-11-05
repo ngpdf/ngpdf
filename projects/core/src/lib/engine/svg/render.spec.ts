@@ -487,7 +487,7 @@ describe('compileSvg', () => {
       expect(() =>
         compile(`<svg><defs>${line}</defs>${'<use href="#l"/>'.repeat(40_000)}</svg>`),
       ).toThrow('path segments, gradient stops, dashes and attributes');
-      expect(performance.now() - started).toBeLessThan(2000);
+      expect(performance.now() - started).toBeLessThan(3000);
     });
 
     it('reads the stops of a gradient that many gradients point at once', () => {

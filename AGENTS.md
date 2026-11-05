@@ -360,7 +360,7 @@ NGPDF_APT=poppler-utils ./scripts/dev node scripts/server-check.mjs   # packed d
     warns once per render, and an invalid value is ignored with a warning.
   - Limits: 1 MB of UTF-8 source (also for fetched URLs and Blobs, before reading), 50,000
     elements, 64 levels of nesting, 16 levels of `use`, 50,000 elements drawn and a budget of
-    1,000,000 path segments, gradient stops, dash lengths and attribute bytes / 8 drawn, each throwing `ngpdf: pdf-svg …`. A gradient `href`
+    1,000,000 path segments, gradient stops, dash lengths and attribute characters / 2 drawn, each throwing `ngpdf: pdf-svg …`. A gradient `href`
     chain stops after 16 gradients with a warning. Malformed markup throws
     `ngpdf: invalid SVG: <reason> at <offset>`, a failed read `ngpdf: could not load SVG …`.
 - **Out of v0.1:**

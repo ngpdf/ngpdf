@@ -135,7 +135,7 @@ export function resolveGradient(
   color: Color,
   warn: (message: string) => void,
   /** Stops by the gradient that holds them, shared by every gradient that points at it. */
-  stopsCache: Map<XmlElement, readonly GradientColorStop[]> = new Map(),
+  stopsCache = new Map<XmlElement, readonly GradientColorStop[]>(),
 ): ResolvedGradient {
   const chain = chainOf(gradient, ids, warn);
   const attribute = (name: string): string | undefined => {

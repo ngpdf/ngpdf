@@ -33,7 +33,7 @@ import { MAX_SVG_ELEMENTS, type XmlElement } from './xml';
 export const MAX_USE_DEPTH = 16;
 
 /**
- * The most work one SVG may cost to draw: path segments, gradient stops, dash lengths and an eighth
+ * The most work one SVG may cost to draw: path segments, gradient stops, dash lengths and half
  * of the attribute text, for every element visited. A 1 MB path has about 250,000 segments; `use`,
  * and shapes sharing a gradient or a dash pattern, repeat them, and this bounds what the copies
  * cost.
@@ -326,7 +326,7 @@ export function compileSvg(
     for (const [name, value] of element.attributes) {
       if (name !== 'd' && name !== 'points') attributeLength += value.length;
     }
-    spend(Math.ceil(attributeLength / 8));
+    spend(Math.ceil(attributeLength / 2));
     const style = computeStyle(element, parent, viewport, warn);
     if (!style.display || style.opacity <= 0) return [];
     let matrix: Matrix = IDENTITY;
