@@ -70,7 +70,7 @@ A page template. Its content continues on as many sheets as it needs, all of the
 
 | Input | Type | Default | Description |
 | --- | --- | --- | --- |
-| `size` | `PageSize` | `'A4'` | `'A3'`, `'A4'`, `'A5'`, `'Letter'`, `'Legal'`, `[width, height]` with each side in points or a length (`'210mm'`), one number or length for a square page, or `'210mm 297mm'`. See [Page size and orientation](/docs/documents-and-pages#page-size-and-orientation). |
+| `size` | `PageSize` | `'A4'` | A named paper size (`'A0'` to `'A10'`, `'B5'`, `'C4'`, `'JIS-B5'`, `'Letter'`, `'Tabloid'` and more), `[width, height]` with each side in points or a length (`'210mm'`), one number or length for a square page, or `'210mm 297mm'`. See [Page size and orientation](/docs/documents-and-pages#page-size-and-orientation). |
 | `orientation` | `PageOrientation` | `'portrait'` | `'portrait'` or `'landscape'`. Landscape swaps width and height. |
 | `dpi` | `number` | `72` | The resolution images on the page are printed at: one without a `width` or `height` takes 72 / `dpi` points per pixel. A finite number above 0; `dpi="300"` works as an attribute. `px` stays 1pt. |
 
