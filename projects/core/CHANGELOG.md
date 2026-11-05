@@ -1,5 +1,11 @@
 # @ngpdf/core
 
+## 1.0.1
+
+### Patch Changes
+
+- [#300](https://github.com/ngpdf/ngpdf/pull/300) [`ee94df9`](https://github.com/ngpdf/ngpdf/commit/ee94df9264f0c220b65219ee2e402b4ca5366706) Thanks [@GabeSilvaDev](https://github.com/GabeSilvaDev)! - The npm README now describes 1.0 instead of v0.1. It explains when a tall table row or row `pdf-view` continues onto another page and when it is clipped, and it links to the current roadmap.
+
 ## 1.0.0
 
 ### Major Changes
