@@ -1,5 +1,0 @@
----
-'@ngpdf/core': minor
----
-
-A row `pdf-view` (or block `pdf-link`) taller than a page now splits across sheets instead of being cut at the bottom, so a two-column layout with a long main column runs over as many pages as it needs. It splits the way a tall table row does: each child breaks on its own, a `pdf-text` between its lines and a column `pdf-view` between its children, and each piece is as tall as its tallest child piece. The row's background and border are sliced per sheet with no border drawn at a cut, and a child stretched to the row's height, such as a shaded sidebar, fills every piece. A row view that fits on a page still moves to the next one whole, so documents that already fit keep their pages. `break-inside: avoid`, a fixed `height` or `max-height`, a `transform` or an `overflow` other than `visible` keep the old behaviour: one unit, cut at the bottom with the dev-mode warning. A single line of a `flex-wrap: wrap` row that is taller than a page now splits the same way.
