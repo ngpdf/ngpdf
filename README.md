@@ -102,8 +102,8 @@ await pdf.download(CommunicatorsList, { inputs: { items }, fileName: 'communicat
 // or: const blob = await pdf.toBlob(CommunicatorsList, { inputs: { items } });
 ```
 
-The header row repeats on every page, a row moves to the next page whole unless it is taller
-than a page, and the text stays selectable.
+The header row repeats on every page, a row moves to the next page whole unless it is too tall
+for a page below the header, and the text stays selectable.
 
 ## Limits
 
