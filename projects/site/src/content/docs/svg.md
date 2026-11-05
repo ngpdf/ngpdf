@@ -84,7 +84,7 @@ An SVG often comes from users or another server, so the parser bounds its work a
   - elements: 50,000;
   - nesting: 64 levels;
   - `use`: 16 levels deep, and at most 50,000 elements drawn in all. A `use` that points at itself or an ancestor stops at the depth limit, and billion-laughs style references stop at the element limit before anything is drawn.
-  - what is drawn: a budget of 1,000,000 path segments, gradient stops, dash lengths and attribute characters (half of each), counting each copy a `use` draws, each shape a gradient paints and each dashed stroke.
+  - what is drawn: a budget of 1,000,000 path segments, gradient stops, dash lengths and attribute characters, counting each copy a `use` draws, each shape a gradient paints and each dashed stroke. Each element visited pays half the length of its attribute values, rounded up; `d` and `points` are paid for by their path segments instead.
 - A URL is never read past 1 MB, whatever `maxImageBytes` allows, and a larger `Blob` is refused before it is read.
 
 ## Errors
