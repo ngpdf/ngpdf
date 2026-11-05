@@ -88,13 +88,13 @@ NGPDF_APT=poppler-utils ./scripts/dev node scripts/server-check.mjs   # packed d
   calls for it and an entry in that file.
 - **Data between stages is readonly.** A stage returns new data and never mutates its input.
 - **Bounded work.** Parsers are linear (no super-linear regex). Nesting deeper than 64 elements,
-  a text node longer than 1 MB and a pdf-canvas with more than 100,000 calls or a non-finite
-  number throw an `ngpdf:` error.
+  a text node longer than 1 MB, a pdf-canvas with more than 100,000 calls or a non-finite
+  number, and a pdf-svg past its limits (below) throw an `ngpdf:` error.
 
 ## Product rules
 
 - **Selectors:** `pdf-document`, `pdf-page`, `pdf-view`, `pdf-text`, `pdf-span`, `pdf-link`,
-  `pdf-note`, `pdf-image`, `pdf-canvas`, `pdf-table`, `pdf-row`, `pdf-cell`, `pdf-page-number`,
+  `pdf-note`, `pdf-image`, `pdf-canvas`, `pdf-svg`, `pdf-table`, `pdf-row`, `pdf-cell`, `pdf-page-number`,
   and `pdf-viewer`, the preview component (an HTML component in the app, not a document
   element). The `pdf-` prefix is mandatory: `table`, `image` and `text` exist in HTML and SVG.
   The one directive, `pdfPerSheet` (`PdfPerSheet`), goes on an `ng-template` and is part of
@@ -334,8 +334,22 @@ NGPDF_APT=poppler-utils ./scripts/dev node scripts/server-check.mjs   # packed d
   - A non-finite number, an unknown option or more than 100,000 calls on one canvas throws
     `ngpdf: pdf-canvas …`; an error thrown by `paint` rejects the render with
     `ngpdf: pdf-canvas paint failed: <message>`.
+- **SVG:** `<pdf-svg [src]>` draws an SVG as vector shapes where a `pdf-image` can go. `src` is
+  markup (a string starting with `<` after spaces), a data URL, an http(s) URL read like an image
+  URL (`maxImageBytes`, the server's `fetchImage` rule), or a `Blob`.
+  - Sized like an image from the root's `width`/`height` (px = 1pt) or `viewBox` (300 × 150
+    without either); a root without `viewBox` gets `0 0 width height`. With both sides set,
+    `preserveAspectRatio` places it. Clipped to the content box; one unit.
+  - The parser and geometry are in `engine/svg/`: an own linear XML tokenizer (no `DOMParser`),
+    path data with arcs as cubic curves, the six transform functions, SVG inheritance from
+    attributes and inline `style`, and gradients on `shape` ops. `currentColor` at the root is the
+    element's `color`. Subset and skipped parts as in `projects/site/src/content/docs/svg.md`;
+    each skipped element, feature, DTD, entity, script, event attribute or external reference
+    warns once per render, and an invalid value is ignored with a warning.
+  - Limits: 1 MB of UTF-8 source, 50,000 elements, 64 levels of nesting, 16 levels of `use` and
+    50,000 elements drawn, each throwing `ngpdf: pdf-svg …`. Malformed markup throws
+    `ngpdf: invalid SVG: <reason> at <offset>`, a failed read `ngpdf: could not load SVG …`.
 - **Out of v0.1:**
-  - SVG;
   - RTL;
   - forms;
   - capturing the DOM.
