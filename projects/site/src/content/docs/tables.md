@@ -139,6 +139,7 @@ Current limits of header repetition:
 - A table made only of header rows has nothing to repeat over, so its rows are ordinary rows.
 - `break-before: page` on a header row or on an element inside it starts a new sheet before the table's first row, where the header is first drawn. It does not break again where the header repeats.
 - A repeated header ignores `break-after`, because it is always drawn with the row under it.
+- A header row ignores its own `min-presence-ahead`. On a body row (or a cell in it) it moves the row to the next sheet, under the repeated header, when too little space is left below it.
 
 See [Pagination](/docs/pagination) for how rows move between pages.
 
