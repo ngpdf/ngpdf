@@ -973,6 +973,13 @@ function breakLines(
   }
   const noWrapAt = (at: number): boolean => ((whiteSpaceAt?.[at] ?? 0) & NO_WRAP) !== 0;
   const keepsSpacesAt = (at: number): boolean => ((whiteSpaceAt?.[at] ?? 0) & KEEP_SPACES) !== 0;
+  // Prefix counts make range checks constant-time, even when a long word wraps into many lines.
+  const noWrapPrefix = whiteSpaceAt ? new Uint32Array(length + 1) : undefined;
+  if (noWrapPrefix)
+    for (let i = 0; i < length; i++)
+      noWrapPrefix[i + 1] = (noWrapPrefix[i] ?? 0) + Number(noWrapAt(i));
+  const hasNoWrap = (from: number, to: number): boolean =>
+    (noWrapPrefix?.[to] ?? 0) > (noWrapPrefix?.[from] ?? 0);
   const forcedAt = (position: number): boolean => collapsed.charCodeAt(position - 1) === LINE_FEED;
   // A break inside text that does not wrap is dropped; a kept line break always stays.
   const breaks =
@@ -1208,7 +1215,7 @@ function breakLines(
       }
     }
 
-    if (end < 0 && whiteSpaceAt && anyIn(start, firstEnd, noWrapAt)) {
+    if (end < 0 && whiteSpaceAt && hasNoWrap(start, firstEnd)) {
       // Text that does not wrap is never cut at the box edge: it overflows.
       end = firstEnd;
     } else if (end < 0) {
@@ -1298,12 +1305,6 @@ function breakLines(
 function runsWidth(runs: readonly TextRun[]): number {
   const last = runs.at(-1);
   return last ? last.x + last.width : 0;
-}
-
-/** Whether `holds` is true at any offset in `[from, to)`. */
-function anyIn(from: number, to: number, holds: (at: number) => boolean): boolean {
-  for (let at = from; at < to; at++) if (holds(at)) return true;
-  return false;
 }
 
 /**

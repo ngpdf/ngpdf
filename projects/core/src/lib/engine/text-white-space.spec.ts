@@ -94,6 +94,20 @@ describe('white-space', () => {
     expect(texts('ab  \ncd', 'pre-wrap')).toEqual(['ab', 'cd']);
   });
 
+  it('lays out a 1 MB unbroken word under pre-wrap in linear time', () => {
+    const word = 'a'.repeat(1_000_000);
+    const normalStart = performance.now();
+    layoutText(word, styled('normal'), 500, metrics);
+    const normalMs = performance.now() - normalStart;
+    const preWrapStart = performance.now();
+    const block = layoutText(word, styled('pre-wrap'), 500, metrics);
+    const preWrapMs = performance.now() - preWrapStart;
+
+    expect(block.lines.length).toBeGreaterThan(1);
+    // Leave headroom for slow CI runners while rejecting the repeated full-word scan.
+    expect(preWrapMs).toBeLessThan(normalMs * 8 + 500);
+  }, 15_000);
+
   it('moves a tab to the next stop, every 8 spaces from the line start', () => {
     const at = (text: string) => lay(text, 'pre').lines[0]?.runs.map((run) => [run.text, run.x]);
     expect(at('a\tb')).toEqual([
