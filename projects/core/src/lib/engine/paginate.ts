@@ -640,7 +640,7 @@ function collectUnits(
         // A first row that is also the last closes the table, and the wrappers that close with it.
         const end = closing ?? top + box.h;
         const trail =
-          first && first === body[lastInFlow(body)]
+          first === body[lastInFlow(body)]
             ? Math.max(0, end - (top + first.y + first.h))
             : 0;
         const gap = box.style.flexDirection === 'column' ? rowGapOf(box) : -height;
