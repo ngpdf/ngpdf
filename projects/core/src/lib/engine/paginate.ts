@@ -624,8 +624,9 @@ function collectUnits(
     if (box.node.tag === 'pdf-table') {
       const isHeader = (child: Box): boolean => isHeaderRow(child.node);
       const body = children.filter((child) => !isHeader(child));
-      // A table of header rows only has nothing to repeat over: its rows are plain units.
-      if (body.length > 0 && body.length < children.length) {
+      const first = body.find((child) => !isFlowNote(child) && !isAbsolute(child));
+      // A table with no in-flow body row has nothing to repeat its header over.
+      if (first && body.length < children.length) {
         const rows = children.filter(isHeader).map((child) => ({
           box: child,
           x: x + child.x,
@@ -636,13 +637,12 @@ function collectUnits(
         const headerTop = Math.min(...rows.map((r) => r.top));
         const headerBottom = Math.max(...rows.map((r) => r.top + r.box.h));
         const height = headerBottom - headerTop;
-        const first = body.find((child) => !isFlowNote(child) && !isAbsolute(child));
         // A first row that is also the last closes the table, and the wrappers that close with it.
         const end = closing ?? top + box.h;
-        const trail =
-          first && first === body[lastInFlow(body)]
-            ? Math.max(0, end - (top + first.y + first.h))
-            : 0;
+        let trail = 0;
+        if (first === body[lastInFlow(body)]) {
+          trail = Math.max(0, end - (top + first.y + first.h));
+        }
         const gap = box.style.flexDirection === 'column' ? rowGapOf(box) : -height;
         let repeats = height <= maxHeader + fitSlack(maxHeader);
         if (!repeats) {
