@@ -134,6 +134,22 @@ describe('paginatePage: tables', () => {
     expect(pages[0]!.placed[0]!.y).toBeCloseTo(CONTENT_TOP, 6);
   });
 
+  it('draws the header when the table body contains only a note or an absolute box', () => {
+    for (const child of [
+      el('pdf-note'),
+      el('pdf-view', { position: 'absolute', width: '10', height: '10' }),
+    ]) {
+      const header = row(20, true);
+      const root = page([el('pdf-table', {}, [header, child], { columns: ['1fr'] })]);
+      const pages = paginate(root);
+      const placed = pages[0]!.placed;
+      expect(
+        pages.flatMap((laid) => laid.placed).filter((item) => isHeader(item.box.node)),
+      ).toHaveLength(1);
+      expect(placed[0]!.box.node).toBe(header);
+    }
+  });
+
   it('moves the header with its first row when the two do not fit', () => {
     // 740pt of filler leaves 20.89pt: room for the header but not for header plus row.
     const filler = el('pdf-view', { height: '740' });
